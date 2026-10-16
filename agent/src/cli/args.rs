@@ -48,6 +48,9 @@ pub struct GlobalArgs {
     pub elevated: bool,
     #[arg(long, global = true, hide = true, value_name = "FILE")]
     pub result_file: Option<PathBuf>,
+    /// 密鑰存放方式（keychain／file；服務模式用 file）
+    #[arg(long, global = true, hide = true, value_name = "BACKEND")]
+    pub secrets_backend: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -84,6 +87,11 @@ pub enum Command {
     Status,
     /// 常駐：定期掃描、上傳報告、連線快照與心跳
     Watch(WatchArgs),
+    /// 開機自動啟動：裝成系統服務（伺服器）或登入時啟動（個人電腦）
+    Service {
+        #[command(subcommand)]
+        cmd: ServiceCmd,
+    },
     /// 防火牆：狀態、稽核、規則、封鎖與情資同步
     Fw {
         #[command(subcommand)]
@@ -566,6 +574,49 @@ pub struct PortsArgs {
     /// 允許探測公網位址（只限你擁有或已獲授權的主機）
     #[arg(long)]
     pub allow_public: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ServiceCmd {
+    /// 安裝並立即啟動（預設 --user：登入時啟動、免系統管理員；--system：開機就啟動的系統服務，需要系統管理員／root）
+    Install {
+        /// 系統服務（Windows 服務／systemd／LaunchDaemon）
+        #[arg(long, conflicts_with = "user")]
+        system: bool,
+        /// 使用者層（登入時啟動；預設）
+        #[arg(long)]
+        user: bool,
+        /// 完整掃描間隔（例：10m、1h）
+        #[arg(long, value_name = "DUR")]
+        interval: Option<String>,
+    },
+    /// 停止並移除開機自動啟動
+    Uninstall {
+        /// 移除系統服務
+        #[arg(long, conflicts_with = "user")]
+        system: bool,
+        /// 移除使用者層（預設）
+        #[arg(long)]
+        user: bool,
+    },
+    /// 系統服務與使用者層的安裝與執行狀態
+    Status,
+    /// 看常駐行程的 log
+    Logs {
+        /// 看系統服務的 log
+        #[arg(long)]
+        system: bool,
+        /// 最後幾行
+        #[arg(long, default_value_t = 100)]
+        tail: usize,
+    },
+    /// Windows 服務入口（由服務控制管理員呼叫）
+    #[command(hide = true)]
+    Run {
+        /// 完整掃描間隔
+        #[arg(long, value_name = "DUR")]
+        interval: Option<String>,
+    },
 }
 
 #[derive(Args, Debug, Clone, Default)]

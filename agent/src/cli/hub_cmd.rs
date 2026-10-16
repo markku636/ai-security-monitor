@@ -16,8 +16,12 @@ use crate::model::report::AgentInfo;
 use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT};
 
 fn log(env: &Env, msg: &str) {
-    if !env.global.quiet {
-        eprintln!("[{}] {msg}", Utc::now().format("%Y-%m-%d %H:%M:%S"));
+    let line = format!("[{}] {msg}", Utc::now().format("%Y-%m-%d %H:%M:%S"));
+    // 服務模式：寫每日 log 檔（<設定目錄>/logs），不寫主控台
+    if crate::service::instance::log_enabled() {
+        crate::service::instance::write_log(&line);
+    } else if !env.global.quiet {
+        eprintln!("{line}");
     }
 }
 
@@ -294,6 +298,47 @@ async fn flush_outbox(env: &Env, client: &HubClient) {
 }
 
 pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
+    // 服務模式：不印進度、單一實例、寫 log 檔、Windows 開機自動啟動時把自帶的主控台關掉
+    let quiet_env;
+    let env = if a.service {
+        quiet_env = Env {
+            global: super::args::GlobalArgs {
+                quiet: true,
+                ..env.global.clone()
+            },
+            config_dir: env.config_dir.clone(),
+        };
+        &quiet_env
+    } else {
+        env
+    };
+    let _lock = if a.service {
+        crate::service::instance::init_log(&env.config_dir);
+        crate::service::instance::detach_console_if_owned();
+        match crate::service::instance::InstanceLock::acquire(&env.config_dir) {
+            Ok(Some(l)) => Some(l),
+            Ok(None) => {
+                log(env, t!("同一個設定目錄已經有常駐的 asa watch，這個不再啟動"));
+                return Ok(());
+            }
+            Err(e) => {
+                log(env, &tf!("無法建立單一實例鎖：{e}", e = e));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if a.service {
+        log(
+            env,
+            &tf!(
+                "服務模式啟動（asa {v}，設定目錄 {dir}）",
+                v = crate::VERSION,
+                dir = env.config_dir.display()
+            ),
+        );
+    }
     let cfg = config::load_or_init(&env.config_dir)?;
     let client = if a.no_upload {
         None
@@ -436,14 +481,14 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             }
             next_scan = now + interval;
         }
-        if a.once {
+        if a.once || crate::service::instance::stop_requested() {
             break;
         }
         let wake = next_scan.min(next_snap);
         tokio::select! {
             _ = tokio::time::sleep_until(wake) => {}
-            _ = tokio::signal::ctrl_c() => {
-                log(env, t!("收到中斷，結束"));
+            _ = crate::service::instance::stopped() => {
+                log(env, t!("收到停止訊號，結束"));
                 break;
             }
         }

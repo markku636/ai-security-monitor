@@ -75,6 +75,38 @@ jobs:
           esac
           echo "firewall e2e ok on $RUNNER_OS"
 
+      - name: Service E2E (install, run, uninstall on the ephemeral runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="$PWD/target/debug/asa"; SUDO="sudo -E"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="$PWD/target/debug/asa.exe"; SUDO=""; fi
+          export ASA_SECRETS_BACKEND=file
+          st() { $SUDO "$BIN" --json service status; }
+          # 系統服務：Windows 服務／systemd／LaunchDaemon
+          $SUDO "$BIN" service install --system --interval 1h --yes
+          ok=""; for i in $(seq 1 45); do
+            if st | jq -e '.scopes[0].installed and ((.scopes[0].state // "") | test("running|active"))' > /dev/null; then ok=1; break; fi; sleep 2
+          done
+          st; test -n "$ok"
+          ok=""; for i in $(seq 1 45); do
+            if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q 'asa 0\.'; then ok=1; break; fi; sleep 2
+          done
+          $SUDO "$BIN" service logs --system --tail 20 || true; test -n "$ok"
+          $SUDO "$BIN" service uninstall --system --yes
+          st | jq -e '.scopes[0].installed | not' > /dev/null
+          # 使用者層：HKCU Run／systemd --user 或 XDG autostart／LaunchAgent
+          SUDO=""
+          "$BIN" service install --user --interval 1h --yes
+          ok=""; for i in $(seq 1 30); do
+            if st | jq -e '.scopes[1].installed and (.running | length >= 1)' > /dev/null; then ok=1; break; fi; sleep 2
+          done
+          st; test -n "$ok"
+          "$BIN" service uninstall --user --yes
+          sleep 3
+          st | jq -e '(.scopes[1].installed | not) and (.running | length == 0)' > /dev/null
+          echo "service e2e ok on $RUNNER_OS"
+
   hub:
     name: hub
     runs-on: ubuntu-latest

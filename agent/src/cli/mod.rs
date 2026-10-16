@@ -21,6 +21,7 @@ pub mod intel_cmd;
 pub mod mcp_cmd;
 pub mod ports_cmd;
 pub mod scan_cmd;
+pub mod service_cmd;
 pub mod traffic_cmd;
 pub mod version_cmd;
 pub mod vuln_cmd;
@@ -62,6 +63,10 @@ pub async fn run() -> i32 {
         }
     };
     let json = cli.global.json;
+    if let Some(b) = &cli.global.secrets_backend {
+        // 服務的命令列帶 --secrets-backend file（LocalSystem／root 沒有使用者的 keychain）
+        std::env::set_var(crate::secrets::ENV_BACKEND, b);
+    }
     match dispatch::dispatch(cli).await {
         Ok(()) => EXIT_OK,
         Err(e) => {

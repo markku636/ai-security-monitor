@@ -27,6 +27,7 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Unenroll => super::hub_cmd::unenroll(&env).await,
         Command::Status => super::hub_cmd::status(&env).await,
         Command::Watch(a) => super::hub_cmd::watch(&env, a).await,
+        Command::Service { cmd } => super::service_cmd::run(&env, cmd).await,
         Command::Ports(a) => super::ports_cmd::run(&env, a).await,
         Command::Traffic(a) => super::traffic_cmd::run(&env, a).await,
         Command::Events(a) => super::events_cmd::run(&env, a).await,

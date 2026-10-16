@@ -26,6 +26,7 @@ pub mod model;
 pub mod ports;
 pub mod scan;
 pub mod secrets;
+pub mod service;
 pub mod store;
 pub mod sysmeta;
 pub mod traffic;
