@@ -20,7 +20,7 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -38,3 +38,28 @@ jobs:
           cargo run -q -- --lang en --help
           cargo run -q -- doctor --json
 
+      - name: Firewall E2E (live, ephemeral runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -q
+          BIN=./target/debug/asa; SUDO="sudo -E"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/asa.exe; SUDO=""; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get install -y nftables >/dev/null; fi
+          CFG="$RUNNER_TEMP/asa-e2e"
+          $SUDO $BIN --config-dir "$CFG" fw block 198.51.100.77 --reason e2e --yes
+          $SUDO $BIN --config-dir "$CFG" fw close-port tcp/65000 --yes
+          $SUDO $BIN --config-dir "$CFG" --json fw list --ours > ours.json
+          grep -q 198.51.100.77 ours.json
+          case "$RUNNER_OS" in
+            Windows) powershell -NoProfile -Command "if (@(Get-NetFirewallRule -Group 'ASA').Count -lt 3) { exit 1 }" ;;
+            Linux) sudo nft list set inet asa block4 | grep -q 198.51.100.77 ;;
+            macOS) sudo pfctl -a com.asa -t asa_block -T show | grep -q 198.51.100.77 ;;
+          esac
+          $SUDO $BIN --config-dir "$CFG" fw unblock --all-asa --yes
+          case "$RUNNER_OS" in
+            Windows) powershell -NoProfile -Command "if (@(Get-NetFirewallRule -Group 'ASA' -ErrorAction SilentlyContinue).Count -ne 0) { exit 1 }" ;;
+            Linux) ! sudo nft list table inet asa 2>/dev/null ;;
+            macOS) ! (sudo pfctl -a com.asa -t asa_block -T show 2>/dev/null | grep -q 198.51.100.77) ;;
+          esac
+          echo "firewall e2e ok on $RUNNER_OS"

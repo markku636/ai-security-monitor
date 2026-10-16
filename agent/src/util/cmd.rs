@@ -23,6 +23,9 @@ pub struct CmdSpec {
     /// PowerShell 腳本原文（`args` 裡是 base64，預覽時顯示這個）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<String>,
+    /// 失敗不中斷後續指令（冪等的刪除 / 檢查類）。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_fail: bool,
 }
 
 impl CmdSpec {
@@ -35,6 +38,7 @@ impl CmdSpec {
             needs_elevation: false,
             description: String::new(),
             script: None,
+            allow_fail: false,
         }
     }
 
@@ -50,6 +54,11 @@ impl CmdSpec {
 
     pub fn timeout(mut self, ms: u64) -> Self {
         self.timeout_ms = ms;
+        self
+    }
+
+    pub fn tolerate_failure(mut self) -> Self {
+        self.allow_fail = true;
         self
     }
 
@@ -106,6 +115,25 @@ pub fn powershell(script: &str) -> CmdSpec {
     );
     spec.script = Some(script.to_string());
     spec.timeout_ms = 60_000;
+    spec
+}
+
+/// 執行一個 PowerShell 腳本檔（大量位址的腳本會超過命令列長度上限，改寫成帶 BOM 的 .ps1 再 -File）。
+pub fn powershell_file(path: &std::path::Path, script: &str) -> CmdSpec {
+    let p = path.to_string_lossy().to_string();
+    let mut spec = CmdSpec::new(
+        "powershell.exe",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &p,
+        ],
+    );
+    spec.script = Some(script.to_string());
+    spec.timeout_ms = 600_000;
     spec
 }
 

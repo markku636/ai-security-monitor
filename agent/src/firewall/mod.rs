@@ -2,8 +2,11 @@
 //! 判斷 listener 是否真的能從網路連入，並稽核常見弱點（作用中網路的設定檔關閉、預設允許連入、全開規則）。
 //! 本輪只讀；封鎖 / 同步黑名單在下一輪（需提權＋確認）。
 
+pub mod desired;
 pub mod linux;
 pub mod macos;
+pub mod plan;
+pub mod select;
 pub mod windows;
 
 use async_trait::async_trait;

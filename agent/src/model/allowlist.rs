@@ -123,6 +123,19 @@ impl Allowlist {
         })
     }
 
+    /// 網段內含任何白名單 IP / CIDR（或被其包含）。
+    pub fn overlaps_net(&self, net: &IpNet) -> Option<&AllowEntry> {
+        self.entries.iter().find(|e| match e.kind {
+            AllowKind::Ip => e.value.parse::<IpAddr>().map(|ip| net.contains(&ip)).unwrap_or(false),
+            AllowKind::Cidr => e
+                .value
+                .parse::<IpNet>()
+                .map(|n| n.contains(&net.network()) || net.contains(&n.network()))
+                .unwrap_or(false),
+            _ => false,
+        })
+    }
+
     pub fn match_process_path(&self, path: &str) -> Option<&AllowEntry> {
         let norm = path.replace('\\', "/");
         self.entries

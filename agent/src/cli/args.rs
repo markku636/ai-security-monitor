@@ -64,7 +64,7 @@ pub enum Command {
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
     Connections(ConnectionsArgs),
-    /// 防火牆：狀態、稽核、規則（本版唯讀）
+    /// 防火牆：狀態、稽核、規則、封鎖與情資同步
     Fw {
         #[command(subcommand)]
         cmd: FwCmd,
@@ -250,6 +250,81 @@ pub enum FwCmd {
         /// 包含 UWP 應用程式（每使用者）規則
         #[arg(long)]
         all: bool,
+        /// 只列 asa 建立的封鎖與期望狀態
+        #[arg(long)]
+        ours: bool,
+    },
+    /// 封鎖 IP / 網段（預設雙向；需要系統管理員權限）
+    Block {
+        /// IP 或 CIDR
+        #[arg(required = true)]
+        targets: Vec<String>,
+        /// 方向
+        #[arg(long, value_enum, default_value = "both")]
+        direction: crate::firewall::plan::Dir,
+        /// 原因（寫進規則說明）
+        #[arg(long, default_value = "manual")]
+        reason: String,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 解除 asa 建立的封鎖
+    Unblock {
+        /// IP 或 CIDR（用 --all-asa 時可省略）
+        targets: Vec<String>,
+        /// 移除 asa 建立的全部規則
+        #[arg(long)]
+        all_asa: bool,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 用防火牆關閉對內 port（例：tcp/6379）
+    ClosePort {
+        /// 協定/port，例：tcp/6379
+        spec: String,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 取消 close-port
+    OpenPort {
+        /// 協定/port，例：tcp/6379
+        spec: String,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 啟用防火牆（Windows 可指定設定檔）
+    Enable {
+        /// Windows 設定檔：domain / private / public（省略＝全部）
+        #[arg(long)]
+        profile: Option<String>,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 把威脅情資黑名單同步到防火牆（只取公網、高信心、可商用來源）
+    SyncBlocklist {
+        /// 只用這些來源 id
+        #[arg(long = "feed", value_name = "ID")]
+        feeds: Vec<String>,
+        /// 最低信心（0–100）
+        #[arg(long, default_value_t = 80)]
+        min_confidence: u8,
+        /// 最多幾個網段（預設依後端上限）
+        #[arg(long)]
+        max: Option<usize>,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 依期望狀態重新套用 asa 規則（pf / nftables 開機後需要）
+    Ensure {
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 

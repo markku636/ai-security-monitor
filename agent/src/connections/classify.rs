@@ -123,6 +123,14 @@ impl KnownGood {
             .map(|(_, name)| name.as_str())
     }
 
+    /// 網段與任何已知良性網段重疊（互相包含）。
+    pub fn overlaps_net(&self, net: &IpNet) -> Option<&str> {
+        self.cidrs
+            .iter()
+            .find(|(n, _)| n.contains(&net.network()) || net.contains(&n.network()))
+            .map(|(_, name)| name.as_str())
+    }
+
     pub fn match_domain(&self, domain: &str) -> Option<&str> {
         let d = domain.trim_end_matches('.').to_ascii_lowercase();
         self.domains

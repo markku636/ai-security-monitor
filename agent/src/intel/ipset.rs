@@ -165,6 +165,16 @@ impl IpSet {
         self.cves.get(&cve.to_ascii_uppercase()).map(|i| self.meta(*i))
     }
 
+    /// IP / CIDR 條目與各自的信心值（防火牆同步依信心篩選）。
+    pub fn networks_with_conf(&self) -> Vec<(IpNet, Option<u8>)> {
+        let nets = self.networks();
+        let idx: Vec<u32> = self.v4.iter().map(|e| e.2).chain(self.v6.iter().map(|e| e.2)).collect();
+        nets.into_iter()
+            .zip(idx)
+            .map(|(n, i)| (n, self.meta(i).confidence))
+            .collect()
+    }
+
     /// 所有 IP / CIDR 條目（給防火牆同步用）。
     pub fn networks(&self) -> Vec<IpNet> {
         let mut out = Vec::with_capacity(self.v4.len() + self.v6.len());

@@ -9,6 +9,7 @@
 pub mod i18n;
 pub mod locales;
 
+pub mod actions;
 pub mod config;
 pub mod connections;
 pub mod elevate;

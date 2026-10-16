@@ -30,4 +30,12 @@
 - 指令執行層：逾時、Windows 無視窗、PowerShell `-EncodedCommand`（UTF-16LE），FakeRunner 讓解析器用 fixture 測。
 - CI：修正無效的 workflow（job 層級 `if` 不能用 `hashFiles`），三平台 agent 測試開始真正執行。
 
-> 驗證：`cargo test`（103 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s。
+- 防火牆寫入（第 4 輪）：`asa fw block|unblock|close-port|open-port|enable|sync-blocklist|ensure`，全部支援 `--dry-run`；
+  Windows（`ASA:` 規則、群組 ASA；大量位址寫成帶 BOM 的 .ps1）、macOS（pf anchor `com.asa`＋持久化表檔）、
+  Linux（nft `table inet asa`，與 ufw／firewalld 並存；無 nft 時 iptables＋ipset）；期望狀態檔供開機後 `fw ensure` 重套；動作稽核 `actions.jsonl`。
+- 情資黑名單同步護欄：只取公網、v4≥/10、v6≥/19、排除本機介面／known-good／白名單重疊、非商用與 Tor 來源；超過後端上限時先保留高信心來源。
+- 提權：永不靜默；`--yes` 後才以管理員身分重跑自己（Windows UAC、sudo、macOS 系統對話框、pkexec），子行程結果檔回報。
+- 封鎖目標護欄：拒絕 loopback／多播／過寬網段；含本機介面位址需 `--force`。MCP 用的審查 token 庫（12 碼、15 分鐘、單次、最多 32 筆）。
+- CI：三平台實機防火牆 E2E（封鎖 TEST-NET、關 port、驗證 OS 規則、全部移除）；`actions/checkout@v5`。
+
+> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證。

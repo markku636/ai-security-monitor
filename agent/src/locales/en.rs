@@ -361,6 +361,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "威脅情資：更新、狀態、來源、查詢 IP／網域" => "Threat intel: update, status, sources, IP / domain lookup",
         "下載／更新威脅情資（只抓過期的；--force 全部重抓）" => "Download / refresh threat-intel feeds (only stale ones; --force refetches all)",
         "只更新這些來源 id" => "Only update these feed ids",
+        "只用這些來源 id" => "Only use these feed ids",
         "忽略更新間隔，全部重抓" => "Ignore refresh intervals and refetch everything",
         "顯示各來源的筆數、更新時間與狀態" => "Show entries, last update and status for each feed",
         "列出所有情資來源（廠商、授權、網址）" => "List all feeds (vendor, licence, URL)",
@@ -512,7 +513,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "{ip}：{open} 個開啟／已探測 {n} 個" => "{ip}: {open} open / {n} probed",
 
         // ---- cli/args.rs：fw / ports ----
-        "防火牆：狀態、稽核、規則（本版唯讀）" => "Firewall: status, audit, rules (read-only in this version)",
+
         "對外 port 與可達性；或探測自己網段的主機" => "External ports and reachability; or probe a host on your own network",
         "防火牆後端、啟用狀態、各設定檔與預設動作" => "Firewall backend, state, profiles and default actions",
         "稽核防火牆與對外 port（產生 finding）" => "Audit the firewall and external ports (produces findings)",
@@ -524,6 +525,86 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "每個連線的逾時" => "Per-connection timeout",
         "改用已安裝的 nmap（-sT）" => "Use the installed nmap instead (-sT)",
         "允許探測公網位址（只限你擁有或已獲授權的主機）" => "Allow probing public addresses (only hosts you own or are authorised to test)",
+
+        // ---- elevate ----
+        "此動作需要系統管理員權限，正在請求提權…" => "This action needs administrator privileges; requesting elevation…",
+        "提權後的行程沒有回報結果（可能被取消）。也可以手動以管理員身分執行：{cmd}" => {
+            "The elevated process did not report back (it may have been cancelled). You can also run it as administrator manually: {cmd}"
+        }
+        "提權被取消或失敗（UAC）" => "Elevation was cancelled or failed (UAC)",
+        "沒有終端機可輸入密碼；請改用 sudo 執行同一個指令" => "No terminal to enter a password; run the same command with sudo",
+
+        // ---- firewall/plan.rs ----
+        "封鎖 {n} 個位址（{dir}）：{list}" => "block {n} addresses ({dir}): {list}",
+        "解除封鎖 {n} 個位址：{list}" => "unblock {n} addresses: {list}",
+        "移除 asa 建立的所有防火牆規則" => "remove every firewall rule created by asa",
+        "關閉對內 {proto} {port}" => "close inbound {proto} {port}",
+        "取消關閉 {proto} {port}" => "reopen {proto} {port}",
+        "同步威脅情資黑名單到防火牆（{n} 個網段）" => "sync the threat-intel blocklist into the firewall ({n} networks)",
+        "依期望狀態重新套用 asa 規則" => "re-apply asa rules from the desired state",
+        "寫入" => "write",
+        "附加到" => "append to",
+        "從檔案移除" => "remove from",
+        "找不到可寫入的防火牆後端（Linux 需要 nft，或 iptables＋ipset）" => {
+            "No writable firewall backend found (Linux needs nft, or iptables + ipset)"
+        }
+        "不支援的設定檔：{profile}" => "Unsupported profile: {profile}",
+        "沒有需要重新套用的規則" => "Nothing to re-apply",
+        "偵測到 sshd 正在監聽：先放行 22/tcp，避免遠端連線被切斷" => {
+            "sshd is listening: allowing 22/tcp first so remote sessions are not cut off"
+        }
+        "沒有 ufw 或 firewalld；請先安裝其中一個（apt install ufw / dnf install firewalld）" => {
+            "Neither ufw nor firewalld is installed; install one first (apt install ufw / dnf install firewalld)"
+        }
+
+        // ---- actions ----
+        "套用失敗：{detail}" => "Apply failed: {detail}",
+
+        // ---- cli/fw_cmd.rs (write) ----
+        "至少要指定一個 IP 或 CIDR" => "Specify at least one IP or CIDR",
+        "不是合法的 IP 或 CIDR：{value}" => "Not a valid IP or CIDR: {value}",
+        "拒絕封鎖 {net}：loopback / 未指定 / 多播位址" => "Refusing to block {net}: loopback / unspecified / multicast",
+        "拒絕封鎖 {net}：範圍太大" => "Refusing to block {net}: range too wide",
+        "{net} 包含本機介面位址，封鎖會切斷自己的連線；確定要做請加 --force" => {
+            "{net} contains a local interface address and blocking it would cut this machine off; add --force if you are sure"
+        }
+        "port 格式錯誤：{spec}（例：tcp/6379）" => "Invalid port spec: {spec} (e.g. tcp/6379)",
+        "已套用：{action}（後端 {backend}）" => "Applied: {action} (backend {backend})",
+        "預演（未執行）：{action}；後端 {backend}" => "Dry run (not executed): {action}; backend {backend}",
+        "已嘗試提權但仍不是系統管理員" => "Elevation was attempted but the process is still not an administrator",
+        "提權後的動作失敗" => "The elevated action failed",
+        "位址" => "Address",
+        "已關閉：{proto} {port}" => "Closed: {proto} {port}",
+        "情資黑名單：{n} 個網段（來源：{feeds}；同步於 {at}）" => "Threat-intel blocklist: {n} networks (feeds: {feeds}; synced at {at})",
+        "選出 {n} 個網段（合併前 {before}）；略過：保留／私網 {reserved}、過寬 {wide}、本機／白名單／已知良性 {local}、信心不足 {low}" => {
+            "Selected {n} networks ({before} before merging); skipped: reserved/private {reserved}, too wide {wide}, local/allowlisted/known-good {local}, low confidence {low}"
+        }
+        "  · 非商用授權來源不用於封鎖：{ids}（config intel.allow_noncommercial true 可改）" => {
+            "  · Non-commercial feeds are not used for blocking: {ids} (set config intel.allow_noncommercial true to change)"
+        }
+        "  · 超過後端上限，只同步前 {n} 個" => "  · Backend limit reached; only the first {n} are synced",
+
+        // ---- cli/args.rs：fw write ----
+        "防火牆：狀態、稽核、規則、封鎖與情資同步" => "Firewall: status, audit, rules, blocking and threat-intel sync",
+        "只列 asa 建立的封鎖與期望狀態" => "Only list blocks and desired state created by asa",
+        "封鎖 IP / 網段（預設雙向；需要系統管理員權限）" => "Block IPs / networks (both directions by default; needs administrator privileges)",
+        "IP 或 CIDR" => "IP or CIDR",
+        "原因（寫進規則說明）" => "Reason (stored in the rule description)",
+        "只顯示會執行的步驟，不執行" => "Only show the steps that would run; do not execute",
+        "解除 asa 建立的封鎖" => "Remove blocks created by asa",
+        "IP 或 CIDR（用 --all-asa 時可省略）" => "IP or CIDR (optional with --all-asa)",
+        "移除 asa 建立的全部規則" => "Remove every rule created by asa",
+        "用防火牆關閉對內 port（例：tcp/6379）" => "Close an inbound port with the firewall (e.g. tcp/6379)",
+        "協定/port，例：tcp/6379" => "Protocol/port, e.g. tcp/6379",
+        "取消 close-port" => "Undo close-port",
+        "啟用防火牆（Windows 可指定設定檔）" => "Enable the firewall (Windows: optionally one profile)",
+        "Windows 設定檔：domain / private / public（省略＝全部）" => "Windows profile: domain / private / public (omit = all)",
+        "把威脅情資黑名單同步到防火牆（只取公網、高信心、可商用來源）" => {
+            "Sync the threat-intel blocklist into the firewall (public ranges, high confidence, commercial-use feeds only)"
+        }
+        "最低信心（0–100）" => "Minimum confidence (0–100)",
+        "最多幾個網段（預設依後端上限）" => "Maximum networks (default: backend limit)",
+        "依期望狀態重新套用 asa 規則（pf / nftables 開機後需要）" => "Re-apply asa rules from the desired state (needed after boot for pf / nftables)",
 
         _ => return None,
     })
