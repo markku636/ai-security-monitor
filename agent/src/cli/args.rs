@@ -64,6 +64,13 @@ pub enum Command {
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
     Connections(ConnectionsArgs),
+    /// 防火牆：狀態、稽核、規則（本版唯讀）
+    Fw {
+        #[command(subcommand)]
+        cmd: FwCmd,
+    },
+    /// 對外 port 與可達性；或探測自己網段的主機
+    Ports(PortsArgs),
     /// 威脅情資：更新、狀態、來源、查詢 IP／網域
     Intel {
         #[command(subcommand)]
@@ -230,4 +237,40 @@ pub enum IntelKeyCmd {
         /// 服務 id（abuseipdb、greynoise-community、crowdsec-cti）
         id: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FwCmd {
+    /// 防火牆後端、啟用狀態、各設定檔與預設動作
+    Status,
+    /// 稽核防火牆與對外 port（產生 finding）
+    Audit,
+    /// 列出允許連入的規則
+    List {
+        /// 包含 UWP 應用程式（每使用者）規則
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct PortsArgs {
+    /// 包含只綁本機的 listener
+    #[arg(long)]
+    pub all: bool,
+    /// 主動探測這台主機的 TCP port（只限自己或私有網段）
+    #[arg(long, value_name = "HOST")]
+    pub probe: Option<String>,
+    /// 要探測的 port（例：22,80,8000-8100；預設常見 70 個）
+    #[arg(long, value_name = "LIST")]
+    pub ports: Option<String>,
+    /// 每個連線的逾時
+    #[arg(long, default_value = "800ms", value_name = "DUR")]
+    pub timeout: String,
+    /// 改用已安裝的 nmap（-sT）
+    #[arg(long)]
+    pub nmap: bool,
+    /// 允許探測公網位址（只限你擁有或已獲授權的主機）
+    #[arg(long)]
+    pub allow_public: bool,
 }

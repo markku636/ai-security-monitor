@@ -376,6 +376,155 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "API key；- 表示從標準輸入讀取" => "API key; - reads it from stdin",
         "刪除 API key" => "Delete an API key",
 
+        // ---- util/cmd.rs ----
+        "找不到指令：{program}" => "Command not found: {program}",
+        "無法執行 {program}：{e}" => "Failed to run {program}: {e}",
+
+        // ---- model/connection.rs：Reachability ----
+        "僅本機" => "local only",
+        "可連入" => "reachable",
+        "可連入（規則：{rule}）" => "reachable (rule: {rule})",
+        "已阻擋" => "filtered",
+
+        // ---- firewall ----
+        "啟用 {profile} 防火牆設定檔" => "Enable the {profile} firewall profile",
+        "啟用主機防火牆" => "Enable the host firewall",
+        "作用中網路的 {profile} 防火牆設定檔已關閉" => "The {profile} firewall profile of the active network is turned off",
+        "目前連線的網路類別是 {profile}，但此設定檔沒有啟用 Windows 防火牆；本機所有對外監聽的服務都能直接從這個網路連入" => {
+            "The current network category is {profile}, but Windows Firewall is off for this profile; every service listening on external interfaces is reachable from this network"
+        }
+        "啟用該設定檔（Set-NetFirewallProfile -Profile <名稱> -Enabled True），再只為需要的服務開例外" => {
+            "Turn the profile on (Set-NetFirewallProfile -Profile <name> -Enabled True) and add exceptions only for the services you need"
+        }
+        "{profile} 防火牆設定檔已關閉（目前非作用中）" => "The {profile} firewall profile is off (not currently active)",
+        "切換到 {profile} 類別的網路時將沒有防火牆保護" => "Networks of the {profile} category will have no firewall protection",
+        "啟用該設定檔，避免換網路時曝露" => "Turn the profile on so switching networks does not expose the machine",
+        "{profile} 設定檔預設允許所有連入" => "The {profile} profile allows all inbound connections by default",
+        "預設連入動作是允許：沒有被規則明確阻擋的連入都會通過" => {
+            "The default inbound action is allow: any inbound connection not explicitly blocked gets through"
+        }
+        "把預設連入動作改為封鎖（Set-NetFirewallProfile -DefaultInboundAction Block）" => {
+            "Change the default inbound action to block (Set-NetFirewallProfile -DefaultInboundAction Block)"
+        }
+        "防火牆規則允許任何連入：{name}" => "A firewall rule allows any inbound traffic: {name}",
+        "規則「{name}」不限程式、協定、port 與位址，套用於作用中網路（{profiles}）" => {
+            "Rule \"{name}\" is not limited by program, protocol, port or address and applies to the active network ({profiles})"
+        }
+        "確認是否仍需要；需要的話限縮到特定程式、port 或來源位址" => {
+            "Confirm it is still needed; if so, restrict it to a specific program, port or source address"
+        }
+        "macOS 應用程式防火牆已關閉" => "The macOS application firewall is off",
+        "系統設定 → 網路 → 防火牆 為關閉；所有對外監聽的服務都能從網路連入" => {
+            "System Settings → Network → Firewall is off; every listening service is reachable from the network"
+        }
+        "開啟應用程式防火牆（socketfilterfw --setglobalstate on），必要時啟用隱形模式" => {
+            "Turn the application firewall on (socketfilterfw --setglobalstate on) and enable stealth mode if needed"
+        }
+        "macOS 防火牆未開啟隱形模式" => "macOS firewall stealth mode is off",
+        "未開啟隱形模式時，主機會回應 ping 與連到已關閉 port 的探測，較容易被掃描發現" => {
+            "Without stealth mode the host answers pings and probes to closed ports, making it easier to discover"
+        }
+        "沒有啟用中的主機防火牆（{backend}）" => "No active host firewall ({backend})",
+        "沒有偵測到運作中的 nftables / ufw / firewalld / iptables 規則；對外監聽的服務都能直接連入" => {
+            "No active nftables / ufw / firewalld / iptables rules detected; listening services are directly reachable"
+        }
+        "啟用 ufw 或 firewalld，預設拒絕連入，只開放需要的服務" => {
+            "Enable ufw or firewalld with default-deny inbound and open only the services you need"
+        }
+        "{backend} 預設允許所有連入" => "{backend} allows all inbound connections by default",
+        "INPUT 預設政策是接受；沒有被規則明確阻擋的連入都會通過" => {
+            "The INPUT default policy is accept; any inbound connection not explicitly blocked gets through"
+        }
+        "把預設連入政策改為 drop / deny，只放行需要的服務" => "Set the default inbound policy to drop / deny and allow only what you need",
+        "防火牆（{backend}）規則需要系統管理員權限才能讀取；部分結果為「未知」" => {
+            "Reading firewall ({backend}) rules requires administrator privileges; some results are \"unknown\""
+        }
+        "讀取 Windows 防火牆設定檔與允許連入規則" => "Read Windows Firewall profiles and inbound allow rules",
+        "解析防火牆狀態失敗：{e}" => "Failed to parse firewall state: {e}",
+        "無法執行 PowerShell" => "Unable to run PowerShell",
+        "讀取應用程式防火牆狀態" => "Read the application firewall state",
+        "讀取隱形模式" => "Read stealth mode",
+        "讀取「阻擋所有連入」" => "Read \"block all incoming\"",
+        "讀取 pf 狀態" => "Read pf status",
+        "讀取 asa 封鎖表" => "Read the asa block table",
+        "讀取 firewalld 狀態" => "Read firewalld state",
+        "讀取 firewalld 預設 zone" => "Read the firewalld default zone",
+        "讀取 ufw 狀態" => "Read ufw status",
+        "讀取 nftables 規則" => "Read nftables rules",
+        "讀取 iptables INPUT 鏈" => "Read the iptables INPUT chain",
+        "沒有找到 nft / iptables / ufw / firewall-cmd" => "No nft / iptables / ufw / firewall-cmd found",
+
+        // ---- ports ----
+        "{name}（{proto} {port}）可從網路連入" => "{name} ({proto} {port}) is reachable from the network",
+        "{process} 綁在 {bind}，防火牆沒有阻擋（{why}）：{rationale}" => {
+            "{process} is bound to {bind} and the firewall does not block it ({why}): {rationale}"
+        }
+        "防火牆關閉或預設允許" => "firewall off or default allow",
+        "不需對外就改綁 127.0.0.1；需要的話用防火牆只允許特定來源" => {
+            "Bind to 127.0.0.1 if it need not be public; otherwise allow only specific sources in the firewall"
+        }
+        "{name}（{proto} {port}）綁在所有介面，目前被防火牆阻擋" => "{name} ({proto} {port}) is bound to all interfaces but currently filtered by the firewall",
+        "{process} 綁在 {bind}；防火牆擋住了連入，但只要規則變動就會曝露：{rationale}" => {
+            "{process} is bound to {bind}; the firewall blocks inbound traffic, but any rule change would expose it: {rationale}"
+        }
+        "縱深防禦：改綁 127.0.0.1 或內部介面" => "Defence in depth: bind to 127.0.0.1 or an internal interface",
+        "{name}（{proto} {port}）對外監聽，無法確認防火牆是否阻擋" => "{name} ({proto} {port}) listens externally; cannot confirm whether the firewall blocks it",
+        "{process} 綁在 {bind}；讀不到防火牆規則（以系統管理員身分重跑可確認）：{rationale}" => {
+            "{process} is bound to {bind}; firewall rules are unreadable (re-run as administrator to confirm): {rationale}"
+        }
+        "以系統管理員身分執行 asa fw audit 確認是否可連入" => "Run asa fw audit as administrator to confirm reachability",
+        "port 範圍格式錯誤：{part}" => "Invalid port range: {part}",
+        "一次最多探測 {n} 個 port" => "At most {n} ports per probe",
+        "{ip} 是公網位址；只掃描你擁有或已獲授權的主機，確認後加 --allow-public" => {
+            "{ip} is a public address; only scan hosts you own or are authorised to test, then add --allow-public"
+        }
+        "{ip} 不是可探測的單播位址" => "{ip} is not a probeable unicast address",
+        "無法解析主機 {host}：{e}" => "Cannot resolve host {host}: {e}",
+        "無法解析主機 {host}" => "Cannot resolve host {host}",
+        "nmap TCP connect 掃描" => "nmap TCP connect scan",
+
+        // ---- cli/fw_cmd.rs, ports_cmd.rs ----
+        "啟用" => "on",
+        "關閉" => "off",
+        "後端：{backend} · 狀態：{state} · 預設連入：{din} · 允許連入規則：{n} · asa 規則：{ours}" => {
+            "Backend: {backend} · state: {state} · default inbound: {din} · inbound allow rules: {n} · asa rules: {ours}"
+        }
+        "作用中" => "Active",
+        "防火牆設定檔" => "Profile",
+        "預設連入" => "Default in",
+        "預設連出" => "Default out",
+        "部分規則需要系統管理員權限才能讀取（sudo asa fw status）" => "Some rules need administrator privileges to read (sudo asa fw status)",
+        "規則" => "Rule",
+        "程式" => "Program",
+        "來源位址" => "Remote",
+        "共 {n} 條允許連入規則（{total} 條含 UWP 應用程式規則；--all 全部列出）" => {
+            "{n} inbound allow rules ({total} including UWP app rules; --all lists everything)"
+        }
+        "綁定" => "Bind",
+        "可達性" => "Reachability",
+        "風險" => "Risk",
+        "服務" => "Service",
+        "對外監聽 {exposed} 個（可連入 {open}、已阻擋 {filtered}、未知 {unknown}）；共 {n} 個 listener（--all 含僅本機）" => {
+            "{exposed} external listeners (reachable {open}, filtered {filtered}, unknown {unknown}); {n} listeners total (--all includes local-only)"
+        }
+        "探測 {ip} 的 {n} 個 TCP port…" => "Probing {n} TCP ports on {ip}…",
+        "nmap 失敗：{e}" => "nmap failed: {e}",
+        "{ip}：{open} 個開啟／已探測 {n} 個" => "{ip}: {open} open / {n} probed",
+
+        // ---- cli/args.rs：fw / ports ----
+        "防火牆：狀態、稽核、規則（本版唯讀）" => "Firewall: status, audit, rules (read-only in this version)",
+        "對外 port 與可達性；或探測自己網段的主機" => "External ports and reachability; or probe a host on your own network",
+        "防火牆後端、啟用狀態、各設定檔與預設動作" => "Firewall backend, state, profiles and default actions",
+        "稽核防火牆與對外 port（產生 finding）" => "Audit the firewall and external ports (produces findings)",
+        "列出允許連入的規則" => "List inbound allow rules",
+        "包含 UWP 應用程式（每使用者）規則" => "Include UWP app (per-user) rules",
+        "包含只綁本機的 listener" => "Include local-only listeners",
+        "主動探測這台主機的 TCP port（只限自己或私有網段）" => "Actively probe this host's TCP ports (own machine or private networks only)",
+        "要探測的 port（例：22,80,8000-8100；預設常見 70 個）" => "Ports to probe (e.g. 22,80,8000-8100; default: ~70 common ports)",
+        "每個連線的逾時" => "Per-connection timeout",
+        "改用已安裝的 nmap（-sT）" => "Use the installed nmap instead (-sT)",
+        "允許探測公網位址（只限你擁有或已獲授權的主機）" => "Allow probing public addresses (only hosts you own or are authorised to test)",
+
         _ => return None,
     })
 }

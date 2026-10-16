@@ -12,6 +12,7 @@ use crate::store;
 
 pub const SECRETS_FILE: &str = "secrets.json";
 pub const ENV_BACKEND: &str = "ASA_SECRETS_BACKEND";
+#[cfg(all(feature = "keychain", any(windows, target_os = "macos")))]
 const KEYCHAIN_SERVICE: &str = "asa";
 
 /// 常用鍵名。

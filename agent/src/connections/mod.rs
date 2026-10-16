@@ -33,6 +33,8 @@ impl Scanner for ConnectionsScanner {
         let dir = ctx.config_dir.clone();
         let allowlist = ctx.allowlist.clone();
         let baseline = ctx.baseline.clone();
+        // 有 ports 掃描器時，曝露判斷交給它（它知道防火牆是否放行）。
+        let defer_exposure = ctx.plans(ScannerId::Ports);
         // netstat2 / sysinfo 都是同步呼叫，丟到 blocking thread。
         let (snap, findings) = tokio::task::spawn_blocking(move || -> AppResult<_> {
             let mut snap = snapshot::take(&dir)?;
@@ -41,7 +43,10 @@ impl Scanner for ConnectionsScanner {
             history::append(&dir, now, &history::pairs_of(&snap.connections))?;
             let hist = history::load(&dir, now.saturating_sub(history::RETENTION_SECS))?;
             let beacons = beacon::detect(&hist, now);
-            let findings = classifier.annotate(&mut snap, &allowlist, baseline.as_ref(), &beacons);
+            let mut findings = classifier.annotate(&mut snap, &allowlist, baseline.as_ref(), &beacons);
+            if defer_exposure {
+                findings.retain(|f| f.rule != "connections.exposed_listener");
+            }
             Ok((snap, findings))
         })
         .await

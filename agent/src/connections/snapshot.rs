@@ -189,6 +189,7 @@ pub fn take_with(config_dir: &Path, hash_exes: bool) -> AppResult<SnapshotResult
                             port: t.local_port,
                             process: process.clone(),
                             exposed: is_any(t.local_addr) || classify(t.local_addr) != IpClass::Loopback,
+                            reachability: None,
                         });
                     }
                 }
@@ -220,6 +221,7 @@ pub fn take_with(config_dir: &Path, hash_exes: bool) -> AppResult<SnapshotResult
                         port: u.local_port,
                         process: process.clone(),
                         exposed: is_any(u.local_addr) || classify(u.local_addr) != IpClass::Loopback,
+                        reachability: None,
                     });
                 }
                 out.connections.push(Connection {

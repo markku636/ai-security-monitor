@@ -662,6 +662,7 @@ mod tests {
                 port: 6379,
                 process: None,
                 exposed: true,
+                reachability: None,
             }],
             ..Default::default()
         };

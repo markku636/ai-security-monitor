@@ -1,0 +1,23 @@
+table inet filter {
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ct state established,related accept
+		iif "lo" accept
+		tcp dport 22 accept
+		tcp dport { 80, 443 } accept
+		udp dport 5000-5010 accept
+	}
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}
+table inet asa {
+	set block4 {
+		type ipv4_addr
+		flags interval
+		elements = { 1.2.3.4, 5.6.7.0/24 }
+	}
+}

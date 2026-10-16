@@ -17,6 +17,8 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Scan(a) => super::scan_cmd::run(&env, a).await,
         Command::Connections(a) => super::connections_cmd::run(&env, a).await,
         Command::Intel { cmd } => super::intel_cmd::run(&env, cmd).await,
+        Command::Fw { cmd } => super::fw_cmd::run(&env, cmd).await,
+        Command::Ports(a) => super::ports_cmd::run(&env, a).await,
         Command::Config { cmd } => super::config_cmd::run(&env, cmd),
         Command::Allowlist { cmd } => super::allowlist_cmd::run(&env, cmd),
         Command::Baseline { cmd } => super::baseline_cmd::run(&env, cmd).await,

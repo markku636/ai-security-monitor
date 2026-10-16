@@ -124,4 +124,45 @@ pub struct Listener {
     pub process: Option<ProcessRef>,
     /// 是否綁在所有介面（0.0.0.0 / ::）→ 可能對外曝露。
     pub exposed: bool,
+    /// 防火牆判斷後的可達性（ports 掃描器填）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reachability: Option<Reachability>,
+}
+
+/// listener 能否從網路連入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum Reachability {
+    /// 只綁 loopback。
+    LocalOnly,
+    /// 防火牆關閉、預設允許，或有規則放行（`rule`＝放行的規則名）。
+    Open {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<String>,
+    },
+    /// 防火牆會擋。
+    Filtered,
+    /// 讀不到防火牆規則（權限不足）或依程式決定（macOS）。
+    Unknown,
+}
+
+impl Reachability {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Reachability::LocalOnly => "local_only",
+            Reachability::Open { .. } => "open",
+            Reachability::Filtered => "filtered",
+            Reachability::Unknown => "unknown",
+        }
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            Reachability::LocalOnly => t!("僅本機").to_string(),
+            Reachability::Open { rule: None } => t!("可連入").to_string(),
+            Reachability::Open { rule: Some(r) } => tf!("可連入（規則：{rule}）", rule = r),
+            Reachability::Filtered => t!("已阻擋").to_string(),
+            Reachability::Unknown => t!("未知").to_string(),
+        }
+    }
 }

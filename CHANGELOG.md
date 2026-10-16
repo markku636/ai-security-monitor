@@ -23,4 +23,11 @@
 - CLI：`asa intel update|status|sources|lookup|enable|disable|key`、`asa connections --intel`（顯示國家）、`asa doctor` 情資新鮮度。
 - 移除 abuse.ch SSLBL IP 清單（官方已於 2025-01-03 停用）；URLhaus 網域級命中降為可疑（共用 CDN 不整台判死）。
 
-> 驗證：`cargo test`（77 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s。
+- 防火牆與 port（第 3 輪，唯讀）：Windows（一次 PowerShell 取設定檔、作用中網路類別、允許連入規則＋port／程式／位址篩選，UWP 每使用者規則另計）、
+  macOS（應用程式防火牆、隱形模式、pf）、Linux（firewalld → ufw → nftables → iptables 偵測與解析）；listener 可達性（僅本機／可連入／已阻擋／未知）；
+  稽核：作用中網路設定檔關閉、預設允許連入、全開規則、macOS 防火牆關閉、Linux 無防火牆；高風險服務可連入時出 `ports.exposed_open`。
+- `asa fw status|audit|list`、`asa ports [--all]`、`asa ports --probe HOST`（TCP connect／nmap，預設只限 loopback 與私網，公網需 `--allow-public`）。
+- 指令執行層：逾時、Windows 無視窗、PowerShell `-EncodedCommand`（UTF-16LE），FakeRunner 讓解析器用 fixture 測。
+- CI：修正無效的 workflow（job 層級 `if` 不能用 `hashFiles`），三平台 agent 測試開始真正執行。
+
+> 驗證：`cargo test`（103 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s。

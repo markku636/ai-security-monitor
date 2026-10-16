@@ -7,7 +7,7 @@ pub mod finding;
 pub mod report;
 pub mod verdict;
 
-pub use connection::{Connection, Direction, Listener, ProcessRef};
+pub use connection::{Connection, Direction, Listener, ProcessRef, Reachability};
 pub use finding::{ActionKind, Evidence, Finding, IntelHit, ProposedAction, ScannerId, Severity};
 pub use report::{AgentInfo, OsInfo, Report, Scores};
 pub use verdict::{AnomalyKind, Reason, Verdict, VerdictLevel};

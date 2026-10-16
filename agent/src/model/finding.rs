@@ -127,6 +127,7 @@ pub enum ActionKind {
     UpdatePackage,
     KillProcess,
     QuarantineFile,
+    EnableFirewall,
     CapturePcap,
     BaselineAccept,
 }
@@ -141,6 +142,7 @@ impl ActionKind {
             ActionKind::UpdatePackage => "update_package",
             ActionKind::KillProcess => "kill_process",
             ActionKind::QuarantineFile => "quarantine_file",
+            ActionKind::EnableFirewall => "enable_firewall",
             ActionKind::CapturePcap => "capture_pcap",
             ActionKind::BaselineAccept => "baseline_accept",
         }
@@ -155,6 +157,7 @@ impl ActionKind {
             ActionKind::UpdatePackage,
             ActionKind::KillProcess,
             ActionKind::QuarantineFile,
+            ActionKind::EnableFirewall,
             ActionKind::CapturePcap,
             ActionKind::BaselineAccept,
         ]

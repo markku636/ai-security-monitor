@@ -1,0 +1,108 @@
+{
+ "profiles": [
+  {
+   "Name": "Domain",
+   "Enabled": "True",
+   "DefaultInboundAction": "NotConfigured",
+   "DefaultOutboundAction": "NotConfigured"
+  },
+  {
+   "Name": "Private",
+   "Enabled": "False",
+   "DefaultInboundAction": "NotConfigured",
+   "DefaultOutboundAction": "NotConfigured"
+  },
+  {
+   "Name": "Public",
+   "Enabled": "False",
+   "DefaultInboundAction": "NotConfigured",
+   "DefaultOutboundAction": "NotConfigured"
+  }
+ ],
+ "active": [
+  "Public"
+ ],
+ "rules": [
+  {
+   "Name": "RemoteAssistance-DCOM-In-TCP-NoScope-Active",
+   "DisplayName": "遠端協助 (DCOM-In)",
+   "Group": "@FirewallAPI.dll,-33002",
+   "Profile": "Domain",
+   "Protocol": "TCP",
+   "LocalPort": "135",
+   "Program": "%SystemRoot%\\system32\\svchost.exe",
+   "Owner": ""
+  },
+  {
+   "Name": "NVS-FrameServer-In-UDP-NoScope",
+   "DisplayName": "Microsoft 媒體基礎網路來源輸入 [UDP 5004-5009]",
+   "Group": "@FirewallAPI.dll,-54001",
+   "Profile": "Any",
+   "Protocol": "UDP",
+   "LocalPort": "5000-5020",
+   "Program": "%SystemRoot%\\system32\\svchost.exe",
+   "Owner": ""
+  },
+  {
+   "Name": "Microsoft.Win32WebViewHost_cw5n1h2txyewy-In-Allow-ServerCapability",
+   "DisplayName": "傳統型應用程式網路檢視器",
+   "Group": "@{Microsoft.Win32WebViewHost_10.0.26100.1_neutral_neutral_cw5n1h2txyewy?ms-resource://Windows.Win32WebViewHost/resources/DisplayName}",
+   "Profile": "Domain, Private, Public",
+   "Protocol": "Any",
+   "LocalPort": "Any",
+   "Program": "Any",
+   "Owner": "S-1-5-18"
+  },
+  {
+   "Name": "WFDPRINT-SPOOL-In-Active",
+   "DisplayName": "Wi-Fi Direct 多工緩衝處理器使用 (輸入)",
+   "Group": "@FirewallAPI.dll,-36851",
+   "Profile": "Public",
+   "Protocol": "Any",
+   "LocalPort": "Any",
+   "Program": "%SystemRoot%\\system32\\spoolsv.exe",
+   "Owner": ""
+  },
+  {
+   "Name": "MDNS-In-UDP-Private-Active",
+   "DisplayName": "mDNS (UDP-In)",
+   "Group": "@%SystemRoot%\\system32\\firewallapi.dll,-37302",
+   "Profile": "Private",
+   "Protocol": "UDP",
+   "LocalPort": "5353",
+   "Program": "%SystemRoot%\\system32\\svchost.exe",
+   "Owner": ""
+  },
+  {
+   "Name": "NVS-FrameServer-In-TCP-NoScope",
+   "DisplayName": "Microsoft 媒體基礎網路來源輸入 [TCP 554]",
+   "Group": "@FirewallAPI.dll,-54001",
+   "Profile": "Any",
+   "Protocol": "TCP",
+   "LocalPort": "554,8554-8558",
+   "Program": "%SystemRoot%\\system32\\svchost.exe",
+   "Owner": ""
+  },
+  {
+   "Name": "FPS-SMB-In-TCP",
+   "DisplayName": "File and Printer Sharing (SMB-In)",
+   "Group": "@FirewallAPI.dll,-28502",
+   "Profile": "Private, Public",
+   "Protocol": "TCP",
+   "LocalPort": "445",
+   "Program": "System",
+   "Owner": ""
+  },
+  {
+   "Name": "TEST-Broad",
+   "DisplayName": "Legacy app allow all",
+   "Group": "",
+   "Profile": "Public",
+   "Protocol": "Any",
+   "LocalPort": "Any",
+   "Program": "Any",
+   "Owner": ""
+  }
+ ],
+ "ours": 0
+}

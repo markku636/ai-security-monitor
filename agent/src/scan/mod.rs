@@ -47,6 +47,10 @@ pub struct ScanCtx {
     pub elevated: bool,
     pub online: bool,
     pub progress: Box<dyn Fn(&str) + Send + Sync>,
+    /// 執行外部指令（測試可換成 FakeRunner）。
+    pub runner: Arc<dyn crate::util::cmd::CmdRunner>,
+    /// 這次要跑的掃描器（Pipeline 排序後填入），讓引擎知道後面還有誰（例：有 ports 時 connections 不重複報曝露）。
+    pub plan: std::sync::Mutex<Vec<ScannerId>>,
 }
 
 impl ScanCtx {
@@ -67,11 +71,23 @@ impl ScanCtx {
             elevated: crate::elevate::is_elevated(),
             online,
             progress: Box::new(|_| {}),
+            runner: Arc::new(crate::util::cmd::RealRunner),
+            plan: std::sync::Mutex::new(Vec::new()),
         }
     }
 
     pub fn with_progress(mut self, f: impl Fn(&str) + Send + Sync + 'static) -> Self {
         self.progress = Box::new(f);
+        self
+    }
+
+    /// 這次掃描是否包含某掃描器。
+    pub fn plans(&self, id: ScannerId) -> bool {
+        self.plan.lock().map(|p| p.contains(&id)).unwrap_or(false)
+    }
+
+    pub fn with_runner(mut self, r: Arc<dyn crate::util::cmd::CmdRunner>) -> Self {
+        self.runner = r;
         self
     }
 
@@ -170,6 +186,9 @@ impl Pipeline {
     /// 執行並組出 Report。
     pub async fn run(&self, selected: &[ScannerId], ctx: &ScanCtx, agent: AgentInfo) -> AppResult<Report> {
         let order = self.order(selected)?;
+        if let Ok(mut p) = ctx.plan.lock() {
+            *p = order.clone();
+        }
         let mut findings: Vec<Finding> = Vec::new();
         let mut warnings: Vec<String> = Vec::new();
         let mut summaries = Summaries::default();
