@@ -39,6 +39,9 @@ jobs:
           cargo run -q -- doctor --json
           cargo run -q -- --json traffic --duration 3s --every 1s > traffic.json
           grep -q flow-lite traffic.json
+          cargo run -q -- events explain 0x7E
+          cargo run -q -- --json events --since 1d > events.json
+          grep -q counts_by_level events.json
 
       - name: Firewall E2E (live, ephemeral runner)
         shell: bash

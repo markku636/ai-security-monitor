@@ -60,6 +60,7 @@ maxminddb = "0.32"
 base64 = "0.22"
 etherparse = "0.21"
 pcap-parser = "0.17"
+quick-xml = "0.42"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }

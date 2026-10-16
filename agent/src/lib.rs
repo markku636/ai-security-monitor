@@ -15,6 +15,7 @@ pub mod connections;
 pub mod elevate;
 pub mod embedded;
 pub mod error;
+pub mod events;
 pub mod firewall;
 pub mod hub;
 pub mod intel;

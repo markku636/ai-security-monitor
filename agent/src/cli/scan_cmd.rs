@@ -20,6 +20,7 @@ pub fn build_pipeline() -> Pipeline {
         .register(Box::new(crate::intel::IntelScanner))
         .register(Box::new(crate::firewall::FirewallScanner))
         .register(Box::new(crate::ports::PortsScanner))
+        .register(Box::new(crate::events::EventsScanner))
 }
 
 /// 解析要跑的掃描器：參數 ＞ config.scan.scanners ＞ 全部可用。

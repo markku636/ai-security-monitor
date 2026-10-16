@@ -93,6 +93,8 @@ pub enum Command {
     Ports(PortsArgs),
     /// 流量：即時觀察連線（免抓包）或分析 pcap／pcapng 檔
     Traffic(TrafficArgs),
+    /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
+    Events(EventsArgs),
     /// 威脅情資：更新、狀態、來源、查詢 IP／網域
     Intel {
         #[command(subcommand)]
@@ -181,6 +183,36 @@ pub enum BaselineCmd {
     Diff,
     /// 顯示基準線內容
     Show,
+}
+
+#[derive(Args, Debug, Clone)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct EventsArgs {
+    #[command(subcommand)]
+    pub cmd: Option<EventsCmd>,
+    /// 看多久以前到現在（例：7d、30d，最多 90d）
+    #[arg(long, default_value = "7d", value_name = "DUR")]
+    pub since: String,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum EventsCmd {
+    /// 只看當機：藍屏、非預期關機、程式當掉、服務失敗、磁碟與硬體錯誤
+    Crashes {
+        /// 看多久以前到現在
+        #[arg(long, default_value = "30d", value_name = "DUR")]
+        since: String,
+    },
+    /// 解釋藍屏代碼（例 0x7E）或事件 ID（例 41、4625）
+    Explain {
+        /// 藍屏代碼或事件 ID
+        code: String,
+    },
+    /// 分析檔案：.evtx（Windows）、journalctl -o json 輸出、macOS .ips／.panic、Windows .dmp
+    Analyze {
+        /// 檔案路徑
+        file: String,
+    },
 }
 
 #[derive(Args, Debug, Clone)]
