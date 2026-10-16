@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "_comment": "已知良性目的地（OS / 套件更新、公共 DNS、常用開發服務）。命中且無任何異常旗標時判定為 safe。每份清單附廠商公開的端點來源，domain 比對支援 *.suffix。",
+  "lists": [
+    {
+      "id": "microsoft-update",
+      "name": "Microsoft Windows Update / Delivery Optimization",
+      "vendor": "Microsoft",
+      "kind": "domain",
+      "source_url": "https://learn.microsoft.com/windows/privacy/manage-windows-11-endpoints",
+      "entries": [
+        "windowsupdate.com",
+        "*.windowsupdate.com",
+        "update.microsoft.com",
+        "*.update.microsoft.com",
+        "download.windowsupdate.com",
+        "*.delivery.mp.microsoft.com",
+        "*.prod.do.dsp.mp.microsoft.com",
+        "ctldl.windowsupdate.com",
+        "*.events.data.microsoft.com"
+      ]
+    },
+    {
+      "id": "apple-update",
+      "name": "Apple software update",
+      "vendor": "Apple",
+      "kind": "domain",
+      "source_url": "https://support.apple.com/en-us/101555",
+      "entries": [
+        "swscan.apple.com",
+        "swcdn.apple.com",
+        "swdist.apple.com",
+        "gdmf.apple.com",
+        "xp.apple.com",
+        "ocsp.apple.com",
+        "ocsp2.apple.com",
+        "mesu.apple.com",
+        "updates-http.cdn-apple.com",
+        "updates.cdn-apple.com"
+      ]
+    },
+    {
+      "id": "ubuntu-debian-archives",
+      "name": "Ubuntu / Debian package archives",
+      "vendor": "Canonical / Debian",
+      "kind": "domain",
+      "source_url": "https://help.ubuntu.com/community/Repositories/Ubuntu",
+      "entries": [
+        "archive.ubuntu.com",
+        "*.archive.ubuntu.com",
+        "security.ubuntu.com",
+        "ports.ubuntu.com",
+        "esm.ubuntu.com",
+        "deb.debian.org",
+        "security.debian.org",
+        "*.debian.org"
+      ]
+    },
+    {
+      "id": "fedora-rhel-mirrors",
+      "name": "Fedora / Rocky / Alma mirrors",
+      "vendor": "Fedora Project / RESF / AlmaLinux",
+      "kind": "domain",
+      "source_url": "https://mirrors.fedoraproject.org/",
+      "entries": [
+        "mirrors.fedoraproject.org",
+        "*.fedoraproject.org",
+        "mirrors.rockylinux.org",
+        "*.rockylinux.org",
+        "mirrors.almalinux.org",
+        "*.almalinux.org"
+      ]
+    },
+    {
+      "id": "public-dns",
+      "name": "Public DNS resolvers",
+      "vendor": "Google / Cloudflare / Quad9",
+      "kind": "cidr",
+      "source_url": "https://developers.google.com/speed/public-dns/docs/using",
+      "entries": [
+        "8.8.8.8/32",
+        "8.8.4.4/32",
+        "2001:4860:4860::8888/128",
+        "2001:4860:4860::8844/128",
+        "1.1.1.1/32",
+        "1.0.0.1/32",
+        "2606:4700:4700::1111/128",
+        "2606:4700:4700::1001/128",
+        "9.9.9.9/32",
+        "149.112.112.112/32",
+        "2620:fe::fe/128"
+      ]
+    },
+    {
+      "id": "dev-registries",
+      "name": "Developer package registries",
+      "vendor": "GitHub / npm / crates.io / PyPI / Docker",
+      "kind": "domain",
+      "source_url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-githubs-ip-addresses",
+      "entries": [
+        "github.com",
+        "api.github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "crates.io",
+        "static.crates.io",
+        "index.crates.io",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "registry-1.docker.io",
+        "auth.docker.io",
+        "production.cloudflare.docker.com"
+      ]
+    },
+    {
+      "id": "ai-assistants",
+      "name": "AI coding assistant APIs",
+      "vendor": "Anthropic / OpenAI",
+      "kind": "domain",
+      "source_url": "https://docs.anthropic.com/",
+      "entries": ["api.anthropic.com", "claude.ai", "*.anthropic.com", "api.openai.com", "*.openai.com"]
+    }
+  ]
+}

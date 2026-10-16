@@ -1,0 +1,33 @@
+# Rust
+agent/target/
+**/*.rs.bk
+
+# Node / Next.js
+node_modules/
+hub/.next/
+hub/out/
+hub/.tmp/
+hub/test-results/
+hub/playwright-report/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+secrets.json
+
+# Build / release artifacts
+release/
+dist/
+*.log
+*.pcap
+*.pcapng
+!agent/tests/fixtures/**
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

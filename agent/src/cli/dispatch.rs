@@ -1,0 +1,22 @@
+//! 子命令分派。每個 handler 吃 `&Env` 與自己的參數，回 `AppResult<()>`。
+
+use super::args::{Cli, Command};
+use super::Env;
+use crate::config;
+use crate::error::AppResult;
+
+pub async fn dispatch(cli: Cli) -> AppResult<()> {
+    let config_dir = config::config_dir(cli.global.config_dir.as_deref())?;
+    let env = Env {
+        global: cli.global.clone(),
+        config_dir,
+    };
+    match cli.cmd {
+        Command::Version { check } => super::version_cmd::run(&env, check).await,
+        Command::Doctor => super::doctor_cmd::run(&env).await,
+        Command::Scan(a) => super::scan_cmd::run(&env, a).await,
+        Command::Config { cmd } => super::config_cmd::run(&env, cmd),
+        Command::Allowlist { cmd } => super::allowlist_cmd::run(&env, cmd),
+        Command::Baseline { cmd } => super::baseline_cmd::run(&env, cmd).await,
+    }
+}

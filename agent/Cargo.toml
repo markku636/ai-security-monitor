@@ -1,0 +1,71 @@
+[package]
+name = "asa"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "AI Security Agent (asa): defensive endpoint scanner with threat-intel verdicts, firewall actions, traffic/event analysis and MCP"
+repository = "https://github.com/markku636/ai-security-agent"
+default-run = "asa"
+
+[lib]
+name = "asa_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "asa"
+path = "src/bin/asa.rs"
+
+[features]
+default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"]
+intel = []
+firewall = []
+vuln = []
+hardening = []
+traffic = []
+# Live packet capture links libpcap / Npcap at build and run time; off by default.
+capture = ["traffic"]
+events = []
+# OS keychain for secrets (Windows Credential Manager / macOS Keychain). Off → file store (0600).
+keychain = ["dep:keyring"]
+service = []
+yara = []
+sigma = []
+
+[dependencies]
+clap = { version = "4.6", features = ["derive", "env"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs", "io-util", "net", "time", "signal", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+async-trait = "0.1"
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+include_dir = "0.7"
+ipnet = { version = "2", features = ["serde"] }
+humantime = "2"
+comfy-table = "8"
+globset = "0.4"
+hostname = "0.4"
+keyring = { version = "3", default-features = false, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+codegen-units = 16
