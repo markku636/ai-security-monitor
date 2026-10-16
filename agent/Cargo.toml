@@ -51,6 +51,8 @@ comfy-table = "8"
 globset = "0.4"
 hostname = "0.4"
 keyring = { version = "3", default-features = false, optional = true }
+netstat2 = "0.11"
+sysinfo = "0.39"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }
@@ -69,3 +71,6 @@ tempfile = "3"
 lto = "thin"
 strip = "symbols"
 codegen-units = 16
+
+[profile.dev.package.sha2]
+opt-level = 3

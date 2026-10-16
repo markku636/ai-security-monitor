@@ -10,6 +10,7 @@ pub mod i18n;
 pub mod locales;
 
 pub mod config;
+pub mod connections;
 pub mod elevate;
 pub mod embedded;
 pub mod error;
@@ -17,6 +18,7 @@ pub mod model;
 pub mod scan;
 pub mod secrets;
 pub mod store;
+pub mod sysmeta;
 pub mod util;
 
 pub mod cli;

@@ -209,6 +209,73 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "比對目前狀態與基準線" => "Compare the current state with the baseline",
         "顯示基準線內容" => "Show the baseline contents",
 
+        // ---- connections ----
+        "部分 socket 無法對應到行程（需要系統管理員權限）" => "Some sockets could not be mapped to a process (administrator privileges required)",
+        "列舉 socket 失敗：{e}" => "Failed to enumerate sockets: {e}",
+        "未知行程" => "unknown process",
+        "對外連到高風險 port {port}（{name}）" => "Outbound connection to risky port {port} ({name})",
+        "{process} 連到 {remote}：{rationale}" => "{process} connects to {remote}: {rationale}",
+        "確認該行程是否應有此連線；若非預期，封鎖目的地並檢查該行程" => {
+            "Confirm the process should make this connection; if unexpected, block the destination and inspect the process"
+        }
+        "Shell / 腳本程式有對外連線：{process}" => "Shell / script host with an outbound connection: {process}",
+        "{process} 連到公網 {remote}；這類程式對外連線常見於反向 shell 或惡意下載" => {
+            "{process} connects to public {remote}; outbound traffic from such programs is typical of reverse shells or malicious downloads"
+        }
+        "檢查該行程的命令列與父行程；非預期則終止並封鎖目的地" => {
+            "Inspect the command line and parent process; terminate it and block the destination if unexpected"
+        }
+        "暫存／下載目錄的程式有網路連線：{process}" => "Program in a temp/download directory has network activity: {process}",
+        "執行檔位於暫存或下載目錄，並連到 {remote}；惡意程式常從這類位置執行" => {
+            "The executable lives in a temp or download directory and connects to {remote}; malware often runs from such locations"
+        }
+        "確認該執行檔來源與雜湊；非預期則隔離檔案並封鎖目的地" => {
+            "Verify the executable's origin and hash; quarantine the file and block the destination if unexpected"
+        }
+        "規律回連（疑似 beacon）：{remote}" => "Periodic reconnects (possible beacon): {remote}",
+        "{process} 每約 {period} 秒重新連到 {remote}（{n} 次，抖動 {jitter}）；C2 常以固定週期回報" => {
+            "{process} reconnects to {remote} about every {period} s ({n} times, jitter {jitter}); C2 implants often check in on a fixed period"
+        }
+        "用 AI 解讀此目的地與行程；非已知服務則封鎖並進一步鑑識" => {
+            "Ask the AI to explain this destination and process; block it and investigate further unless it is a known service"
+        }
+        "{name}（{proto} {port}）對外監聽" => "{name} ({proto} {port}) is listening on external interfaces",
+        "{process} 綁在 {bind}：{rationale}" => "{process} is bound to {bind}: {rationale}",
+        "若不需對外提供，改綁 127.0.0.1 或用防火牆只允許特定來源" => {
+            "If it need not be reachable externally, bind to 127.0.0.1 or restrict sources with the firewall"
+        }
+        "以防火牆封鎖對內 {proto} {port}" => "Block inbound {proto} {port} with the firewall",
+        "基準線外的新 listener：{proto} {port}" => "New listener not in the baseline: {proto} {port}",
+        "{process} 開始監聽 {proto} {port}，基準線中沒有這個 port" => {
+            "{process} started listening on {proto} {port}, which is not in the baseline"
+        }
+        "確認是否為預期服務；是則執行 asa baseline save --yes 納入基準線" => {
+            "Confirm it is an expected service; if so, run asa baseline save --yes to add it to the baseline"
+        }
+        "以防火牆封鎖 {ip}（雙向）" => "Block {ip} with the firewall (both directions)",
+
+        // ---- cli/connections_cmd.rs ----
+        "方向" => "Direction",
+        "判定" => "Verdict",
+        "協定" => "Proto",
+        "本機位址" => "Local",
+        "遠端" => "Remote",
+        "狀態" => "State",
+        "行程" => "Process",
+        "原因" => "Reasons",
+        "共 {n} 筆（{total} 筆原始 socket）" => "{n} rows ({total} raw sockets)",
+        "列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因" => {
+            "List connections: direction, verdict (safe / unknown / suspicious / dangerous), process, reasons"
+        }
+        "只看某方向（outbound / inbound / listening / local）" => "Only one direction (outbound / inbound / listening / local)",
+        "只看這些判定（逗號分隔：safe,unknown,suspicious,dangerous）" => {
+            "Only these verdicts (comma-separated: safe,unknown,suspicious,dangerous)"
+        }
+        "包含本機對本機與 loopback listener" => "Include local-to-local connections and loopback listeners",
+        "持續刷新" => "Keep refreshing",
+        "刷新間隔（--watch）" => "Refresh interval (--watch)",
+        "比對威脅情資（需先 asa intel update）" => "Match against threat intel (run asa intel update first)",
+
         _ => return None,
     })
 }

@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 
 use crate::model::allowlist::AllowKind;
+use crate::model::connection::Direction;
 use crate::model::finding::ScannerId;
+use crate::model::verdict::VerdictLevel;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -60,6 +62,8 @@ pub enum Command {
     Doctor,
     /// 執行掃描並輸出報告
     Scan(ScanArgs),
+    /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
+    Connections(ConnectionsArgs),
     /// 設定檔
     Config {
         #[command(subcommand)]
@@ -143,4 +147,26 @@ pub enum BaselineCmd {
     Diff,
     /// 顯示基準線內容
     Show,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct ConnectionsArgs {
+    /// 只看某方向（outbound / inbound / listening / local）
+    #[arg(long, value_enum)]
+    pub direction: Option<Direction>,
+    /// 只看這些判定（逗號分隔：safe,unknown,suspicious,dangerous）
+    #[arg(long, value_delimiter = ',', value_enum)]
+    pub verdict: Vec<VerdictLevel>,
+    /// 包含本機對本機與 loopback listener
+    #[arg(long)]
+    pub all: bool,
+    /// 持續刷新
+    #[arg(long)]
+    pub watch: bool,
+    /// 刷新間隔（--watch）
+    #[arg(long, default_value = "2s", value_name = "DUR")]
+    pub interval: String,
+    /// 比對威脅情資（需先 asa intel update）
+    #[arg(long)]
+    pub intel: bool,
 }

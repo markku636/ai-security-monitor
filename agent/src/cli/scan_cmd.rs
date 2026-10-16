@@ -15,7 +15,7 @@ use crate::scan::{Pipeline, ScanCtx};
 
 /// 建立含所有本版本可用引擎的 Pipeline（各輪次在此掛入）。
 pub fn build_pipeline() -> Pipeline {
-    Pipeline::new()
+    Pipeline::new().register(Box::new(crate::connections::ConnectionsScanner))
 }
 
 /// 解析要跑的掃描器：參數 ＞ config.scan.scanners ＞ 全部可用。
@@ -50,6 +50,7 @@ pub async fn run_scan(env: &Env, scanners: &[ScannerId], no_online: bool) -> App
             }
         });
     let mut agent = AgentInfo::current(&cfg.agent_id);
+    crate::sysmeta::enrich(&mut agent);
     agent.scanners_available = pipeline.available();
     let report = pipeline.run(&selected, &ctx, agent).await?;
     let shared = ctx.shared.lock().await;

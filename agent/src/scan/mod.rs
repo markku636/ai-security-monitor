@@ -212,6 +212,25 @@ impl Pipeline {
             }
         }
 
+        // 同一 finding id（例：同 port 同時綁 0.0.0.0 與 ::）只保留一筆，標籤合併。
+        {
+            let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            let mut deduped: Vec<Finding> = Vec::with_capacity(findings.len());
+            for f in findings.drain(..) {
+                if let Some(&i) = seen.get(&f.id) {
+                    for t in f.tags {
+                        if !deduped[i].tags.contains(&t) {
+                            deduped[i].tags.push(t);
+                        }
+                    }
+                } else {
+                    seen.insert(f.id.clone(), deduped.len());
+                    deduped.push(f);
+                }
+            }
+            findings = deduped;
+        }
+
         // 白名單：命中的 finding 標 suppressed_by（保留在報告裡，hub 可選擇隱藏）。
         for f in &mut findings {
             if let Some(entry) = allowlist_hit(&ctx.allowlist, f) {

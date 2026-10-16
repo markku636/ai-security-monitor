@@ -4,10 +4,23 @@
 use crate::model::finding::{Evidence, Finding, ScannerId};
 use crate::model::report::{HardeningSummary, Scores};
 
+/// 曝露類規則：雖由 connections 引擎產生，計分歸「曝露」面向。
+fn is_exposure_rule(rule: &str) -> bool {
+    rule.starts_with("connections.exposed_listener") || rule.starts_with("connections.new_listener")
+}
+
+fn belongs(f: &Finding, scanners: &[ScannerId]) -> bool {
+    let exposure_set = scanners.contains(&ScannerId::Ports) || scanners.contains(&ScannerId::Firewall);
+    if is_exposure_rule(&f.rule) {
+        return exposure_set;
+    }
+    scanners.contains(&f.scanner)
+}
+
 fn component(findings: &[Finding], scanners: &[ScannerId]) -> u8 {
     let mut penalty: u32 = 0;
     for f in findings {
-        if f.suppressed_by.is_some() || !scanners.contains(&f.scanner) {
+        if f.suppressed_by.is_some() || !belongs(f, scanners) {
             continue;
         }
         penalty += f.severity.penalty();
@@ -58,7 +71,7 @@ pub fn compute(findings: &[Finding], hardening: Option<&HardeningSummary>, ran: 
             ],
         )
     });
-    let exposure = has(&[ScannerId::Ports, ScannerId::Firewall])
+    let exposure = (has(&[ScannerId::Ports, ScannerId::Firewall]) || ran.contains(&ScannerId::Connections))
         .then(|| component(findings, &[ScannerId::Ports, ScannerId::Firewall]));
     let vulns =
         has(&[ScannerId::Vuln, ScannerId::Files]).then(|| component(findings, &[ScannerId::Vuln, ScannerId::Files]));

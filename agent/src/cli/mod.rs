@@ -10,6 +10,7 @@ pub mod render;
 pub mod allowlist_cmd;
 pub mod baseline_cmd;
 pub mod config_cmd;
+pub mod connections_cmd;
 pub mod doctor_cmd;
 pub mod scan_cmd;
 pub mod version_cmd;
