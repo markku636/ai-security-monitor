@@ -32,7 +32,7 @@ pub fn push(config_dir: &Path, report: &Report) -> AppResult<PathBuf> {
     let name = format!(
         "{}-{}.json",
         report.finished_at.format("%Y%m%dT%H%M%S"),
-        &report.report_id
+        report.report_id
     );
     store::write_json_compact_in(&d, &name, report)?;
     // 超過上限丟最舊的。
