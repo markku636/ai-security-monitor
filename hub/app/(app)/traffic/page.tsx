@@ -29,13 +29,16 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
             {t('依各主機的連線快照彙整：最常連的目的地、新出現的目的地、各行程的連線數。逐封包分析請在主機上用 asa traffic analyze。')}
           </p>
         </div>
-        <FilterRow label={t('期間')}>
-          {[1, 7, 30].map((d) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <a href="/ai?scope=traffic" className="rounded-md border border-teal-600 px-2.5 py-1 text-xs text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950">{t('請 AI 解讀流量')}</a>
+          <FilterRow label={t('期間')}>
+            {[1, 7, 30].map((d) => (
             <FilterChip key={d} href={`/traffic?days=${d}`} active={d === days}>
               {t('{n} 天', { n: d })}
             </FilterChip>
-          ))}
-        </FilterRow>
+            ))}
+          </FilterRow>
+        </div>
       </header>
       {!top.length ? <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 asa watch 後每分鐘會回報連線快照。')}</EmptyState> : null}
       {risky.length ? (

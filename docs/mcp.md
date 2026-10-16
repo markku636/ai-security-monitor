@@ -75,3 +75,14 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 工具（全部唯讀）：`fleet_summary`、`list_agents`、`list_findings`、`list_connections`、`inbound_attackers`、`lookup_indicator`、`top_destinations`、
 `crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`。資料與 Hub 頁面同一份查詢。
 認證用 `ASA_HUB_MCP_TOKEN`（建議另設一把，只給 AI 用）或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。
+
+## Hub 的 AI 分析頁（/ai）
+
+Hub 也能直接在 hub 主機上跑 Claude Code／Codex：選「整個車隊／單一主機／解讀流量／分析當機與資安事件」，回答與工具呼叫即時串流到網頁，紀錄留在「最近的分析」。
+「事件與當機」「流量」頁與主機頁都有「請 AI …」按鈕直接帶入範圍。
+
+- 每一輪產生一次性 token，CLI 只能用它呼叫 hub 的唯讀 MCP；結束即失效。
+- 子行程只拿到白名單環境變數（PATH、HOME、Claude／OpenAI 的登入憑證等），**不會**拿到 hub 的管理員金鑰或資料庫網址。
+- 網頁按「停止」或關掉分頁就會整棵行程收掉；同時最多跑 `ASA_HUB_AI_MAX_CONCURRENT`（預設 2）輪。
+- hub 主機要先安裝並登入 Claude Code 或 Codex；Docker 版會把登入狀態放在 `/data`（之後的 Docker 輪次）。CLI 不在 PATH 時用 `ASA_HUB_CLAUDE_BIN`／`ASA_HUB_CODEX_BIN` 指定；
+  hub 不是跑在 3000 port 時設 `ASA_HUB_INTERNAL_URL`（例 `http://127.0.0.1:8088`）讓 CLI 連得回 `/api/mcp`。

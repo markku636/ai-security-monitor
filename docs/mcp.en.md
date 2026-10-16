@@ -75,3 +75,14 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 Tools (all read-only): `fleet_summary`, `list_agents`, `list_findings`, `list_connections`, `inbound_attackers`, `lookup_indicator`, `top_destinations`,
 `crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`. They use the same queries as the hub pages.
 Authenticate with `ASA_HUB_MCP_TOKEN` (recommended: a separate key just for AI clients) or the admin key; open mode (no admin key) only accepts loopback Host/Origin.
+
+## The hub's AI page (/ai)
+
+The hub can also run Claude Code / Codex on the hub host: pick "whole fleet / one host / explain traffic / crashes and security events" and the answer and tool calls stream into the page; runs are kept under "Recent analyses".
+The Events and Traffic pages and the host page have "Ask AI …" buttons that open it with the scope preselected.
+
+- Each run gets a one-time token that only lets the CLI call the hub's read-only MCP; it expires when the run ends.
+- The child process only receives allow-listed environment variables (PATH, HOME, Claude/OpenAI sign-in credentials…), **never** the hub's admin key or database URL.
+- Pressing Stop or closing the tab kills the whole process tree; at most `ASA_HUB_AI_MAX_CONCURRENT` (default 2) runs at a time.
+- Install and sign in to Claude Code or Codex on the hub host first; the Docker image will keep sign-in state under `/data` (later Docker round). Use `ASA_HUB_CLAUDE_BIN` / `ASA_HUB_CODEX_BIN` when the CLI is not on PATH,
+  and set `ASA_HUB_INTERNAL_URL` (e.g. `http://127.0.0.1:8088`) when the hub does not listen on port 3000 so the CLI can reach `/api/mcp`.

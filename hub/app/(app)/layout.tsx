@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           { href: '/events', label: t('事件與當機') },
           { href: '/intel', label: t('威脅情資') },
           { href: '/actions', label: t('動作') },
+          { href: '/ai', label: t('AI 分析') },
         ]
       : []),
   ];

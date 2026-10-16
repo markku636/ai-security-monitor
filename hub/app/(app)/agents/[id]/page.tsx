@@ -259,6 +259,12 @@ export default async function AgentPage({
           <h1 className="text-xl font-semibold">{a.hostname}</h1>
           <StatusBadge t={t} a={a} />
           {a.partial ? <Badge tone="info">{t('部分資料')}</Badge> : null}
+          <Link
+            href={`/ai?scope=agent&agent_id=${encodeURIComponent(a.id)}`}
+            className="ml-auto rounded-md border border-teal-600 px-2.5 py-1 text-xs text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950"
+          >
+            {t('請 AI 檢查這台主機')}
+          </Link>
         </div>
         <p className="font-mono text-xs text-slate-500">{a.id}</p>
       </header>

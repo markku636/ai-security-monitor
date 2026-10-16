@@ -6,6 +6,7 @@ import { safeEqual } from '@/lib/auth/crypto';
 import { bearer } from '@/lib/auth/access';
 import { env, isOpenMode } from '@/lib/env';
 import { readJson } from '@/lib/http';
+import { isRunToken } from '@/lib/ai/run';
 import { callTool, TOOLS } from '@/lib/mcp/tools';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,8 @@ function authorized(req: Request): boolean {
   const token = bearer(req);
   const mcpToken = (process.env.ASA_HUB_MCP_TOKEN ?? '').trim();
   if (token && mcpToken && safeEqual(token, mcpToken)) return true;
+  // hub 自己跑 AI 時給 CLI 的一次性 token
+  if (token && isRunToken(token)) return true;
   if (token && env().adminSecret && safeEqual(token, env().adminSecret)) return true;
   if (isOpenMode()) {
     const origin = req.headers.get('origin');

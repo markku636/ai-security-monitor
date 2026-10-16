@@ -35,13 +35,16 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
           <h1 className="text-xl font-semibold">{t('事件與當機')}</h1>
           <p className="text-sm text-slate-500">{t('各主機回報的藍屏、非預期關機、程式當掉、硬體錯誤，以及暴力破解、新帳號、新服務等資安事件。')}</p>
         </div>
-        <FilterRow label={t('期間')}>
-          {DAY_CHOICES.map((d) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <a href="/ai?scope=events" className="rounded-md border border-teal-600 px-2.5 py-1 text-xs text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950">{t('請 AI 分析當機原因')}</a>
+          <FilterRow label={t('期間')}>
+            {DAY_CHOICES.map((d) => (
             <FilterChip key={d} href={`/events?days=${d}`} active={d === days}>
               {t('{n} 天', { n: d })}
             </FilterChip>
-          ))}
-        </FilterRow>
+            ))}
+          </FilterRow>
+        </div>
       </header>
       {empty ? (
         <EmptyState title={t('這段期間沒有當機或資安事件')}>{t('代理程式的掃描會帶上近 7 天的事件摘要；以系統管理員執行才讀得到 Security 記錄。')}</EmptyState>

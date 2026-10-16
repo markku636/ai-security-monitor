@@ -351,3 +351,25 @@ export const agentSummaries = pgTable(
   },
   (t) => [primaryKey({ columns: [t.agentId, t.kind] })],
 );
+
+/** AI 分析紀錄（hub 上執行 Claude Code／Codex 的每一輪）。 */
+export const aiAnalyses = pgTable(
+  'ai_analyses',
+  {
+    id: text('id').primaryKey(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    finishedAt: ts('finished_at'),
+    provider: text('provider').notNull(),
+    scope: text('scope').notNull(),
+    agentId: text('agent_id'),
+    prompt: text('prompt').notNull(),
+    /** running / done / error / cancelled */
+    status: text('status').notNull().default('running'),
+    resultText: text('result_text'),
+    toolsCalled: integer('tools_called').notNull().default(0),
+    events: jsonb('events').$type<unknown[]>().notNull().default([]),
+    error: text('error'),
+    createdBy: text('created_by').notNull(),
+  },
+  (t) => [index('ai_analyses_created_idx').on(t.createdAt)],
+);
