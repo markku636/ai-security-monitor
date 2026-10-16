@@ -98,6 +98,9 @@ pub struct Summaries {
     pub events: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hardening: Option<HardeningSummary>,
+    /// VulnSummary（作業系統支援、更新、已知漏洞軟體、OSV）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vuln: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

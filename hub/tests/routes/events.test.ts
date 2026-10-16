@@ -98,7 +98,7 @@ describe('events summaries', () => {
     const r2 = structuredClone(r1);
     r2.report_id = '11111111-2222-4333-8444-555555555555';
     r2.finished_at = new Date(Date.now() + 1000).toISOString();
-    r2.summaries = { events: eventsSummary(40) };
+    r2.summaries = { events: eventsSummary(40), vuln: { packages: 140, support: { product: 'Windows 11 25H2', status: 'supported' }, app_hits: [] } };
     expect((await report(clientPost('/api/v1/ingest/report', r2))).status).toBe(200);
     expect(await db.select().from(crashRecords)).toHaveLength(2);
     const sec = await db.select().from(securityEvents);
@@ -107,6 +107,7 @@ describe('events summaries', () => {
     const summ = await db.select().from(agentSummaries);
     expect(summ[0]).toMatchObject({ kind: 'events' });
     expect((await latestSummary(AGENT, 'events'))?.summary).toMatchObject({ needs_admin: ['Minidump'] });
+    expect((await latestSummary(AGENT, 'vuln'))?.summary).toMatchObject({ packages: 140, support: { status: 'supported' } });
   });
 
   it('answers the events queries', async () => {

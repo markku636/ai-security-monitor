@@ -61,12 +61,14 @@ base64 = "0.22"
 etherparse = "0.21"
 pcap-parser = "0.17"
 quick-xml = "0.42"
+regex = "1"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+plist = "1"
 keyring = { version = "3", default-features = false, features = ["apple-native"], optional = true }
 
 [target.'cfg(unix)'.dependencies]

@@ -95,6 +95,8 @@ pub enum Command {
     Traffic(TrafficArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
     Events(EventsArgs),
+    /// 漏洞與更新：作業系統是否仍在支援、多久沒更新、已安裝軟體的已知漏洞（Linux 套件查 OSV）
+    Vuln(VulnArgs),
     /// MCP 伺服器：讓 Claude Code／Codex／Cursor／VS Code 查這台電腦的資安狀態
     Mcp(McpArgs),
     /// 用 Claude Code 或 Codex CLI 分析：問問題、解讀報告、流量與當機
@@ -325,6 +327,19 @@ pub enum EventsCmd {
         /// 檔案路徑
         file: String,
     },
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct VulnArgs {
+    /// 只列出已安裝的軟體清單，不做比對
+    #[arg(long)]
+    pub inventory_only: bool,
+    /// 不連線查 OSV（只用內建規則）
+    #[arg(long)]
+    pub no_online: bool,
+    /// 清單模式下只列名稱含這段文字的軟體
+    #[arg(long, value_name = "TEXT")]
+    pub filter: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "_comment": "作業系統支援期限（停止安全性更新的日期）。資料來源見 refs；自寫整理，MIT。macOS 沒有官方公告的期限，只列出已確定不再更新的版本。",
+  "refs": [
+    "https://learn.microsoft.com/windows/release-health/windows11-release-information",
+    "https://learn.microsoft.com/lifecycle/products/windows-10-home-and-pro",
+    "https://learn.microsoft.com/lifecycle/products/?products=windows-server",
+    "https://ubuntu.com/about/release-cycle",
+    "https://wiki.debian.org/DebianReleases",
+    "https://access.redhat.com/support/policy/updates/errata",
+    "https://alpinelinux.org/releases/",
+    "https://endoflife.date/macos"
+  ],
+  "windows": [
+    { "name": "Windows 10", "min_build": 10240, "max_build": 19045, "eol": "2025-10-14", "enterprise_eol": "2025-10-14", "note": "ESU（延伸安全性更新）需另外付費註冊" },
+    { "name": "Windows 11 21H2", "min_build": 22000, "max_build": 22000, "eol": "2023-10-10", "enterprise_eol": "2024-10-08" },
+    { "name": "Windows 11 22H2", "min_build": 22621, "max_build": 22621, "eol": "2024-10-08", "enterprise_eol": "2025-10-14" },
+    { "name": "Windows 11 23H2", "min_build": 22631, "max_build": 22631, "eol": "2025-11-11", "enterprise_eol": "2026-11-10" },
+    { "name": "Windows 11 24H2", "min_build": 26100, "max_build": 26100, "eol": "2026-10-13", "enterprise_eol": "2027-10-12" },
+    { "name": "Windows 11 25H2", "min_build": 26200, "max_build": 26200, "eol": "2027-10-12", "enterprise_eol": "2028-10-10" }
+  ],
+  "windows_server": [
+    { "name": "Windows Server 2012 R2", "match": "2012", "eol": "2023-10-10" },
+    { "name": "Windows Server 2016", "match": "2016", "eol": "2027-01-12" },
+    { "name": "Windows Server 2019", "match": "2019", "eol": "2029-01-09" },
+    { "name": "Windows Server 2022", "match": "2022", "eol": "2031-10-14" },
+    { "name": "Windows Server 2025", "match": "2025", "eol": "2034-10-10" }
+  ],
+  "linux": [
+    { "id": "ubuntu", "version": "18.04", "eol": "2023-05-31", "note": "ESM 需 Ubuntu Pro" },
+    { "id": "ubuntu", "version": "20.04", "eol": "2025-05-31", "note": "ESM 需 Ubuntu Pro" },
+    { "id": "ubuntu", "version": "22.04", "eol": "2027-06-01" },
+    { "id": "ubuntu", "version": "24.04", "eol": "2029-05-31" },
+    { "id": "ubuntu", "version": "24.10", "eol": "2025-07-10" },
+    { "id": "ubuntu", "version": "25.04", "eol": "2026-01-15" },
+    { "id": "debian", "version": "10", "eol": "2024-06-30" },
+    { "id": "debian", "version": "11", "eol": "2026-08-31" },
+    { "id": "debian", "version": "12", "eol": "2028-06-30" },
+    { "id": "debian", "version": "13", "eol": "2030-06-30" },
+    { "id": "rhel", "version": "7", "eol": "2024-06-30" },
+    { "id": "rhel", "version": "8", "eol": "2029-05-31" },
+    { "id": "rhel", "version": "9", "eol": "2032-05-31" },
+    { "id": "rocky", "version": "8", "eol": "2029-05-31" },
+    { "id": "rocky", "version": "9", "eol": "2032-05-31" },
+    { "id": "almalinux", "version": "8", "eol": "2029-05-31" },
+    { "id": "almalinux", "version": "9", "eol": "2032-05-31" },
+    { "id": "centos", "version": "7", "eol": "2024-06-30" },
+    { "id": "centos", "version": "8", "eol": "2021-12-31" },
+    { "id": "alpine", "version": "3.18", "eol": "2025-05-09" },
+    { "id": "alpine", "version": "3.19", "eol": "2025-11-01" },
+    { "id": "alpine", "version": "3.20", "eol": "2026-04-01" },
+    { "id": "alpine", "version": "3.21", "eol": "2026-11-01" },
+    { "id": "alpine", "version": "3.22", "eol": "2027-05-01" }
+  ],
+  "macos": [
+    { "major": 10, "eol": "2023-09-26", "note": "macOS 10.x 全部已停止更新" },
+    { "major": 11, "eol": "2023-09-26" },
+    { "major": 12, "eol": "2024-09-16" },
+    { "major": 13, "eol": "2025-09-15" }
+  ]
+}

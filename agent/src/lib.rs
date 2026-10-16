@@ -29,6 +29,7 @@ pub mod store;
 pub mod sysmeta;
 pub mod traffic;
 pub mod util;
+pub mod vuln;
 
 pub mod cli;
 

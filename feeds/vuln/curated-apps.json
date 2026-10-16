@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "_comment": "常見桌面軟體／執行環境的已知漏洞版本門檻：已安裝版本低於 fixed 就出 finding。只收公開、有修補版本的漏洞；是否列入 CISA KEV 由已下載的 KEV 清單動態判斷。match 是不分大小寫的顯示名稱片段（Windows 解除安裝清單、macOS App 名稱、Linux 套件名）。自寫整理，MIT。",
+  "rules": [
+    {
+      "id": "winrar-cve-2025-8088",
+      "app": "WinRAR",
+      "match": ["winrar"],
+      "platforms": ["windows"],
+      "fixed": "7.13",
+      "cves": ["CVE-2025-8088"],
+      "severity": "high",
+      "summary": { "zh": "解壓縮特製 RAR 時可寫入任意路徑（已被用於攻擊）", "en": "Crafted RAR archives can write to arbitrary paths (exploited in the wild)" },
+      "fix": { "zh": "更新到 WinRAR 7.13 以上", "en": "Update to WinRAR 7.13 or later" }
+    },
+    {
+      "id": "7zip-cve-2025-0411",
+      "app": "7-Zip",
+      "match": ["7-zip"],
+      "platforms": ["windows"],
+      "fixed": "24.09",
+      "cves": ["CVE-2025-0411"],
+      "severity": "high",
+      "summary": { "zh": "解壓縮後的檔案不帶 Mark-of-the-Web，可繞過 SmartScreen（已被用於攻擊）", "en": "Extracted files lose Mark-of-the-Web, bypassing SmartScreen (exploited in the wild)" },
+      "fix": { "zh": "更新到 7-Zip 24.09 以上", "en": "Update to 7-Zip 24.09 or later" }
+    },
+    {
+      "id": "chrome-cve-2025-6554",
+      "app": "Google Chrome",
+      "match": ["google chrome"],
+      "platforms": ["windows", "macos", "linux"],
+      "fixed": "138.0.7204.96",
+      "cves": ["CVE-2025-6554"],
+      "severity": "high",
+      "summary": { "zh": "V8 型別混淆，瀏覽惡意網頁可執行程式碼（已被用於攻擊）", "en": "V8 type confusion lets a malicious page run code (exploited in the wild)" },
+      "fix": { "zh": "重新啟動 Chrome 套用更新，或到「關於 Google Chrome」手動更新", "en": "Restart Chrome to apply the update, or update from About Google Chrome" }
+    },
+    {
+      "id": "edge-cve-2025-6554",
+      "app": "Microsoft Edge",
+      "match": ["microsoft edge"],
+      "platforms": ["windows", "macos"],
+      "fixed": "138.0.3351.65",
+      "cves": ["CVE-2025-6554"],
+      "severity": "high",
+      "summary": { "zh": "Chromium V8 型別混淆，瀏覽惡意網頁可執行程式碼（已被用於攻擊）", "en": "Chromium V8 type confusion lets a malicious page run code (exploited in the wild)" },
+      "fix": { "zh": "到 edge://settings/help 更新並重新啟動", "en": "Update from edge://settings/help and restart" }
+    },
+    {
+      "id": "putty-cve-2024-31497",
+      "app": "PuTTY",
+      "match": ["putty"],
+      "platforms": ["windows"],
+      "fixed": "0.81",
+      "cves": ["CVE-2024-31497"],
+      "severity": "high",
+      "summary": { "zh": "NIST P-521 簽章可被還原私鑰（用該金鑰的 SSH 帳號要換金鑰）", "en": "NIST P-521 signatures leak the private key (rotate affected SSH keys)" },
+      "fix": { "zh": "更新到 PuTTY 0.81 以上，並更換曾用過的 P-521 金鑰", "en": "Update to PuTTY 0.81+ and replace any P-521 keys that were used" }
+    },
+    {
+      "id": "git-cve-2024-32002",
+      "app": "Git",
+      "match": ["git version", "git for windows", "^git$"],
+      "platforms": ["windows", "macos", "linux"],
+      "fixed": "2.45.1",
+      "cves": ["CVE-2024-32002"],
+      "severity": "high",
+      "summary": { "zh": "clone 含子模組的惡意 repo 時可執行程式碼", "en": "Cloning a malicious repository with submodules can run code" },
+      "fix": { "zh": "更新到 Git 2.45.1 以上", "en": "Update to Git 2.45.1 or later" }
+    },
+    {
+      "id": "vlc-cve-2024-46461",
+      "app": "VLC media player",
+      "match": ["vlc media player", "^vlc$"],
+      "platforms": ["windows", "macos", "linux"],
+      "fixed": "3.0.21",
+      "cves": ["CVE-2024-46461"],
+      "severity": "medium",
+      "summary": { "zh": "播放特製 MMS 串流可能溢位", "en": "Crafted MMS streams can overflow a buffer" },
+      "fix": { "zh": "更新到 VLC 3.0.21 以上", "en": "Update to VLC 3.0.21 or later" }
+    },
+    {
+      "id": "nodejs-eol",
+      "app": "Node.js",
+      "match": ["node.js", "^nodejs$"],
+      "platforms": ["windows", "macos", "linux"],
+      "fixed": "22.0.0",
+      "cves": [],
+      "severity": "medium",
+      "eol": true,
+      "summary": { "zh": "Node.js 20 以下已停止支援（20 於 2026-04-30 終止），不再有安全修補", "en": "Node.js 20 and older are end of life (20 ended 2026-04-30) and get no security fixes" },
+      "fix": { "zh": "升級到 Node.js 22 或 24 LTS", "en": "Upgrade to Node.js 22 or 24 LTS" },
+      "ref": "https://nodejs.org/en/about/previous-releases"
+    },
+    {
+      "id": "python-eol",
+      "app": "Python",
+      "match": ["^python 3\\.", "^python3$"],
+      "platforms": ["windows", "macos", "linux"],
+      "fixed": "3.11.0",
+      "cves": [],
+      "severity": "low",
+      "eol": true,
+      "summary": { "zh": "Python 3.10 以下已停止支援（3.10 於 2026-10 終止）", "en": "Python 3.10 and older are end of life (3.10 ended 2026-10)" },
+      "fix": { "zh": "升級到仍在支援的 Python 版本，並移除舊版", "en": "Upgrade to a supported Python and remove the old one" },
+      "ref": "https://devguide.python.org/versions/"
+    }
+  ]
+}

@@ -217,6 +217,7 @@ impl Pipeline {
                         match id {
                             ScannerId::Traffic => summaries.traffic = Some(s),
                             ScannerId::Events => summaries.events = Some(s),
+                            ScannerId::Vuln => summaries.vuln = Some(s),
                             ScannerId::Hardening => {
                                 summaries.hardening = serde_json::from_value(s).ok();
                             }
@@ -259,9 +260,12 @@ impl Pipeline {
 
         let shared = ctx.shared.lock().await;
         let snapshot = Snapshot::from_parts(&shared.listeners, &shared.connections, &findings);
+        let inv = shared.inventory.as_ref();
         let inventory = InventorySummary {
-            packages: 0,
-            by_ecosystem: Default::default(),
+            packages: inv.and_then(|v| v["packages"].as_u64()).unwrap_or(0) as u32,
+            by_ecosystem: inv
+                .and_then(|v| v["by_ecosystem"].as_object().cloned())
+                .unwrap_or_default(),
             listeners: shared.listeners.len() as u32,
             connections: shared.connections.len() as u32,
             processes_with_network: snapshot.network_processes.len() as u32,
