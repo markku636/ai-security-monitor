@@ -30,7 +30,12 @@ pub fn sample_agent() -> AgentInfo {
         ips: vec!["192.0.2.10".into()],
         uptime_s: Some(3600),
         elevated: false,
-        scanners_available: vec![ScannerId::Connections, ScannerId::Intel, ScannerId::Firewall, ScannerId::Ports],
+        scanners_available: vec![
+            ScannerId::Connections,
+            ScannerId::Intel,
+            ScannerId::Firewall,
+            ScannerId::Ports,
+        ],
     }
 }
 
@@ -157,7 +162,12 @@ pub fn sample_report() -> Report {
         agent: sample_agent(),
         started_at: t(9, 29),
         finished_at: t(9, 30),
-        scanners_run: vec![ScannerId::Connections, ScannerId::Intel, ScannerId::Firewall, ScannerId::Ports],
+        scanners_run: vec![
+            ScannerId::Connections,
+            ScannerId::Intel,
+            ScannerId::Firewall,
+            ScannerId::Ports,
+        ],
         warnings: vec!["部分 socket 無法對應到行程（需要系統管理員權限）".into()],
         findings: vec![intel, port],
         inventory: InventorySummary {
@@ -196,9 +206,12 @@ mod tests {
             std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap() + "\n").unwrap();
             return;
         }
-        let on_disk: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("missing {}; run ASA_UPDATE_CONTRACT=1 cargo test contract", path.display())),
-        )
+        let on_disk: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|_| {
+            panic!(
+                "missing {}; run ASA_UPDATE_CONTRACT=1 cargo test contract",
+                path.display()
+            )
+        }))
         .unwrap();
         assert_eq!(
             on_disk, value,
