@@ -14,6 +14,7 @@ pub mod connections;
 pub mod elevate;
 pub mod embedded;
 pub mod error;
+pub mod intel;
 pub mod model;
 pub mod scan;
 pub mod secrets;

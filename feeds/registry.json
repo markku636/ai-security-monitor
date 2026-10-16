@@ -6,7 +6,9 @@
       "id": "spamhaus-drop-v4",
       "name": "Spamhaus DROP v4",
       "vendor": "Spamhaus",
-      "urls": ["https://www.spamhaus.org/drop/drop_v4.json"],
+      "urls": [
+        "https://www.spamhaus.org/drop/drop_v4.json"
+      ],
       "format": "spamhaus-json",
       "kind": "cidr",
       "direction": "both",
@@ -21,13 +23,18 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["hijacked", "botnet-c2"]
+      "tags": [
+        "hijacked",
+        "botnet-c2"
+      ]
     },
     {
       "id": "spamhaus-drop-v6",
       "name": "Spamhaus DROP v6",
       "vendor": "Spamhaus",
-      "urls": ["https://www.spamhaus.org/drop/drop_v6.json"],
+      "urls": [
+        "https://www.spamhaus.org/drop/drop_v6.json"
+      ],
       "format": "spamhaus-json",
       "kind": "cidr",
       "direction": "both",
@@ -42,13 +49,17 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["hijacked"]
+      "tags": [
+        "hijacked"
+      ]
     },
     {
       "id": "spamhaus-asndrop",
       "name": "Spamhaus ASN-DROP",
       "vendor": "Spamhaus",
-      "urls": ["https://www.spamhaus.org/drop/asndrop.json"],
+      "urls": [
+        "https://www.spamhaus.org/drop/asndrop.json"
+      ],
       "format": "spamhaus-json",
       "kind": "asn",
       "direction": "both",
@@ -63,7 +74,9 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["asn"],
+      "tags": [
+        "asn"
+      ],
       "notes": "需要 IP→ASN 對應（DB-IP ASN lite）才能比對。"
     },
     {
@@ -88,34 +101,19 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["botnet-c2", "emotet", "qakbot"]
-    },
-    {
-      "id": "abusech-sslbl",
-      "name": "SSL Blacklist IPs",
-      "vendor": "abuse.ch",
-      "urls": ["https://sslbl.abuse.ch/blacklist/sslipblacklist.txt"],
-      "format": "plain-ip-per-line",
-      "kind": "ip",
-      "direction": "outbound",
-      "confidence": 85,
-      "license": {
-        "name": "CC0 1.0",
-        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "attribution_required": false,
-        "commercial_ok": true,
-        "keep_header": false
-      },
-      "refresh_interval": "1h",
-      "requires_api_key": null,
-      "enabled_default": true,
-      "tags": ["botnet-c2", "tls"]
+      "tags": [
+        "botnet-c2",
+        "emotet",
+        "qakbot"
+      ]
     },
     {
       "id": "abusech-urlhaus-hosts",
       "name": "URLhaus online hosts",
       "vendor": "abuse.ch",
-      "urls": ["https://urlhaus.abuse.ch/downloads/text_online/"],
+      "urls": [
+        "https://urlhaus.abuse.ch/downloads/text_online/"
+      ],
       "format": "urlhaus-text",
       "kind": "domain",
       "direction": "outbound",
@@ -130,14 +128,18 @@
       "refresh_interval": "30m",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["malware-distribution"],
+      "tags": [
+        "malware-distribution"
+      ],
       "notes": "從 URL 行擷取 host；host 可能是 IP 或網域。"
     },
     {
       "id": "abusech-threatfox-ipport",
       "name": "ThreatFox IP:port (recent)",
       "vendor": "abuse.ch",
-      "urls": ["https://threatfox.abuse.ch/export/json/ip-port/recent/"],
+      "urls": [
+        "https://threatfox.abuse.ch/export/json/ip-port/recent/"
+      ],
       "format": "threatfox-json",
       "kind": "ip+port",
       "direction": "outbound",
@@ -152,13 +154,17 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["ioc"]
+      "tags": [
+        "ioc"
+      ]
     },
     {
       "id": "blocklist-de-all",
       "name": "blocklist.de all",
       "vendor": "blocklist.de",
-      "urls": ["https://lists.blocklist.de/lists/all.txt"],
+      "urls": [
+        "https://lists.blocklist.de/lists/all.txt"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "inbound",
@@ -173,13 +179,17 @@
       "refresh_interval": "30m",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["bruteforce"]
+      "tags": [
+        "bruteforce"
+      ]
     },
     {
       "id": "blocklist-de-ssh",
       "name": "blocklist.de ssh",
       "vendor": "blocklist.de",
-      "urls": ["https://lists.blocklist.de/lists/ssh.txt"],
+      "urls": [
+        "https://lists.blocklist.de/lists/ssh.txt"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "inbound",
@@ -194,13 +204,18 @@
       "refresh_interval": "30m",
       "requires_api_key": null,
       "enabled_default": false,
-      "tags": ["bruteforce", "ssh"]
+      "tags": [
+        "bruteforce",
+        "ssh"
+      ]
     },
     {
       "id": "blocklist-de-bruteforcelogin",
       "name": "blocklist.de bruteforcelogin",
       "vendor": "blocklist.de",
-      "urls": ["https://lists.blocklist.de/lists/bruteforcelogin.txt"],
+      "urls": [
+        "https://lists.blocklist.de/lists/bruteforcelogin.txt"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "inbound",
@@ -215,13 +230,18 @@
       "refresh_interval": "30m",
       "requires_api_key": null,
       "enabled_default": false,
-      "tags": ["bruteforce", "web"]
+      "tags": [
+        "bruteforce",
+        "web"
+      ]
     },
     {
       "id": "cins-army",
       "name": "CINS Army list",
       "vendor": "CINS / Sentinel IPS",
-      "urls": ["https://cinsscore.com/list/ci-badguys.txt"],
+      "urls": [
+        "https://cinsscore.com/list/ci-badguys.txt"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "inbound",
@@ -236,13 +256,18 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["scanner", "bruteforce"]
+      "tags": [
+        "scanner",
+        "bruteforce"
+      ]
     },
     {
       "id": "et-compromised",
       "name": "Emerging Threats compromised IPs",
       "vendor": "Proofpoint ET Open",
-      "urls": ["https://rules.emergingthreats.net/blockrules/compromised-ips.txt"],
+      "urls": [
+        "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "both",
@@ -257,13 +282,17 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["compromised"]
+      "tags": [
+        "compromised"
+      ]
     },
     {
       "id": "et-block",
       "name": "Emerging Threats fwrules Block-IPs",
       "vendor": "Proofpoint ET Open",
-      "urls": ["https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt"],
+      "urls": [
+        "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt"
+      ],
       "format": "cidr-per-line",
       "kind": "cidr",
       "direction": "both",
@@ -278,14 +307,18 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": false,
-      "tags": ["aggregate"],
+      "tags": [
+        "aggregate"
+      ],
       "notes": "預設關閉：與 spamhaus-drop / dshield 重疊；那兩個關掉時可改開。"
     },
     {
       "id": "dshield-block",
       "name": "DShield recommended block list",
       "vendor": "SANS ISC",
-      "urls": ["https://isc.sans.edu/feeds/block.txt"],
+      "urls": [
+        "https://isc.sans.edu/feeds/block.txt"
+      ],
       "format": "dshield-tab",
       "kind": "cidr",
       "direction": "inbound",
@@ -300,14 +333,19 @@
       "refresh_interval": "1h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["scanner", "top20"],
+      "tags": [
+        "scanner",
+        "top20"
+      ],
       "notes": "非商用授權：預設只告警，不進封鎖。"
     },
     {
       "id": "tor-exits",
       "name": "Tor exit nodes",
       "vendor": "Tor Project",
-      "urls": ["https://check.torproject.org/torbulkexitlist"],
+      "urls": [
+        "https://check.torproject.org/torbulkexitlist"
+      ],
       "format": "plain-ip-per-line",
       "kind": "ip",
       "direction": "both",
@@ -322,14 +360,19 @@
       "refresh_interval": "30m",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["anonymizer", "informational"],
+      "tags": [
+        "anonymizer",
+        "informational"
+      ],
       "notes": "低信心（匿名網路不等於惡意）；永不自動封鎖。"
     },
     {
       "id": "ipsum",
       "name": "IPsum (aggregated, scored)",
       "vendor": "stamparm",
-      "urls": ["https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt"],
+      "urls": [
+        "https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt"
+      ],
       "format": "ipsum-tab",
       "kind": "ip",
       "direction": "both",
@@ -344,14 +387,18 @@
       "refresh_interval": "24h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["aggregate"],
+      "tags": [
+        "aggregate"
+      ],
       "notes": "score（被幾份清單列入）存於 extra.score；有效信心 = min(95, 40 + 10*score)。"
     },
     {
       "id": "firehol-level1",
       "name": "FireHOL level1",
       "vendor": "FireHOL",
-      "urls": ["https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"],
+      "urls": [
+        "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"
+      ],
       "format": "cidr-per-line",
       "kind": "cidr",
       "direction": "both",
@@ -366,13 +413,18 @@
       "refresh_interval": "24h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["aggregate", "bogons"]
+      "tags": [
+        "aggregate",
+        "bogons"
+      ]
     },
     {
       "id": "dbip-country-lite",
       "name": "DB-IP IP to Country Lite",
       "vendor": "DB-IP",
-      "urls": ["https://download.db-ip.com/free/dbip-country-lite-{YYYY}-{MM}.mmdb.gz"],
+      "urls": [
+        "https://download.db-ip.com/free/dbip-country-lite-{YYYY}-{MM}.mmdb.gz"
+      ],
       "format": "mmdb-gz",
       "kind": "geo",
       "direction": "both",
@@ -387,14 +439,18 @@
       "refresh_interval": "720h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["geo"],
+      "tags": [
+        "geo"
+      ],
       "notes": "每月更新；報告頁尾需標註 IP Geolocation by DB-IP。"
     },
     {
       "id": "dbip-asn-lite",
       "name": "DB-IP IP to ASN Lite",
       "vendor": "DB-IP",
-      "urls": ["https://download.db-ip.com/free/dbip-asn-lite-{YYYY}-{MM}.mmdb.gz"],
+      "urls": [
+        "https://download.db-ip.com/free/dbip-asn-lite-{YYYY}-{MM}.mmdb.gz"
+      ],
       "format": "mmdb-gz",
       "kind": "geo",
       "direction": "both",
@@ -409,13 +465,18 @@
       "refresh_interval": "720h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["geo", "asn"]
+      "tags": [
+        "geo",
+        "asn"
+      ]
     },
     {
       "id": "cisa-kev",
       "name": "CISA Known Exploited Vulnerabilities",
       "vendor": "CISA",
-      "urls": ["https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"],
+      "urls": [
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+      ],
       "format": "cisa-kev-json",
       "kind": "cve",
       "direction": "both",
@@ -430,13 +491,17 @@
       "refresh_interval": "24h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["vuln"]
+      "tags": [
+        "vuln"
+      ]
     },
     {
       "id": "first-epss",
       "name": "FIRST EPSS",
       "vendor": "FIRST",
-      "urls": ["https://api.first.org/data/v1/epss?cve={cves}"],
+      "urls": [
+        "https://api.first.org/data/v1/epss?cve={cves}"
+      ],
       "format": "lookup-api",
       "kind": "cve",
       "direction": "both",
@@ -451,14 +516,18 @@
       "refresh_interval": "24h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["vuln"],
+      "tags": [
+        "vuln"
+      ],
       "notes": "每次最多 100 個 CVE。"
     },
     {
       "id": "nvd-cve",
       "name": "NVD CVE API 2.0",
       "vendor": "NIST",
-      "urls": ["https://services.nvd.nist.gov/rest/json/cves/2.0"],
+      "urls": [
+        "https://services.nvd.nist.gov/rest/json/cves/2.0"
+      ],
       "format": "lookup-api",
       "kind": "cve",
       "direction": "both",
@@ -473,14 +542,18 @@
       "refresh_interval": "24h",
       "requires_api_key": "NVD_API_KEY",
       "enabled_default": true,
-      "tags": ["vuln"],
+      "tags": [
+        "vuln"
+      ],
       "notes": "無 key 5 req/30s；有 key 50 req/30s；agent 端限速。"
     },
     {
       "id": "osv-dev",
       "name": "OSV.dev querybatch",
       "vendor": "Google OSV",
-      "urls": ["https://api.osv.dev/v1/querybatch"],
+      "urls": [
+        "https://api.osv.dev/v1/querybatch"
+      ],
       "format": "lookup-api",
       "kind": "cve",
       "direction": "both",
@@ -495,14 +568,18 @@
       "refresh_interval": "24h",
       "requires_api_key": null,
       "enabled_default": true,
-      "tags": ["vuln"],
+      "tags": [
+        "vuln"
+      ],
       "notes": "每批最多 1000 筆查詢。"
     },
     {
       "id": "abuseipdb",
       "name": "AbuseIPDB check",
       "vendor": "AbuseIPDB",
-      "urls": ["https://api.abuseipdb.com/api/v2/check"],
+      "urls": [
+        "https://api.abuseipdb.com/api/v2/check"
+      ],
       "format": "lookup-api",
       "kind": "lookup",
       "direction": "both",
@@ -517,13 +594,17 @@
       "refresh_interval": "24h",
       "requires_api_key": "ABUSEIPDB_API_KEY",
       "enabled_default": false,
-      "tags": ["lookup"]
+      "tags": [
+        "lookup"
+      ]
     },
     {
       "id": "greynoise-community",
       "name": "GreyNoise Community",
       "vendor": "GreyNoise",
-      "urls": ["https://api.greynoise.io/v3/community/{ip}"],
+      "urls": [
+        "https://api.greynoise.io/v3/community/{ip}"
+      ],
       "format": "lookup-api",
       "kind": "lookup",
       "direction": "both",
@@ -538,13 +619,18 @@
       "refresh_interval": "24h",
       "requires_api_key": "GREYNOISE_API_KEY",
       "enabled_default": false,
-      "tags": ["lookup", "scanner"]
+      "tags": [
+        "lookup",
+        "scanner"
+      ]
     },
     {
       "id": "crowdsec-cti",
       "name": "CrowdSec CTI smoke",
       "vendor": "CrowdSec",
-      "urls": ["https://cti.api.crowdsec.net/v2/smoke/{ip}"],
+      "urls": [
+        "https://cti.api.crowdsec.net/v2/smoke/{ip}"
+      ],
       "format": "lookup-api",
       "kind": "lookup",
       "direction": "both",
@@ -559,14 +645,18 @@
       "refresh_interval": "24h",
       "requires_api_key": "CROWDSEC_CTI_KEY",
       "enabled_default": false,
-      "tags": ["lookup"],
+      "tags": [
+        "lookup"
+      ],
       "notes": "Header x-api-key。"
     },
     {
       "id": "otx",
       "name": "AlienVault OTX",
       "vendor": "LevelBlue / AlienVault",
-      "urls": ["https://otx.alienvault.com/api/v1/indicators/IPv4/{ip}/general"],
+      "urls": [
+        "https://otx.alienvault.com/api/v1/indicators/IPv4/{ip}/general"
+      ],
       "format": "lookup-api",
       "kind": "lookup",
       "direction": "both",
@@ -581,7 +671,9 @@
       "refresh_interval": "24h",
       "requires_api_key": "OTX_API_KEY",
       "enabled_default": false,
-      "tags": ["lookup"],
+      "tags": [
+        "lookup"
+      ],
       "notes": "Header X-OTX-API-KEY。"
     }
   ]

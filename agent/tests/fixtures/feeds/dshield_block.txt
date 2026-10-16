@@ -1,0 +1,9 @@
+#
+#   DShield.org Recommended Block List
+#   (c) 2026 DShield.org
+#   some rights reserved. Details http://creativecommons.org/licenses/by-nc-sa/2.5/
+#   updated Thu Oct 16 10:00:00 2026 UTC
+#
+#   Start	End	Netmask	Attacks	Name	Country	email
+185.199.108.0	185.199.108.255	24	12345	Example-Net	US	abuse@example.test
+45.33.0.0	45.33.255.255	16	999	Linode	US	abuse@linode.com

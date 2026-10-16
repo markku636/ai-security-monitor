@@ -1,0 +1,5 @@
+# Spamhaus DROP, DShield, Feodo aggregated
+1.10.16.0/20
+185.199.108.16
+#comment
+203.0.113.0/24

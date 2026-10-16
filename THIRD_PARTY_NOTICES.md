@@ -6,7 +6,7 @@
 | Source | Data | Licence / terms | Notes |
 |---|---|---|---|
 | Spamhaus DROP / DROPv6 / ASN-DROP | hijacked & criminal netblocks | [Fair Use Policy](https://www.spamhaus.org/blocklists/drop-fair-use-policy/) | free incl. commercial; keep header/timestamps, attribute "Spamhaus" |
-| abuse.ch Feodo Tracker / SSLBL / URLhaus / ThreatFox | botnet C2, malicious TLS, malware hosts, IOCs | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | |
+| abuse.ch Feodo Tracker / URLhaus / ThreatFox | botnet C2, malware hosts, IOCs | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | |
 | blocklist.de | fail2ban community reports | [free](https://www.blocklist.de/en/index.html) | |
 | CINS Army | poor-reputation IPs | [free, attribution](https://cinsscore.com/#list) | |
 | Emerging Threats Open (Proofpoint) | compromised IPs, block list | BSD (ruleset) | block list aggregates Spamhaus + DShield |

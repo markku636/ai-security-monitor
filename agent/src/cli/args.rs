@@ -64,6 +64,11 @@ pub enum Command {
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
     Connections(ConnectionsArgs),
+    /// 威脅情資：更新、狀態、來源、查詢 IP／網域
+    Intel {
+        #[command(subcommand)]
+        cmd: IntelCmd,
+    },
     /// 設定檔
     Config {
         #[command(subcommand)]
@@ -169,4 +174,60 @@ pub struct ConnectionsArgs {
     /// 比對威脅情資（需先 asa intel update）
     #[arg(long)]
     pub intel: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IntelCmd {
+    /// 下載／更新威脅情資（只抓過期的；--force 全部重抓）
+    Update {
+        /// 只更新這些來源 id
+        #[arg(long = "feed", value_name = "ID")]
+        feeds: Vec<String>,
+        /// 忽略更新間隔，全部重抓
+        #[arg(long)]
+        force: bool,
+    },
+    /// 顯示各來源的筆數、更新時間與狀態
+    Status,
+    /// 列出所有情資來源（廠商、授權、網址）
+    Sources,
+    /// 查詢 IP 或網域：命中哪些情資、地理位置、判定
+    Lookup {
+        /// IP 或網域
+        indicator: String,
+        /// 也查詢已設定 API key 的線上名譽服務
+        #[arg(long)]
+        online: bool,
+    },
+    /// 啟用來源
+    Enable {
+        /// 來源 id
+        id: String,
+    },
+    /// 停用來源
+    Disable {
+        /// 來源 id
+        id: String,
+    },
+    /// 設定／刪除線上名譽服務的 API key（存進 keychain）
+    Key {
+        #[command(subcommand)]
+        cmd: IntelKeyCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IntelKeyCmd {
+    /// 設定 API key（值為 - 時從標準輸入讀取）
+    Set {
+        /// 服務 id（abuseipdb、greynoise-community、crowdsec-cti）
+        id: String,
+        /// API key；- 表示從標準輸入讀取
+        value: String,
+    },
+    /// 刪除 API key
+    Delete {
+        /// 服務 id（abuseipdb、greynoise-community、crowdsec-cti）
+        id: String,
+    },
 }

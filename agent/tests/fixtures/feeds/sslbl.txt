@@ -1,0 +1,4 @@
+# SSLBL IP blacklist
+# Last updated: 2026-10-16
+185.199.108.10
+91.92.240.1

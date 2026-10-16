@@ -126,6 +126,20 @@ pub fn collect(env: &Env) -> AppResult<DoctorReport> {
         },
     });
 
+    if let Ok(reg) = crate::intel::registry::Registry::load(&env.config_dir) {
+        let (fresh, stale, missing) = crate::intel::fetch::freshness(&env.config_dir, &reg);
+        checks.push(Check {
+            name: t!("威脅情資").into(),
+            ok: fresh > 0 && stale == 0,
+            detail: tf!(
+                "{fresh} 個最新、{stale} 個過期、{missing} 個未下載",
+                fresh = fresh,
+                stale = stale,
+                missing = missing
+            ),
+        });
+    }
+
     let tools = external_tools()
         .into_iter()
         .map(|(name, purpose)| {

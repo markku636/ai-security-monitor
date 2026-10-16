@@ -67,7 +67,10 @@ fn render(conns: &[Connection], a: &ConnectionsArgs) -> String {
             c.verdict.level.label().to_string(),
             c.proto.clone(),
             format!("{}:{}", c.local_ip, c.local_port),
-            c.remote_display(),
+            match c.geo.as_ref().and_then(|g| g.country.clone()) {
+                Some(cc) => format!("{} [{cc}]", c.remote_display()),
+                None => c.remote_display(),
+            },
             c.state.clone(),
             c.process
                 .as_ref()
@@ -97,7 +100,7 @@ fn render(conns: &[Connection], a: &ConnectionsArgs) -> String {
 }
 
 async fn one_shot(env: &Env, a: &ConnectionsArgs) -> AppResult<Vec<Connection>> {
-    let _ = a.intel; // 情資比對於第 2 輪接上。
+    let with_intel = a.intel;
     let dir = env.config_dir.clone();
     let allowlist = Allowlist::load(&dir)?;
     let baseline = Baseline::load(&dir)?;
@@ -109,6 +112,11 @@ async fn one_shot(env: &Env, a: &ConnectionsArgs) -> AppResult<Vec<Connection>> 
         let beacons = beacon::detect(&hist, now);
         let cl = Classifier::load();
         cl.annotate(&mut snap, &allowlist, baseline.as_ref(), &beacons);
+        if with_intel {
+            let reg = crate::intel::registry::Registry::load(&dir)?;
+            let db = crate::intel::IntelDb::load(&dir, &reg);
+            crate::intel::enrich_connections(&db, &mut snap.connections);
+        }
         Ok(snap.connections)
     })
     .await

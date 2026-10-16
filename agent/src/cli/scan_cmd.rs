@@ -15,7 +15,9 @@ use crate::scan::{Pipeline, ScanCtx};
 
 /// 建立含所有本版本可用引擎的 Pipeline（各輪次在此掛入）。
 pub fn build_pipeline() -> Pipeline {
-    Pipeline::new().register(Box::new(crate::connections::ConnectionsScanner))
+    Pipeline::new()
+        .register(Box::new(crate::connections::ConnectionsScanner))
+        .register(Box::new(crate::intel::IntelScanner))
 }
 
 /// 解析要跑的掃描器：參數 ＞ config.scan.scanners ＞ 全部可用。

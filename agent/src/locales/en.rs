@@ -276,6 +276,106 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "刷新間隔（--watch）" => "Refresh interval (--watch)",
         "比對威脅情資（需先 asa intel update）" => "Match against threat intel (run asa intel update first)",
 
+        // ---- intel ----
+        "內建情資登錄格式錯誤：{e}" => "The built-in feed registry is malformed: {e}",
+        "自訂情資 id 不合法，已略過：{id}" => "Invalid custom feed id, skipped: {id}",
+        "自訂情資 id 與內建重複，已略過：{id}" => "Custom feed id collides with a built-in feed, skipped: {id}",
+        "自訂情資必須使用 https 網址，已略過：{id}" => "Custom feeds must use https URLs, skipped: {id}",
+        "沒有這個情資來源：{id}" => "No such threat-intel feed: {id}",
+        "下載內容是 HTML 網頁而不是清單" => "The download is an HTML page, not a list",
+        "此格式不能當清單解析：{format}" => "This format cannot be parsed as a list: {format}",
+        "下載情資：{id}" => "Downloading feed: {id}",
+        "下載失敗：{url}：{e}" => "Download failed: {url}: {e}",
+        "HTTP {status}：{url}" => "HTTP {status}: {url}",
+        "檔案超過大小上限：{url}" => "File exceeds the size limit: {url}",
+        "沒有可用的下載網址" => "No usable download URL",
+        "解壓縮失敗：{e}" => "Decompression failed: {e}",
+        "解壓後超過大小上限" => "Decompressed data exceeds the size limit",
+        "GeoIP 資料庫格式錯誤：{e}" => "Malformed GeoIP database: {e}",
+        "下載內容沒有任何條目（保留舊資料）" => "The download contains no entries (keeping the previous data)",
+        "{provider} 查詢失敗：{e}" => "{provider} lookup failed: {e}",
+        "{provider} 拒絕了 API key" => "{provider} rejected the API key",
+        "{provider} 已達呼叫上限" => "{provider} rate limit reached",
+        "{provider} 回應 HTTP {status}" => "{provider} responded with HTTP {status}",
+        "{provider} 回應格式錯誤：{e}" => "{provider} returned an unexpected payload: {e}",
+        "{provider} 今日查詢額度已用完（{n}）" => "{provider} daily quota used up ({n})",
+        "解析情資 {id} 失敗：{e}" => "Failed to parse feed {id}: {e}",
+        "線上名譽服務標記為可疑的 IP：{ip}" => "IP flagged by an online reputation service: {ip}",
+        "來自威脅情資列名 IP 的連入：{ip}" => "Inbound connection from a threat-listed IP: {ip}",
+        "連到威脅情資列名的 IP：{ip}" => "Connection to a threat-listed IP: {ip}",
+        "{process} ↔ {remote}（判定：{verdict}）。來源：{sources}" => "{process} ↔ {remote} (verdict: {verdict}). Sources: {sources}",
+        "封鎖此 IP 並檢查相關行程；確認是誤判可加入白名單" => {
+            "Block this IP and inspect the related process; add it to the allowlist if it is a false positive"
+        }
+        "情資 {id} 更新失敗：{e}" => "Feed {id} failed to update: {e}",
+        "尚未下載任何威脅情資；執行 asa intel update" => "No threat-intel feeds downloaded yet; run asa intel update",
+        "有 {n} 個已啟用的情資來源尚未下載：{ids}" => "{n} enabled feeds have not been downloaded yet: {ids}",
+
+        // ---- cli/intel_cmd.rs ----
+        "已更新" => "updated",
+        "未變更" => "not modified",
+        "仍新鮮" => "still fresh",
+        "失敗" => "failed",
+        "來源" => "Source",
+        "筆數" => "Entries",
+        "大小" => "Size",
+        "耗時" => "Time",
+        "{n} 個來源更新失敗；舊資料仍保留可用" => "{n} feeds failed to update; their previous data is still used",
+        "未下載" => "not downloaded",
+        "廠商" => "Vendor",
+        "距今" => "Age",
+        "授權" => "Licence",
+        "已啟用：{fresh} 個最新、{stale} 個過期、{missing} 個未下載" => {
+            "Enabled: {fresh} fresh, {stale} stale, {missing} not downloaded"
+        }
+        "類型" => "Kind",
+        "網址" => "URL",
+        "[NC]＝非商用授權：預設只告警、不用於防火牆封鎖。" => {
+            "[NC] = non-commercial licence: alert-only by default, never used for firewall blocking."
+        }
+        "{ind}（{class}）判定：{verdict}" => "{ind} ({class}) verdict: {verdict}",
+        "地理：{country} · AS{asn} {org}" => "Geo: {country} · AS{asn} {org}",
+        "沒有命中任何已載入的情資（{n} 個來源）" => "No hits in the loaded threat intel ({n} feeds)",
+        "命中" => "Matched",
+        "信心" => "Confidence",
+        "資料距今" => "Data age",
+        "線上名譽：{provider} = {score}（{detail}）" => "Online reputation: {provider} = {score} ({detail})",
+        "已知良性清單：{list}" => "Known-good list: {list}",
+        "白名單條目：{id}" => "Allowlist entry: {id}",
+        "沒有設定任何線上名譽服務的 API key（asa intel key set abuseipdb -）" => {
+            "No online reputation API key configured (asa intel key set abuseipdb -)"
+        }
+        "已啟用 {id}；執行 asa intel update 下載" => "Enabled {id}; run asa intel update to download it",
+        "已停用 {id}" => "Disabled {id}",
+        "不支援的名譽服務：{id}；可用：{ids}" => "Unsupported reputation service: {id}; available: {ids}",
+        "API key 不可為空" => "The API key cannot be empty",
+        "已儲存 {id} 的 API key（{backend}）" => "Saved the API key for {id} ({backend})",
+        "要讓掃描自動查詢，執行 asa config set intel.online_lookups true" => {
+            "To let scans query it automatically, run asa config set intel.online_lookups true"
+        }
+        "已刪除 {id} 的 API key" => "Deleted the API key for {id}",
+        "威脅情資" => "Threat intel",
+        "{fresh} 個最新、{stale} 個過期、{missing} 個未下載" => "{fresh} fresh, {stale} stale, {missing} not downloaded",
+
+        // ---- cli/args.rs：intel ----
+        "威脅情資：更新、狀態、來源、查詢 IP／網域" => "Threat intel: update, status, sources, IP / domain lookup",
+        "下載／更新威脅情資（只抓過期的；--force 全部重抓）" => "Download / refresh threat-intel feeds (only stale ones; --force refetches all)",
+        "只更新這些來源 id" => "Only update these feed ids",
+        "忽略更新間隔，全部重抓" => "Ignore refresh intervals and refetch everything",
+        "顯示各來源的筆數、更新時間與狀態" => "Show entries, last update and status for each feed",
+        "列出所有情資來源（廠商、授權、網址）" => "List all feeds (vendor, licence, URL)",
+        "查詢 IP 或網域：命中哪些情資、地理位置、判定" => "Look up an IP or domain: feed hits, geolocation, verdict",
+        "IP 或網域" => "IP or domain",
+        "也查詢已設定 API key 的線上名譽服務" => "Also query online reputation services that have an API key configured",
+        "啟用來源" => "Enable a feed",
+        "停用來源" => "Disable a feed",
+        "來源 id" => "Feed id",
+        "設定／刪除線上名譽服務的 API key（存進 keychain）" => "Set / delete API keys for online reputation services (stored in the keychain)",
+        "設定 API key（值為 - 時從標準輸入讀取）" => "Set an API key (reads stdin when the value is -)",
+        "服務 id（abuseipdb、greynoise-community、crowdsec-cti）" => "Service id (abuseipdb, greynoise-community, crowdsec-cti)",
+        "API key；- 表示從標準輸入讀取" => "API key; - reads it from stdin",
+        "刪除 API key" => "Delete an API key",
+
         _ => return None,
     })
 }
