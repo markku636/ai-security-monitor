@@ -32,23 +32,14 @@ fn component(findings: &[Finding], scanners: &[ScannerId]) -> u8 {
 }
 
 fn hardening_score(h: &HardeningSummary, findings: &[Finding]) -> u8 {
-    // 以 finding 嚴重度加權：fail 的 finding 權重 crit 4 / high 3 / med 2 / low 1；pass 數量視為權重 2。
-    let fail_weight: u32 = findings
-        .iter()
-        .filter(|f| f.scanner == ScannerId::Hardening && f.suppressed_by.is_none())
-        .map(|f| match f.severity {
-            crate::model::finding::Severity::Critical => 4,
-            crate::model::finding::Severity::High => 3,
-            crate::model::finding::Severity::Medium => 2,
-            _ => 1,
-        })
-        .sum();
-    let pass_weight = h.pass * 2;
-    let total = pass_weight + fail_weight;
-    if total == 0 {
-        return 100;
-    }
-    ((pass_weight as f64 / total as f64) * 100.0).round() as u8
+    // 以 finding 嚴重度加權（白名單壓掉的不算）：fail 權重 crit 4 / high 3 / med 2 / low 1；pass 數量視為權重 2。
+    crate::hardening::weighted_score(
+        h.pass,
+        findings
+            .iter()
+            .filter(|f| f.scanner == ScannerId::Hardening && f.suppressed_by.is_none())
+            .map(|f| f.severity),
+    )
 }
 
 pub fn compute(findings: &[Finding], hardening: Option<&HardeningSummary>, ran: &[ScannerId]) -> Scores {
@@ -155,6 +146,7 @@ mod tests {
             fail: 2,
             na: 1,
             error: 0,
+            ..Default::default()
         };
         let fs = vec![
             f(ScannerId::Hardening, Severity::High),

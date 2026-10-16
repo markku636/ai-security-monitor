@@ -44,6 +44,8 @@ pub const READ_ONLY: &[&str] = &[
     "events_summary",
     "crash_history",
     "explain_code",
+    "vuln_summary",
+    "hardening_status",
 ];
 pub const ACTION_TOOLS: &[&str] = &["preview_action", "execute_action"];
 
@@ -148,6 +150,19 @@ pub fn read_only_defs() -> Vec<ToolDef> {
             name: "explain_code",
             description: t!("解釋藍屏代碼（例 0x7E）或 Windows 事件 ID（例 41、4625）。").into(),
             input_schema: obj(json!({ "code": { "type": "string" } }), &["code"]),
+        },
+        ToolDef {
+            name: "vuln_summary",
+            description: t!("漏洞與更新：作業系統是否仍在支援（停止支援日期）、最近一次更新、已知漏洞版本的軟體（附 CVE 與 NVD 連結）、Linux 套件的 OSV 結果、CISA KEV 命中。").into(),
+            input_schema: obj(json!({ "online": { "type": "boolean" } }), &[]),
+        },
+        ToolDef {
+            name: "hardening_status",
+            description: t!("系統硬化檢查：每條檢查的結果（通過／未通過／不適用）、目前值、期望值、修正方式與參考連結，以及加權分數。").into(),
+            input_schema: obj(
+                json!({ "only_failed": { "type": "boolean" }, "category": { "type": "string" } }),
+                &[],
+            ),
         },
     ]
 }
@@ -527,6 +542,28 @@ pub async fn call(ctx: &ToolCtx, name: &str, args: &Value) -> Result<String, Str
                 ));
             }
             Ok(to_text(&serde_json::to_value(s).unwrap_or_default()))
+        }
+        "vuln_summary" => {
+            let inv = crate::vuln::inventory::collect(&crate::util::cmd::RealRunner)
+                .await
+                .map_err(|e| e.message())?;
+            let online = args.get("online").and_then(Value::as_bool).unwrap_or(true);
+            let kev = crate::vuln::KevSet::load(&ctx.config_dir);
+            let s = crate::vuln::analyze(inv, &ctx.config_dir, online, &kev).await;
+            Ok(to_text(&serde_json::to_value(s).unwrap_or_default()))
+        }
+        "hardening_status" => {
+            let (env, distros) = crate::hardening::current_env();
+            let mut r =
+                crate::hardening::run_checks(&ctx.config_dir, &crate::util::cmd::RealRunner, &env, &distros).await;
+            if args.get("only_failed").and_then(Value::as_bool).unwrap_or(false) {
+                r.results
+                    .retain(|o| o.result == crate::model::finding::CheckResult::Fail);
+            }
+            if let Some(cat) = s("category") {
+                r.results.retain(|o| o.category.eq_ignore_ascii_case(cat));
+            }
+            Ok(to_text(&serde_json::to_value(r).unwrap_or_default()))
         }
         "explain_code" => {
             let code = s("code").ok_or_else(|| t!("缺少 code").to_string())?;

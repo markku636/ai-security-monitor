@@ -1,0 +1,161 @@
+# macOS 系統硬化檢查（asa harden）。
+# probe 種類：command（[程式, 參數…]，可配 regex 取值、stderr: true 一併讀 stderr）、builtin。
+# defaults read 讀不到 key 時算「讀不到值」，用 missing 決定結果（系統預設值多半就是安全的）。
+# 應用程式防火牆由 fw 引擎檢查（asa fw audit），這裡不重複。
+
+- id: mac.gatekeeper
+  category: malware
+  severity: high
+  title: { zh: "Gatekeeper 已開啟", en: "Gatekeeper is enabled" }
+  rationale: { zh: "Gatekeeper 擋下沒有簽章或被撤銷的程式。", en: "Gatekeeper blocks unsigned or revoked apps." }
+  remediation: { zh: "sudo spctl --master-enable。", en: "sudo spctl --master-enable." }
+  references: [ "https://support.apple.com/guide/security/gatekeeper-and-runtime-protection-sec5599b66df/web" ]
+  probe: { command: [ spctl, --status ], regex: 'assessments (enabled|disabled)' }
+  expect: { op: eq, value: "enabled" }
+
+- id: mac.sip
+  category: hardening
+  severity: high
+  title: { zh: "系統完整性保護（SIP）已開啟", en: "System Integrity Protection (SIP) is enabled" }
+  rationale: { zh: "SIP 防止連 root 都不能改系統檔案。", en: "SIP stops even root from modifying system files." }
+  remediation: { zh: "開機進復原模式執行 csrutil enable。", en: "Boot into Recovery and run csrutil enable." }
+  references: [ "https://support.apple.com/102149" ]
+  probe: { command: [ csrutil, status ], regex: 'status: (enabled|disabled)' }
+  expect: { op: eq, value: "enabled" }
+
+- id: mac.filevault
+  category: encryption
+  severity: high
+  title: { zh: "FileVault 磁碟加密已開啟", en: "FileVault disk encryption is on" }
+  rationale: { zh: "筆電遺失時，沒加密的資料可以直接讀出。", en: "If the laptop is lost, unencrypted data can simply be read." }
+  remediation: { zh: "系統設定 → 隱私權與安全性 → FileVault → 開啟。", en: "System Settings → Privacy & Security → FileVault → Turn On." }
+  references: [ "https://support.apple.com/guide/mac-help/mh11785/mac" ]
+  probe: { command: [ fdesetup, status ], regex: 'FileVault is (On|Off)' }
+  expect: { op: eq, value: "on" }
+
+- id: mac.firewall.stealth
+  category: network
+  severity: low
+  title: { zh: "防火牆隱形模式已開啟", en: "Firewall stealth mode is on" }
+  rationale: { zh: "不回應 ping 與探測，讓掃描器較難發現這台。", en: "Ignores pings and probes so scanners are less likely to notice the Mac." }
+  remediation: { zh: "系統設定 → 網路 → 防火牆 → 選項 → 開啟隱形模式。", en: "System Settings → Network → Firewall → Options → Enable stealth mode." }
+  references: [ "https://support.apple.com/guide/mac-help/mh34041/mac" ]
+  probe: { command: [ /usr/libexec/ApplicationFirewall/socketfilterfw, --getstealthmode ], regex: '(?i)stealth mode (?:is )?(on|off|enabled|disabled)' }
+  expect: { op: in, value: [ "on", "enabled" ] }
+
+- id: mac.update.auto_check
+  category: update
+  severity: medium
+  title: { zh: "自動檢查軟體更新", en: "Automatically check for software updates" }
+  rationale: { zh: "沒在檢查就不會知道有安全性更新。", en: "Without checking you never learn about security updates." }
+  remediation: { zh: "系統設定 → 一般 → 軟體更新 → 自動更新 → 開啟「檢查更新」。", en: "System Settings → General → Software Update → Automatic updates → Check for updates." }
+  references: [ "https://support.apple.com/guide/deployment/depc4c80847a/web" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.SoftwareUpdate, AutomaticCheckEnabled ] }
+  expect: { op: eq, value: 1 }
+  missing: pass
+
+- id: mac.update.security_responses
+  category: update
+  severity: medium
+  title: { zh: "自動安裝安全性回應與系統檔案", en: "Security responses and system files install automatically" }
+  rationale: { zh: "快速安全回應與 XProtect 規則靠這個設定自動安裝。", en: "Rapid Security Responses and XProtect rules install through this setting." }
+  remediation: { zh: "自動更新 → 開啟「安裝安全性回應與系統檔案」。", en: "Automatic updates → turn on \"Install Security Responses and system files\"." }
+  references: [ "https://support.apple.com/guide/deployment/depc4c80847a/web" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.SoftwareUpdate, CriticalUpdateInstall ] }
+  expect: { op: eq, value: 1 }
+  missing: pass
+
+- id: mac.update.config_data
+  category: update
+  severity: medium
+  title: { zh: "自動更新 XProtect 等安全資料", en: "XProtect and other security data update automatically" }
+  rationale: { zh: "XProtect 惡意程式規則要靠這個設定才會自動更新。", en: "XProtect malware definitions only update automatically with this on." }
+  remediation: { zh: "sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true。", en: "sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true." }
+  references: [ "https://support.apple.com/guide/security/protecting-against-malware-sec469d47bd8/web" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.SoftwareUpdate, ConfigDataInstall ] }
+  expect: { op: eq, value: 1 }
+  missing: pass
+
+- id: mac.update.auto_download
+  category: update
+  severity: low
+  title: { zh: "自動下載可用的更新", en: "Available updates download automatically" }
+  rationale: { zh: "先下載好，更新時比較不會一拖再拖。", en: "Pre-downloaded updates are less likely to be postponed." }
+  remediation: { zh: "自動更新 → 開啟「有可用更新時下載」。", en: "Automatic updates → turn on \"Download new updates when available\"." }
+  references: [ "https://support.apple.com/guide/deployment/depc4c80847a/web" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.SoftwareUpdate, AutomaticDownload ] }
+  expect: { op: eq, value: 1 }
+  missing: pass
+
+- id: mac.login.guest
+  category: account
+  severity: medium
+  title: { zh: "訪客使用者已停用", en: "Guest user is disabled" }
+  rationale: { zh: "訪客帳號不需要密碼就能登入。", en: "The guest account logs in without a password." }
+  remediation: { zh: "系統設定 → 使用者與群組 → 訪客使用者 → 關閉。", en: "System Settings → Users & Groups → Guest User → off." }
+  references: [ "https://support.apple.com/guide/mac-help/mchl6d39d5ad/mac" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.loginwindow, GuestEnabled ] }
+  expect: { op: eq, value: 0 }
+  missing: pass
+
+- id: mac.login.autologin
+  category: account
+  severity: high
+  title: { zh: "沒有開啟自動登入", en: "Automatic login is off" }
+  rationale: { zh: "自動登入時，拿到電腦的人開機就直接進桌面。", en: "With auto-login, anyone holding the Mac boots straight to the desktop." }
+  remediation: { zh: "系統設定 → 使用者與群組 → 自動登入 → 關閉。", en: "System Settings → Users & Groups → Automatically log in as → Off." }
+  references: [ "https://support.apple.com/102316" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.loginwindow, autoLoginUser ] }
+  expect: { op: empty }
+  missing: pass
+
+- id: mac.login.password_hints
+  category: account
+  severity: low
+  title: { zh: "登入畫面不顯示密碼提示", en: "Login window does not show password hints" }
+  rationale: { zh: "提示常常直接洩漏密碼。", en: "Hints often give the password away." }
+  remediation: { zh: "sudo defaults write /Library/Preferences/com.apple.loginwindow RetriesUntilHint -int 0。", en: "sudo defaults write /Library/Preferences/com.apple.loginwindow RetriesUntilHint -int 0." }
+  references: [ "https://support.apple.com/guide/deployment/dep1fb6e6c23/web" ]
+  probe: { command: [ defaults, read, /Library/Preferences/com.apple.loginwindow, RetriesUntilHint ] }
+  expect: { op: eq, value: 0 }
+  missing: pass
+
+- id: mac.screen_lock
+  category: account
+  severity: medium
+  title: { zh: "螢幕保護或睡眠後要密碼", en: "Password required after screen saver or sleep" }
+  rationale: { zh: "離開座位時別人就能直接用你的電腦。", en: "Otherwise anyone can use the Mac while you are away." }
+  remediation: { zh: "系統設定 → 鎖定畫面 → 「螢幕保護程式啟動或顯示器關閉後要求密碼」設為立即。", en: "System Settings → Lock Screen → require password immediately after screen saver or display off." }
+  references: [ "https://support.apple.com/guide/mac-help/mh11784/mac" ]
+  probe: { command: [ sysadminctl, -screenLock, status ], stderr: true, regex: 'screenLock (is off|delay is \S+)' }
+  expect: { op: ne, value: "is off" }
+
+- id: mac.remote_login
+  category: remote
+  severity: low
+  title: { zh: "遠端登入（SSH）已關閉", en: "Remote Login (SSH) is off" }
+  rationale: { zh: "用不到就關掉，少一個能從網路登入的入口。", en: "If unused, turning it off removes a network login path." }
+  remediation: { zh: "系統設定 → 一般 → 共享 → 關閉遠端登入。", en: "System Settings → General → Sharing → turn off Remote Login." }
+  references: [ "https://support.apple.com/guide/mac-help/mchlp1066/mac" ]
+  probe: { command: [ systemsetup, -getremotelogin ], regex: 'Remote Login: (On|Off)' }
+  expect: { op: eq, value: "off" }
+
+- id: mac.sudo.nopasswd
+  category: account
+  severity: medium
+  title: { zh: "sudo 沒有免密碼規則", en: "sudo has no NOPASSWD rules" }
+  rationale: { zh: "NOPASSWD 讓偷到該帳號的人直接拿到 root。", en: "NOPASSWD turns any compromise of that account into root." }
+  remediation: { zh: "用 sudo visudo 移除 NOPASSWD。", en: "Remove NOPASSWD with sudo visudo." }
+  references: [ "https://www.sudo.ws/docs/man/sudoers.man/" ]
+  probe: { builtin: sudo_nopasswd }
+  expect: { op: empty }
+
+- id: mac.path.world_writable
+  category: hardening
+  severity: medium
+  title: { zh: "PATH 裡沒有任何人都能寫入的目錄", en: "No world-writable directories in PATH" }
+  rationale: { zh: "任何人都能在 PATH 目錄放同名程式，等別人執行。", en: "Anyone could drop a same-named program into a PATH directory and wait." }
+  remediation: { zh: "chmod o-w <目錄>，或把它移出 PATH。", en: "chmod o-w <dir>, or remove it from PATH." }
+  references: [ "https://attack.mitre.org/techniques/T1574/007/" ]
+  probe: { builtin: path_world_writable }
+  expect: { op: empty }

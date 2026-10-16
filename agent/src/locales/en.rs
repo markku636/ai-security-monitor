@@ -965,6 +965,27 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "不連線查 OSV（只用內建規則）" => "Do not query OSV online (built-in rules only)",
         "清單模式下只列名稱含這段文字的軟體" => "In list mode, only show software whose name contains this text",
 
+        // hardening
+        "讀不到設定值（使用系統預設）" => "Setting not found (system default applies)",
+        "需要系統管理員／root 權限才能檢查" => "Needs administrator / root to check",
+        "未通過：{title}" => "Failed: {title}",
+        "通過" => "Pass",
+        "未通過" => "Fail",
+        "不適用" => "N/A",
+        "錯誤" => "Error",
+        "硬化分數 {score}/100 · 通過 {pass} · 未通過 {fail} · 不適用 {na} · 錯誤 {error}" => "Hardening score {score}/100 · pass {pass} · fail {fail} · n/a {na} · error {error}",
+        "全部通過。" => "All checks passed.",
+        "目前" => "Current",
+        "怎麼修" => "How to fix",
+        "{n} 項需要系統管理員／root 權限才能檢查：{ids}" => "{n} checks need administrator / root: {ids}",
+        "系統硬化檢查：UAC、Defender、BitLocker、SSH、核心參數、自動更新等，給分數與修正方式" => "System hardening checks (UAC, Defender, BitLocker, SSH, kernel settings, automatic updates, …) with a score and fixes",
+        "列出全部檢查（預設只列未通過）" => "List every check (default: failures only)",
+        "只看這個分類（例：account、remote、kernel、update、encryption）" => "Only this category (e.g. account, remote, kernel, update, encryption)",
+
+        // mcp vuln/hardening
+        "漏洞與更新：作業系統是否仍在支援（停止支援日期）、最近一次更新、已知漏洞版本的軟體（附 CVE 與 NVD 連結）、Linux 套件的 OSV 結果、CISA KEV 命中。" => "Vulnerabilities and updates: whether the OS is still supported (end date), last update, software on known-vulnerable versions (with CVE and NVD link), OSV results for Linux packages, CISA KEV matches.",
+        "系統硬化檢查：每條檢查的結果（通過／未通過／不適用）、目前值、期望值、修正方式與參考連結，以及加權分數。" => "System hardening checks: each check's result (pass / fail / n/a), current and expected value, fix and references, plus the weighted score.",
+
         _ => return None,
     })
 }

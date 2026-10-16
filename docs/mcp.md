@@ -30,6 +30,8 @@ asa mcp uninstall --client cursor --yes
 | `baseline_diff`／`doctor` | 基準線差異、環境檢查 |
 | `traffic_summary`／`analyze_pcap` | 即時流量（最多 60 秒）、pcap 分析 |
 | `events_summary`／`crash_history`／`explain_code` | 事件與當機、藍屏代碼與事件 ID 說明 |
+| `vuln_summary` | 作業系統支援期限、最近更新、已知漏洞版本的軟體（CVE、NVD 連結）、Linux 套件 OSV、KEV |
+| `hardening_status` | 系統硬化檢查每條結果、目前值、修正方式與加權分數（`only_failed`、`category`） |
 | `preview_action`／`execute_action` | 防禦動作（只在 `--allow-actions` 時出現） |
 
 預設全部唯讀。要讓 AI 能封鎖 IP，伺服器啟動時加 `--allow-actions`（關閉 port 另需 `--allow-destructive`）；

@@ -62,6 +62,7 @@ etherparse = "0.21"
 pcap-parser = "0.17"
 quick-xml = "0.42"
 regex = "1"
+serde_yaml_ng = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }

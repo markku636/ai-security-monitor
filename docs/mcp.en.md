@@ -30,6 +30,8 @@ Supported clients: `claude-code` (user or `--project` `.mcp.json`), `codex`, `cu
 | `baseline_diff` / `doctor` | baseline differences, environment check |
 | `traffic_summary` / `analyze_pcap` | live traffic (up to 60 s), pcap analysis |
 | `events_summary` / `crash_history` / `explain_code` | events and crashes, bugcheck codes and event IDs |
+| `vuln_summary` | OS support lifetime, last update, software on known-vulnerable versions (CVE, NVD link), Linux OSV results, KEV |
+| `hardening_status` | every hardening check with current value, fix and weighted score (`only_failed`, `category`) |
 | `preview_action` / `execute_action` | defensive actions (listed only with `--allow-actions`) |
 
 Everything is read-only by default. To let the AI block IPs, start the server with `--allow-actions` (closing ports also needs `--allow-destructive`);

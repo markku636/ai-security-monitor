@@ -1,0 +1,273 @@
+# Linux 系統硬化檢查（asa harden）。
+# probe 種類：sshd {key,default}（讀 /etc/ssh/sshd_config 與 Include，取全域區第一個值）、sysctl（/proc/sys）、
+# service {names, query: active|enabled}（systemctl；任一符合即回該狀態）、file（可配 regex）、command、builtin。
+# distros：只在這些發行版（/etc/os-release 的 ID 或 ID_LIKE）檢查；only_if_exists：檔案不存在就不適用。
+# 防火牆由 fw 引擎檢查（asa fw audit），這裡不重複。
+
+- id: lin.ssh.root_login
+  category: remote
+  severity: high
+  title: { zh: "SSH 不允許 root 用密碼登入", en: "SSH does not allow root password logins" }
+  rationale: { zh: "root 是每個暴力破解字典的第一個帳號。", en: "root is the first account every brute-force list tries." }
+  remediation: { zh: "在 /etc/ssh/sshd_config 設定 PermitRootLogin no（或 prohibit-password）後 systemctl reload sshd。", en: "Set PermitRootLogin no (or prohibit-password) in /etc/ssh/sshd_config and reload sshd." }
+  references: [ "https://man.openbsd.org/sshd_config#PermitRootLogin" ]
+  probe: { sshd: { key: PermitRootLogin, default: prohibit-password } }
+  expect: { op: in, value: [ "no", "prohibit-password", "without-password", "forced-commands-only" ] }
+
+- id: lin.ssh.password_auth
+  category: remote
+  severity: medium
+  title: { zh: "SSH 只用金鑰登入（關閉密碼登入）", en: "SSH uses keys only (password login off)" }
+  rationale: { zh: "對外開放的 SSH 每天都會收到成千上萬次密碼猜測。", en: "Internet-facing SSH receives thousands of password guesses a day." }
+  remediation: { zh: "確認金鑰可登入後，設定 PasswordAuthentication no 並 reload sshd。", en: "After confirming key login works, set PasswordAuthentication no and reload sshd." }
+  references: [ "https://man.openbsd.org/sshd_config#PasswordAuthentication" ]
+  probe: { sshd: { key: PasswordAuthentication, default: "yes" } }
+  expect: { op: eq, value: "no" }
+
+- id: lin.ssh.empty_passwords
+  category: remote
+  severity: high
+  title: { zh: "SSH 不允許空白密碼", en: "SSH rejects empty passwords" }
+  rationale: { zh: "允許空白密碼等於沒有密碼。", en: "Allowing empty passwords means no password at all." }
+  remediation: { zh: "設定 PermitEmptyPasswords no。", en: "Set PermitEmptyPasswords no." }
+  references: [ "https://man.openbsd.org/sshd_config#PermitEmptyPasswords" ]
+  probe: { sshd: { key: PermitEmptyPasswords, default: "no" } }
+  expect: { op: eq, value: "no" }
+
+- id: lin.ssh.x11_forwarding
+  category: remote
+  severity: low
+  title: { zh: "SSH X11 轉送已關閉", en: "SSH X11 forwarding is off" }
+  rationale: { zh: "伺服器用不到 X11 轉送，開著只多一個攻擊面。", en: "Servers rarely need X11 forwarding; it only adds attack surface." }
+  remediation: { zh: "設定 X11Forwarding no。", en: "Set X11Forwarding no." }
+  references: [ "https://man.openbsd.org/sshd_config#X11Forwarding" ]
+  probe: { sshd: { key: X11Forwarding, default: "no" } }
+  expect: { op: eq, value: "no" }
+
+- id: lin.ssh.max_auth_tries
+  category: remote
+  severity: low
+  title: { zh: "SSH 每次連線最多嘗試 4 次", en: "SSH allows at most 4 attempts per connection" }
+  rationale: { zh: "降低單一連線可嘗試的次數，讓暴力破解變慢。", en: "Fewer attempts per connection slows brute force down." }
+  remediation: { zh: "設定 MaxAuthTries 4（或更小）。", en: "Set MaxAuthTries 4 (or lower)." }
+  references: [ "https://man.openbsd.org/sshd_config#MaxAuthTries" ]
+  probe: { sshd: { key: MaxAuthTries, default: "6" } }
+  expect: { op: lte, value: 4 }
+
+- id: lin.ssh.brute_force_guard
+  category: remote
+  severity: low
+  title: { zh: "有 fail2ban／CrowdSec／sshguard 擋暴力破解", en: "fail2ban / CrowdSec / sshguard blocks brute force" }
+  rationale: { zh: "自動封鎖一直猜密碼的來源 IP。", en: "Automatically bans source IPs that keep guessing passwords." }
+  remediation: { zh: "安裝並啟用 fail2ban（apt install fail2ban）或 CrowdSec。", en: "Install and enable fail2ban (apt install fail2ban) or CrowdSec." }
+  references: [ "https://github.com/fail2ban/fail2ban", "https://www.crowdsec.net/" ]
+  probe: { service: { names: [ fail2ban, crowdsec, sshguard ], query: active } }
+  expect: { op: eq, value: "active" }
+  only_if_exists: /etc/ssh/sshd_config
+  missing: fail
+
+- id: lin.kernel.aslr
+  category: kernel
+  severity: high
+  title: { zh: "記憶體位址隨機化（ASLR）完整開啟", en: "Full address space layout randomization (ASLR)" }
+  rationale: { zh: "ASLR 讓記憶體漏洞很難被穩定利用。", en: "ASLR makes memory-corruption bugs much harder to exploit reliably." }
+  remediation: { zh: "sysctl -w kernel.randomize_va_space=2，並寫入 /etc/sysctl.d/。", en: "sysctl -w kernel.randomize_va_space=2 and persist it in /etc/sysctl.d/." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/kernel.html#randomize-va-space" ]
+  probe: { sysctl: kernel.randomize_va_space }
+  expect: { op: eq, value: 2 }
+
+- id: lin.kernel.kptr_restrict
+  category: kernel
+  severity: low
+  title: { zh: "隱藏核心記憶體位址", en: "Kernel pointers are hidden" }
+  rationale: { zh: "洩漏的核心位址會幫攻擊者繞過 KASLR。", en: "Leaked kernel addresses help attackers defeat KASLR." }
+  remediation: { zh: "sysctl -w kernel.kptr_restrict=1（或 2）。", en: "sysctl -w kernel.kptr_restrict=1 (or 2)." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/kernel.html#kptr-restrict" ]
+  probe: { sysctl: kernel.kptr_restrict }
+  expect: { op: gte, value: 1 }
+
+- id: lin.kernel.dmesg_restrict
+  category: kernel
+  severity: low
+  title: { zh: "一般使用者不能讀核心訊息（dmesg）", en: "Unprivileged users cannot read dmesg" }
+  rationale: { zh: "dmesg 可能洩漏位址與硬體資訊。", en: "dmesg can leak addresses and hardware details." }
+  remediation: { zh: "sysctl -w kernel.dmesg_restrict=1。", en: "sysctl -w kernel.dmesg_restrict=1." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/kernel.html#dmesg-restrict" ]
+  probe: { sysctl: kernel.dmesg_restrict }
+  expect: { op: eq, value: 1 }
+
+- id: lin.kernel.unprivileged_bpf
+  category: kernel
+  severity: low
+  title: { zh: "一般使用者不能載入 eBPF", en: "Unprivileged eBPF is disabled" }
+  rationale: { zh: "非特權 eBPF 曾多次被用來提權。", en: "Unprivileged eBPF has repeatedly been used for privilege escalation." }
+  remediation: { zh: "sysctl -w kernel.unprivileged_bpf_disabled=1。", en: "sysctl -w kernel.unprivileged_bpf_disabled=1." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/kernel.html#unprivileged-bpf-disabled" ]
+  probe: { sysctl: kernel.unprivileged_bpf_disabled }
+  expect: { op: in, value: [1, 2] }
+
+- id: lin.fs.protected_symlinks
+  category: kernel
+  severity: medium
+  title: { zh: "保護共用目錄的符號連結", en: "Symlinks in shared directories are protected" }
+  rationale: { zh: "防止 /tmp 這類目錄的符號連結攻擊。", en: "Prevents symlink attacks in world-writable directories such as /tmp." }
+  remediation: { zh: "sysctl -w fs.protected_symlinks=1。", en: "sysctl -w fs.protected_symlinks=1." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/fs.html#protected-symlinks" ]
+  probe: { sysctl: fs.protected_symlinks }
+  expect: { op: eq, value: 1 }
+
+- id: lin.fs.protected_hardlinks
+  category: kernel
+  severity: low
+  title: { zh: "保護硬連結", en: "Hardlinks are protected" }
+  rationale: { zh: "防止對不屬於自己的檔案建立硬連結。", en: "Prevents hardlinking files you do not own." }
+  remediation: { zh: "sysctl -w fs.protected_hardlinks=1。", en: "sysctl -w fs.protected_hardlinks=1." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/fs.html#protected-hardlinks" ]
+  probe: { sysctl: fs.protected_hardlinks }
+  expect: { op: eq, value: 1 }
+
+- id: lin.fs.suid_dumpable
+  category: kernel
+  severity: low
+  title: { zh: "setuid 程式當機不產生 core dump", en: "setuid programs do not dump core" }
+  rationale: { zh: "特權程式的 core dump 可能含有密碼或金鑰。", en: "Core dumps of privileged programs can contain secrets." }
+  remediation: { zh: "sysctl -w fs.suid_dumpable=0。", en: "sysctl -w fs.suid_dumpable=0." }
+  references: [ "https://docs.kernel.org/admin-guide/sysctl/fs.html#suid-dumpable" ]
+  probe: { sysctl: fs.suid_dumpable }
+  expect: { op: eq, value: 0 }
+
+- id: lin.net.syncookies
+  category: network
+  severity: low
+  title: { zh: "TCP SYN cookies 已開啟", en: "TCP SYN cookies are on" }
+  rationale: { zh: "減輕 SYN flood。", en: "Mitigates SYN floods." }
+  remediation: { zh: "sysctl -w net.ipv4.tcp_syncookies=1。", en: "sysctl -w net.ipv4.tcp_syncookies=1." }
+  references: [ "https://docs.kernel.org/networking/ip-sysctl.html" ]
+  probe: { sysctl: net.ipv4.tcp_syncookies }
+  expect: { op: eq, value: 1 }
+
+- id: lin.net.rp_filter
+  category: network
+  severity: low
+  title: { zh: "開啟反向路徑過濾（防偽造來源）", en: "Reverse path filtering is on (anti-spoofing)" }
+  rationale: { zh: "丟棄來源位址不可能從這張網卡進來的封包。", en: "Drops packets whose source could not have arrived on that interface." }
+  remediation: { zh: "sysctl -w net.ipv4.conf.all.rp_filter=1。", en: "sysctl -w net.ipv4.conf.all.rp_filter=1." }
+  references: [ "https://docs.kernel.org/networking/ip-sysctl.html" ]
+  probe: { sysctl: net.ipv4.conf.all.rp_filter }
+  expect: { op: in, value: [1, 2] }
+
+- id: lin.net.accept_redirects
+  category: network
+  severity: low
+  title: { zh: "不接受 ICMP 重新導向", en: "ICMP redirects are not accepted" }
+  rationale: { zh: "偽造的 ICMP redirect 可以把流量導到攻擊者。", en: "Forged ICMP redirects can reroute traffic to an attacker." }
+  remediation: { zh: "sysctl -w net.ipv4.conf.all.accept_redirects=0。", en: "sysctl -w net.ipv4.conf.all.accept_redirects=0." }
+  references: [ "https://docs.kernel.org/networking/ip-sysctl.html" ]
+  probe: { sysctl: net.ipv4.conf.all.accept_redirects }
+  expect: { op: eq, value: 0 }
+
+- id: lin.net.send_redirects
+  category: network
+  severity: low
+  title: { zh: "不送出 ICMP 重新導向", en: "ICMP redirects are not sent" }
+  rationale: { zh: "一般主機不是路由器，不需要送 redirect。", en: "Hosts that are not routers have no reason to send redirects." }
+  remediation: { zh: "sysctl -w net.ipv4.conf.all.send_redirects=0。", en: "sysctl -w net.ipv4.conf.all.send_redirects=0." }
+  references: [ "https://docs.kernel.org/networking/ip-sysctl.html" ]
+  probe: { sysctl: net.ipv4.conf.all.send_redirects }
+  expect: { op: eq, value: 0 }
+
+- id: lin.mac.enforcing
+  category: hardening
+  severity: medium
+  title: { zh: "AppArmor 或 SELinux 已啟用", en: "AppArmor or SELinux is enforcing" }
+  rationale: { zh: "強制存取控制限制被入侵的服務能碰到的檔案與權限。", en: "Mandatory access control limits what a compromised service can touch." }
+  remediation: { zh: "Ubuntu／Debian 啟用 AppArmor；RHEL 系 setenforce 1 並設定 /etc/selinux/config。", en: "Enable AppArmor on Ubuntu/Debian; on RHEL-likes run setenforce 1 and set /etc/selinux/config." }
+  references: [ "https://apparmor.net/", "https://selinuxproject.org/" ]
+  probe: { builtin: lsm }
+  expect: { op: in, value: [ "apparmor", "selinux" ] }
+
+- id: lin.accounts.uid0
+  category: account
+  severity: high
+  title: { zh: "只有 root 的 UID 是 0", en: "Only root has UID 0" }
+  rationale: { zh: "多出來的 UID 0 帳號是常見的後門。", en: "Extra UID 0 accounts are a classic backdoor." }
+  remediation: { zh: "檢查 /etc/passwd，移除或改掉其他 UID 0 帳號。", en: "Review /etc/passwd and remove or renumber other UID 0 accounts." }
+  references: [ "https://attack.mitre.org/techniques/T1136/001/" ]
+  probe: { builtin: uid0_accounts }
+  expect: { op: empty }
+
+- id: lin.accounts.empty_passwords
+  category: account
+  severity: high
+  title: { zh: "沒有空白密碼的帳號", en: "No accounts with empty passwords" }
+  rationale: { zh: "空白密碼的帳號不用密碼就能登入。", en: "Accounts with empty passwords log in without one." }
+  remediation: { zh: "passwd -l <帳號> 鎖住，或設定密碼。", en: "Lock with passwd -l <account> or set a password." }
+  references: [ "https://man7.org/linux/man-pages/man5/shadow.5.html" ]
+  probe: { builtin: empty_passwords }
+  expect: { op: empty }
+
+- id: lin.sudo.nopasswd
+  category: account
+  severity: medium
+  title: { zh: "sudo 沒有免密碼規則", en: "sudo has no NOPASSWD rules" }
+  rationale: { zh: "NOPASSWD 讓偷到該帳號的人直接拿到 root。", en: "NOPASSWD turns any compromise of that account into root." }
+  remediation: { zh: "用 visudo 移除 NOPASSWD，或只限定特定指令。", en: "Remove NOPASSWD with visudo, or restrict it to specific commands." }
+  references: [ "https://www.sudo.ws/docs/man/sudoers.man/" ]
+  probe: { builtin: sudo_nopasswd }
+  expect: { op: empty }
+
+- id: lin.path.world_writable
+  category: hardening
+  severity: medium
+  title: { zh: "PATH 裡沒有任何人都能寫入的目錄", en: "No world-writable directories in PATH" }
+  rationale: { zh: "任何人都能在 PATH 目錄放同名程式，等別人執行。", en: "Anyone could drop a same-named program into a PATH directory and wait." }
+  remediation: { zh: "chmod o-w <目錄>，或把它移出 PATH。", en: "chmod o-w <dir>, or remove it from PATH." }
+  references: [ "https://attack.mitre.org/techniques/T1574/007/" ]
+  probe: { builtin: path_world_writable }
+  expect: { op: empty }
+
+- id: lin.updates.unattended
+  category: update
+  severity: medium
+  title: { zh: "已開啟自動安裝安全性更新（unattended-upgrades）", en: "Automatic security updates are on (unattended-upgrades)" }
+  rationale: { zh: "安全性更新自動安裝，不用等人登入處理。", en: "Security updates install on their own instead of waiting for a person." }
+  remediation: { zh: "apt install unattended-upgrades && dpkg-reconfigure -plow unattended-upgrades。", en: "apt install unattended-upgrades && dpkg-reconfigure -plow unattended-upgrades." }
+  references: [ "https://wiki.debian.org/UnattendedUpgrades" ]
+  distros: [ debian, ubuntu ]
+  probe: { file: /etc/apt/apt.conf.d/20auto-upgrades, regex: 'Unattended-Upgrade\s+"(\d+)"' }
+  expect: { op: eq, value: 1 }
+  missing: fail
+
+- id: lin.updates.dnf_automatic
+  category: update
+  severity: medium
+  title: { zh: "已開啟 dnf-automatic 自動更新", en: "dnf-automatic updates are enabled" }
+  rationale: { zh: "安全性更新自動安裝，不用等人登入處理。", en: "Security updates install on their own instead of waiting for a person." }
+  remediation: { zh: "dnf install dnf-automatic && systemctl enable --now dnf-automatic-install.timer。", en: "dnf install dnf-automatic && systemctl enable --now dnf-automatic-install.timer." }
+  references: [ "https://dnf.readthedocs.io/en/latest/automatic.html" ]
+  distros: [ rhel, rocky, almalinux, centos, fedora ]
+  probe: { service: { names: [ dnf-automatic-install.timer, dnf-automatic.timer, dnf5-automatic.timer ], query: enabled } }
+  expect: { op: eq, value: "enabled" }
+  missing: fail
+
+- id: lin.services.legacy
+  category: remote
+  severity: high
+  title: { zh: "沒有執行 telnet／FTP／rsh 這類明文服務", en: "No telnet / FTP / rsh plaintext services running" }
+  rationale: { zh: "這些服務用明文傳送帳號密碼。", en: "These services send credentials in clear text." }
+  remediation: { zh: "停用並移除這些服務，改用 SSH／SFTP。", en: "Stop and remove these services; use SSH/SFTP instead." }
+  references: [ "https://attack.mitre.org/techniques/T1040/" ]
+  probe: { service: { names: [ telnet.socket, inetd, xinetd, vsftpd, proftpd, pure-ftpd, rsh.socket, rlogin.socket, rexec.socket ], query: active } }
+  expect: { op: ne, value: "active" }
+  missing: pass
+
+- id: lin.audit.auditd
+  category: logging
+  severity: low
+  title: { zh: "auditd 稽核服務在執行", en: "auditd is running" }
+  rationale: { zh: "事後調查需要誰在什麼時候做了什麼的紀錄。", en: "Investigations need a record of who did what and when." }
+  remediation: { zh: "安裝並啟用 auditd（apt install auditd／dnf install audit）。", en: "Install and enable auditd (apt install auditd / dnf install audit)." }
+  references: [ "https://man7.org/linux/man-pages/man8/auditd.8.html" ]
+  probe: { service: { names: [ auditd ], query: active } }
+  expect: { op: eq, value: "active" }
+  missing: fail

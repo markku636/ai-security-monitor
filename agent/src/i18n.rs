@@ -56,6 +56,23 @@ fn lookup_in(l: Lang, zh: &str) -> Option<&'static str> {
 }
 
 /// 查目前語言譯文；查無回 `None`（不做 identity fallback）。給 clap help 這類執行期 `String` 用。
+/// 資料檔（feeds/*.json、*.yml）裡的中英雙語欄位。
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Localized {
+    pub zh: String,
+    pub en: String,
+}
+
+impl Localized {
+    pub fn get(&self) -> String {
+        if current() == Lang::En && !self.en.is_empty() {
+            self.en.clone()
+        } else {
+            self.zh.clone()
+        }
+    }
+}
+
 pub fn lookup_opt(zh: &str) -> Option<&'static str> {
     let l = current();
     if l == Lang::ZhTw {

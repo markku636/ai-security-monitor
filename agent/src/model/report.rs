@@ -87,6 +87,14 @@ pub struct HardeningSummary {
     pub fail: u32,
     pub na: u32,
     pub error: u32,
+    /// 嚴重度加權分數（0–100）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<u8>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub needs_admin: Vec<String>,
+    /// 每條檢查的結果（hardening::Outcome）。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub results: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

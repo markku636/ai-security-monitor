@@ -97,6 +97,8 @@ pub enum Command {
     Events(EventsArgs),
     /// 漏洞與更新：作業系統是否仍在支援、多久沒更新、已安裝軟體的已知漏洞（Linux 套件查 OSV）
     Vuln(VulnArgs),
+    /// 系統硬化檢查：UAC、Defender、BitLocker、SSH、核心參數、自動更新等，給分數與修正方式
+    Harden(HardenArgs),
     /// MCP 伺服器：讓 Claude Code／Codex／Cursor／VS Code 查這台電腦的資安狀態
     Mcp(McpArgs),
     /// 用 Claude Code 或 Codex CLI 分析：問問題、解讀報告、流量與當機
@@ -327,6 +329,16 @@ pub enum EventsCmd {
         /// 檔案路徑
         file: String,
     },
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct HardenArgs {
+    /// 列出全部檢查（預設只列未通過）
+    #[arg(long)]
+    pub all: bool,
+    /// 只看這個分類（例：account、remote、kernel、update、encryption）
+    #[arg(long, value_name = "NAME")]
+    pub category: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]

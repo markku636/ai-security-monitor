@@ -1,0 +1,253 @@
+# Windows 系統硬化檢查（asa harden）。
+# probe 種類：registry {path,name}、powershell（腳本，回傳單一值）；全部合併成一次 PowerShell 呼叫。
+# expect.op：eq ne gte lte contains not_contains matches in not_in empty not_empty
+# missing：讀不到值時的結果（pass｜fail｜na，預設 na）；na_values：這些值代表「不適用」。
+# 防火牆設定檔由 fw 引擎檢查（asa fw audit），這裡不重複。
+
+- id: win.uac.enabled
+  category: account
+  severity: high
+  title: { zh: "使用者帳戶控制（UAC）已開啟", en: "User Account Control (UAC) is enabled" }
+  rationale: { zh: "關掉 UAC 後所有程式都以系統管理員權限執行，惡意程式不需要再要權限。", en: "With UAC off every program runs with full admin rights, so malware never has to ask." }
+  remediation: { zh: "設定 HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System 的 EnableLUA=1 後重新開機。", en: "Set EnableLUA=1 under HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System and reboot." }
+  references: [ "https://learn.microsoft.com/windows/security/application-security/application-control/user-account-control/settings-and-configuration" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System', name: EnableLUA } }
+  expect: { op: eq, value: 1 }
+  missing: pass
+
+- id: win.uac.admin_prompt
+  category: account
+  severity: medium
+  title: { zh: "系統管理員提升權限時會詢問", en: "Administrators are prompted before elevation" }
+  rationale: { zh: "設成「不提示直接提升」等於關掉 UAC 的保護。", en: "\"Elevate without prompting\" removes UAC's protection." }
+  remediation: { zh: "ConsentPromptBehaviorAdmin 設為 5（預設）或 2。", en: "Set ConsentPromptBehaviorAdmin to 5 (default) or 2." }
+  references: [ "https://learn.microsoft.com/windows/security/application-security/application-control/user-account-control/settings-and-configuration" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System', name: ConsentPromptBehaviorAdmin } }
+  expect: { op: ne, value: 0 }
+  missing: pass
+
+- id: win.defender.realtime
+  category: malware
+  severity: high
+  title: { zh: "Microsoft Defender 即時保護已開啟", en: "Microsoft Defender real-time protection is on" }
+  rationale: { zh: "即時保護在檔案寫入或執行時就攔截惡意程式。", en: "Real-time protection blocks malware as files are written or run." }
+  remediation: { zh: "Windows 安全性 → 病毒與威脅防護 → 管理設定 → 開啟即時保護。", en: "Windows Security → Virus & threat protection → Manage settings → turn on Real-time protection." }
+  references: [ "https://learn.microsoft.com/defender-endpoint/configure-real-time-protection-microsoft-defender-antivirus" ]
+  probe:
+    powershell: |
+      $s = Get-MpComputerStatus
+      if (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.RealTimeProtectionEnabled) { 'on' } else { 'off' }
+  expect: { op: eq, value: "on" }
+  na_values: [ "other_av" ]
+
+- id: win.defender.signatures
+  category: malware
+  severity: medium
+  title: { zh: "Defender 病毒碼 7 天內更新過", en: "Defender signatures updated within 7 days" }
+  rationale: { zh: "病毒碼太舊就認不出新出現的惡意程式。", en: "Old signatures miss recent malware." }
+  remediation: { zh: "執行 Update-MpSignature，或確認 Windows Update 正常。", en: "Run Update-MpSignature or make sure Windows Update works." }
+  references: [ "https://learn.microsoft.com/defender-endpoint/manage-updates-baselines-microsoft-defender-antivirus" ]
+  probe:
+    powershell: |
+      $s = Get-MpComputerStatus
+      if (-not $s.AntivirusEnabled) { 'other_av' } else { $s.AntivirusSignatureAge }
+  expect: { op: lte, value: 7 }
+  na_values: [ "other_av" ]
+
+- id: win.defender.tamper
+  category: malware
+  severity: medium
+  title: { zh: "Defender 竄改防護已開啟", en: "Defender tamper protection is on" }
+  rationale: { zh: "惡意程式常先關掉防毒；竄改防護讓設定無法被程式改掉。", en: "Malware often disables antivirus first; tamper protection blocks that." }
+  remediation: { zh: "Windows 安全性 → 病毒與威脅防護設定 → 開啟竄改防護。", en: "Windows Security → Virus & threat protection settings → turn on Tamper Protection." }
+  references: [ "https://learn.microsoft.com/defender-endpoint/prevent-changes-to-security-settings-with-tamper-protection" ]
+  probe:
+    powershell: |
+      $s = Get-MpComputerStatus
+      if (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.IsTamperProtected) { 'on' } else { 'off' }
+  expect: { op: eq, value: "on" }
+  na_values: [ "other_av" ]
+
+- id: win.smartscreen
+  category: malware
+  severity: medium
+  title: { zh: "SmartScreen 沒有被關閉", en: "SmartScreen is not turned off" }
+  rationale: { zh: "SmartScreen 會擋下已知惡意或來路不明的下載與程式。", en: "SmartScreen blocks known-bad and unrecognized downloads and apps." }
+  remediation: { zh: "Windows 安全性 → 應用程式與瀏覽器控制 → 開啟「檢查應用程式和檔案」。", en: "Windows Security → App & browser control → turn on \"Check apps and files\"." }
+  references: [ "https://learn.microsoft.com/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/" ]
+  probe:
+    powershell: |
+      $p = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -ErrorAction SilentlyContinue).EnableSmartScreen
+      $e = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer' -ErrorAction SilentlyContinue).SmartScreenEnabled
+      if ($p -eq 0 -or $e -eq 'Off') { 'off' } else { 'on' }
+  expect: { op: eq, value: "on" }
+
+- id: win.smb1.client
+  category: network
+  severity: high
+  title: { zh: "SMBv1 用戶端已停用", en: "SMBv1 client is disabled" }
+  rationale: { zh: "SMBv1 是 WannaCry／NotPetya 利用的舊協定，沒有現代加密與完整性保護。", en: "SMBv1 is the legacy protocol abused by WannaCry/NotPetya and lacks modern protections." }
+  remediation: { zh: "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol（系統管理員）。", en: "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol (admin)." }
+  references: [ "https://learn.microsoft.com/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3" ]
+  probe:
+    powershell: |
+      $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\mrxsmb10'
+      if (Test-Path $k) { (Get-ItemProperty $k).Start } else { 4 }
+  expect: { op: eq, value: 4 }
+
+- id: win.smb1.server
+  category: network
+  severity: high
+  title: { zh: "SMBv1 伺服器已停用", en: "SMBv1 server is disabled" }
+  rationale: { zh: "對外提供 SMBv1 的主機是蠕蟲橫向擴散的目標。", en: "Hosts serving SMBv1 are targets for worm-style lateral movement." }
+  remediation: { zh: "Set-SmbServerConfiguration -EnableSMB1Protocol $false（系統管理員）。", en: "Set-SmbServerConfiguration -EnableSMB1Protocol $false (admin)." }
+  references: [ "https://learn.microsoft.com/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3" ]
+  probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters', name: SMB1 } }
+  expect: { op: eq, value: 0 }
+  missing: pass
+
+- id: win.rdp.nla
+  category: remote
+  severity: high
+  title: { zh: "遠端桌面要求網路層級驗證（NLA）", en: "Remote Desktop requires Network Level Authentication" }
+  rationale: { zh: "沒有 NLA 時，未登入的人就能連到登入畫面，暴露在 BlueKeep 這類漏洞與暴力破解之下。", en: "Without NLA anyone reaches the logon screen unauthenticated, exposing BlueKeep-class bugs and brute force." }
+  remediation: { zh: "系統 → 遠端桌面 → 勾選「要求電腦使用網路層級驗證來連線」。", en: "System → Remote Desktop → require devices to use Network Level Authentication." }
+  references: [ "https://learn.microsoft.com/windows-server/remote/remote-desktop-services/clients/remote-desktop-allow-access" ]
+  probe:
+    powershell: |
+      $ts = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server'
+      if ($ts.fDenyTSConnections -ne 0) { 'rdp_off' } else { (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp').UserAuthentication }
+  expect: { op: eq, value: 1 }
+  na_values: [ "rdp_off" ]
+
+- id: win.bitlocker.system
+  category: encryption
+  severity: high
+  title: { zh: "系統磁碟已用 BitLocker／裝置加密保護", en: "System drive is protected by BitLocker / Device Encryption" }
+  rationale: { zh: "筆電遺失或硬碟被拆走時，沒加密的資料可以直接讀出。", en: "If a laptop or disk is stolen, unencrypted data can simply be read." }
+  remediation: { zh: "設定 → 隱私權與安全性 → 裝置加密，或控制台 → BitLocker 磁碟機加密。", en: "Settings → Privacy & security → Device encryption, or Control Panel → BitLocker Drive Encryption." }
+  references: [ "https://learn.microsoft.com/windows/security/operating-system-security/data-protection/bitlocker/" ]
+  probe:
+    powershell: |
+      $v = (New-Object -ComObject Shell.Application).NameSpace($env:SystemDrive + '\').Self.ExtendedProperty('System.Volume.BitLockerProtection')
+      if ($null -eq $v -or $v -eq 0) { 'unavailable' } elseif (@(1, 3, 5, 6) -contains $v) { 'on' } else { 'off' }
+  expect: { op: eq, value: "on" }
+  na_values: [ "unavailable" ]
+
+- id: win.secureboot
+  category: boot
+  severity: medium
+  title: { zh: "安全開機（Secure Boot）已開啟", en: "Secure Boot is enabled" }
+  rationale: { zh: "安全開機阻止開機程式被替換成 bootkit。", en: "Secure Boot stops the boot chain from being replaced by a bootkit." }
+  remediation: { zh: "在 UEFI／BIOS 設定開啟 Secure Boot。", en: "Enable Secure Boot in UEFI/BIOS settings." }
+  references: [ "https://learn.microsoft.com/windows-hardware/design/device-experiences/oem-secure-boot" ]
+  probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State', name: UEFISecureBootEnabled } }
+  expect: { op: eq, value: 1 }
+
+- id: win.lsa.protection
+  category: credential
+  severity: medium
+  title: { zh: "LSA 保護（RunAsPPL）已開啟", en: "LSA protection (RunAsPPL) is on" }
+  rationale: { zh: "防止 Mimikatz 之類的工具從 LSASS 記憶體偷出密碼雜湊。", en: "Stops tools like Mimikatz from reading credentials out of LSASS memory." }
+  remediation: { zh: "Windows 安全性 → 裝置安全性 → 核心隔離 → 本機安全性授權保護。", en: "Windows Security → Device security → Core isolation → Local Security Authority protection." }
+  references: [ "https://learn.microsoft.com/windows-server/security/credentials-protection-and-management/configuring-additional-lsa-protection" ]
+  probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa', name: RunAsPPL } }
+  expect: { op: in, value: [1, 2] }
+  missing: fail
+
+- id: win.wdigest
+  category: credential
+  severity: high
+  title: { zh: "WDigest 不保存明文密碼", en: "WDigest does not keep plaintext passwords" }
+  rationale: { zh: "UseLogonCredential=1 會讓登入密碼以明文留在記憶體。", en: "UseLogonCredential=1 keeps logon passwords in memory in clear text." }
+  remediation: { zh: "刪除或設定 HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest 的 UseLogonCredential=0。", en: "Delete or set UseLogonCredential=0 under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest." }
+  references: [ "https://attack.mitre.org/techniques/T1003/001/" ]
+  probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest', name: UseLogonCredential } }
+  expect: { op: eq, value: 0 }
+  missing: pass
+
+- id: win.account.guest
+  category: account
+  severity: medium
+  title: { zh: "Guest 帳戶已停用", en: "Guest account is disabled" }
+  rationale: { zh: "Guest 帳戶不需要密碼就能登入。", en: "The Guest account allows logon without a password." }
+  remediation: { zh: "Disable-LocalUser -SID （結尾 -501 的帳戶）（系統管理員）。", en: "Disable-LocalUser on the account whose SID ends in -501 (admin)." }
+  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/accounts-guest-account-status" ]
+  probe:
+    powershell: |
+      $u = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }
+      if ($null -eq $u) { 'none' } elseif ($u.Enabled) { 'enabled' } else { 'disabled' }
+  expect: { op: in, value: [ "disabled", "none" ] }
+
+- id: win.account.builtin_admin
+  category: account
+  severity: low
+  title: { zh: "內建 Administrator 帳戶已停用", en: "Built-in Administrator account is disabled" }
+  rationale: { zh: "內建 Administrator 名稱固定、不受帳戶鎖定限制，是暴力破解的首選目標。", en: "The built-in Administrator has a well-known name and is exempt from lockout, a favorite brute-force target." }
+  remediation: { zh: "改用一般帳戶＋系統管理員群組；停用 SID 結尾 -500 的帳戶。", en: "Use named admin accounts and disable the account whose SID ends in -500." }
+  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/accounts-administrator-account-status" ]
+  probe:
+    powershell: |
+      $u = Get-LocalUser | Where-Object { $_.SID.Value -like '*-500' }
+      if ($null -eq $u) { 'none' } elseif ($u.Enabled) { 'enabled' } else { 'disabled' }
+  expect: { op: in, value: [ "disabled", "none" ] }
+
+- id: win.update.not_disabled
+  category: update
+  severity: high
+  title: { zh: "自動更新沒有被原則關閉", en: "Automatic updates are not disabled by policy" }
+  rationale: { zh: "關掉自動更新後漏洞修補只能靠人記得。", en: "With automatic updates off, patching depends on someone remembering." }
+  remediation: { zh: "移除群組原則「設定自動更新：已停用」（NoAutoUpdate=1）。", en: "Remove the \"Configure Automatic Updates: Disabled\" policy (NoAutoUpdate=1)." }
+  references: [ "https://learn.microsoft.com/windows/deployment/update/waas-wu-settings" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', name: NoAutoUpdate } }
+  expect: { op: ne, value: 1 }
+  missing: pass
+
+- id: win.autorun.disabled
+  category: device
+  severity: low
+  title: { zh: "所有磁碟機的自動執行（AutoRun）已關閉", en: "AutoRun is disabled for all drives" }
+  rationale: { zh: "隨身碟插上就執行是舊式蠕蟲的傳播方式。", en: "Run-on-insert is a classic USB worm vector." }
+  remediation: { zh: "群組原則「關閉自動播放：所有磁碟機」，或 NoDriveTypeAutoRun=255。", en: "Group Policy \"Turn off AutoPlay: All drives\", or NoDriveTypeAutoRun=255." }
+  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/" ]
+  probe:
+    powershell: |
+      $a = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' -ErrorAction SilentlyContinue).NoDriveTypeAutoRun
+      $b = (Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' -ErrorAction SilentlyContinue).NoDriveTypeAutoRun
+      if ($a -eq 255 -or $b -eq 255) { 'off' } else { 'on' }
+  expect: { op: eq, value: "off" }
+
+- id: win.llmnr.disabled
+  category: network
+  severity: low
+  title: { zh: "LLMNR 名稱解析已關閉", en: "LLMNR name resolution is disabled" }
+  rationale: { zh: "同網段的攻擊者可以假冒 LLMNR 回應騙取 NTLM 雜湊（Responder）。", en: "Attackers on the same network can spoof LLMNR replies to capture NTLM hashes (Responder)." }
+  remediation: { zh: "群組原則「關閉多點傳送名稱解析」，或 EnableMulticast=0。", en: "Group Policy \"Turn off multicast name resolution\", or EnableMulticast=0." }
+  references: [ "https://attack.mitre.org/techniques/T1557/001/" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient', name: EnableMulticast } }
+  expect: { op: eq, value: 0 }
+  missing: fail
+
+- id: win.powershell_v2.removed
+  category: hardening
+  severity: low
+  title: { zh: "PowerShell 2.0 引擎已移除", en: "PowerShell 2.0 engine is removed" }
+  rationale: { zh: "PowerShell 2.0 沒有腳本記錄與 AMSI，攻擊者會降版本躲偵測。", en: "PowerShell 2.0 lacks script logging and AMSI; attackers downgrade to evade detection." }
+  remediation: { zh: "Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root（系統管理員）。", en: "Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root (admin)." }
+  references: [ "https://learn.microsoft.com/powershell/scripting/windows-powershell/install/windows-powershell-system-requirements" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\PowerShellEngine', name: PowerShellVersion } }
+  expect: { op: ne, value: "2.0" }
+  missing: pass
+
+- id: win.remote_registry
+  category: remote
+  severity: low
+  title: { zh: "遠端登錄服務沒有自動啟動", en: "Remote Registry service is not set to start automatically" }
+  rationale: { zh: "遠端登錄讓網路上的人讀寫這台的登錄檔。", en: "Remote Registry lets others on the network read and write this machine's registry." }
+  remediation: { zh: "Set-Service RemoteRegistry -StartupType Disabled（系統管理員）。", en: "Set-Service RemoteRegistry -StartupType Disabled (admin)." }
+  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/" ]
+  probe:
+    powershell: |
+      $s = Get-Service RemoteRegistry -ErrorAction SilentlyContinue
+      if ($null -eq $s) { 'none' } else { [string]$s.StartType }
+  expect: { op: in, value: [ "Disabled", "Manual", "none" ] }

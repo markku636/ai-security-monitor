@@ -1,4 +1,4 @@
-// 報告裡的引擎摘要（summaries.events／traffic／vuln）→ 當機紀錄、資安事件、每台最新摘要。
+// 報告裡的引擎摘要（summaries.events／traffic／vuln／hardening）→ 當機紀錄、資安事件、每台最新摘要。
 // 解析寬鬆：欄位不對的單筆略過，不讓整份報告失敗（agent 與 hub 版本可能不同步）。
 import crypto from 'node:crypto';
 import { sql } from 'drizzle-orm';
@@ -63,7 +63,7 @@ export interface SummaryResult {
 
 export async function applySummaries(db: DB, agentId: string, summaries: Record<string, unknown>, at: Date): Promise<SummaryResult> {
   const res: SummaryResult = { crashes: 0, security: 0 };
-  for (const kind of ['events', 'traffic', 'vuln'] as const) {
+  for (const kind of ['events', 'traffic', 'vuln', 'hardening'] as const) {
     const s = summaries[kind];
     if (s && typeof s === 'object' && !Array.isArray(s)) {
       await db

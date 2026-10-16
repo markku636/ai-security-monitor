@@ -7,21 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::inventory::{Inventory, OsInfo, Package};
 use super::version::older_than;
 
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct Localized {
-    pub zh: String,
-    pub en: String,
-}
-
-impl Localized {
-    pub fn get(&self) -> String {
-        if crate::i18n::current() == crate::i18n::Lang::En {
-            self.en.clone()
-        } else {
-            self.zh.clone()
-        }
-    }
-}
+pub use crate::i18n::Localized;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppRule {

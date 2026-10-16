@@ -18,6 +18,7 @@ pub mod embedded;
 pub mod error;
 pub mod events;
 pub mod firewall;
+pub mod hardening;
 pub mod hub;
 pub mod intel;
 pub mod mcp;
