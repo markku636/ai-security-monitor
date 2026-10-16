@@ -75,7 +75,7 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 ```
 
 工具（全部唯讀）：`fleet_summary`、`list_agents`、`list_findings`、`list_connections`、`inbound_attackers`、`lookup_indicator`、`top_destinations`、
-`crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`。資料與 Hub 頁面同一份查詢。
+`crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`、`vuln_overview`、`hardening_overview`。資料與 Hub 頁面同一份查詢。
 認證用 `ASA_HUB_MCP_TOKEN`（建議另設一把，只給 AI 用）或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。
 
 ## Hub 的 AI 分析頁（/ai）

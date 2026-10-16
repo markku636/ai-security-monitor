@@ -131,6 +131,9 @@ jobs:
           curl -sf -H 'authorization: Bearer ci-admin-secret' http://127.0.0.1:3911/api/v1/fleet/summary -o page.out && grep -q '"intel_feeds"' page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/events -o page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/traffic -o page.out && grep -q 'updater.exe' page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/vulns -o page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/hardening -o page.out
+          curl -sf -H "authorization: Bearer ci-admin-secret" http://127.0.0.1:3911/api/v1/vulns -o page.out && grep -q hosts page.out
           curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:3911/api/mcp -o page.out && grep -q crash_history page.out
           echo "hub smoke ok"
 
@@ -188,6 +191,9 @@ jobs:
           test "$(jq -r .action.status action.json)" = "succeeded"
           sudo nft list set inet asa block4 | grep -q 198.51.100.77
           curl -sf -H "$A" "$B/api/v1/agents/$AID" | jq -e '.reports | length >= 1' > /dev/null
+          # 真實 Ubuntu runner 的漏洞與硬化摘要有進 hub
+          curl -sf -H "$A" "$B/api/v1/vulns?agent_id=$AID" | jq -e '.summary.packages > 100 and .summary.os.family == "linux"' > /dev/null
+          curl -sf -H "$A" "$B/api/v1/hardening?agent_id=$AID" | jq -e '(.summary.results | length) >= 20 and .summary.score != null' > /dev/null
           # 冒名：同一把 client 金鑰、不同 agent token → 403
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'authorization: Bearer ci-client-key' -H "x-asa-agent-id: $AID" -H 'x-asa-agent-token: impostor-token-000000000000' $B/api/v1/agents/me/actions)" = "403"
           sudo -E $BIN --config-dir "$CFG" fw unblock --all-asa --yes

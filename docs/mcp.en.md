@@ -75,7 +75,7 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 ```
 
 Tools (all read-only): `fleet_summary`, `list_agents`, `list_findings`, `list_connections`, `inbound_attackers`, `lookup_indicator`, `top_destinations`,
-`crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`. They use the same queries as the hub pages.
+`crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`, `vuln_overview`, `hardening_overview`. They use the same queries as the hub pages.
 Authenticate with `ASA_HUB_MCP_TOKEN` (recommended: a separate key just for AI clients) or the admin key; open mode (no admin key) only accepts loopback Host/Origin.
 
 ## The hub's AI page (/ai)

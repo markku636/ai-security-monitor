@@ -9,6 +9,7 @@ import { inboundAttackers, listConnections, parseConnectionFilter } from '@/lib/
 import { bruteForceSources, recentCrashes, securityHits, topBugchecks } from '@/lib/queries/events';
 import { listFindings, parseFindingFilter, toFindingView } from '@/lib/queries/findings';
 import { feedHitStats, lookupIndicator } from '@/lib/queries/intel';
+import { agentHardening, agentVuln, hardeningOverview, vulnOverview } from '@/lib/queries/posture';
 import { processActivity, topDestinations } from '@/lib/queries/traffic';
 
 export interface ToolDef {
@@ -54,6 +55,18 @@ export const TOOLS: ToolDef[] = [
   { name: 'brute_force_sources', description: 'Failed-logon brute-force source IPs aggregated across hosts, with intel hits.', inputSchema: obj({ days }) },
   { name: 'explain_bugcheck', description: 'Name, likely causes and fixes for a Windows bugcheck code such as 0x7E or 0x124.', inputSchema: obj({ code: { type: 'string' } }, ['code']) },
   { name: 'list_actions', description: 'Remote defensive actions (block IP, close port) and their review status and results.', inputSchema: obj({ status: { type: 'array', items: { type: 'string' } } }) },
+  {
+    name: 'vuln_overview',
+    description:
+      'Vulnerabilities and updates: OS support lifetime (end-of-life dates), last patch / pending security updates, software on known-vulnerable versions with CVEs and CISA KEV, OSV results for Linux packages. Fleet-wide, or one host with agent_id.',
+    inputSchema: obj({ agent_id: agent }),
+  },
+  {
+    name: 'hardening_overview',
+    description:
+      'System hardening checks (UAC, antivirus, disk encryption, SSH, kernel settings, automatic updates, ...): per-host scores and the most common failures, or one host\'s check results with current value, fix and references (agent_id).',
+    inputSchema: obj({ agent_id: agent, only_failed: { type: 'boolean' } }),
+  },
   { name: 'intel_feeds', description: 'Threat-intel sources used by the agents: vendor, license (commercial use, attribution), confidence and 7-day hits.', inputSchema: obj({}) },
 ];
 
@@ -152,6 +165,23 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
       const status = Array.isArray(args.status) ? (args.status as string[]) : undefined;
       const r = await listActions(getDb(), { status: status as never, limit: 100 });
       return toText(r);
+    }
+    case 'vuln_overview': {
+      const agentId = str(args, 'agent_id');
+      if (agentId) return toText((await agentVuln(agentId)) ?? { error: 'no vulnerability summary for this agent' });
+      const v = await vulnOverview();
+      return toText({ ...v, apps: v.apps.slice(0, 50), os: v.os.slice(0, 200), patches: v.patches.slice(0, 200) });
+    }
+    case 'hardening_overview': {
+      const agentId = str(args, 'agent_id');
+      if (agentId) {
+        const h = await agentHardening(agentId);
+        if (!h) return toText({ error: 'no hardening summary for this agent' });
+        const onlyFailed = args.only_failed === true;
+        return toText({ at: h.at, summary: { ...h.summary, results: h.summary.results.filter((o) => !onlyFailed || o.result === 'fail') } });
+      }
+      const h = await hardeningOverview();
+      return toText({ average: h.average, hosts: h.hosts, top_failed: h.topFailed.slice(0, 40).map((e) => ({ id: e.check.id, title: e.check.title, severity: e.check.severity, remediation: e.check.remediation, failed: e.hosts.length, checked: e.checked, hosts: e.hosts.map((x) => x.hostname) })) });
     }
     case 'intel_feeds': {
       const stats = await feedHitStats(7);

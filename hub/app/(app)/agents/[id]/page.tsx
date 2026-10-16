@@ -17,10 +17,12 @@ import { riskyDestinations } from '@/lib/queries/connections';
 import { latestSummary, recentCrashes, securityHits } from '@/lib/queries/events';
 import { newDestinations, processActivity, topDestinations } from '@/lib/queries/traffic';
 import { CrashTable, DestinationTable, ProcessTable, SecurityTable } from '@/components/security/EventViews';
+import { AppHitsTable, HardeningTable, OsvTable, ScoreTrend, SupportBadge } from '@/components/security/PostureViews';
+import { agentHardening, agentVuln, type VulnSummary } from '@/lib/queries/posture';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['overview', 'connections', 'findings', 'events', 'traffic', 'history'] as const;
+const TABS = ['overview', 'connections', 'findings', 'vulns', 'hardening', 'events', 'traffic', 'history'] as const;
 type Tab = (typeof TABS)[number];
 
 type Agent = NonNullable<Awaited<ReturnType<typeof getAgent>>>;
@@ -30,6 +32,8 @@ function tabLabel(t: TFn, tab: Tab): string {
     overview: t('概況'),
     connections: t('連線'),
     findings: t('發現'),
+    vulns: t('漏洞與更新'),
+    hardening: t('系統硬化'),
     events: t('事件與當機'),
     traffic: t('流量'),
     history: t('報告紀錄'),
@@ -43,7 +47,16 @@ function StatusBadge({ t, a }: { t: TFn; a: Agent }) {
 }
 
 async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
-  const risky = await riskyDestinations(10, a.id);
+  const [risky, history] = await Promise.all([riskyDestinations(10, a.id), agentReports(a.id, 60)]);
+  const trend = history
+    .slice()
+    .reverse()
+    .map((r) => ({
+      at: r.finishedAt,
+      overall: r.score.overall,
+      vulns: r.scannersRun.includes('vuln') ? r.score.vulns : undefined,
+      hardening: r.scannersRun.includes('hardening') ? r.score.hardening : undefined,
+    }));
   const rows: [string, string][] = [
     [t('系統'), [a.osName ?? a.osFamily, a.osVersion].filter(Boolean).join(' ')],
     [t('架構'), a.arch],
@@ -79,6 +92,9 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
             </div>
           ))}
         </dl>
+      </Card>
+      <Card title={t('分數趨勢（最近 {n} 份報告）', { n: trend.length })} className="xl:col-span-2">
+        <ScoreTrend t={t} points={trend} />
       </Card>
       <Card title={t('看過的危險與可疑目的地')} className="xl:col-span-2">
         {risky.length ? (
@@ -189,6 +205,121 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
   );
 }
 
+async function VulnsTab({ t, a }: { t: TFn; a: Agent }) {
+  const v = await agentVuln(a.id);
+  if (!v) return <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報（需要 asa 0.1 以上）。')}</EmptyState>;
+  const s = v.summary;
+  const eco = Object.entries(s.by_ecosystem)
+    .map(([k, n]) => `${k} ${n}`)
+    .join(' · ');
+  const support = s.support;
+  const left = support?.days_left != null && support.days_left >= 0 ? ` · ${t('剩 {n} 天', { n: support.days_left })}` : '';
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card title={t('作業系統')}>
+          <div className="text-sm">{[s.os.name, s.os.version].filter(Boolean).join(' ') || '—'}</div>
+          {support ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <SupportBadge t={t} status={support.status} />
+              <span className="text-slate-500">
+                {support.product}
+                {support.eol ? ` · ${support.eol}` : ''}
+                {left}
+              </span>
+            </div>
+          ) : null}
+          {support?.note ? <p className="mt-2 text-xs text-slate-500">{support.note}</p> : null}
+        </Card>
+        <Card title={t('更新')}>
+          <PatchInfo t={t} s={s} />
+        </Card>
+        <Card title={t('已安裝軟體')}>
+          <div className="text-2xl font-semibold tabular-nums">{s.packages}</div>
+          <div className="text-xs text-slate-500">{eco || '—'}</div>
+          <div className="mt-1 text-xs text-slate-500">{t('回報時間 {when}', { when: since(v.at, t) })}</div>
+        </Card>
+      </div>
+      {s.kev_count > 0 ? (
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {t('有 {n} 個 CVE 在 CISA KEV（已被用於攻擊），請優先更新。', { n: s.kev_count })}
+        </p>
+      ) : null}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('有已知漏洞或已停止支援的軟體')}</h2>
+        {s.app_hits.length ? <AppHitsTable t={t} hits={s.app_hits} /> : <p className="text-sm text-slate-500">{t('內建規則沒有比對到已知漏洞版本的軟體。')}</p>}
+      </section>
+      {s.osv ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+            {t('OSV（{eco}）：查了 {q} 個套件，{n} 個有已公告漏洞', { eco: s.osv.ecosystem, q: s.osv.queried, n: s.osv.packages.length })}
+          </h2>
+          {s.osv.packages.length ? <OsvTable t={t} osv={s.osv} /> : null}
+        </section>
+      ) : null}
+      {s.notes.length ? (
+        <ul className="list-disc pl-5 text-xs text-slate-500">
+          {s.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function PatchInfo({ t, s }: { t: TFn; s: VulnSummary }) {
+  if (!s.last_patch && !s.pending_updates) return <p className="text-sm text-slate-500">—</p>;
+  const stale = (s.last_patch?.days ?? 0) > 45;
+  return (
+    <div className="space-y-1 text-sm">
+      {s.last_patch ? (
+        <p className={stale ? 'font-semibold text-amber-700 dark:text-amber-400' : ''}>
+          {t('最近一次：{id}（{date}，{days} 天前）', { id: s.last_patch.id, date: s.last_patch.date, days: s.last_patch.days })}
+        </p>
+      ) : null}
+      {s.pending_updates ? <p>{t('待安裝 {total} 個，其中安全性 {sec} 個', { total: s.pending_updates.total, sec: s.pending_updates.security })}</p> : null}
+    </div>
+  );
+}
+
+const RESULT_ORDER = { fail: 0, error: 1, pass: 2, not_applicable: 3 } as const;
+const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 } as const;
+
+async function HardeningTab({ t, a, sp }: { t: TFn; a: Agent; sp: Record<string, string | string[] | undefined> }) {
+  const h = await agentHardening(a.id);
+  if (!h) return <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報；本機可用 asa harden 先看結果。')}</EmptyState>;
+  const s = h.summary;
+  const all = (Array.isArray(sp.show) ? sp.show[0] : sp.show) === 'all';
+  const rows = s.results
+    .filter((o) => all || o.result === 'fail' || o.result === 'error')
+    .sort((x, y) => RESULT_ORDER[x.result] - RESULT_ORDER[y.result] || SEV_ORDER[x.severity] - SEV_ORDER[y.severity]);
+  const base = `/agents/${encodeURIComponent(a.id)}?tab=hardening`;
+  const on = 'border-teal-600 text-teal-700 dark:text-teal-300';
+  const off = 'border-slate-300 dark:border-slate-700';
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-6">
+        <Gauge score={s.score ?? null} label={t('硬化')} size={96} />
+        <div className="text-sm">
+          <div>{t('通過 {pass} · 未通過 {fail} · 不適用 {na} · 錯誤 {error}', { pass: s.pass, fail: s.fail, na: s.na, error: s.error })}</div>
+          <div className="text-xs text-slate-500">{t('回報時間 {when}', { when: since(h.at, t) })}</div>
+          {s.needs_admin.length ? <div className="mt-1 text-xs text-slate-500">{t('{n} 項需要管理員權限', { n: s.needs_admin.length })}</div> : null}
+        </div>
+        <div className="ml-auto flex gap-2 text-xs">
+          <Link className={`rounded-md border px-2 py-1 ${all ? off : on}`} href={base}>
+            {t('只看未通過')}
+          </Link>
+          <Link className={`rounded-md border px-2 py-1 ${all ? on : off}`} href={`${base}&show=all`}>
+            {t('全部 {n} 項', { n: s.results.length })}
+          </Link>
+        </div>
+      </div>
+      {rows.length ? <HardeningTable t={t} rows={rows} /> : <p className="text-sm text-slate-500">{t('全部通過。')}</p>}
+    </div>
+  );
+}
+
 async function HistoryTab({ t, a }: { t: TFn; a: Agent }) {
   const reports = await agentReports(a.id, 50);
   if (!reports.length) return <EmptyState title={t('還沒有收到任何報告')} />;
@@ -285,6 +416,8 @@ export default async function AgentPage({
       {tab === 'overview' ? <OverviewTab t={t} a={a} /> : null}
       {tab === 'connections' ? <ConnectionsView base={base} params={sp} agentId={a.id} /> : null}
       {tab === 'findings' ? <FindingsView base={base} params={sp} agentId={a.id} /> : null}
+      {tab === 'vulns' ? <VulnsTab t={t} a={a} /> : null}
+      {tab === 'hardening' ? <HardeningTab t={t} a={a} sp={sp} /> : null}
       {tab === 'events' ? <EventsTab t={t} a={a} /> : null}
       {tab === 'traffic' ? <TrafficTab t={t} a={a} /> : null}
       {tab === 'history' ? <HistoryTab t={t} a={a} /> : null}
