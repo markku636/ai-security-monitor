@@ -394,7 +394,9 @@ mod tests {
         assert!(s.contains("--allowedTools mcp__asa__lookup_ip,mcp__asa__list_connections"));
         assert!(s.contains("--strict-mcp-config") && s.contains("--max-turns 6") && s.contains("--model m1"));
         assert_eq!(a.last().unwrap(), "be careful");
-        assert!(!claude_args(&spec(Provider::Claude), Path::new("x"), false).iter().any(|x| x == "--append-system-prompt"));
+        assert!(!claude_args(&spec(Provider::Claude), Path::new("x"), false)
+            .iter()
+            .any(|x| x == "--append-system-prompt"));
     }
 
     #[test]
