@@ -17,6 +17,7 @@ pub mod hub_cmd;
 pub mod intel_cmd;
 pub mod ports_cmd;
 pub mod scan_cmd;
+pub mod traffic_cmd;
 pub mod version_cmd;
 
 use clap::{CommandFactory, FromArgMatches};

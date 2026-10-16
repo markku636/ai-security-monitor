@@ -48,6 +48,8 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
         v.extend([
             ("powershell", t!("防火牆 / 事件 / 清單查詢")),
             ("wevtutil", t!("Windows 事件日誌")),
+            ("pktmon", t!("內建封包擷取（轉成 pcapng 給 asa traffic analyze）")),
+            ("tshark", t!("Wireshark 命令列擷取（選用）")),
         ]);
     } else if cfg!(target_os = "macos") {
         v.extend([
@@ -55,6 +57,7 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
             ("log", t!("統一日誌")),
             ("nettop", t!("每行程流量（flow-lite）")),
             ("lynis", t!("硬化稽核（選用）")),
+            ("tcpdump", t!("封包擷取（存成 pcap 給 asa traffic analyze）")),
         ]);
     } else {
         v.extend([
@@ -64,10 +67,52 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
             ("firewall-cmd", t!("firewalld 防火牆")),
             ("journalctl", t!("systemd 日誌")),
             ("ss", t!("每 socket 流量（flow-lite）")),
+            ("tcpdump", t!("封包擷取（存成 pcap 給 asa traffic analyze）")),
             ("lynis", t!("硬化稽核（選用）")),
         ]);
     }
     v
+}
+
+/// 封包擷取能力：asa 本身不抓包（不需要驅動），但能分析其他工具存下的 pcap／pcapng。
+fn capture_check() -> Check {
+    let npcap = cfg!(windows)
+        && std::env::var_os("SystemRoot")
+            .map(|r| {
+                std::path::Path::new(&r)
+                    .join("System32")
+                    .join("Npcap")
+                    .join("wpcap.dll")
+                    .is_file()
+            })
+            .unwrap_or(false);
+    let (ok, detail) = if cfg!(windows) {
+        if npcap {
+            (
+                true,
+                t!("Npcap 已安裝：可用 Wireshark 擷取後 asa traffic analyze <檔案>").to_string(),
+            )
+        } else if find_in_path("pktmon").is_some() {
+            (
+                true,
+                t!("可用內建 pktmon：pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl（需系統管理員）").to_string(),
+            )
+        } else {
+            (false, t!("沒有擷取工具；即時模式（asa traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com").to_string())
+        }
+    } else if find_in_path("tcpdump").is_some() {
+        (
+            true,
+            t!("可用 tcpdump：sudo tcpdump -w cap.pcap → asa traffic analyze cap.pcap").to_string(),
+        )
+    } else {
+        (false, t!("沒有 tcpdump；即時模式（asa traffic）仍可用").to_string())
+    };
+    Check {
+        name: t!("封包擷取").into(),
+        ok,
+        detail,
+    }
 }
 
 /// 在 PATH 上找可執行檔（不靠 `which` crate；Windows 補 .exe / .cmd / .bat）。
@@ -139,6 +184,8 @@ pub fn collect(env: &Env) -> AppResult<DoctorReport> {
             ),
         });
     }
+
+    checks.push(capture_check());
 
     let tools = external_tools()
         .into_iter()

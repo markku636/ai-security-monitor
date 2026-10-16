@@ -37,6 +37,8 @@ jobs:
         run: |
           cargo run -q -- --lang en --help
           cargo run -q -- doctor --json
+          cargo run -q -- --json traffic --duration 3s --every 1s > traffic.json
+          grep -q flow-lite traffic.json
 
       - name: Firewall E2E (live, ephemeral runner)
         shell: bash

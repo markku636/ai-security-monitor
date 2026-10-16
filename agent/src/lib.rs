@@ -24,6 +24,7 @@ pub mod scan;
 pub mod secrets;
 pub mod store;
 pub mod sysmeta;
+pub mod traffic;
 pub mod util;
 
 pub mod cli;

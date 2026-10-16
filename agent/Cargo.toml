@@ -58,6 +58,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 flate2 = "1"
 maxminddb = "0.32"
 base64 = "0.22"
+etherparse = "0.21"
+pcap-parser = "0.17"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"], optional = true }

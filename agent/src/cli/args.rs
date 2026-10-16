@@ -91,6 +91,8 @@ pub enum Command {
     },
     /// 對外 port 與可達性；或探測自己網段的主機
     Ports(PortsArgs),
+    /// 流量：即時觀察連線（免抓包）或分析 pcap／pcapng 檔
+    Traffic(TrafficArgs),
     /// 威脅情資：更新、狀態、來源、查詢 IP／網域
     Intel {
         #[command(subcommand)]
@@ -179,6 +181,31 @@ pub enum BaselineCmd {
     Diff,
     /// 顯示基準線內容
     Show,
+}
+
+#[derive(Args, Debug, Clone)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct TrafficArgs {
+    #[command(subcommand)]
+    pub cmd: Option<TrafficCmd>,
+    /// 觀察多久（即時模式）
+    #[arg(long, default_value = "30s", value_name = "DUR")]
+    pub duration: String,
+    /// 多久讀一次連線表
+    #[arg(long, default_value = "2s", value_name = "DUR")]
+    pub every: String,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum TrafficCmd {
+    /// 分析 Wireshark／tcpdump 存的 .pcap／.pcapng（DNS、TLS SNI、明文協定、大量上傳、週期性連線、情資命中）
+    Analyze {
+        /// 擷取檔路徑
+        file: String,
+        /// 最多處理幾個封包
+        #[arg(long, default_value_t = crate::traffic::offline::DEFAULT_MAX_PACKETS)]
+        max_packets: u64,
+    },
 }
 
 #[derive(Args, Debug, Clone, Default)]
