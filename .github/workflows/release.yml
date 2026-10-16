@@ -18,6 +18,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/markku636/ai-security-agent-hub
+  DOCKER_BUILD_RECORD_UPLOAD: false
   PUBLISH: ${{ github.event_name == 'push' || !inputs.dry_run }}
 
 jobs:
@@ -135,6 +136,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          # 只拿 asa 執行檔（build-push-action 另外會上傳 .dockerbuild 紀錄）
+          pattern: asa-*
           merge-multiple: true
       - name: Checksums and notes
         run: |
