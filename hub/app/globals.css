@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+  /* 嚴重度（finding）與判定（連線）色階，全站一致 */
+  --color-sev-critical: #b91c1c;
+  --color-sev-high: #ea580c;
+  --color-sev-medium: #ca8a04;
+  --color-sev-low: #2563eb;
+  --color-sev-info: #64748b;
+
+  --color-verdict-dangerous: #b91c1c;
+  --color-verdict-suspicious: #d97706;
+  --color-verdict-unknown: #64748b;
+  --color-verdict-safe: #15803d;
+
+  --color-brand: #0f766e;
+  --color-brand-strong: #115e59;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}

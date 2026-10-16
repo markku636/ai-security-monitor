@@ -38,4 +38,10 @@
 - 封鎖目標護欄：拒絕 loopback／多播／過寬網段；含本機介面位址需 `--force`。MCP 用的審查 token 庫（12 碼、15 分鐘、單次、最多 32 筆）。
 - CI：三平台實機防火牆 E2E（封鎖 TEST-NET、關 port、驗證 OS 規則、全部移除）；`actions/checkout@v5`。
 
-> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證。
+- Security Hub 骨架（第 5 輪）：Next.js 16（App Router）＋Tailwind 4＋Drizzle＋PostgreSQL；啟動時跑 migration（advisory lock 防兩個 hub 同時跑）；
+  `/api/health`（資料庫不通回 503）；管理員登入（HttpOnly＋SameSite=Strict session、資料庫只存 sha256、換金鑰即全部登出、每 IP 每分鐘 5 次失敗上限）；
+  admin／client／viewer 三種身分、開放模式（無管理員金鑰＝僅本機）、CSRF（X-ASA-Request＋Sec-Fetch-Site）、`*_FILE` Docker secrets；
+  中英文（繁中原文即 key、cookie／Accept-Language、`i18n:check` 閘門）、深色模式、稽核紀錄表；`docker/compose.dev.yml` 開發用 PostgreSQL。
+- 測試用記憶體內 PGlite 跑同一份 migration；CI 新增 hub job（typecheck、i18n、vitest、next build，再對 PostgreSQL 服務容器做登入煙霧測試）。
+
+> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入。

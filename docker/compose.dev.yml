@@ -1,0 +1,22 @@
+# 開發用 PostgreSQL（只綁本機 127.0.0.1:55432）。hub/.env.local 設
+# ASA_HUB_DATABASE_URL=postgres://asa_hub:asa_dev_only@127.0.0.1:55432/asa_hub
+name: asa-hub-dev
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: asa_hub
+      POSTGRES_USER: asa_hub
+      POSTGRES_PASSWORD: asa_dev_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asa_hub -d asa_hub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  pgdata: {}
