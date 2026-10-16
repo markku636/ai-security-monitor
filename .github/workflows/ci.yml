@@ -119,3 +119,66 @@ jobs:
           curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=history' > /dev/null
           curl -sf -H 'authorization: Bearer ci-admin-secret' http://127.0.0.1:3911/api/v1/fleet/summary -o page.out && grep -q '"intel_feeds"' page.out
           echo "hub smoke ok"
+
+  e2e:
+    name: e2e (agent ↔ hub, remote action on linux)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: asa_hub
+          POSTGRES_USER: asa_hub
+          POSTGRES_PASSWORD: ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asa_hub -d asa_hub"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      ASA_HUB_DATABASE_URL: postgres://asa_hub:ci_only@127.0.0.1:5432/asa_hub
+      ASA_HUB_ADMIN_SECRET: ci-admin-secret
+      ASA_HUB_CLIENT_SECRETS: ci-client-key
+      ASA_SECRETS_BACKEND: file
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agent
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hub/package-lock.json
+      - name: Build agent and hub
+        run: |
+          sudo apt-get update >/dev/null && sudo apt-get install -y libpcap-dev pkg-config nftables >/dev/null
+          (cd agent && cargo build -q)
+          (cd hub && npm ci && npm run build)
+      - name: Enroll, approve a block, let the agent execute it as root
+        run: |
+          set -euo pipefail
+          (cd hub && nohup npx next start -p 3911 -H 127.0.0.1 > "$RUNNER_TEMP/hub.log" 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:3911/api/health > /dev/null && break; sleep 1; done
+          BIN="$PWD/agent/target/debug/asa"; CFG="$RUNNER_TEMP/asa"; B=http://127.0.0.1:3911; A='authorization: Bearer ci-admin-secret'
+          $BIN --config-dir "$CFG" --json enroll $B --key ci-client-key --accept-remote-actions | tee enroll.json
+          jq -e '.remote_actions == true and .pinned == true' enroll.json > /dev/null
+          AID=$(jq -r .agent_id enroll.json)
+          ID=$(curl -sf -H "$A" -H 'content-type: application/json' \
+            -d "{\"agent_id\":\"$AID\",\"kind\":\"block_ip\",\"params\":{\"ip\":\"198.51.100.77\",\"direction\":\"both\",\"reason\":\"ci-e2e\"}}" \
+            $B/api/v1/actions | jq -r .action.id)
+          curl -sf -H "$A" -H 'content-type: application/json' -d '{"decision":"approve"}' $B/api/v1/actions/$ID > /dev/null
+          sudo -E $BIN --config-dir "$CFG" watch --once --interval 1h
+          curl -sf -H "$A" $B/api/v1/actions/$ID | tee action.json
+          test "$(jq -r .action.status action.json)" = "succeeded"
+          sudo nft list set inet asa block4 | grep -q 198.51.100.77
+          curl -sf -H "$A" "$B/api/v1/agents/$AID" | jq -e '.reports | length >= 1' > /dev/null
+          # 冒名：同一把 client 金鑰、不同 agent token → 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'authorization: Bearer ci-client-key' -H "x-asa-agent-id: $AID" -H 'x-asa-agent-token: impostor-token-000000000000' $B/api/v1/agents/me/actions)" = "403"
+          sudo -E $BIN --config-dir "$CFG" fw unblock --all-asa --yes
+          ! sudo nft list table inet asa 2>/dev/null
+          echo "e2e ok"
+      - name: Hub log on failure
+        if: failure()
+        run: tail -100 "$RUNNER_TEMP/hub.log" || true

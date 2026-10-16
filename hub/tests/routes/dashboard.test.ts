@@ -7,6 +7,8 @@ import { GET as attackersRoute } from '@/app/api/v1/connections/inbound-attacker
 import { GET as connectionsRoute } from '@/app/api/v1/connections/route';
 import { GET as findingsGet, POST as findingsPost } from '@/app/api/v1/findings/route';
 import { GET as fleetRoute } from '@/app/api/v1/fleet/summary/route';
+import { GET as feedsRoute } from '@/app/api/v1/intel/feeds/route';
+import { GET as lookupRoute } from '@/app/api/v1/intel/lookup/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
 import { POST as report } from '@/app/api/v1/ingest/report/route';
 import { POST as snapshot } from '@/app/api/v1/ingest/snapshot/route';
@@ -206,5 +208,28 @@ describe('dashboard API', () => {
       }),
     );
     expect(tooMany.status).toBe(400);
+  });
+});
+
+describe('intel API', () => {
+  it('lists the feed registry with 7-day hit stats (viewers allowed)', async () => {
+    process.env.ASA_HUB_PUBLIC_DASHBOARD = '1';
+    resetEnvForTests();
+    const r = await (await feedsRoute(req('/api/v1/intel/feeds'))).json();
+    const feodo = r.items.find((f: { id: string }) => f.id === 'abusech-feodo');
+    expect(feodo.license.commercial_ok).toBe(true);
+    expect(feodo.hits_7d).toMatchObject({ indicators: 1, hosts: 1 });
+    const dshield = r.items.find((f: { id: string }) => f.id === 'dshield-block');
+    expect(dshield.license.commercial_ok).toBe(false);
+    expect(r.items.length).toBeGreaterThan(20);
+  });
+
+  it('looks up an indicator across hits, connections and history', async () => {
+    const r = await (await lookupRoute(req('/api/v1/intel/lookup?q=203.0.113.66', { headers: admin }))).json();
+    expect(r.hits[0]).toMatchObject({ vendor: 'abuse.ch', confidence: 90 });
+    expect(r.connections[0]).toMatchObject({ verdict: 'dangerous', direction: 'outbound', processName: 'updater.exe' });
+    expect(r.destinations[0].worstVerdict).toBe('dangerous');
+    expect((await lookupRoute(req('/api/v1/intel/lookup', { headers: admin }))).status).toBe(400);
+    expect((await lookupRoute(req('/api/v1/intel/lookup?q=1.1.1.1'))).status).toBe(401);
   });
 });

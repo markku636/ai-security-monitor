@@ -1,0 +1,20 @@
+{
+  "signing_key": "asa-contract-test-signing-key",
+  "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+  "action_key": "76415b38927eb51b67e7717ddb14f3500df1347ecf9eda520f7a421ca6840fcc",
+  "canonical": "{\"action_id\":\"act_00112233445566ff\",\"agent_id\":\"0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee\",\"expires_at\":\"2026-10-17T09:30:00.000Z\",\"kind\":\"block_ip\",\"params\":{\"direction\":\"both\",\"ip\":\"203.0.113.66\",\"reason\":\"abusech-feodo\"}}",
+  "action": {
+    "action_id": "act_00112233445566ff",
+    "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+    "kind": "block_ip",
+    "params": {
+      "reason": "abusech-feodo",
+      "ip": "203.0.113.66",
+      "direction": "both"
+    },
+    "expires_at": "2026-10-17T09:30:00.000Z",
+    "reason": "Feodo C2",
+    "destructive": false,
+    "token": "04b8f50b8163e0c6c425291c6bd1baf0b34a7c83ee5faf5a5bd05c955cdcd373"
+  }
+}

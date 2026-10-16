@@ -11,9 +11,9 @@ use super::Env;
 use crate::config::{self, HubConfig};
 use crate::error::{AppError, AppResult};
 use crate::hub::contract::HeartbeatPayload;
-use crate::hub::{outbox, validate_url, watch, HubClient};
+use crate::hub::{actions as remote, outbox, validate_url, watch, HubClient};
 use crate::model::report::AgentInfo;
-use crate::secrets::{SecretStore, KEY_HUB_CLIENT};
+use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT};
 
 fn log(env: &Env, msg: &str) {
     if !env.global.quiet {
@@ -47,7 +47,8 @@ pub async fn enroll(
         return Err(AppError::InvalidArg(t!("client 金鑰不可為空").into()));
     }
     let mut cfg = config::load_or_init(&env.config_dir)?;
-    let client = HubClient::new(&url, &key, &cfg.agent_id)?;
+    let token = watch::agent_token(&env.config_dir)?;
+    let client = HubClient::new(&url, &key, &cfg.agent_id)?.with_agent_token(Some(token));
     let health = client.health().await?;
     let agent = agent_info(&cfg);
     let reg = client
@@ -58,6 +59,7 @@ pub async fn enroll(
             other => other,
         })?;
     SecretStore::open(&env.config_dir).set(KEY_HUB_CLIENT, &key)?;
+    let has_action_key = watch::save_action_key(&env.config_dir, accept_remote_actions, reg.action_key.as_deref())?;
     cfg.hub = Some(HubConfig {
         url: url.clone(),
         enrolled_at: crate::util::time::now_iso(),
@@ -70,7 +72,7 @@ pub async fn enroll(
     config::save(&env.config_dir, &cfg)?;
     if env.global.json {
         print_json(
-            &serde_json::json!({ "ok": true, "hub": url, "agent_id": reg.agent_id, "created": reg.created, "hub_info": reg.hub, "health": health }),
+            &serde_json::json!({ "ok": true, "hub": url, "agent_id": reg.agent_id, "created": reg.created, "pinned": reg.pinned, "remote_actions": has_action_key, "hub_info": reg.hub, "health": health }),
         );
     } else {
         println!(
@@ -83,6 +85,17 @@ pub async fn enroll(
                 id = reg.agent_id
             )
         );
+        if accept_remote_actions && !has_action_key {
+            println!(
+                "{}",
+                t!("注意：hub 沒有提供遠端動作金鑰（hub 版本太舊，或這台 agent 的身分未能釘選），遠端動作不會執行")
+            );
+        } else if has_action_key {
+            println!(
+                "{}",
+                t!("已啟用遠端動作：hub 核准的封鎖會在這台機器執行（需以系統管理員／服務模式執行 asa watch）")
+            );
+        }
         println!(
             "{}",
             t!("下一步：執行 asa watch 開始定期回報（或 asa watch --once 先試一輪）")
@@ -95,7 +108,9 @@ pub async fn unenroll(env: &Env) -> AppResult<()> {
     let mut cfg = config::load_or_init(&env.config_dir)?;
     let was = cfg.hub.take();
     config::save(&env.config_dir, &cfg)?;
-    SecretStore::open(&env.config_dir).delete(KEY_HUB_CLIENT)?;
+    let store = SecretStore::open(&env.config_dir);
+    store.delete(KEY_HUB_CLIENT)?;
+    store.delete(KEY_HUB_ACTION)?;
     match was {
         Some(h) => println!("{}", tf!("已取消註冊：{url}", url = h.url)),
         None => println!("{}", t!("原本就沒有註冊任何 hub")),
@@ -178,6 +193,82 @@ pub async fn status(env: &Env) -> AppResult<()> {
     Ok(())
 }
 
+/// 領取並執行 hub 核准的遠端動作；每個動作都回報結果（包含拒絕執行的原因）。
+async fn run_remote_actions(env: &Env, client: &HubClient, cfg: &config::AgentConfig) {
+    if !cfg.remote_actions.accept {
+        return;
+    }
+    let Ok(Some(key)) = SecretStore::open(&env.config_dir).get(KEY_HUB_ACTION) else {
+        return;
+    };
+    let items = match client.poll_actions().await {
+        Ok(v) => v,
+        Err(e) => {
+            log(env, &tf!("領取遠端動作失敗：{e}", e = e.message()));
+            return;
+        }
+    };
+    let allowlist = crate::model::allowlist::Allowlist::load(&env.config_dir).unwrap_or_default();
+    let mut done = remote::DoneLog::load(&env.config_dir);
+    for a in items {
+        let (ok, output) = match done.items.get(&a.action_id) {
+            Some(prev) => (prev.ok, prev.output.clone()),
+            None => {
+                let r = execute_remote(env, &a, &key, cfg, &allowlist).await;
+                done.record(&a.action_id, r.0, &r.1);
+                let _ = done.save(&env.config_dir);
+                r
+            }
+        };
+        log(
+            env,
+            &tf!(
+                "遠端動作 {id}（{kind}）：{result}",
+                id = a.action_id,
+                kind = a.kind,
+                result = output
+            ),
+        );
+        if let Err(e) = client.post_action_result(&a.action_id, ok, &output).await {
+            log(env, &tf!("回報遠端動作結果失敗：{e}", e = e.message()));
+        }
+    }
+}
+
+async fn execute_remote(
+    env: &Env,
+    a: &remote::RemoteAction,
+    key: &str,
+    cfg: &config::AgentConfig,
+    allowlist: &crate::model::allowlist::Allowlist,
+) -> (bool, String) {
+    let fw = match remote::check(a, key, &cfg.agent_id, &cfg.remote_actions, allowlist, Utc::now()) {
+        Ok(fw) => fw,
+        Err(why) => return (false, tf!("拒絕執行：{why}", why = why)),
+    };
+    // 背景執行不跳 UAC／sudo：沒有權限就回報失敗。
+    if !crate::elevate::is_elevated() {
+        return (
+            false,
+            t!("需要系統管理員權限：請以服務模式（asa service install）或系統管理員身分執行 asa watch").to_string(),
+        );
+    }
+    let backend = crate::firewall::plan::write_backend();
+    let origin = format!("hub:{}", a.action_id);
+    let runner = crate::util::cmd::RealRunner;
+    match crate::actions::execute(&env.config_dir, &fw, backend, &origin, &runner, false).await {
+        Ok(rep) => (
+            true,
+            tf!(
+                "已套用：{action}（後端 {backend}）",
+                action = rep.action,
+                backend = rep.backend
+            ),
+        ),
+        Err(e) => (false, e.message()),
+    }
+}
+
 /// 先把 outbox 裡的舊報告送掉（遇到錯誤就停，等下一輪）。
 async fn flush_outbox(env: &Env, client: &HubClient) {
     for p in outbox::list(&env.config_dir) {
@@ -222,6 +313,12 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     if let Some(c) = &client {
         match c.register(&agent, cfg.remote_actions.accept, a.service).await {
             Ok(r) => {
+                match watch::save_action_key(&env.config_dir, cfg.remote_actions.accept, r.action_key.as_deref()) {
+                    Ok(true) => log(env, t!("遠端動作：已啟用")),
+                    Ok(false) if cfg.remote_actions.accept => log(env, t!("遠端動作：hub 沒有提供驗章金鑰，暫不執行")),
+                    Ok(false) => {}
+                    Err(e) => log(env, &e.message()),
+                }
                 interval = interval.max(Duration::from_secs(r.hub.min_report_interval_s));
                 snap_every = snap_every.max(Duration::from_secs(r.hub.snapshot_interval_s.max(10)));
                 log(
@@ -276,8 +373,12 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                             last_scan_at,
                             elevated: crate::elevate::is_elevated(),
                         };
-                        if let Err(e) = c.heartbeat(&hb).await {
-                            log(env, &tf!("心跳失敗：{e}", e = e.message()));
+                        match c.heartbeat(&hb).await {
+                            Ok(v) if v["pending_actions"].as_u64().unwrap_or(0) > 0 => {
+                                run_remote_actions(env, c, &cfg).await;
+                            }
+                            Ok(_) => {}
+                            Err(e) => log(env, &tf!("心跳失敗：{e}", e = e.message())),
                         }
                     } else {
                         log(

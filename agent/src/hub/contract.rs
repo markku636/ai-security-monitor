@@ -52,4 +52,10 @@ pub struct RegisterResponse {
     pub created: bool,
     #[serde(default)]
     pub hub: HubInfo,
+    /// hub 是否已釘選這台 agent 的身分 token。
+    #[serde(default)]
+    pub pinned: bool,
+    /// 驗證遠端動作 token 用的金鑰（只在接受遠端動作且已釘選時給）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_key: Option<String>,
 }

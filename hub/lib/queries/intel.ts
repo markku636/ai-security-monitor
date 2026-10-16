@@ -1,6 +1,6 @@
 // 威脅情資命中的彙總：哪些來源最常命中、命中了哪些指標（每筆都帶廠商、授權與來源網址）。
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
-import { agents, intelHits } from '@/drizzle/schema';
+import { agents, connections, destinations, intelHits } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 
 /** 依來源（feed）彙總最近 N 天的命中。 */
@@ -50,4 +50,70 @@ export async function topIndicators(days = 7, limit = 10, agentId?: string) {
     .orderBy(desc(sql`max(${intelHits.confidence})`), desc(sql`max(${intelHits.seenAt})`))
     .limit(limit);
   return rows.map((r) => ({ ...r, lastSeenAt: new Date(r.lastSeenAt), sources: r.sources ?? [] }));
+}
+
+/** 每個來源最近 N 天的命中統計（情資頁的來源表用）。 */
+export async function feedHitStats(days = 7) {
+  const rows = await topIntelFeeds(days, 200);
+  return new Map(rows.map((r) => [r.feedId, r]));
+}
+
+/** 查一個 IP／網域：哪些來源列過它、哪些主機連過它。 */
+export async function lookupIndicator(q: string) {
+  const db = getDb();
+  const [hits, conns, dests] = await Promise.all([
+    db
+      .select({
+        agentId: intelHits.agentId,
+        hostname: agents.hostname,
+        feedId: intelHits.feedId,
+        feedName: intelHits.feedName,
+        vendor: intelHits.vendor,
+        license: intelHits.license,
+        sourceUrl: intelHits.sourceUrl,
+        confidence: intelHits.confidence,
+        fetchedAt: intelHits.fetchedAt,
+        seenAt: intelHits.seenAt,
+      })
+      .from(intelHits)
+      .innerJoin(agents, and(eq(agents.id, intelHits.agentId), isNull(agents.deletedAt)))
+      .where(eq(intelHits.indicator, q))
+      .orderBy(desc(intelHits.seenAt))
+      .limit(50),
+    db
+      .select({
+        agentId: connections.agentId,
+        hostname: agents.hostname,
+        direction: connections.direction,
+        verdict: connections.verdict,
+        remotePort: connections.remotePort,
+        localPort: connections.localPort,
+        processName: connections.processName,
+        country: connections.country,
+        org: connections.org,
+        at: connections.at,
+      })
+      .from(connections)
+      .innerJoin(agents, and(eq(agents.id, connections.agentId), isNull(agents.deletedAt)))
+      .where(eq(connections.remoteIp, q))
+      .limit(50),
+    db
+      .select({
+        agentId: destinations.agentId,
+        hostname: agents.hostname,
+        direction: destinations.direction,
+        worstVerdict: destinations.worstVerdict,
+        remotePort: destinations.remotePort,
+        processName: destinations.processName,
+        firstSeenAt: destinations.firstSeenAt,
+        lastSeenAt: destinations.lastSeenAt,
+        seenCount: destinations.seenCount,
+      })
+      .from(destinations)
+      .innerJoin(agents, and(eq(agents.id, destinations.agentId), isNull(agents.deletedAt)))
+      .where(eq(destinations.remoteIp, q))
+      .orderBy(desc(destinations.lastSeenAt))
+      .limit(50),
+  ]);
+  return { hits, connections: conns, destinations: dests };
 }

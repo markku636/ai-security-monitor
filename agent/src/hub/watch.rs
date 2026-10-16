@@ -15,7 +15,7 @@ use crate::intel::IntelDb;
 use crate::model::allowlist::Allowlist;
 use crate::model::baseline::Baseline;
 use crate::model::report::Report;
-use crate::secrets::{SecretStore, KEY_HUB_CLIENT};
+use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_AGENT_TOKEN, KEY_HUB_CLIENT};
 use crate::store;
 
 pub const LATEST_REPORT: &str = "reports/latest.json";
@@ -28,7 +28,36 @@ pub fn client_from_config(config_dir: &Path, cfg: &AgentConfig) -> AppResult<Opt
     let key = SecretStore::open(config_dir)
         .get(KEY_HUB_CLIENT)?
         .ok_or_else(|| AppError::Hub(t!("已註冊 hub 但找不到 client 金鑰；重新執行 asa enroll").into()))?;
-    Ok(Some(HubClient::new(&h.url, &key, &cfg.agent_id)?))
+    let token = agent_token(config_dir)?;
+    Ok(Some(
+        HubClient::new(&h.url, &key, &cfg.agent_id)?.with_agent_token(Some(token)),
+    ))
+}
+
+/// 這台 agent 的身分 token（hub 第一次看到就釘選）；沒有就產生。取消註冊也保留，重新註冊才不會被當成冒名。
+pub fn agent_token(config_dir: &Path) -> AppResult<String> {
+    let store = SecretStore::open(config_dir);
+    if let Some(t) = store.get(KEY_HUB_AGENT_TOKEN)? {
+        return Ok(t);
+    }
+    let t = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+    store.set(KEY_HUB_AGENT_TOKEN, &t)?;
+    Ok(t)
+}
+
+/// 依註冊回應保存或清掉驗章金鑰；回傳目前是否持有金鑰。
+pub fn save_action_key(config_dir: &Path, accept: bool, key: Option<&str>) -> AppResult<bool> {
+    let store = SecretStore::open(config_dir);
+    match key.filter(|_| accept) {
+        Some(k) => {
+            store.set(KEY_HUB_ACTION, k)?;
+            Ok(true)
+        }
+        None => {
+            store.delete(KEY_HUB_ACTION)?;
+            Ok(false)
+        }
+    }
 }
 
 /// 拍一次連線快照：socket＋行程、方向、異常旗標、beacon、情資判定、地理。

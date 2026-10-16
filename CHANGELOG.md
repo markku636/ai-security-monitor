@@ -62,4 +62,12 @@
 - API：`GET /api/v1/fleet/summary`（公開檢視只給彙總）、`/api/v1/connections`、`/api/v1/connections/inbound-attackers`、`GET|POST /api/v1/findings`（≤500 筆、cookie 身分需同站）、`/api/v1/agents/{id}`。
 - 深色模式預設跟隨系統；CI 煙霧測試加上新頁面與 API。
 
-> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示；第 7 輪 cargo test 129 passed、vitest 24 passed，本機 agent 註冊到本機 hub，`watch --once` 上傳 345 條連線快照＋10 筆發現，hub 停機時報告進 outbox、恢復後自動補送；第 8 輪 vitest 32 passed，本機以真實 agent 資料（約 300 條連線）驗證所有頁面 200、批次 API、無頭 Edge 截圖檢查淺色／深色／手機寬度版面。
+- 遠端動作（第 9 輪）：Hub `/actions` 審核頁（待核准／已核准／已派送／完成／失敗／拒絕／取消／過期，破壞性動作核准要輸入主機名稱）；
+  「發現」展開後可把 agent 建議的動作（封鎖 IP、關閉 port）一鍵送審；核准後 hub 用每台 agent 專屬金鑰簽 HMAC token，
+  agent 驗章、檢查期限／允許種類／白名單／已知良好／本機位址後才執行，結果回報 hub；背景執行不跳 UAC／sudo，沒權限就回報失敗。
+- agent 身分釘選：enroll 時產生隨機 token，hub 第一次看到就記下，之後拿同一把 client 金鑰冒充別台 agent 會被 403；驗章金鑰只發給已釘選的 agent。
+- `/intel` 情資頁：26 個來源依威脅指標／地理／漏洞／線上查詢分組，列出廠商、信心、授權（可商用、需標註）、更新頻率、7 天命中；可查 IP／網域在車隊裡的命中、連線與歷史。
+- `contract/action.v1.json`：hub（TypeScript）與 agent（Rust）的 canonical JSON 與 HMAC 交叉驗證；`npm run verify` 新增「server 檔不可從 'use client' 模組取函式」靜態檢查。
+- CI 新增 e2e job：Linux runner 上 hub＋PostgreSQL＋agent，enroll → 核准封鎖 → agent 以 root 執行 → nft 規則存在 → hub 狀態 succeeded → 冒名 403 → 清除。
+
+> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示；第 7 輪 cargo test 129 passed、vitest 24 passed，本機 agent 註冊到本機 hub，`watch --once` 上傳 345 條連線快照＋10 筆發現，hub 停機時報告進 outbox、恢復後自動補送；第 8 輪 vitest 32 passed，本機以真實 agent 資料（約 300 條連線）驗證所有頁面 200、批次 API、無頭 Edge 截圖檢查淺色／深色／手機寬度版面；第 9 輪 cargo test 133 passed、vitest 43 passed，本機真實 agent enroll（--accept-remote-actions）→ hub 核准封鎖 → agent 驗章通過、因非管理員回報失敗（不動本機防火牆），實際寫入由 CI e2e 驗證。

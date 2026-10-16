@@ -6,6 +6,7 @@ import { hit } from '@/lib/auth/ratelimit';
 import { getDb, type DB } from '@/lib/db';
 import { error, json, sourceIp } from '@/lib/http';
 import { IngestRejected, readIngestBody } from './guard';
+import { agentTokenOf, pinAgentToken, type PinResult } from './identity';
 import { zodRule } from './schema';
 
 const g = globalThis as unknown as { __asaIngestLast?: Map<string, number> };
@@ -40,6 +41,8 @@ export interface IngestCtx<T> {
   db: DB;
   ip: string;
   bytes: number;
+  agentToken: string | null;
+  pin: PinResult;
 }
 
 export async function handleIngest<S extends z.ZodTypeAny>(
@@ -83,6 +86,12 @@ export async function handleIngest<S extends z.ZodTypeAny>(
   const agentId = opts.agentIdOf(body);
   const header = req.headers.get('x-asa-agent-id');
   if (header && header !== agentId) return error(400, 'bad_request', { rule: 'agent_id_mismatch' });
+  const agentToken = agentTokenOf(req);
+  const pin = await pinAgentToken(getDb(), agentId, agentToken);
+  if (pin === 'mismatch') {
+    await audit({ actor: `client:${id.keyIndex ?? 'admin'}`, actorRole: id.role, action: `ingest.${opts.kind}.token_mismatch`, targetType: 'agent', targetId: agentId, sourceIp: ip });
+    return error(403, 'agent_token_mismatch');
+  }
   if (opts.precheck) {
     const early = await opts.precheck(body, getDb());
     if (early) return early;
@@ -95,7 +104,7 @@ export async function handleIngest<S extends z.ZodTypeAny>(
     return json({ error: 'too_frequent', retry_after_ms: wait }, 429, { 'retry-after': String(Math.ceil(wait / 1000)) });
   }
   try {
-    return await fn({ body, id, db: getDb(), ip, bytes });
+    return await fn({ body, id, db: getDb(), ip, bytes, agentToken, pin });
   } catch (e) {
     if (e instanceof IngestRejected) return error(e.status, e.rule);
     throw e;

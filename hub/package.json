@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "dev:db": "docker compose -f ../docker/compose.dev.yml up -d --wait",
     "i18n:check": "node scripts/i18n-scan.mjs",
-    "verify": "npm run typecheck && npm run i18n:check && npm test && npm run build"
+    "verify": "npm run typecheck && npm run i18n:check && npm run check:client-imports && npm test && npm run build",
+    "check:client-imports": "node scripts/check-client-imports.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

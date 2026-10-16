@@ -28,6 +28,46 @@ export interface FindingView {
   allowlistedBy: string | null;
   tags: string[];
   intelHits: { feed_id: string; name: string; vendor: string; confidence: number; license: string; source_url: string; fetched_at?: string; matched?: string }[];
+  proposed: { kind: string; params: Record<string, unknown>; description: string; destructive?: boolean }[];
+}
+
+/** hub 能派送給 agent 的動作種類。 */
+const REMOTE_KINDS = ['block_ip', 'unblock_ip', 'close_port'];
+
+function ProposeButton({ f, a }: { f: FindingView; a: FindingView['proposed'][number] }) {
+  const { t } = useT();
+  const [state, setState] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const submit = () =>
+    start(async () => {
+      const res = await apiPost<{ error?: string }>('/api/v1/actions', {
+        agent_id: f.agentId,
+        kind: a.kind,
+        params: a.params,
+        finding_id: f.findingId,
+        reason: f.title,
+      });
+      setState(
+        res.ok
+          ? t('已送審，到「動作」頁核准後才會執行')
+          : res.data.error === 'duplicate'
+            ? t('已經有同樣的動作在審核或執行中')
+            : t('送審失敗：{error}', { error: res.data.error ?? res.status }),
+      );
+    });
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={busy || state !== null}
+        onClick={submit}
+        className="rounded-md border border-teal-600 px-2 py-0.5 text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950"
+      >
+        {t('送審：{action}', { action: a.description })}
+      </button>
+      {state ? <span role="status">{state}</span> : null}
+    </span>
+  );
 }
 
 const SEV_DOT: Record<string, string> = {
@@ -145,6 +185,15 @@ export function FindingsTable({ rows, canWrite, showHost = true }: { rows: Findi
                           {f.intelHits.map((h, i) => (
                             <SourceBadge key={i} r={{ type: 'intel_hit', ...h }} t={t} />
                           ))}
+                        </div>
+                      ) : null}
+                      {canWrite && f.proposed.some((a) => REMOTE_KINDS.includes(a.kind)) ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {f.proposed
+                            .filter((a) => REMOTE_KINDS.includes(a.kind))
+                            .map((a, i) => (
+                              <ProposeButton key={i} f={f} a={a} />
+                            ))}
                         </div>
                       ) : null}
                       <p className="text-slate-500">

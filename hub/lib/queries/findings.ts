@@ -74,6 +74,7 @@ export async function listFindings(f: FindingFilter) {
         detail: findings.detail,
         recommendation: findings.recommendation,
         intelHits: findings.intelHits,
+        actions: findings.actions,
         tags: findings.tags,
         status: findings.status,
         indicator: findings.indicator,
@@ -224,5 +225,14 @@ export function toFindingView(r: FindingRow) {
     allowlistedBy: r.allowlistedBy,
     tags: r.tags ?? [],
     intelHits: r.intelHits,
+    proposed: (Array.isArray(r.actions) ? r.actions : []) as ProposedActionJson[],
   };
+}
+
+export interface ProposedActionJson {
+  kind: string;
+  params: Record<string, unknown>;
+  description: string;
+  destructive?: boolean;
+  requires_elevation?: boolean;
 }

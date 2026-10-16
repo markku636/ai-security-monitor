@@ -1,5 +1,6 @@
 //! Hub 客戶端：註冊、上傳報告（gzip）、連線快照、心跳；失敗的上傳存進 outbox 下次重送。
 
+pub mod actions;
 pub mod contract;
 pub mod outbox;
 pub mod watch;
@@ -48,6 +49,8 @@ pub struct HubClient {
     base: String,
     key: String,
     agent_id: String,
+    /// 身分釘選 token（enroll 時產生）；舊設定沒有就不帶。
+    agent_token: Option<String>,
     http: reqwest::Client,
 }
 
@@ -75,8 +78,25 @@ impl HubClient {
             base: base.trim_end_matches('/').to_string(),
             key: key.to_string(),
             agent_id: agent_id.to_string(),
+            agent_token: None,
             http,
         })
+    }
+
+    pub fn with_agent_token(mut self, token: Option<String>) -> Self {
+        self.agent_token = token.filter(|t| !t.is_empty());
+        self
+    }
+
+    fn authed(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let req = req
+            .bearer_auth(&self.key)
+            .header("x-asa-agent-id", &self.agent_id)
+            .header("x-asa-agent-version", crate::VERSION);
+        match &self.agent_token {
+            Some(t) => req.header("x-asa-agent-token", t),
+            None => req,
+        }
     }
 
     pub fn base(&self) -> &str {
@@ -97,20 +117,20 @@ impl HubClient {
             )));
         }
         let mut req = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .bearer_auth(&self.key)
-            .header("content-type", "application/json")
-            .header("x-asa-agent-id", &self.agent_id)
-            .header("x-asa-agent-version", crate::VERSION);
+            .authed(self.http.post(format!("{}{path}", self.base)))
+            .header("content-type", "application/json");
         if gz {
             req = req.header("content-encoding", "gzip");
         }
-        let resp = req
-            .body(payload)
-            .send()
-            .await
-            .map_err(|e| AppError::Hub(tf!("連不上 hub：{e}", e = e)))?;
+        Self::finish(req.body(payload).send().await).await
+    }
+
+    async fn get(&self, path: &str) -> AppResult<HubResponse> {
+        Self::finish(self.authed(self.http.get(format!("{}{path}", self.base))).send().await).await
+    }
+
+    async fn finish(sent: reqwest::Result<reqwest::Response>) -> AppResult<HubResponse> {
+        let resp = sent.map_err(|e| AppError::Hub(tf!("連不上 hub：{e}", e = e)))?;
         let status = resp.status().as_u16();
         let retry_after = resp
             .headers()
@@ -191,6 +211,19 @@ impl HubClient {
 
     pub async fn heartbeat(&self, hb: &HeartbeatPayload) -> AppResult<Value> {
         Ok(self.post("/api/v1/agents/me/heartbeat", hb).await?.body)
+    }
+
+    /// 領取已核准的遠端動作。
+    pub async fn poll_actions(&self) -> AppResult<Vec<actions::RemoteAction>> {
+        let r = self.get("/api/v1/agents/me/actions").await?;
+        serde_json::from_value(r.body.get("items").cloned().unwrap_or(Value::Array(vec![])))
+            .map_err(|e| AppError::Hub(e.to_string()))
+    }
+
+    pub async fn post_action_result(&self, action_id: &str, ok: bool, output: &str) -> AppResult<Value> {
+        let path = format!("/api/v1/agents/me/actions/{action_id}/result");
+        let body = serde_json::json!({ "agent_id": self.agent_id, "ok": ok, "output": output });
+        Ok(self.post(&path, &body).await?.body)
     }
 }
 

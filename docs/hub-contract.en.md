@@ -19,6 +19,7 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # regenerate contract/*.
 |---|---|
 | Auth | `Authorization: Bearer <client key>` (one of `ASA_HUB_CLIENT_SECRETS`; enroll keys behave the same) |
 | Identity | `X-ASA-Agent-Id` (must equal the agent id in the body, else 400 `agent_id_mismatch`), `X-ASA-Agent-Version` |
+| Identity pinning | `X-ASA-Agent-Token`: a random token generated at enroll time. The hub stores its sha256 the first time it sees it and answers 403 `agent_token_mismatch` afterwards if it differs (client keys are shared between hosts, so this is what stops impersonation). Unenrolling keeps the token |
 | Compression | `Content-Encoding: gzip` for bodies > 16 KB; ≤ 4 MB compressed, ≤ 24 MB decompressed (else 413) |
 | Structure limits | depth, node count, string length, array length, key count; `__proto__`/`constructor`/`prototype` are rejected → 400 with the rule name only |
 | Transport | https; plain http only for loopback and private addresses (`asa enroll --insecure-http` to override) |
@@ -57,10 +58,21 @@ connections and aggregates destinations (keeping the worst verdict). Minimum int
 
 Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated }`. Unknown agents get 404.
 
+### Remote actions
+
+After an admin approves an action on the hub (currently `block_ip`, `unblock_ip`, `close_port`; `close_port` is destructive and needs the hostname typed in):
+
+1. When the agent registers with `accept_remote_actions: true` and a pinned identity, the response carries `action_key` = HMAC-SHA256(hub signing key, `asa-action-key|<agent_id>`), stored in the OS keychain.
+2. When a heartbeat reports `pending_actions` > 0, the agent calls `GET /api/v1/agents/me/actions` and receives `{action_id, agent_id, kind, params, expires_at, token}`.
+3. The agent checks: `token` = HMAC-SHA256(action_key, canonical JSON of {action_id, agent_id, kind, params, expires_at}) (sorted keys, no whitespace; see `contract/action.v1.json`), matching agent id, not expired (24 h after approval), kind allowed by local settings (block_ip / unblock_ip by default; destructive ones need `allow_destructive`), target not on the local allowlist or a known-good list and not covering a local interface address.
+4. Background runs never pop UAC or sudo: without administrator rights the action is reported as failed. Results go to `POST /api/v1/agents/me/actions/{id}/result` (`{agent_id, ok, output}`). Actions not reported within 10 minutes are dispatched again; the agent de-duplicates by action id and re-sends the earlier result.
+
+Signing key: `ASA_HUB_ACTION_SIGNING_KEY` (or `_FILE`); if unset, one is generated on first use and stored in the database. After changing it, agents must register again to get the new `action_key`.
+
 ## `asa watch` loop
 
 1. Load config and key → `register` (identity and version are refreshed on every start).
-2. Every `snapshot_interval` (default 1 min): take a connection snapshot (with intel verdicts) → `ingest/snapshot`, then `heartbeat`.
+2. Every `snapshot_interval` (default 1 min): take a connection snapshot (with intel verdicts) → `ingest/snapshot`, then `heartbeat`; pending remote actions are fetched, verified, executed and reported.
 3. Every `interval` (default 10 min): flush queued reports first (stop at the first retryable error) → scan → `ingest/report`; queue it on failure.
 4. The latest report is saved to `<config>/reports/latest.json`; `asa status` shows hub health, queued reports and the last scan.
 

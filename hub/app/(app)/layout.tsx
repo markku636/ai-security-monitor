@@ -16,6 +16,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       ? [
           { href: '/connections', label: t('連線') },
           { href: '/findings', label: t('發現') },
+          { href: '/intel', label: t('威脅情資') },
+          { href: '/actions', label: t('動作') },
         ]
       : []),
   ];

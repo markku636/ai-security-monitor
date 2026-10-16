@@ -1,7 +1,9 @@
+import { actionKeyFor, signingKey } from '@/lib/actions/sign';
 import { audit } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { json } from '@/lib/http';
 import { applyRegister } from '@/lib/ingest/apply';
+import { pinAgentToken } from '@/lib/ingest/identity';
 import { handleIngest } from '@/lib/ingest/route';
 import { Register } from '@/lib/ingest/schema';
 
@@ -12,8 +14,10 @@ export async function POST(req: Request): Promise<Response> {
     req,
     Register,
     { kind: 'register', agentIdOf: (b) => b.agent.id, minIntervalMs: 0, maxBytes: 64 * 1024 },
-    async ({ body, id, db, ip }) => {
+    async ({ body, id, db, ip, agentToken }) => {
       const r = await applyRegister(db, body, id.keyIndex);
+      // 新 agent：寫入後才釘選得到。
+      const pin = await pinAgentToken(db, r.agent_id, agentToken);
       if (r.created) {
         await audit({
           actor: `client:${id.keyIndex ?? 'admin'}`,
@@ -26,9 +30,14 @@ export async function POST(req: Request): Promise<Response> {
         });
       }
       const e = env();
+      // 只有身分已釘選、且願意接受遠端動作的 agent 才拿得到驗章金鑰。
+      const actionKey =
+        body.accept_remote_actions && pin === 'pinned' ? actionKeyFor(await signingKey(db), r.agent_id) : undefined;
       return json({
         agent_id: r.agent_id,
         created: r.created,
+        pinned: pin === 'pinned',
+        ...(actionKey ? { action_key: actionKey } : {}),
         hub: {
           name: 'Security Hub',
           version: e.version,

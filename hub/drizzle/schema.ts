@@ -1,5 +1,6 @@
 // Security Hub 資料表（PostgreSQL；測試用 PGlite 跑同一份 migration）。
 // 雜湊一律存 hex 文字，避免 pg（Buffer）與 PGlite（Uint8Array）型別差異。
+import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
@@ -10,6 +11,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -81,6 +83,8 @@ export const agents = pgTable(
     sevCounts: jsonb('sev_counts').$type<SevCounts>().notNull().default({ critical: 0, high: 0, medium: 0, low: 0, info: 0 }),
     openFindings: integer('open_findings').notNull().default(0),
     deletedAt: ts('deleted_at'),
+    /** 身分釘選：第一次看到時記下 X-ASA-Agent-Token 的 sha256，之後不符就拒絕（防共用 client 金鑰冒名）。 */
+    tokenHash: text('token_hash'),
   },
   (t) => [index('agents_last_seen_idx').on(t.lastSeenAt), index('agents_hostname_idx').on(t.hostname)],
 );
@@ -237,5 +241,46 @@ export const destinations = pgTable(
     primaryKey({ columns: [t.agentId, t.remoteIp, t.remotePort, t.direction] }),
     index('destinations_remote_idx').on(t.remoteIp),
     index('destinations_verdict_idx').on(t.worstVerdict, t.lastSeenAt),
+  ],
+);
+
+/**
+ * 遠端動作（封鎖 IP、關 port…）：pending → approved → dispatched → succeeded／failed；也可 rejected／cancelled／expired。
+ * 核准後 hub 用 per-agent 金鑰簽 HMAC token，agent 驗證通過才執行。
+ */
+export const actions = pgTable(
+  'actions',
+  {
+    id: text('id').primaryKey(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    findingId: text('finding_id'),
+    kind: text('kind').notNull(),
+    params: jsonb('params').$type<Record<string, unknown>>().notNull(),
+    paramsHash: text('params_hash').notNull(),
+    reason: text('reason').notNull().default(''),
+    destructive: boolean('destructive').notNull().default(false),
+    requiresElevation: boolean('requires_elevation').notNull().default(true),
+    /** agent／admin:<via>／ai:<run> */
+    proposedBy: text('proposed_by').notNull(),
+    status: text('status').notNull().default('pending'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: ts('reviewed_at'),
+    reviewNote: text('review_note'),
+    /** pending：等候審核的期限；approved 之後：token 有效期限。 */
+    expiresAt: ts('expires_at').notNull(),
+    dispatchedAt: ts('dispatched_at'),
+    completedAt: ts('completed_at'),
+    resultOk: boolean('result_ok'),
+    resultOutput: text('result_output'),
+  },
+  (t) => [
+    index('actions_agent_status_idx').on(t.agentId, t.status),
+    index('actions_status_created_idx').on(t.status, t.createdAt),
+    uniqueIndex('actions_open_unique')
+      .on(t.agentId, t.kind, t.paramsHash)
+      .where(sql`status in ('pending', 'approved', 'dispatched')`),
   ],
 );

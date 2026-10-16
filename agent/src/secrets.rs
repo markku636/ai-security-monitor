@@ -18,6 +18,7 @@ const KEYCHAIN_SERVICE: &str = "asa";
 /// 常用鍵名。
 pub const KEY_HUB_CLIENT: &str = "hub.client_key";
 pub const KEY_HUB_ACTION: &str = "hub.action_key";
+pub const KEY_HUB_AGENT_TOKEN: &str = "hub.agent_token";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {

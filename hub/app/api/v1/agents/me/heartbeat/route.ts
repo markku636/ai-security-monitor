@@ -1,3 +1,4 @@
+import { openActionCount } from '@/lib/actions/store';
 import { env } from '@/lib/env';
 import { error, json } from '@/lib/http';
 import { applyHeartbeat } from '@/lib/ingest/apply';
@@ -11,9 +12,10 @@ export async function POST(req: Request): Promise<Response> {
     req,
     Heartbeat,
     { kind: 'heartbeat', agentIdOf: (b) => b.agent_id, minIntervalMs: env().snapshotMinIntervalMs, maxBytes: 8 * 1024 },
-    async ({ body, db }) => {
+    async ({ body, db, pin }) => {
       if (!(await applyHeartbeat(db, body))) return error(404, 'unknown_agent', { hint: 'register first' });
-      return json({ ok: true, server_time: new Date().toISOString(), pending_actions: 0 });
+      const pending = pin === 'pinned' ? await openActionCount(db, body.agent_id) : 0;
+      return json({ ok: true, server_time: new Date().toISOString(), pending_actions: pending });
     },
   );
 }
