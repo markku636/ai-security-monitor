@@ -63,6 +63,15 @@ pub enum Command {
     },
     /// 檢查環境：權限、外部工具、情資新鮮度、hub 連線、AI 用戶端
     Doctor,
+    /// 更新 asa：下載 GitHub Release 的執行檔，比對 SHA256 後替換
+    SelfUpdate {
+        /// 只檢查有沒有新版
+        #[arg(long)]
+        check: bool,
+        /// 更新（或退回）到指定版本，例：0.2.0
+        #[arg(long, value_name = "VER")]
+        to: Option<String>,
+    },
     /// 執行掃描並輸出報告
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
@@ -601,6 +610,12 @@ pub enum ServiceCmd {
     },
     /// 系統服務與使用者層的安裝與執行狀態
     Status,
+    /// 重新啟動常駐行程（例如更新 asa 之後）
+    Restart {
+        /// 重新啟動系統服務
+        #[arg(long)]
+        system: bool,
+    },
     /// 看常駐行程的 log
     Logs {
         /// 看系統服務的 log

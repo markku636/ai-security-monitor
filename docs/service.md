@@ -10,6 +10,7 @@ asa service install --system        # 系統服務：開機就啟動，需要系
 asa service install --interval 30m  # 完整掃描間隔（預設取設定 scan.interval）
 asa service status                  # 兩種範圍的安裝狀態與正在執行的 asa watch
 asa service logs [--system] [--tail 100]
+asa service restart [--system]     # 例如 asa self-update 之後換成新版
 asa service uninstall [--system]
 ```
 

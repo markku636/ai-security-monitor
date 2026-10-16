@@ -30,6 +30,7 @@ pub mod service;
 pub mod store;
 pub mod sysmeta;
 pub mod traffic;
+pub mod update;
 pub mod util;
 pub mod vuln;
 

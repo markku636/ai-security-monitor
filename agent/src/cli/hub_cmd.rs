@@ -387,6 +387,9 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     let mut next_scan = tokio::time::Instant::now();
     let mut next_snap = tokio::time::Instant::now();
     let mut last_scan_at: Option<chrono::DateTime<Utc>> = None;
+    // 停止訊號（Ctrl-C／SIGTERM／服務停止）：等待與掃描中都會被打斷，服務停止不必等完整掃描跑完
+    let stop = crate::service::instance::stopped();
+    tokio::pin!(stop);
 
     loop {
         let now = tokio::time::Instant::now();
@@ -444,7 +447,16 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             if let Some(c) = &client {
                 flush_outbox(env, c).await;
             }
-            match super::scan_cmd::run_scan(env, &ScanArgs::default().scanners, false).await {
+            let all_scanners = ScanArgs::default().scanners;
+            let scanned = tokio::select! {
+                r = super::scan_cmd::run_scan(env, &all_scanners, false) => Some(r),
+                _ = &mut stop => None,
+            };
+            let Some(scanned) = scanned else {
+                log(env, t!("收到停止訊號，結束"));
+                break;
+            };
+            match scanned {
                 Ok((report, _)) => {
                     last_scan_at = Some(report.finished_at);
                     let _ = watch::save_latest(&env.config_dir, &report);
@@ -487,7 +499,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         let wake = next_scan.min(next_snap);
         tokio::select! {
             _ = tokio::time::sleep_until(wake) => {}
-            _ = crate::service::instance::stopped() => {
+            _ = &mut stop => {
                 log(env, t!("收到停止訊號，結束"));
                 break;
             }

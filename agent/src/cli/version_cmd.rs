@@ -1,6 +1,6 @@
 use super::render::print_json;
 use super::Env;
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 
 pub async fn run(env: &Env, check: bool) -> AppResult<()> {
     if env.global.json {
@@ -21,10 +21,7 @@ pub async fn run(env: &Env, check: bool) -> AppResult<()> {
         );
     }
     if check {
-        // 第 17 輪（self-update）接上 GitHub Release 查詢。
-        return Err(AppError::Unsupported(
-            t!("版本檢查將隨 self-update 功能一起提供").into(),
-        ));
+        return super::update_cmd::run(env, true, None).await;
     }
     Ok(())
 }

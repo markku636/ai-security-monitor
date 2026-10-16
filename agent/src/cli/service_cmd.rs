@@ -19,6 +19,7 @@ pub async fn run(env: &Env, cmd: ServiceCmd) -> AppResult<()> {
         }
         ServiceCmd::Uninstall { system, .. } => change(env, scope(system), None, false).await,
         ServiceCmd::Status => status(env).await,
+        ServiceCmd::Restart { system } => restart(env, scope(system)).await,
         ServiceCmd::Logs { system, tail } => logs(env, system, tail),
         ServiceCmd::Run { interval } => run_service(env, interval).await,
     }
@@ -126,6 +127,48 @@ async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool
         }
     }
     res.map(|_| ())
+}
+
+async fn restart(env: &Env, scope: Scope) -> AppResult<()> {
+    let target = service::current_target(scope, &env.config_dir, None, &RealRunner).await?;
+    if !target.existing {
+        return Err(AppError::Service(
+            t!("還沒安裝開機自動啟動（asa service install）").to_string(),
+        ));
+    }
+    let plan = service::plan_restart(&target);
+    if !env.global.yes {
+        for s in &plan.steps {
+            println!("  · {}", s.describe());
+        }
+        return ensure_confirmed(false, false, false, t!("重新啟動常駐行程"));
+    }
+    if scope == Scope::System && !elevate::is_elevated() {
+        let r = elevate::rerun_elevated(&env.config_dir).await?;
+        for l in &r.lines {
+            println!("{l}");
+        }
+        return if r.ok {
+            Ok(())
+        } else {
+            Err(AppError::Service(t!("重新啟動失敗").to_string()))
+        };
+    }
+    let res = service::apply(&plan, &RealRunner).await;
+    if let Some(rf) = &env.global.result_file {
+        ElevatedResult {
+            ok: res.is_ok(),
+            lines: res.as_ref().map(|l| l.clone()).unwrap_or_else(|e| vec![e.message()]),
+            json: serde_json::Value::Null,
+            error: res.as_ref().err().and_then(|e| serde_json::to_value(e).ok()),
+        }
+        .write(rf)?;
+        return res.map(|_| ());
+    }
+    for l in res? {
+        println!("{l}");
+    }
+    Ok(())
 }
 
 async fn status(env: &Env) -> AppResult<()> {

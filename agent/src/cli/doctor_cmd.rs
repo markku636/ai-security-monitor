@@ -187,6 +187,17 @@ pub fn collect(env: &Env) -> AppResult<DoctorReport> {
 
     checks.push(capture_check());
 
+    let watchers = crate::service::running_watchers(None);
+    checks.push(Check {
+        name: t!("常駐與開機自動啟動").into(),
+        ok: true,
+        detail: if watchers.is_empty() {
+            t!("沒有常駐的 asa watch（asa service install 可設定開機自動啟動）").into()
+        } else {
+            tf!("{n} 個常駐中（asa service status 看詳細）", n = watchers.len())
+        },
+    });
+
     let tools = external_tools()
         .into_iter()
         .map(|(name, purpose)| {

@@ -1036,6 +1036,36 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         // service
         "命令列 {n} 字元，超過 Windows「執行」機碼的 260 字元上限，登入時可能不會啟動；請把 asa 放到較短的路徑" => "The command line is {n} characters, over the 260-character limit of the Windows Run key, so it may not start at login; move asa to a shorter path",
 
+        // self-update
+        "{url} 超過大小上限" => "{url} exceeds the size limit",
+        "{url} 不是 Release 資料" => "{url} is not release data",
+        "Release {tag} 沒有 SHA256SUMS，拒絕更新" => "Release {tag} has no SHA256SUMS; refusing to update",
+        "SHA256SUMS 裡沒有 {name}" => "{name} is not listed in SHA256SUMS",
+        "{name} 的 SHA256 不符（預期 {expected}，實際 {actual}），已放棄" => "SHA256 mismatch for {name} (expected {expected}, got {actual}); aborted",
+        "無法寫入 {dir}（{e}）；請用有權限的身分執行（例如 sudo asa self-update）" => "Cannot write to {dir} ({e}); run with sufficient rights (e.g. sudo asa self-update)",
+        "有新版：{latest}（目前 {current}）→ asa self-update --yes；說明：{url}" => "New version available: {latest} (current {current}) → asa self-update --yes; notes: {url}",
+        "已是最新版（{current}）" => "Already up to date ({current})",
+        "Release {tag} 沒有這個平台（{os}/{arch}）的執行檔" => "Release {tag} has no executable for this platform ({os}/{arch})",
+        "將下載 {name}（{size}）並比對 SHA256SUMS，取代 {exe}" => "Will download {name} ({size}), verify it against SHA256SUMS and replace {exe}",
+        "更新到 {v}" => "update to {v}",
+        "已更新 {from} → {to}（SHA256 {sha}）" => "Updated {from} → {to} (SHA256 {sha})",
+        "常駐中的 asa watch 還是舊版：執行 asa service restart --yes（系統服務加 --system）換成新版" => "The resident asa watch still runs the old version: run asa service restart --yes (add --system for the system service)",
+        "還沒安裝開機自動啟動（asa service install）" => "Start-at-boot is not installed (asa service install)",
+        "重新啟動常駐行程" => "restart the resident process",
+        "重新啟動失敗" => "Restart failed",
+        "更新 asa：下載 GitHub Release 的執行檔，比對 SHA256 後替換" => "Update asa: download the GitHub release executable, verify its SHA256 and replace this one",
+        "只檢查有沒有新版" => "Only check whether a new version exists",
+        "更新（或退回）到指定版本，例：0.2.0" => "Update (or roll back) to this version, e.g. 0.2.0",
+        "重新啟動常駐行程（例如更新 asa 之後）" => "Restart the resident process (e.g. after updating asa)",
+        "重新啟動系統服務" => "Restart the system service",
+        "常駐與開機自動啟動" => "Resident process and start at boot",
+        "沒有常駐的 asa watch（asa service install 可設定開機自動啟動）" => "No resident asa watch (asa service install sets up start at boot)",
+        "{n} 個常駐中（asa service status 看詳細）" => "{n} running (see asa service status)",
+
+        // self-update
+        "找不到版本 {v}（{url}）" => "Version {v} not found ({url})",
+        "還沒有發佈任何版本（{url}）" => "No version has been released yet ({url})",
+
         _ => return None,
     })
 }

@@ -93,8 +93,16 @@ jobs:
             if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q 'asa 0\.'; then ok=1; break; fi; sleep 2
           done
           $SUDO "$BIN" service logs --system --tail 20 || true; test -n "$ok"
+          $SUDO "$BIN" service restart --system --yes
+          ok=""; for i in $(seq 1 45); do
+            if st | jq -e '(.scopes[0].state // "") | test("running|active")' > /dev/null; then ok=1; break; fi; sleep 2
+          done
+          test -n "$ok"
           $SUDO "$BIN" service uninstall --system --yes
-          st | jq -e '.scopes[0].installed | not' > /dev/null
+          ok=""; for i in $(seq 1 30); do
+            if st | jq -e '.scopes[0].installed | not' > /dev/null; then ok=1; break; fi; sleep 2
+          done
+          st; test -n "$ok"
           # 使用者層：HKCU Run／systemd --user 或 XDG autostart／LaunchAgent
           SUDO=""
           "$BIN" service install --user --interval 1h --yes
@@ -106,6 +114,40 @@ jobs:
           sleep 3
           st | jq -e '(.scopes[1].installed | not) and (.running | length == 0)' > /dev/null
           echo "service e2e ok on $RUNNER_OS"
+
+      - name: Install script E2E (local mirror, checksum enforced)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=./target/debug/asa; if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/asa.exe; fi
+          VER=$("$BIN" --json version | tr -d '\r' | jq -r .version)
+          case "$RUNNER_OS" in
+            Windows) SUF=windows-x64.exe; SRC=target/debug/asa.exe ;;
+            Linux) SUF=linux-x64; SRC=target/debug/asa ;;
+            macOS) if [ "$(uname -m)" = arm64 ]; then SUF=macos-arm64; else SUF=macos-x64; fi; SRC=target/debug/asa ;;
+          esac
+          REL="$RUNNER_TEMP/rel"; mkdir -p "$REL"; cp "$SRC" "$REL/asa-$VER-$SUF"
+          (cd "$REL" && { sha256sum "asa-$VER-$SUF" 2>/dev/null || shasum -a 256 "asa-$VER-$SUF"; } > SHA256SUMS)
+          PY=$(command -v python3 || command -v python)
+          (cd "$REL" && nohup "$PY" -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/http.log" 2>&1 &)
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8765/SHA256SUMS > /dev/null && break; sleep 1; done
+          export ASA_DOWNLOAD_BASE=http://127.0.0.1:8765 ASA_VERSION="$VER" ASA_INSTALL_DIR="$RUNNER_TEMP/asa-bin" ASA_NO_MODIFY_PATH=1
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
+            "$ASA_INSTALL_DIR/asa.exe" version | grep -q "asa $VER"
+            powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
+            ls "$ASA_INSTALL_DIR" | grep -q 'asa.exe.old-'
+          else
+            sh ../scripts/install.sh
+            "$ASA_INSTALL_DIR/asa" version | grep -q "asa $VER"
+          fi
+          echo "0000000000000000000000000000000000000000000000000000000000000000  asa-$VER-$SUF" > "$REL/SHA256SUMS"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ! powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
+          else
+            ! sh ../scripts/install.sh
+          fi
+          echo "install script e2e ok on $RUNNER_OS"
 
   hub:
     name: hub

@@ -10,6 +10,7 @@ asa service install --system        # system service: starts at boot, needs admi
 asa service install --interval 30m  # full scan interval (default: config scan.interval)
 asa service status                  # install state of both scopes and running asa watch processes
 asa service logs [--system] [--tail 100]
+asa service restart [--system]     # e.g. after asa self-update
 asa service uninstall [--system]
 ```
 

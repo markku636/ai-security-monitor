@@ -244,6 +244,7 @@ pub fn plan_install(t: &Target) -> Plan {
             let bin = units::windows_cmdline(&t.exe, &args);
             if t.existing {
                 steps.push(run_ok("sc.exe", &["stop", SERVICE_NAME]));
+                steps.push(win_wait_stopped());
                 steps.push(run(
                     "sc.exe",
                     &["config", SERVICE_NAME, "binPath=", &bin, "start=", "auto"],
@@ -364,11 +365,27 @@ pub fn plan_install(t: &Target) -> Plan {
     }
 }
 
+/// 等 Windows 服務真的停下來（sc stop 是非同步的；還在跑時 sc delete 只會標記待刪）。
+fn win_wait_stopped() -> Step {
+    Step::Run {
+        program: "powershell.exe".into(),
+        args: vec![
+            "-NoProfile".into(),
+            "-Command".into(),
+            format!(
+                "$s = Get-Service {SERVICE_NAME} -ErrorAction SilentlyContinue; if ($s) {{ $s.WaitForStatus('Stopped', '00:00:45') }}"
+            ),
+        ],
+        ignore_failure: true,
+    }
+}
+
 pub fn plan_uninstall(t: &Target) -> Plan {
     let mut steps = Vec::new();
     match t.manager() {
         Manager::WindowsService => {
             steps.push(run_ok("sc.exe", &["stop", SERVICE_NAME]));
+            steps.push(win_wait_stopped());
             steps.push(run("sc.exe", &["delete", SERVICE_NAME]));
         }
         Manager::WindowsRun => {
@@ -411,6 +428,40 @@ pub fn plan_uninstall(t: &Target) -> Plan {
             });
         }
     }
+    Plan {
+        scope: t.scope,
+        manager: t.manager(),
+        steps,
+        notes: Vec::new(),
+    }
+}
+
+/// 重新啟動（更新 asa 之後讓常駐行程換成新版）。
+pub fn plan_restart(t: &Target) -> Plan {
+    let args = t.run_args();
+    let steps = match t.manager() {
+        Manager::WindowsService => vec![
+            run_ok("sc.exe", &["stop", SERVICE_NAME]),
+            win_wait_stopped(),
+            run("sc.exe", &["start", SERVICE_NAME]),
+        ],
+        Manager::Systemd => vec![run("systemctl", &["restart", "asa.service"])],
+        Manager::SystemdUser => vec![run("systemctl", &["--user", "restart", "asa.service"])],
+        Manager::LaunchDaemon => vec![run("launchctl", &["kickstart", "-k", &format!("system/{LABEL}")])],
+        Manager::LaunchAgent => vec![run(
+            "launchctl",
+            &["kickstart", "-k", &format!("gui/{}/{LABEL}", t.uid)],
+        )],
+        Manager::WindowsRun | Manager::XdgAutostart => vec![
+            Step::StopWatchers {
+                config_dir: t.config_dir.clone(),
+            },
+            Step::Spawn {
+                program: t.exe.display().to_string(),
+                args,
+            },
+        ],
+    };
     Plan {
         scope: t.scope,
         manager: t.manager(),
@@ -792,7 +843,7 @@ mod tests {
         assert!(describe(&sys).last().unwrap().ends_with("sc.exe start asa"));
         let mut existing = target(Os::Windows, Scope::System);
         existing.existing = true;
-        assert!(describe(&plan_install(&existing))[2].contains("sc.exe config asa binPath="));
+        assert!(describe(&plan_install(&existing))[3].contains("sc.exe config asa binPath="));
 
         let user = plan_install(&target(Os::Windows, Scope::User));
         assert_eq!(user.manager, Manager::WindowsRun);
@@ -853,6 +904,18 @@ mod tests {
         assert!(describe(&msys)
             .iter()
             .any(|s| s == "launchctl bootstrap system /Library/LaunchDaemons/dev.asa.agent.plist"));
+        assert_eq!(
+            describe(&plan_restart(&target(Os::Linux, Scope::System))),
+            ["systemctl restart asa.service"]
+        );
+        assert_eq!(
+            describe(&plan_restart(&target(Os::Macos, Scope::User))),
+            ["launchctl kickstart -k gui/501/dev.asa.agent"]
+        );
+        assert!(matches!(
+            plan_restart(&target(Os::Windows, Scope::User)).steps[1],
+            Step::Spawn { .. }
+        ));
         let un = plan_uninstall(&target(Os::Linux, Scope::System));
         assert_eq!(describe(&un)[0], "systemctl disable --now asa.service");
     }
