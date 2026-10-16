@@ -218,6 +218,30 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $TOK" http://127.0.0.1:3911/api/v1/admin/tokens)" = "403"
           echo "hub smoke ok"
 
+  docker:
+    name: docker (hub image + standalone compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build slim image
+        run: docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ghcr.io/markku636/ai-security-agent-hub:ci .
+      - name: Standalone compose smoke
+        run: |
+          set -euo pipefail
+          printf 'ASA_HUB_ADMIN_SECRET=ci-admin\nASA_HUB_DB_PASSWORD=ci-db\nASA_HUB_IMAGE_TAG=ci\nASA_HUB_HOST_PORT=18088\nASA_HUB_UPDATE_CHECK=0\n' > ci.env
+          docker compose -f docker/compose.standalone.yml --env-file ci.env up -d --wait --no-build
+          B=http://127.0.0.1:18088
+          curl -sf $B/api/health | tee health.json | grep -q '"db":"ok"'
+          curl -sf $B/install.sh | grep -q '^DEFAULT_HUB="http://127.0.0.1:18088"'
+          KEY=$(curl -sf -H 'authorization: Bearer ci-admin' -H 'content-type: application/json' -d '{"name":"ci"}' $B/api/v1/admin/enroll-keys | jq -r .key)
+          curl -sf -H "authorization: Bearer $KEY" -H 'content-type: application/json' --data @contract/register.v1.json $B/api/v1/agents/register | jq -e '.agent_id' > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' $B/api/v1/fleet/summary)" = "401"
+          docker compose -f docker/compose.standalone.yml --env-file ci.env exec -T hub sh -c 'test "$(id -un)" = node'
+          # 沒有管理員金鑰的容器要拒絕啟動
+          ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-agent-hub:ci
+          docker compose -f docker/compose.standalone.yml --env-file ci.env down -v
+          echo "docker smoke ok"
+
   e2e:
     name: e2e (agent ↔ hub, remote action on linux)
     runs-on: ubuntu-latest

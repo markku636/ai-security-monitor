@@ -1,0 +1,17 @@
+# 建置環境是 repo 根目錄；只需要 hub/、feeds/、scripts/install.*、docker/entrypoint.sh。
+# 注意：裸的 glob 只比對根目錄，子目錄要用 **/。
+.git
+**/.git
+agent
+contract
+docs
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!.env.example
+hub/tests
+hub/coverage
+**/*.log
+**/.DS_Store

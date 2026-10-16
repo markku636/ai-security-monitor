@@ -1,0 +1,157 @@
+name: release
+
+# 打 tag v* 就發版：六個平台的 asa 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim）。
+# 手動執行（workflow_dispatch）預設 dry_run：全部建置但不推映像、不建立 Release。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build everything but do not publish
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/markku636/ai-security-agent-hub
+  PUBLISH: ${{ github.event_name == 'push' || !inputs.dry_run }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+            node scripts/check-version.mjs "$V"
+          else
+            V=$(node -p "require('./hub/package.json').version")
+            node scripts/check-version.mjs "$V" --no-changelog
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+  agent:
+    needs: verify
+    name: agent (${{ matrix.asset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, asset: windows-x64.exe }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc, asset: windows-arm64.exe }
+          - { os: macos-latest, target: aarch64-apple-darwin, asset: macos-arm64 }
+          - { os: macos-latest, target: x86_64-apple-darwin, asset: macos-x64 }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, asset: linux-x64, musl: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, asset: linux-arm64, musl: true }
+    defaults:
+      run:
+        shell: bash
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: musl toolchain
+        if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package and smoke test
+        run: |
+          set -euo pipefail
+          EXT=""; case "${{ matrix.target }}" in *windows*) EXT=".exe" ;; esac
+          OUT="../dist/asa-${{ needs.verify.outputs.version }}-${{ matrix.asset }}"
+          mkdir -p ../dist
+          cp "target/${{ matrix.target }}/release/asa$EXT" "$OUT"
+          HOST=$(rustc -vV | sed -n 's/^host: //p')
+          if [ "$HOST" = "${{ matrix.target }}" ] || [ "${{ matrix.musl }}" = "true" ]; then
+            "$OUT" version
+            "$OUT" --json version | grep -q '"version":"${{ needs.verify.outputs.version }}"'
+          fi
+          ls -l ../dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asa-${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+
+  hub-image:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Hub image (with Claude Code and Codex CLI)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: ASA_HUB_VERSION=${{ needs.verify.outputs.version }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Hub image (slim, no AI CLIs)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            ASA_HUB_VERSION=${{ needs.verify.outputs.version }}
+            AI_CLIS=
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}-slim
+            ${{ env.IMAGE }}:slim
+          cache-from: type=gha
+
+  release:
+    needs: [verify, agent, hub-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and notes
+        run: |
+          set -euo pipefail
+          cp scripts/install.sh scripts/install.ps1 dist/
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            node scripts/changelog-section.mjs "${{ needs.verify.outputs.version }}" > notes.md
+          else
+            echo "dry run" > notes.md
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/*
+      - name: Create GitHub Release
+        if: env.PUBLISH == 'true' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag --latest

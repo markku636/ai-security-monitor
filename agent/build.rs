@@ -5,6 +5,12 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=../feeds");
     println!("cargo:rerun-if-changed=build.rs");
+    // commit 變了就重新取 git sha（路徑不存在時 cargo 會每次重跑，所以只在存在時才監看）
+    for p in ["../.git/HEAD", "../.git/refs/heads"] {
+        if std::path::Path::new(p).exists() {
+            println!("cargo:rerun-if-changed={p}");
+        }
+    }
 
     let sha = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])

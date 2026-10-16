@@ -1,0 +1,56 @@
+# 伺服器版：Security Hub＋PostgreSQL，給整個車隊的 agent 回報。
+#   cp .env.example .env   # 填好 ASA_HUB_ADMIN_SECRET、ASA_HUB_DB_PASSWORD
+#   docker compose -f docker/compose.yml --env-file .env up -d
+# 更新：docker compose -f docker/compose.yml --env-file .env pull && docker compose -f docker/compose.yml --env-file .env up -d
+name: asa-hub
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: asa_hub
+      POSTGRES_USER: asa_hub
+      POSTGRES_PASSWORD: ${ASA_HUB_DB_PASSWORD:?set ASA_HUB_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asa_hub -d asa_hub"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  hub:
+    image: ghcr.io/markku636/ai-security-agent-hub:${ASA_HUB_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    init: false
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASA_HUB_DATABASE_URL: postgres://asa_hub:${ASA_HUB_DB_PASSWORD}@postgres:5432/asa_hub
+      ASA_HUB_ADMIN_SECRET: ${ASA_HUB_ADMIN_SECRET:?set ASA_HUB_ADMIN_SECRET in .env}
+      ASA_HUB_CLIENT_SECRETS: ${ASA_HUB_CLIENT_SECRETS:-}
+      ASA_HUB_PUBLIC_URL: ${ASA_HUB_PUBLIC_URL:-}
+      ASA_HUB_EDITION: ${ASA_HUB_EDITION:-server}
+      ASA_HUB_PUBLIC_DASHBOARD: ${ASA_HUB_PUBLIC_DASHBOARD:-}
+      ASA_HUB_TRUST_PROXY: ${ASA_HUB_TRUST_PROXY:-}
+      ASA_HUB_MCP_TOKEN: ${ASA_HUB_MCP_TOKEN:-}
+      ASA_HUB_ACTION_SIGNING_KEY: ${ASA_HUB_ACTION_SIGNING_KEY:-}
+      ASA_HUB_UPDATE_CHECK: ${ASA_HUB_UPDATE_CHECK:-}
+      ASA_HUB_AI_MAX_CONCURRENT: ${ASA_HUB_AI_MAX_CONCURRENT:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+    ports:
+      - "${ASA_HUB_BIND:-0.0.0.0}:${ASA_HUB_HOST_PORT:-8088}:3000"
+    volumes:
+      - hubdata:/data
+
+volumes:
+  pgdata: {}
+  hubdata: {}
