@@ -83,6 +83,13 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then BIN="$PWD/target/debug/asa.exe"; SUDO=""; fi
           export ASA_SECRETS_BACKEND=file
           st() { $SUDO "$BIN" --json service status; }
+          case "$RUNNER_OS" in
+            Windows) SYSDIR='C:\ProgramData\ai-security-agent' ;;
+            Linux) SYSDIR=/var/lib/asa; sudo apt-get install -y nftables >/dev/null ;;
+            macOS) SYSDIR='/Library/Application Support/ai-security-agent' ;;
+          esac
+          # 先在系統設定目錄封鎖一個 IP：服務啟動時要依期望狀態重新套用
+          $SUDO "$BIN" --config-dir "$SYSDIR" fw block 198.51.100.99 --reason service-e2e --yes
           # 系統服務：Windows 服務／systemd／LaunchDaemon
           $SUDO "$BIN" service install --system --interval 1h --yes
           ok=""; for i in $(seq 1 45); do
@@ -93,6 +100,10 @@ jobs:
             if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q 'asa 0\.'; then ok=1; break; fi; sleep 2
           done
           $SUDO "$BIN" service logs --system --tail 20 || true; test -n "$ok"
+          ok=""; for i in $(seq 1 30); do
+            if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q '已重新套用防火牆規則'; then ok=1; break; fi; sleep 2
+          done
+          test -n "$ok"
           $SUDO "$BIN" service restart --system --yes
           ok=""; for i in $(seq 1 45); do
             if st | jq -e '(.scopes[0].state // "") | test("running|active")' > /dev/null; then ok=1; break; fi; sleep 2
@@ -103,6 +114,7 @@ jobs:
             if st | jq -e '.scopes[0].installed | not' > /dev/null; then ok=1; break; fi; sleep 2
           done
           st; test -n "$ok"
+          $SUDO "$BIN" --config-dir "$SYSDIR" fw unblock --all-asa --yes
           # 使用者層：HKCU Run／systemd --user 或 XDG autostart／LaunchAgent
           SUDO=""
           "$BIN" service install --user --interval 1h --yes

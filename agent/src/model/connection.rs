@@ -10,13 +10,13 @@ use super::verdict::Verdict;
 #[serde(rename_all = "snake_case")]
 #[clap(rename_all = "snake_case")]
 pub enum Direction {
-    /// 本機主動連出。
+    // 本機主動連出。（不用 ///：會變成 clap 可選值說明，無法翻譯）
     Outbound,
-    /// 遠端連入到本機 listener。
+    // 遠端連入到本機 listener。
     Inbound,
-    /// 本機監聽中的 port。
+    // 本機監聽中的 port。
     Listening,
-    /// 本機對本機（loopback 兩端都是自己）。
+    // 本機對本機（loopback 兩端都是自己）。
     Local,
 }
 

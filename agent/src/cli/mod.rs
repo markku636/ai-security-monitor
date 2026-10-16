@@ -170,6 +170,12 @@ mod help_tests {
             if let Some(h) = a.get_help() {
                 out.push(h.to_string());
             }
+            // ValueEnum 變體的 doc comment 會變成可選值說明，localize_command 換不到：一律不准是中文
+            for pv in a.get_possible_values() {
+                if let Some(h) = pv.get_help() {
+                    out.push(format!("possible value of --{}: {h}", a.get_id()));
+                }
+            }
         }
         for s in cmd.get_subcommands() {
             collect(s, out);

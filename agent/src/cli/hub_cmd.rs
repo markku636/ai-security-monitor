@@ -25,6 +25,46 @@ fn log(env: &Env, msg: &str) {
     }
 }
 
+/// 服務啟動時依期望狀態重新套用 asa 的防火牆規則（pf／nftables 重開機不保留）；只在有權限且真的有東西要套時做。
+async fn reapply_firewall(env: &Env) {
+    let Ok(d) = crate::firewall::desired::DesiredState::load(&env.config_dir) else {
+        return;
+    };
+    if d.blocked.is_empty() && d.closed_ports.is_empty() && d.feed_nets == 0 {
+        return;
+    }
+    if !crate::elevate::is_elevated() {
+        log(
+            env,
+            t!("有 asa 防火牆規則要重新套用，但沒有系統管理員權限（請用 asa service install --system）"),
+        );
+        return;
+    }
+    let backend = crate::firewall::plan::write_backend();
+    let action = crate::firewall::plan::FwAction::Ensure;
+    match crate::actions::execute(
+        &env.config_dir,
+        &action,
+        backend,
+        "service",
+        &crate::util::cmd::RealRunner,
+        false,
+    )
+    .await
+    {
+        Ok(_) => log(
+            env,
+            &tf!(
+                "已重新套用防火牆規則：封鎖 {b} 筆、關閉 {p} 個 port、情資網段 {n} 個",
+                b = d.blocked.len(),
+                p = d.closed_ports.len(),
+                n = d.feed_nets
+            ),
+        ),
+        Err(e) => log(env, &tf!("重新套用防火牆規則失敗：{e}", e = e.message())),
+    }
+}
+
 fn agent_info(cfg: &config::AgentConfig) -> AgentInfo {
     let mut a = AgentInfo::current(&cfg.agent_id);
     crate::sysmeta::enrich(&mut a);
@@ -338,6 +378,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                 dir = env.config_dir.display()
             ),
         );
+        reapply_firewall(env).await;
     }
     let cfg = config::load_or_init(&env.config_dir)?;
     let client = if a.no_upload {

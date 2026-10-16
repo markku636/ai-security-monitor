@@ -1066,6 +1066,11 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "找不到版本 {v}（{url}）" => "Version {v} not found ({url})",
         "還沒有發佈任何版本（{url}）" => "No version has been released yet ({url})",
 
+        // service firewall
+        "有 asa 防火牆規則要重新套用，但沒有系統管理員權限（請用 asa service install --system）" => "asa firewall rules need to be re-applied but there are no administrator rights (use asa service install --system)",
+        "已重新套用防火牆規則：封鎖 {b} 筆、關閉 {p} 個 port、情資網段 {n} 個" => "Re-applied firewall rules: {b} blocked, {p} ports closed, {n} intel networks",
+        "重新套用防火牆規則失敗：{e}" => "Re-applying firewall rules failed: {e}",
+
         _ => return None,
     })
 }
