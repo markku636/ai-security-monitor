@@ -27,6 +27,8 @@ pub enum AppError {
     Hub(String),
     #[error("hub auth rejected")]
     HubAuth,
+    #[error("hub rejected payload: {0}")]
+    HubRejected(String),
     #[error("mcp error: {0}")]
     Mcp(String),
     #[error("ai provider: {0}")]
@@ -66,6 +68,7 @@ impl AppError {
             AppError::Parse(_) => "parse",
             AppError::Hub(_) => "hub",
             AppError::HubAuth => "hub_auth",
+            AppError::HubRejected(_) => "hub_rejected",
             AppError::Mcp(_) => "mcp",
             AppError::Ai(_) => "ai",
             AppError::Capture(_) => "capture",
@@ -93,6 +96,7 @@ impl AppError {
             AppError::Parse(_) => "ERR_PARSE",
             AppError::Hub(_) => "ERR_HUB",
             AppError::HubAuth => "ERR_HUB_AUTH",
+            AppError::HubRejected(_) => "ERR_HUB_REJECTED",
             AppError::Mcp(_) => "ERR_MCP",
             AppError::Ai(_) => "ERR_AI",
             AppError::Capture(_) => "ERR_CAPTURE",
@@ -120,6 +124,7 @@ impl AppError {
             AppError::Parse(d) => tf!("解析錯誤：{detail}", detail = d),
             AppError::Hub(d) => tf!("Hub 錯誤：{detail}", detail = d),
             AppError::HubAuth => t!("Hub 拒絕了這把金鑰").to_string(),
+            AppError::HubRejected(d) => tf!("Hub 拒收這份資料（不會重送）：{detail}", detail = d),
             AppError::Mcp(d) => tf!("MCP 錯誤：{detail}", detail = d),
             AppError::Ai(d) => tf!("AI 提供者錯誤：{detail}", detail = d),
             AppError::Capture(d) => tf!("抓包錯誤：{detail}", detail = d),
@@ -189,6 +194,7 @@ mod tests {
             AppError::Parse(String::new()),
             AppError::Hub(String::new()),
             AppError::HubAuth,
+            AppError::HubRejected(String::new()),
             AppError::Mcp(String::new()),
             AppError::Ai(String::new()),
             AppError::Capture(String::new()),

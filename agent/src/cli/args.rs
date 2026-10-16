@@ -64,6 +64,26 @@ pub enum Command {
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
     Connections(ConnectionsArgs),
+    /// 註冊到 Security Hub（client 金鑰存進 keychain）
+    Enroll {
+        /// Hub 網址（https://…；本機或私網可用 http）
+        url: String,
+        /// client 金鑰；- 表示從標準輸入讀取
+        #[arg(long)]
+        key: String,
+        /// 接受 hub 核准的遠端動作（預設關）
+        #[arg(long)]
+        accept_remote_actions: bool,
+        /// 允許對公網 hub 使用未加密的 http
+        #[arg(long)]
+        insecure_http: bool,
+    },
+    /// 取消註冊（刪除 hub 設定與金鑰）
+    Unenroll,
+    /// 顯示 agent、hub 連線、待重送與最後一次掃描
+    Status,
+    /// 常駐：定期掃描、上傳報告、連線快照與心跳
+    Watch(WatchArgs),
     /// 防火牆：狀態、稽核、規則、封鎖與情資同步
     Fw {
         #[command(subcommand)]
@@ -348,4 +368,23 @@ pub struct PortsArgs {
     /// 允許探測公網位址（只限你擁有或已獲授權的主機）
     #[arg(long)]
     pub allow_public: bool,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct WatchArgs {
+    /// 完整掃描間隔（預設取設定 scan.interval）
+    #[arg(long, value_name = "DUR")]
+    pub interval: Option<String>,
+    /// 連線快照與心跳間隔（預設取設定 scan.snapshot_interval）
+    #[arg(long, value_name = "DUR")]
+    pub snapshot_interval: Option<String>,
+    /// 只跑一輪（掃描＋快照＋上傳）就結束
+    #[arg(long)]
+    pub once: bool,
+    /// 不上傳，只在本機掃描
+    #[arg(long)]
+    pub no_upload: bool,
+    /// 以系統服務身分執行（服務管理器使用）
+    #[arg(long, hide = true)]
+    pub service: bool,
 }

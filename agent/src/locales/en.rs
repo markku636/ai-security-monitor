@@ -18,6 +18,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "解析錯誤：{detail}" => "Parse error: {detail}",
         "Hub 錯誤：{detail}" => "Hub error: {detail}",
         "Hub 拒絕了這把金鑰" => "The hub rejected this key",
+        "Hub 拒收這份資料（不會重送）：{detail}" => "The hub rejected this payload (it will not be retried): {detail}",
         "MCP 錯誤：{detail}" => "MCP error: {detail}",
         "AI 提供者錯誤：{detail}" => "AI provider error: {detail}",
         "抓包錯誤：{detail}" => "Capture error: {detail}",
@@ -605,6 +606,63 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "最低信心（0–100）" => "Minimum confidence (0–100)",
         "最多幾個網段（預設依後端上限）" => "Maximum networks (default: backend limit)",
         "依期望狀態重新套用 asa 規則（pf / nftables 開機後需要）" => "Re-apply asa rules from the desired state (needed after boot for pf / nftables)",
+
+        // ---- hub client ----
+        "Hub 網址必須是 https（http 只允許本機或私網；確定要用請加 --insecure-http）：{url}" => {
+            "The hub URL must be https (http is only allowed for local or private hosts; add --insecure-http if you are sure): {url}"
+        }
+        "Hub 網址格式錯誤：{url}" => "Invalid hub URL: {url}",
+        "上傳內容超過 hub 上限（{n} bytes）" => "Upload exceeds the hub limit ({n} bytes)",
+        "連不上 hub：{e}" => "Cannot reach the hub: {e}",
+        "hub 要求稍後再傳（{s} 秒後）" => "The hub asked to retry later (in {s} s)",
+        "hub 回應 HTTP {status}：{detail}" => "The hub responded HTTP {status}: {detail}",
+        "hub 健康檢查失敗（HTTP {status}）" => "Hub health check failed (HTTP {status})",
+        "已註冊 hub 但找不到 client 金鑰；重新執行 asa enroll" => "Enrolled in a hub but the client key is missing; run asa enroll again",
+        "client 金鑰不可為空" => "The client key cannot be empty",
+        "已註冊到 {url}（{hub} {version}）；agent id {id}" => "Enrolled in {url} ({hub} {version}); agent id {id}",
+        "下一步：執行 asa watch 開始定期回報（或 asa watch --once 先試一輪）" => {
+            "Next: run asa watch to start reporting (or asa watch --once for a single round)"
+        }
+        "已取消註冊：{url}" => "Unenrolled from {url}",
+        "原本就沒有註冊任何 hub" => "Not enrolled in any hub",
+        "未註冊" => "not enrolled",
+        "client 金鑰" => "Client key",
+        "hub 狀態" => "Hub status",
+        "待重送" => "Pending uploads",
+        "最後一次掃描" => "Last scan",
+        "{at} · {n} 筆發現 · 總分 {score}" => "{at} · {n} findings · score {score}",
+        "項目" => "Item",
+        "已補送暫存報告 {id}" => "Sent queued report {id}",
+        "補送失敗，稍後再試：{e}" => "Queued upload failed; will retry: {e}",
+        "尚未註冊 hub：只在本機掃描（asa enroll <HUB_URL> --key … 後才會上傳）" => {
+            "Not enrolled in a hub: scanning locally only (run asa enroll <HUB_URL> --key … to upload)"
+        }
+        "已連上 {url}（{hub} {version}）" => "Connected to {url} ({hub} {version})",
+        "註冊失敗，稍後重試：{e}" => "Registration failed; will retry: {e}",
+        "快照已上傳：{n} 條連線（可疑／危險 {bad}）" => "Snapshot uploaded: {n} connections ({bad} suspicious/dangerous)",
+        "快照上傳失敗：{e}" => "Snapshot upload failed: {e}",
+        "心跳失敗：{e}" => "Heartbeat failed: {e}",
+        "快照：{n} 條連線（可疑／危險 {bad}）" => "Snapshot: {n} connections ({bad} suspicious/dangerous)",
+        "快照失敗：{e}" => "Snapshot failed: {e}",
+        "掃描完成：{n} 筆發現，總分 {score}" => "Scan finished: {n} findings, score {score}",
+        "{summary}；已上傳（新 {new}、解決 {resolved}）" => "{summary}; uploaded ({new} new, {resolved} resolved)",
+        "{summary}；上傳失敗已暫存：{e}" => "{summary}; upload failed, queued: {e}",
+        "掃描失敗：{e}" => "Scan failed: {e}",
+        "收到中斷，結束" => "Interrupted; exiting",
+
+        // ---- cli/args.rs：hub ----
+        "註冊到 Security Hub（client 金鑰存進 keychain）" => "Enroll in a Security Hub (the client key goes into the keychain)",
+        "Hub 網址（https://…；本機或私網可用 http）" => "Hub URL (https://…; http is fine for local or private hosts)",
+        "client 金鑰；- 表示從標準輸入讀取" => "Client key; - reads it from stdin",
+        "接受 hub 核准的遠端動作（預設關）" => "Accept remote actions approved in the hub (off by default)",
+        "允許對公網 hub 使用未加密的 http" => "Allow unencrypted http to a public hub",
+        "取消註冊（刪除 hub 設定與金鑰）" => "Unenroll (remove the hub settings and key)",
+        "顯示 agent、hub 連線、待重送與最後一次掃描" => "Show the agent, hub connection, pending uploads and last scan",
+        "常駐：定期掃描、上傳報告、連線快照與心跳" => "Run continuously: periodic scans, report uploads, connection snapshots and heartbeats",
+        "完整掃描間隔（預設取設定 scan.interval）" => "Full scan interval (default: config scan.interval)",
+        "連線快照與心跳間隔（預設取設定 scan.snapshot_interval）" => "Snapshot and heartbeat interval (default: config scan.snapshot_interval)",
+        "只跑一輪（掃描＋快照＋上傳）就結束" => "Run a single round (scan + snapshot + upload) and exit",
+        "不上傳，只在本機掃描" => "Do not upload; scan locally only",
 
         _ => return None,
     })
