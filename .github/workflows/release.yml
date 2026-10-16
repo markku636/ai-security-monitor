@@ -77,7 +77,7 @@ jobs:
           HOST=$(rustc -vV | sed -n 's/^host: //p')
           if [ "$HOST" = "${{ matrix.target }}" ] || [ "${{ matrix.musl }}" = "true" ]; then
             "$OUT" version
-            "$OUT" --json version | grep -q '"version":"${{ needs.verify.outputs.version }}"'
+            "$OUT" --json version | grep -Eq '"version": ?"${{ needs.verify.outputs.version }}"'
           fi
           ls -l ../dist
       - uses: actions/upload-artifact@v4
