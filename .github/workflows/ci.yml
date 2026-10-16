@@ -129,6 +129,9 @@ jobs:
           curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=findings' -o page.out && grep -q 'intel.outbound_match' page.out
           curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=history' > /dev/null
           curl -sf -H 'authorization: Bearer ci-admin-secret' http://127.0.0.1:3911/api/v1/fleet/summary -o page.out && grep -q '"intel_feeds"' page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/events -o page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/traffic -o page.out && grep -q 'updater.exe' page.out
+          curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:3911/api/mcp -o page.out && grep -q crash_history page.out
           echo "hub smoke ok"
 
   e2e:

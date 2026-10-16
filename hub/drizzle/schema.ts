@@ -284,3 +284,70 @@ export const actions = pgTable(
       .where(sql`status in ('pending', 'approved', 'dispatched')`),
   ],
 );
+
+/** agent 回報的當機紀錄（藍屏、非預期關機、程式當掉…）；同一筆以 dedupe_key 去重。 */
+export const crashRecords = pgTable(
+  'crash_records',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    time: ts('time').notNull(),
+    kind: text('kind').notNull(),
+    code: text('code'),
+    name: text('name'),
+    module: text('module'),
+    process: text('process'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    dedupeKey: text('dedupe_key').notNull(),
+    receivedAt: ts('received_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('crash_records_dedupe').on(t.agentId, t.dedupeKey),
+    index('crash_records_time_idx').on(t.time),
+    index('crash_records_agent_time_idx').on(t.agentId, t.time),
+    index('crash_records_kind_code_idx').on(t.kind, t.code),
+  ],
+);
+
+/** 資安事件規則的彙總（暴力破解、新帳號、新服務…）；同規則＋同對象一列，隨報告更新次數與時間。 */
+export const securityEvents = pgTable(
+  'security_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    rule: text('rule').notNull(),
+    severity: text('severity').notNull(),
+    count: integer('count').notNull().default(1),
+    firstAt: ts('first_at').notNull(),
+    lastAt: ts('last_at').notNull(),
+    sourceIp: text('source_ip'),
+    userName: text('user_name'),
+    detail: text('detail').notNull().default(''),
+    intel: jsonb('intel').notNull().default([]),
+    dedupeKey: text('dedupe_key').notNull(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('security_events_dedupe').on(t.agentId, t.dedupeKey),
+    index('security_events_rule_last_idx').on(t.rule, t.lastAt),
+    index('security_events_source_idx').on(t.sourceIp),
+  ],
+);
+
+/** 每台 agent 最新的引擎摘要（events／traffic），整份 JSON 原樣保存給頁面與 AI 用。 */
+export const agentSummaries = pgTable(
+  'agent_summaries',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    at: ts('at').notNull(),
+    summary: jsonb('summary').$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.kind] })],
+);

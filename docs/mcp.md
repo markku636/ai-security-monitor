@@ -63,3 +63,15 @@ asa ai ask "…" --provider codex --max-turns 8 --json   # NDJSON 事件
 - 子行程放進 Windows Job Object／Unix process group，逾時（預設 10 分鐘）或中斷時整棵收掉。
 - `analyze` 會先告訴你送了多少資料給 AI；資料是摘要（各 ≤ 約 40 KB），不含封包內容。
 - 不需要額外的 API key：用的是你已經登入的 Claude Code／Codex。
+
+## Hub 的 MCP（整個車隊）
+
+Security Hub 也有 MCP 端點 `/api/mcp`，讓 AI 一次查所有主機：
+
+```bash
+claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <ASA_HUB_MCP_TOKEN 或管理員金鑰>"
+```
+
+工具（全部唯讀）：`fleet_summary`、`list_agents`、`list_findings`、`list_connections`、`inbound_attackers`、`lookup_indicator`、`top_destinations`、
+`crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`。資料與 Hub 頁面同一份查詢。
+認證用 `ASA_HUB_MCP_TOKEN`（建議另設一把，只給 AI 用）或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。

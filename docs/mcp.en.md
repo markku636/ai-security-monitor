@@ -63,3 +63,15 @@ asa ai ask "…" --provider codex --max-turns 8 --json   # NDJSON events
 - The child process tree lives in a Windows Job Object / Unix process group and is killed as a whole on timeout (10 minutes by default) or interruption.
 - `analyze` tells you how much data it sends to the AI; the data are summaries (each ≤ about 40 KB) without packet payloads.
 - No extra API key is needed: it uses the Claude Code / Codex you are already signed in to.
+
+## The hub's MCP (whole fleet)
+
+Security Hub exposes an MCP endpoint at `/api/mcp` so an AI can query every host at once:
+
+```bash
+claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <ASA_HUB_MCP_TOKEN or admin key>"
+```
+
+Tools (all read-only): `fleet_summary`, `list_agents`, `list_findings`, `list_connections`, `inbound_attackers`, `lookup_indicator`, `top_destinations`,
+`crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`. They use the same queries as the hub pages.
+Authenticate with `ASA_HUB_MCP_TOKEN` (recommended: a separate key just for AI clients) or the admin key; open mode (no admin key) only accepts loopback Host/Origin.

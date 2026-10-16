@@ -5,6 +5,7 @@ import { agents, connections, destinations, findings, intelHits, reports } from 
 import type { DB } from '@/lib/db';
 import { recountAgent } from '@/lib/queries/findings';
 import { IngestRejected } from './guard';
+import { applySummaries } from './summaries';
 import type { FindingT, HeartbeatT, RegisterT, ReportT, SnapshotT } from './schema';
 
 const SEV_RANK: Record<string, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
@@ -249,6 +250,7 @@ export async function applyReport(
       .update(reports)
       .set({ newCount: counts.new + counts.reopened, resolvedCount: counts.resolved })
       .where(eq(reports.id, r.report_id));
+    await applySummaries(t, r.agent.id, r.summaries ?? {}, now);
     return { report_id: r.report_id, duplicate: false, findings: counts };
   });
 }

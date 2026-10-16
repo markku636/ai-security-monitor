@@ -14,16 +14,26 @@ import type { TFn } from '@/lib/i18n/core';
 import { getT } from '@/lib/i18n/server';
 import { agentReports, getAgent } from '@/lib/queries/agents';
 import { riskyDestinations } from '@/lib/queries/connections';
+import { latestSummary, recentCrashes, securityHits } from '@/lib/queries/events';
+import { newDestinations, processActivity, topDestinations } from '@/lib/queries/traffic';
+import { CrashTable, DestinationTable, ProcessTable, SecurityTable } from '@/components/security/EventViews';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['overview', 'connections', 'findings', 'history'] as const;
+const TABS = ['overview', 'connections', 'findings', 'events', 'traffic', 'history'] as const;
 type Tab = (typeof TABS)[number];
 
 type Agent = NonNullable<Awaited<ReturnType<typeof getAgent>>>;
 
 function tabLabel(t: TFn, tab: Tab): string {
-  return { overview: t('概況'), connections: t('連線'), findings: t('發現'), history: t('報告紀錄') }[tab];
+  return {
+    overview: t('概況'),
+    connections: t('連線'),
+    findings: t('發現'),
+    events: t('事件與當機'),
+    traffic: t('流量'),
+    history: t('報告紀錄'),
+  }[tab];
 }
 
 function StatusBadge({ t, a }: { t: TFn; a: Agent }) {
@@ -92,6 +102,89 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
           <p className="text-sm text-slate-500">{t('這台主機還沒有連到過可疑或危險的位址。')}</p>
         )}
       </Card>
+    </div>
+  );
+}
+
+async function EventsTab({ t, a }: { t: TFn; a: Agent }) {
+  const [crashes, sec, summary] = await Promise.all([
+    recentCrashes({ agentId: a.id, days: 90, limit: 100 }),
+    securityHits({ agentId: a.id, days: 90, limit: 100 }),
+    latestSummary(a.id, 'events'),
+  ]);
+  const s = (summary?.summary ?? {}) as {
+    needs_admin?: string[];
+    top_error_sources?: { provider: string; event_id: number; count: number; sample?: string }[];
+    counts_by_level?: Record<string, number>;
+  };
+  if (!crashes.length && !sec.length && !summary) {
+    return <EmptyState title={t('還沒有事件資料')}>{t('這台主機的 asa 掃描會帶上近 7 天的事件摘要。')}</EmptyState>;
+  }
+  return (
+    <div className="space-y-4">
+      {s.needs_admin?.length ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          {t('需要系統管理員權限才能讀取：{what}', { what: s.needs_admin.join('、') })}
+        </p>
+      ) : null}
+      {sec.length ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('資安事件')}</h2>
+          <SecurityTable t={t} rows={sec} showHost={false} />
+        </section>
+      ) : null}
+      {crashes.length ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('當機與錯誤')}</h2>
+          <CrashTable t={t} rows={crashes} showHost={false} />
+        </section>
+      ) : null}
+      {s.top_error_sources?.length ? (
+        <Card title={t('最常出現的錯誤（最近一次掃描）')}>
+          <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
+            {s.top_error_sources.map((e) => (
+              <li key={`${e.provider}-${e.event_id}`} className="py-1.5">
+                <span className="tabular-nums font-medium">{e.count}×</span> <span>{e.provider}</span>{' '}
+                <span className="font-mono text-xs text-slate-500">#{e.event_id}</span>
+                {e.sample ? <div className="truncate text-xs text-slate-500">{e.sample}</div> : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
+  const [top, fresh, procs] = await Promise.all([
+    topDestinations({ agentId: a.id, days: 7, limit: 50 }),
+    newDestinations(24, 30, a.id),
+    processActivity(a.id, 20),
+  ]);
+  if (!top.length && !procs.length) {
+    return <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 asa watch 後每分鐘會回報連線快照。')}</EmptyState>;
+  }
+  return (
+    <div className="space-y-4">
+      {procs.length ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('各行程目前的連線')}</h2>
+          <ProcessTable t={t} rows={procs} showHosts={false} />
+        </section>
+      ) : null}
+      {fresh.length ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('24 小時內新出現的目的地')}</h2>
+          <DestinationTable t={t} rows={fresh.map((d) => ({ ...d, asn: null, lastSeenAt: d.firstSeenAt, seenCount: 1 }))} showHost={false} />
+        </section>
+      ) : null}
+      {top.length ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('最常連的目的地（7 天）')}</h2>
+          <DestinationTable t={t} rows={top} showHost={false} />
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -186,6 +279,8 @@ export default async function AgentPage({
       {tab === 'overview' ? <OverviewTab t={t} a={a} /> : null}
       {tab === 'connections' ? <ConnectionsView base={base} params={sp} agentId={a.id} /> : null}
       {tab === 'findings' ? <FindingsView base={base} params={sp} agentId={a.id} /> : null}
+      {tab === 'events' ? <EventsTab t={t} a={a} /> : null}
+      {tab === 'traffic' ? <TrafficTab t={t} a={a} /> : null}
       {tab === 'history' ? <HistoryTab t={t} a={a} /> : null}
     </div>
   );
