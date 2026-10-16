@@ -10,6 +10,7 @@ pub mod i18n;
 pub mod locales;
 
 pub mod actions;
+pub mod ai;
 pub mod config;
 pub mod connections;
 pub mod elevate;
@@ -19,6 +20,7 @@ pub mod events;
 pub mod firewall;
 pub mod hub;
 pub mod intel;
+pub mod mcp;
 pub mod model;
 pub mod ports;
 pub mod scan;

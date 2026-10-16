@@ -30,6 +30,8 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Ports(a) => super::ports_cmd::run(&env, a).await,
         Command::Traffic(a) => super::traffic_cmd::run(&env, a).await,
         Command::Events(a) => super::events_cmd::run(&env, a).await,
+        Command::Mcp(a) => super::mcp_cmd::run(&env, a).await,
+        Command::Ai { cmd } => super::ai_cmd::run(&env, cmd).await,
         Command::Config { cmd } => super::config_cmd::run(&env, cmd),
         Command::Allowlist { cmd } => super::allowlist_cmd::run(&env, cmd),
         Command::Baseline { cmd } => super::baseline_cmd::run(&env, cmd).await,

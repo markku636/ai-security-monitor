@@ -7,6 +7,7 @@ pub mod dispatch;
 pub mod guard;
 pub mod render;
 
+pub mod ai_cmd;
 pub mod allowlist_cmd;
 pub mod baseline_cmd;
 pub mod config_cmd;
@@ -16,6 +17,7 @@ pub mod events_cmd;
 pub mod fw_cmd;
 pub mod hub_cmd;
 pub mod intel_cmd;
+pub mod mcp_cmd;
 pub mod ports_cmd;
 pub mod scan_cmd;
 pub mod traffic_cmd;

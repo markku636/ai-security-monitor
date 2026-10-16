@@ -39,6 +39,16 @@ fn select(pipeline: &Pipeline, args: &[ScannerId], cfg: &config::AgentConfig) ->
 }
 
 pub async fn run_scan(env: &Env, scanners: &[ScannerId], no_online: bool) -> AppResult<(Report, Snapshot)> {
+    let (report, snapshot, _) = run_scan_full(env, scanners, no_online).await?;
+    Ok((report, snapshot))
+}
+
+/// 同 run_scan，另外交回掃描後的 listener（含 ports 引擎算出的可達性），給 MCP 用。
+pub async fn run_scan_full(
+    env: &Env,
+    scanners: &[ScannerId],
+    no_online: bool,
+) -> AppResult<(Report, Snapshot, Vec<crate::model::connection::Listener>)> {
     let mut cfg = config::load_or_init(&env.config_dir)?;
     if no_online {
         cfg.scan.online = false;
@@ -60,7 +70,7 @@ pub async fn run_scan(env: &Env, scanners: &[ScannerId], no_online: bool) -> App
     let report = pipeline.run(&selected, &ctx, agent).await?;
     let shared = ctx.shared.lock().await;
     let snapshot = Snapshot::from_parts(&shared.listeners, &shared.connections, &report.findings);
-    Ok((report, snapshot))
+    Ok((report, snapshot, shared.listeners.clone()))
 }
 
 /// 給 baseline 子命令用：跑全部可用掃描器（不線上查詢，求快）。

@@ -213,15 +213,44 @@ fn sources(env: &Env) -> AppResult<()> {
     Ok(())
 }
 
-async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
-    let reg = Registry::load(&env.config_dir)?;
-    let dir = env.config_dir.clone();
+/// 查一個 IP／網域的計算結果（CLI 與 MCP 共用）。
+pub struct LookupOut {
+    pub ind: String,
+    pub class: String,
+    pub verdict: Verdict,
+    pub geo: Option<crate::model::connection::GeoInfo>,
+    pub hits: Vec<crate::model::finding::IntelHit>,
+    pub reps: Vec<lookup::Reputation>,
+    pub warnings: Vec<String>,
+    pub feeds_loaded: usize,
+}
+
+impl LookupOut {
+    pub fn to_json(&self) -> serde_json::Value {
+        json!({
+            "indicator": self.ind,
+            "class": self.class,
+            "verdict": self.verdict,
+            "geo": self.geo,
+            "hits": self.hits,
+            "reputation": self.reps,
+            "feeds_loaded": self.feeds_loaded,
+            "warnings": self.warnings,
+            "attribution": if self.geo.is_some() { Some(geo::ATTRIBUTION) } else { None },
+        })
+    }
+}
+
+pub async fn compute_lookup(config_dir: &std::path::Path, indicator: &str, online: bool) -> AppResult<LookupOut> {
+    let env_dir = config_dir.to_path_buf();
+    let reg = Registry::load(&env_dir)?;
+    let dir = env_dir.clone();
     let reg2 = reg.clone();
     let db = tokio::task::spawn_blocking(move || IntelDb::load(&dir, &reg2))
         .await
         .map_err(|e| AppError::Intel(e.to_string()))?;
     let kg = KnownGood::load();
-    let allow = Allowlist::load(&env.config_dir)?;
+    let allow = Allowlist::load(&env_dir)?;
     let ind = indicator.trim();
 
     let mut reasons: Vec<Reason> = Vec::new();
@@ -245,7 +274,7 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
         }
         let hits = db.match_ip(ip, None);
         if online && class.is_public() {
-            let (r, w) = lookup::lookup_ip(&env.config_dir, &reg, ip).await;
+            let (r, w) = lookup::lookup_ip(&env_dir, &reg, ip).await;
             reps = r;
             warnings = w;
         }
@@ -279,19 +308,34 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
         });
     }
     let verdict = Verdict::compute(reasons);
+    Ok(LookupOut {
+        ind: ind.to_string(),
+        class,
+        verdict,
+        geo: geo_info,
+        hits,
+        reps,
+        warnings,
+        feeds_loaded: db.feeds.len(),
+    })
+}
+
+async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
+    let out = compute_lookup(&env.config_dir, indicator, online).await?;
+    let LookupOut {
+        ind,
+        class,
+        verdict,
+        geo: geo_info,
+        hits,
+        reps,
+        warnings,
+        feeds_loaded,
+    } = &out;
+    let ind = ind.as_str();
 
     if env.global.json {
-        print_json(&json!({
-            "indicator": ind,
-            "class": class,
-            "verdict": verdict,
-            "geo": geo_info,
-            "hits": hits,
-            "reputation": reps,
-            "feeds_loaded": db.feeds.len(),
-            "warnings": warnings,
-            "attribution": if geo_info.is_some() { Some(geo::ATTRIBUTION) } else { None },
-        }));
+        print_json(&out.to_json());
         return Ok(());
     }
 
@@ -316,7 +360,7 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
         );
     }
     if hits.is_empty() {
-        println!("{}", tf!("沒有命中任何已載入的情資（{n} 個來源）", n = db.feeds.len()));
+        println!("{}", tf!("沒有命中任何已載入的情資（{n} 個來源）", n = feeds_loaded));
     } else {
         let rows = hits
             .iter()
@@ -346,7 +390,7 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
             )
         );
     }
-    for r in &reps {
+    for r in reps {
         println!(
             "{}",
             tf!(
@@ -364,16 +408,21 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
             _ => {}
         }
     }
-    for w in &warnings {
+    for w in warnings {
         println!("  ! {w}");
     }
-    if online && reps.is_empty() && lookup::configured_providers(&env.config_dir, &reg).is_empty() {
+    if online
+        && reps.is_empty()
+        && Registry::load(&env.config_dir)
+            .map(|reg| lookup::configured_providers(&env.config_dir, &reg).is_empty())
+            .unwrap_or(true)
+    {
         println!(
             "{}",
             t!("沒有設定任何線上名譽服務的 API key（asa intel key set abuseipdb -）")
         );
     }
-    if db.feeds.is_empty() {
+    if *feeds_loaded == 0 {
         println!("{}", t!("尚未下載任何威脅情資；執行 asa intel update"));
     }
     if geo_info.is_some() {

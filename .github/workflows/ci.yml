@@ -34,7 +34,9 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --locked
       - name: CLI smoke
+        shell: bash
         run: |
+          set -euo pipefail
           cargo run -q -- --lang en --help
           cargo run -q -- doctor --json
           cargo run -q -- --json traffic --duration 3s --every 1s > traffic.json
@@ -42,6 +44,10 @@ jobs:
           cargo run -q -- events explain 0x7E
           cargo run -q -- --json events --since 1d > events.json
           grep -q counts_by_level events.json
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"explain_code","arguments":{"code":"0x124"}}}' | cargo run -q -- mcp > mcp.jsonl
+          grep -q list_connections mcp.jsonl
+          grep -q WHEA_UNCORRECTABLE_ERROR mcp.jsonl
+          cargo run -q -- --json ai status > ai.json
 
       - name: Firewall E2E (live, ephemeral runner)
         shell: bash

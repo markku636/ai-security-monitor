@@ -95,6 +95,13 @@ pub enum Command {
     Traffic(TrafficArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
     Events(EventsArgs),
+    /// MCP 伺服器：讓 Claude Code／Codex／Cursor／VS Code 查這台電腦的資安狀態
+    Mcp(McpArgs),
+    /// 用 Claude Code 或 Codex CLI 分析：問問題、解讀報告、流量與當機
+    Ai {
+        #[command(subcommand)]
+        cmd: AiCmd,
+    },
     /// 威脅情資：更新、狀態、來源、查詢 IP／網域
     Intel {
         #[command(subcommand)]
@@ -183,6 +190,111 @@ pub enum BaselineCmd {
     Diff,
     /// 顯示基準線內容
     Show,
+}
+
+#[derive(Args, Debug, Clone)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct McpArgs {
+    #[command(subcommand)]
+    pub cmd: Option<McpCmd>,
+    /// 改用 HTTP（例：127.0.0.1:7870）；預設 stdio
+    #[arg(long, value_name = "ADDR")]
+    pub http: Option<String>,
+    /// HTTP 模式的 Bearer token（沒設時只能綁本機）
+    #[arg(long, env = "ASA_MCP_TOKEN", hide_env_values = true)]
+    pub token: Option<String>,
+    /// 只開放這些工具（逗號分隔）
+    #[arg(long, value_delimiter = ',')]
+    pub tools: Vec<String>,
+    /// 開放防禦動作（preview_action → 使用者同意 → execute_action）
+    #[arg(long)]
+    pub allow_actions: bool,
+    /// 也開放破壞性動作（關閉 port）
+    #[arg(long)]
+    pub allow_destructive: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum McpCmd {
+    /// 印出給 AI 用戶端的設定片段
+    Config {
+        /// AI 用戶端
+        #[arg(long, value_enum)]
+        client: crate::mcp::setup::Client,
+        /// 設定裡加上 --allow-actions
+        #[arg(long)]
+        allow_actions: bool,
+    },
+    /// 寫入 AI 用戶端設定（需要 --yes；原檔備份為 .bak）
+    Install {
+        /// AI 用戶端
+        #[arg(long, value_enum)]
+        client: crate::mcp::setup::Client,
+        /// 寫進專案設定（.mcp.json、.vscode/mcp.json…）而不是使用者設定
+        #[arg(long, value_name = "DIR")]
+        project: Option<PathBuf>,
+        /// 設定裡加上 --allow-actions
+        #[arg(long)]
+        allow_actions: bool,
+    },
+    /// 從 AI 用戶端設定移除 asa（需要 --yes）
+    Uninstall {
+        /// AI 用戶端
+        #[arg(long, value_enum)]
+        client: crate::mcp::setup::Client,
+        /// 專案資料夾
+        #[arg(long, value_name = "DIR")]
+        project: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum AiCmd {
+    /// 問 AI 一個資安問題（它會透過 asa 的 MCP 工具自己查這台電腦）
+    Ask {
+        /// 問題
+        question: String,
+        #[command(flatten)]
+        opts: AiOpts,
+    },
+    /// 請 AI 解讀最新報告；--traffic／--events 改看流量或事件
+    Analyze {
+        /// 報告檔（預設最新一份）
+        #[arg(long, value_name = "FILE")]
+        report: Option<PathBuf>,
+        /// 改看即時流量（觀察 --duration）
+        #[arg(long)]
+        traffic: bool,
+        /// 改看事件與當機（近 --since）
+        #[arg(long)]
+        events: bool,
+        /// 流量觀察時間
+        #[arg(long, default_value = "30s", value_name = "DUR")]
+        duration: String,
+        /// 事件範圍
+        #[arg(long, default_value = "7d", value_name = "DUR")]
+        since: String,
+        #[command(flatten)]
+        opts: AiOpts,
+    },
+    /// 檢查 Claude Code／Codex CLI 是否安裝與登入
+    Status,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct AiOpts {
+    /// 用哪個 AI（claude／codex；預設找得到哪個用哪個）
+    #[arg(long, value_enum)]
+    pub provider: Option<crate::ai::Provider>,
+    /// 模型名稱（交給 CLI）
+    #[arg(long)]
+    pub model: Option<String>,
+    /// 最多幾回合工具呼叫
+    #[arg(long, default_value_t = 12)]
+    pub max_turns: u32,
+    /// 逾時
+    #[arg(long, default_value = "10m", value_name = "DUR")]
+    pub timeout: String,
 }
 
 #[derive(Args, Debug, Clone)]
