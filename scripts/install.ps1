@@ -25,6 +25,8 @@ $Hub = $env:ASA_HUB_URL
 $Key = $env:ASA_ENROLL_KEY
 $Service = if ($env:ASA_SERVICE) { $env:ASA_SERVICE } else { 'none' }
 $Base = $env:ASA_DOWNLOAD_BASE
+# Security Hub 提供的 /install.ps1 會把自己的網址填在這裡（只給 ASA_ENROLL_KEY 時註冊到這個 Hub）
+$DefaultHub = ''
 
 function Say([string]$m) { Write-Host "asa-install: $m" }
 function Invoke-Asa([string[]]$a) {
@@ -33,7 +35,9 @@ function Invoke-Asa([string[]]$a) {
 }
 
 if (@('none', 'user', 'system') -notcontains $Service) { throw 'ASA_SERVICE must be none, user or system' }
+if ($Key -and -not $Hub) { $Hub = $DefaultHub }
 if ($Hub -and -not $Key) { throw 'ASA_HUB_URL needs ASA_ENROLL_KEY (an enroll key or client key from the Hub)' }
+if ($Key -and -not $Hub) { throw 'ASA_ENROLL_KEY needs ASA_HUB_URL' }
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
 if (-not $Version) {

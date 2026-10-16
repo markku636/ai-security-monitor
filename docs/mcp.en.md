@@ -71,12 +71,12 @@ asa ai ask "…" --provider codex --max-turns 8 --json   # NDJSON events
 Security Hub exposes an MCP endpoint at `/api/mcp` so an AI can query every host at once:
 
 ```bash
-claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <ASA_HUB_MCP_TOKEN or admin key>"
+claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <API token with the mcp scope>"
 ```
 
 Tools (all read-only): `fleet_summary`, `list_agents`, `list_findings`, `list_connections`, `inbound_attackers`, `lookup_indicator`, `top_destinations`,
 `crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`, `vuln_overview`, `hardening_overview`. They use the same queries as the hub pages.
-Authenticate with `ASA_HUB_MCP_TOKEN` (recommended: a separate key just for AI clients) or the admin key; open mode (no admin key) only accepts loopback Host/Origin.
+Authenticate with a read-only API token created under "Admin → API token" with the MCP scope (expiry and revocation supported); `ASA_HUB_MCP_TOKEN` or the admin key also work; open mode (no admin key) only accepts loopback Host/Origin.
 
 ## The hub's AI page (/ai)
 

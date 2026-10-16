@@ -16,3 +16,8 @@ export async function apiPost<T = unknown>(path: string, body: unknown): Promise
   }
   return { ok: res.ok, status: res.status, data };
 }
+
+export async function apiDelete(path: string): Promise<{ ok: boolean; status: number }> {
+  const res = await fetch(path, { method: 'DELETE', headers: { 'x-asa-request': '1' }, credentials: 'same-origin' });
+  return { ok: res.ok, status: res.status };
+}

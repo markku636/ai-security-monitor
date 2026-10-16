@@ -2,20 +2,38 @@
 //   admin  ASA_HUB_ADMIN_SECRET（Bearer）或登入後的 session cookie
 //   client ASA_HUB_CLIENT_SECRETS（agent 上傳用）
 //   viewer 不帶金鑰，只在 ASA_HUB_PUBLIC_DASHBOARD 時
+//   reader 網頁建立的 API token（唯讀，依 scope：read／export／mcp）
+// 網頁建立的註冊金鑰（asa_ek_…）等同 client。
 // 沒設管理員金鑰＝開放模式：所有人都是 admin（只能綁 loopback，見 scripts/start.mjs）。
 import { env, isOpenMode } from '@/lib/env';
 import { parseCookies } from '@/lib/http';
 import { safeEqual } from './crypto';
 import { SESSION_COOKIE, validateSession } from './sessions';
+import { isApiTokenShape, isEnrollKeyShape, verifyApiToken, verifyEnrollKey, type TokenScope } from './tokens';
 
-export type Role = 'admin' | 'client' | 'viewer' | 'none';
-export type Via = 'open' | 'session' | 'bearer' | 'public' | 'none';
+export type Role = 'admin' | 'client' | 'viewer' | 'reader' | 'none';
+export type Via = 'open' | 'session' | 'bearer' | 'public' | 'enroll' | 'token' | 'none';
 
 export interface Identity {
   role: Role;
   via: Via;
   /** client 金鑰的序號（第幾把），稽核用。 */
   keyIndex?: number;
+  /** 網頁建立的註冊金鑰 id。 */
+  enrollKeyId?: string;
+  /** API token id 與 scope。 */
+  tokenId?: string;
+  scopes?: TokenScope[];
+}
+
+/** 稽核用的 client 名稱：環境變數第幾把，或註冊金鑰 id。 */
+export function clientLabel(id: Identity): string {
+  if (id.enrollKeyId) return `client:ek_${id.enrollKeyId}`;
+  return `client:${id.keyIndex ?? 'admin'}`;
+}
+
+export function hasScope(id: Identity, scope: TokenScope): boolean {
+  return id.role === 'reader' && !!id.scopes?.includes(scope);
 }
 
 export function bearer(req: Request): string | undefined {
@@ -31,6 +49,13 @@ export async function identifyByCredentials(token: string | undefined, cookieTok
     if (safeEqual(token, e.adminSecret)) return { role: 'admin', via: 'bearer' };
     const idx = e.clientSecrets.findIndex((s) => safeEqual(token, s));
     if (idx >= 0) return { role: 'client', via: 'bearer', keyIndex: idx };
+    if (isEnrollKeyShape(token)) {
+      const k = await verifyEnrollKey(token);
+      if (k) return { role: 'client', via: 'enroll', enrollKeyId: k.id };
+    } else if (isApiTokenShape(token)) {
+      const t = await verifyApiToken(token);
+      if (t) return { role: 'reader', via: 'token', tokenId: t.id, scopes: t.scopes };
+    }
     return { role: 'none', via: 'none' };
   }
   if (cookieToken && (await validateSession(cookieToken))) return { role: 'admin', via: 'session' };

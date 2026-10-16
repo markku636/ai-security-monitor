@@ -1,4 +1,5 @@
 // agent 領取已核准的遠端動作（附 HMAC token）。需要 client 金鑰＋已釘選的 agent token。
+import { clientLabel } from '@/lib/auth/access';
 import { eq } from 'drizzle-orm';
 import { agents } from '@/drizzle/schema';
 import { dispatchForAgent } from '@/lib/actions/store';
@@ -19,7 +20,7 @@ export async function GET(req: Request): Promise<Response> {
   const pin = await pinAgentToken(db, agentId, agentTokenOf(req));
   if (pin === 'unknown_agent') return error(404, 'unknown_agent');
   if (pin !== 'pinned') {
-    await audit({ actor: `client:${id.keyIndex}`, actorRole: 'client', action: 'actions.poll.rejected', targetType: 'agent', targetId: agentId, sourceIp: sourceIp(req), details: { pin } });
+    await audit({ actor: clientLabel(id), actorRole: 'client', action: 'actions.poll.rejected', targetType: 'agent', targetId: agentId, sourceIp: sourceIp(req), details: { pin } });
     return error(403, pin === 'mismatch' ? 'agent_token_mismatch' : 'agent_not_pinned');
   }
   const a = (await db.select({ accept: agents.acceptRemoteActions }).from(agents).where(eq(agents.id, agentId)).limit(1))[0];

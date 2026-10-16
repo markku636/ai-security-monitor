@@ -1,7 +1,7 @@
 // agent 端點共用流程：client 金鑰 → 讀 body（gzip / 上限 / 結構檢查）→ zod → 依 agent 限流 → 寫入。
 import type { z } from 'zod';
 import { audit } from '@/lib/audit';
-import { identify, type Identity } from '@/lib/auth/access';
+import { clientLabel, identify, type Identity } from '@/lib/auth/access';
 import { hit } from '@/lib/auth/ratelimit';
 import { getDb, type DB } from '@/lib/db';
 import { error, json, sourceIp } from '@/lib/http';
@@ -73,7 +73,7 @@ export async function handleIngest<S extends z.ZodTypeAny>(
     bytes = r.bytes;
   } catch (e) {
     if (e instanceof IngestRejected) {
-      await audit({ actor: `client:${id.keyIndex ?? 'admin'}`, actorRole: id.role, action: `ingest.${opts.kind}.rejected`, sourceIp: ip, details: { rule: e.rule } });
+      await audit({ actor: clientLabel(id), actorRole: id.role, action: `ingest.${opts.kind}.rejected`, sourceIp: ip, details: { rule: e.rule } });
       return error(e.status, e.status === 413 ? 'too_large' : 'bad_request', { rule: e.rule });
     }
     throw e;
@@ -89,7 +89,7 @@ export async function handleIngest<S extends z.ZodTypeAny>(
   const agentToken = agentTokenOf(req);
   const pin = await pinAgentToken(getDb(), agentId, agentToken);
   if (pin === 'mismatch') {
-    await audit({ actor: `client:${id.keyIndex ?? 'admin'}`, actorRole: id.role, action: `ingest.${opts.kind}.token_mismatch`, targetType: 'agent', targetId: agentId, sourceIp: ip });
+    await audit({ actor: clientLabel(id), actorRole: id.role, action: `ingest.${opts.kind}.token_mismatch`, targetType: 'agent', targetId: agentId, sourceIp: ip });
     return error(403, 'agent_token_mismatch');
   }
   if (opts.precheck) {

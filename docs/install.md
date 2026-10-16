@@ -33,6 +33,12 @@ curl -fsSL https://github.com/markku636/ai-security-agent/releases/latest/downlo
 
 平台名稱：`windows-x64.exe`、`windows-arm64.exe`、`macos-arm64`、`macos-x64`、`linux-x64`、`linux-arm64`。
 
+## 從 Security Hub 安裝
+
+Hub 的「安裝代理程式」頁（`/install`）會建立一把註冊金鑰，並給出已填好 Hub 網址與金鑰的指令；
+`<hub>/install.sh`、`<hub>/install.ps1` 是同一份腳本，只是預設註冊到那個 Hub（腳本公開、不含金鑰）。
+註冊金鑰在「管理 → 註冊金鑰」列出用了幾台主機、最後使用時間，撤銷後用那把金鑰的主機會被拒絕。
+
 ## 更新
 
 ```bash

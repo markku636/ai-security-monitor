@@ -38,7 +38,7 @@ export interface RegisterResult {
   created: boolean;
 }
 
-export async function applyRegister(db: DB, body: RegisterT, keyIndex: number | undefined): Promise<RegisterResult> {
+export async function applyRegister(db: DB, body: RegisterT, keyIndex: number | undefined, enrollKeyId?: string): Promise<RegisterResult> {
   const now = new Date();
   const existed = await assertNotDeleted(db, body.agent.id);
   const cols = {
@@ -46,6 +46,7 @@ export async function applyRegister(db: DB, body: RegisterT, keyIndex: number | 
     acceptRemoteActions: body.accept_remote_actions,
     serviceMode: body.service_mode,
     keyIndex: keyIndex ?? null,
+    enrollKeyId: enrollKeyId ?? null,
   };
   await db
     .insert(agents)

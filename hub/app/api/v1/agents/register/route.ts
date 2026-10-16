@@ -1,3 +1,4 @@
+import { clientLabel } from '@/lib/auth/access';
 import { actionKeyFor, signingKey } from '@/lib/actions/sign';
 import { audit } from '@/lib/audit';
 import { env } from '@/lib/env';
@@ -15,12 +16,12 @@ export async function POST(req: Request): Promise<Response> {
     Register,
     { kind: 'register', agentIdOf: (b) => b.agent.id, minIntervalMs: 0, maxBytes: 64 * 1024 },
     async ({ body, id, db, ip, agentToken }) => {
-      const r = await applyRegister(db, body, id.keyIndex);
+      const r = await applyRegister(db, body, id.keyIndex, id.enrollKeyId);
       // 新 agent：寫入後才釘選得到。
       const pin = await pinAgentToken(db, r.agent_id, agentToken);
       if (r.created) {
         await audit({
-          actor: `client:${id.keyIndex ?? 'admin'}`,
+          actor: clientLabel(id),
           actorRole: id.role,
           action: 'agent.registered',
           targetType: 'agent',

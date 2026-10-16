@@ -209,6 +209,13 @@ jobs:
           curl -sf -b cj.txt http://127.0.0.1:3911/hardening -o page.out
           curl -sf -H "authorization: Bearer ci-admin-secret" http://127.0.0.1:3911/api/v1/vulns -o page.out && grep -q hosts page.out
           curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:3911/api/mcp -o page.out && grep -q crash_history page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/admin -o page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/install -o page.out
+          curl -sf http://127.0.0.1:3911/install.sh -o page.out && grep -q '^DEFAULT_HUB="http://127.0.0.1:3911"' page.out
+          curl -sf http://127.0.0.1:3911/install.ps1 -o page.out && grep -q "DefaultHub = 'http://127.0.0.1:3911'" page.out
+          TOK=$(curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"name":"ci","scopes":["export"]}' http://127.0.0.1:3911/api/v1/admin/tokens | jq -r .token)
+          curl -sf -H "authorization: Bearer $TOK" http://127.0.0.1:3911/api/v1/export/findings.csv -o page.out && grep -q 'hostname,severity' page.out
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $TOK" http://127.0.0.1:3911/api/v1/admin/tokens)" = "403"
           echo "hub smoke ok"
 
   e2e:

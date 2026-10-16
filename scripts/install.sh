@@ -18,6 +18,8 @@ HUB="${ASA_HUB_URL:-}"
 KEY="${ASA_ENROLL_KEY:-}"
 SERVICE="${ASA_SERVICE:-none}"
 BASE="${ASA_DOWNLOAD_BASE:-}"
+# Security Hub 提供的 /install.sh 會把自己的網址填在這裡（只給 --key 時註冊到這個 Hub）
+DEFAULT_HUB=""
 
 say() { printf 'asa-install: %s\n' "$*" >&2; }
 die() { say "error: $*"; exit 1; }
@@ -35,7 +37,9 @@ while [ $# -gt 0 ]; do
 done
 
 case "$SERVICE" in none|user|system) ;; *) die "--service must be none, user or system" ;; esac
+if [ -n "$KEY" ] && [ -z "$HUB" ]; then HUB="$DEFAULT_HUB"; fi
 if [ -n "$HUB" ] && [ -z "$KEY" ]; then die "--hub needs --key (an enroll key or client key from the Hub)"; fi
+if [ -n "$KEY" ] && [ -z "$HUB" ]; then die "--key needs --hub URL"; fi
 
 fetch() {
   if command -v curl >/dev/null 2>&1; then

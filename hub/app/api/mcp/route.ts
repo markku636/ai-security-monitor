@@ -1,9 +1,10 @@
 // Hub MCP（Streamable HTTP，協定照 agent 端與 db-kit）：POST JSON-RPC；initialize 回 Mcp-Session-Id；純通知 202。
-// 認證：ASA_HUB_MCP_TOKEN 或管理員金鑰（Bearer）。開放模式（沒設管理員金鑰）只接受 Host／Origin 是本機的請求。
+// 認證：ASA_HUB_MCP_TOKEN、管理員金鑰，或有 mcp scope 的 API token（Bearer）。開放模式（沒設管理員金鑰）只接受 Host／Origin 是本機的請求。
 //   claude mcp add --transport http asahub http://<hub>/api/mcp --header "Authorization: Bearer <token>"
 import crypto from 'node:crypto';
 import { safeEqual } from '@/lib/auth/crypto';
 import { bearer } from '@/lib/auth/access';
+import { isApiTokenShape, verifyApiToken } from '@/lib/auth/tokens';
 import { env, isOpenMode } from '@/lib/env';
 import { readJson } from '@/lib/http';
 import { isRunToken } from '@/lib/ai/run';
@@ -32,13 +33,14 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   });
 }
 
-function authorized(req: Request): boolean {
+async function authorized(req: Request): Promise<boolean> {
   const token = bearer(req);
   const mcpToken = (process.env.ASA_HUB_MCP_TOKEN ?? '').trim();
   if (token && mcpToken && safeEqual(token, mcpToken)) return true;
   // hub 自己跑 AI 時給 CLI 的一次性 token
   if (token && isRunToken(token)) return true;
   if (token && env().adminSecret && safeEqual(token, env().adminSecret)) return true;
+  if (token && isApiTokenShape(token)) return !!(await verifyApiToken(token))?.scopes.includes('mcp');
   if (isOpenMode()) {
     const origin = req.headers.get('origin');
     return loopback(req.headers.get('host')) && (!origin || loopback(origin));
@@ -90,7 +92,7 @@ async function handle(msg: Record<string, unknown>): Promise<unknown | null> {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  if (!authorized(req)) return json({ error: 'unauthorized' }, 401);
+  if (!(await authorized(req))) return json({ error: 'unauthorized' }, 401);
   let body: unknown;
   try {
     body = await readJson(req, MAX_BODY);
@@ -131,7 +133,7 @@ export async function GET(): Promise<Response> {
 }
 
 export async function DELETE(req: Request): Promise<Response> {
-  if (!authorized(req)) return json({ error: 'unauthorized' }, 401);
+  if (!(await authorized(req))) return json({ error: 'unauthorized' }, 401);
   const sid = req.headers.get('mcp-session-id');
   if (sid) g.__asaMcpSessions = sessions().filter((s) => s !== sid);
   return json({ ok: true });

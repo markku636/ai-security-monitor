@@ -36,6 +36,38 @@ export const settings = pgTable('settings', {
   updatedBy: text('updated_by'),
 });
 
+/** API token（唯讀）：`asa_<8hex>_<40hex>`，只存 sha256；scope：read（API）、export（CSV）、mcp。 */
+export const apiTokens = pgTable(
+  'api_tokens',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    createdBy: text('created_by').notNull(),
+    expiresAt: ts('expires_at'),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [index('api_tokens_created_idx').on(t.createdAt)],
+);
+
+/** 註冊金鑰（agent 上傳用，等同 client 金鑰但可在網頁建立／撤銷）：`asa_ek_<8hex>_<40hex>`，只存 sha256。 */
+export const enrollKeys = pgTable(
+  'enroll_keys',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    keyHash: text('key_hash').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    createdBy: text('created_by').notNull(),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [index('enroll_keys_created_idx').on(t.createdAt)],
+);
+
 export const auditLog = pgTable(
   'audit_log',
   {
@@ -73,6 +105,8 @@ export const agents = pgTable(
     acceptRemoteActions: boolean('accept_remote_actions').notNull().default(false),
     serviceMode: boolean('service_mode').notNull().default(false),
     keyIndex: integer('key_index'),
+    /** 用哪把註冊金鑰（enroll_keys.id）上傳；撤銷金鑰時可以看到會影響哪些主機。 */
+    enrollKeyId: text('enroll_key_id'),
     firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
     lastHeartbeatAt: ts('last_heartbeat_at'),

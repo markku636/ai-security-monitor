@@ -33,6 +33,12 @@ curl -fsSL https://github.com/markku636/ai-security-agent/releases/latest/downlo
 
 Platform names: `windows-x64.exe`, `windows-arm64.exe`, `macos-arm64`, `macos-x64`, `linux-x64`, `linux-arm64`.
 
+## Install from the Security Hub
+
+The Hub's "Install agent" page (`/install`) creates an enroll key and shows commands with the Hub URL and key filled in;
+`<hub>/install.sh` and `<hub>/install.ps1` are the same scripts, defaulting to that Hub (the scripts are public and contain no key).
+"Admin → Enroll keys" lists how many hosts use each key and when it was last used; revoking a key rejects the hosts that use it.
+
 ## Update
 
 ```bash

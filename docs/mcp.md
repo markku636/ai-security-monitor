@@ -71,12 +71,12 @@ asa ai ask "…" --provider codex --max-turns 8 --json   # NDJSON 事件
 Security Hub 也有 MCP 端點 `/api/mcp`，讓 AI 一次查所有主機：
 
 ```bash
-claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <ASA_HUB_MCP_TOKEN 或管理員金鑰>"
+claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authorization: Bearer <有 mcp 權限的 API token>"
 ```
 
 工具（全部唯讀）：`fleet_summary`、`list_agents`、`list_findings`、`list_connections`、`inbound_attackers`、`lookup_indicator`、`top_destinations`、
 `crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`、`vuln_overview`、`hardening_overview`。資料與 Hub 頁面同一份查詢。
-認證用 `ASA_HUB_MCP_TOKEN`（建議另設一把，只給 AI 用）或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。
+認證建議用 Hub「管理 → API token」建立、勾選 MCP 權限的唯讀 token（可設期限、可撤銷）；也接受 `ASA_HUB_MCP_TOKEN` 或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。
 
 ## Hub 的 AI 分析頁（/ai）
 

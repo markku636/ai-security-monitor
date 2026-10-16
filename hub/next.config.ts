@@ -5,7 +5,7 @@ const config: NextConfig = {
   output: 'standalone',
   // 讓 standalone 輸出也追蹤到 repo 根目錄的 feeds/（情資登錄、bugcheck 表）。
   outputFileTracingRoot: path.join(__dirname, '..'),
-  outputFileTracingIncludes: { '/**': ['./drizzle/**', '../feeds/**'] },
+  outputFileTracingIncludes: { '/**': ['./drizzle/**', '../feeds/**', '../scripts/install.sh', '../scripts/install.ps1'] },
   serverExternalPackages: ['pg', '@electric-sql/pglite'],
   poweredByHeader: false,
   async headers() {
