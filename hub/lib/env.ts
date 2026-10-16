@@ -11,6 +11,12 @@ export interface HubEnv {
   trustProxy: boolean;
   edition: Edition;
   version: string;
+  /** 同一 agent 兩次完整報告的最短間隔。 */
+  reportMinIntervalMs: number;
+  /** 連線快照 / 心跳的最短間隔。 */
+  snapshotMinIntervalMs: number;
+  /** 超過這段時間沒消息就算「離線」（之內但超過快照間隔兩倍算「延遲」）。 */
+  staleAfterMs: number;
 }
 
 function raw(name: string): string {
@@ -27,6 +33,13 @@ function raw(name: string): string {
 
 function flag(name: string): boolean {
   return ['1', 'true', 'yes', 'on'].includes(raw(name).toLowerCase());
+}
+
+function num(name: string, dflt: number): number {
+  const v = raw(name);
+  if (v === '') return dflt;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
 }
 
 export class EnvError extends Error {}
@@ -54,6 +67,9 @@ export function loadEnv(): HubEnv {
     trustProxy: flag('ASA_HUB_TRUST_PROXY'),
     edition: raw('ASA_HUB_EDITION') === 'server' ? 'server' : 'standalone',
     version: raw('ASA_HUB_VERSION') || process.env.npm_package_version || '0.1.0',
+    reportMinIntervalMs: num('ASA_HUB_INGEST_MIN_INTERVAL_MS', 60_000),
+    snapshotMinIntervalMs: num('ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS', 10_000),
+    staleAfterMs: num('ASA_HUB_STALE_AFTER_MS', 30 * 60_000),
   };
 }
 

@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "report_id": "7d3f1b2a-0c4e-4f5a-8b6c-9d0e1f2a3b4c",
+  "agent": {
+    "id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+    "version": "0.1.0",
+    "hostname": "demo-host",
+    "os": {
+      "family": "windows",
+      "name": "Windows",
+      "version": "11 (26200)",
+      "build": "Windows 11 Pro",
+      "kernel": "26200"
+    },
+    "arch": "x86_64",
+    "ips": [
+      "192.0.2.10"
+    ],
+    "uptime_s": 3600,
+    "elevated": false,
+    "scanners_available": [
+      "connections",
+      "intel",
+      "firewall",
+      "ports"
+    ]
+  },
+  "started_at": "2026-10-16T09:29:00Z",
+  "finished_at": "2026-10-16T09:30:00Z",
+  "scanners_run": [
+    "connections",
+    "intel",
+    "firewall",
+    "ports"
+  ],
+  "warnings": [
+    "部分 socket 無法對應到行程（需要系統管理員權限）"
+  ],
+  "findings": [
+    {
+      "id": "f_b53de772e7c9b87d",
+      "scanner": "intel",
+      "rule": "intel.outbound_match",
+      "severity": "critical",
+      "title": "連到威脅情資列名的 IP：203.0.113.66",
+      "detail": "updater.exe (pid 4242) ↔ 203.0.113.66:443（判定：危險）。來源：abuse.ch Feodo Tracker (recommended)（CC0 1.0，90%）",
+      "evidence": {
+        "type": "connection",
+        "proto": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": 51234,
+        "remote_ip": "203.0.113.66",
+        "remote_port": 443,
+        "state": "ESTABLISHED",
+        "direction": "outbound",
+        "process": {
+          "pid": 4242,
+          "name": "updater.exe",
+          "exe": "C:\\Users\\demo\\AppData\\Local\\Temp\\updater.exe",
+          "parent_pid": 1000,
+          "user": "demo",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "geo": {
+          "country": "NL",
+          "asn": 64500,
+          "org": "Example Hosting"
+        },
+        "verdict": {
+          "level": "dangerous",
+          "reasons": [
+            {
+              "type": "anomaly",
+              "kind": "temp_dir_process",
+              "detail": "C:\\Users\\demo\\AppData\\Local\\Temp\\updater.exe"
+            },
+            {
+              "type": "intel_hit",
+              "feed_id": "abusech-feodo",
+              "name": "Feodo Tracker (recommended)",
+              "vendor": "abuse.ch",
+              "confidence": 90,
+              "license": "CC0 1.0",
+              "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+              "attribution_required": false,
+              "fetched_at": "2026-10-16T09:00:00Z",
+              "source_url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+              "matched": "203.0.113.66",
+              "extra": {
+                "commercial_ok": true,
+                "feed_direction": "outbound"
+              }
+            }
+          ]
+        }
+      },
+      "intel_hits": [
+        {
+          "feed_id": "abusech-feodo",
+          "name": "Feodo Tracker (recommended)",
+          "vendor": "abuse.ch",
+          "confidence": 90,
+          "license": "CC0 1.0",
+          "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+          "attribution_required": false,
+          "fetched_at": "2026-10-16T09:00:00Z",
+          "source_url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+          "matched": "203.0.113.66",
+          "extra": {
+            "commercial_ok": true,
+            "feed_direction": "outbound"
+          }
+        }
+      ],
+      "recommendation": "封鎖此 IP 並檢查相關行程；確認是誤判可加入白名單",
+      "actions": [
+        {
+          "kind": "block_ip",
+          "params": {
+            "ip": "203.0.113.66",
+            "direction": "both",
+            "reason": "abusech-feodo"
+          },
+          "requires_elevation": true,
+          "destructive": false,
+          "reversible": true,
+          "description": "以防火牆封鎖 203.0.113.66（雙向）"
+        }
+      ],
+      "first_seen": "2026-10-16T09:30:00Z",
+      "last_seen": "2026-10-16T09:30:00Z",
+      "tags": [
+        "intel"
+      ],
+      "refs": [
+        "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt"
+      ]
+    },
+    {
+      "id": "f_786f0bc778214b03",
+      "scanner": "ports",
+      "rule": "ports.exposed_open",
+      "severity": "critical",
+      "title": "Redis（tcp 6379）可從網路連入",
+      "detail": "redis-server (pid 900) 綁在 0.0.0.0/::，防火牆沒有阻擋",
+      "evidence": {
+        "type": "port",
+        "proto": "tcp",
+        "port": 6379,
+        "bind": "0.0.0.0/::",
+        "pid": 900,
+        "process": "redis-server",
+        "reachability": "open"
+      },
+      "intel_hits": [],
+      "recommendation": "不需對外就改綁 127.0.0.1",
+      "actions": [],
+      "first_seen": "2026-10-16T09:30:00Z",
+      "last_seen": "2026-10-16T09:30:00Z",
+      "tags": [
+        "exposed"
+      ],
+      "refs": []
+    }
+  ],
+  "inventory": {
+    "packages": 0,
+    "by_ecosystem": {},
+    "listeners": 12,
+    "connections": 85,
+    "processes_with_network": 9
+  },
+  "summaries": {},
+  "score": {
+    "overall": 52,
+    "connections": 75,
+    "exposure": 75,
+    "vulns": 100,
+    "hardening": 100
+  },
+  "partial": true
+}

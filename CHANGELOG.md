@@ -44,4 +44,10 @@
   中英文（繁中原文即 key、cookie／Accept-Language、`i18n:check` 閘門）、深色模式、稽核紀錄表；`docker/compose.dev.yml` 開發用 PostgreSQL。
 - 測試用記憶體內 PGlite 跑同一份 migration；CI 新增 hub job（typecheck、i18n、vitest、next build，再對 PostgreSQL 服務容器做登入煙霧測試）。
 
-> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入。
+- Hub 接收（第 6 輪）：`/api/v1/agents/register`、`/api/v1/ingest/report`（gzip、壓縮後 4 MB／解壓 24 MB 上限、結構上限與禁止 key、zod、每 agent 最短間隔 429、report_id 冪等）、
+  `/api/v1/ingest/snapshot`（最新連線整批替換＋目的地彙總，保留最嚴重判定）、`/api/v1/agents/me/heartbeat`、`GET /api/v1/agents`（公開檢視不露 IP）；
+  finding 差異：新增／更新／未變／已解決（只對本次有跑的掃描器）／重新開啟（已解決又出現、已確認但升級、暫停過期）；情資命中保留廠商與來源網址。
+- `contract/*.v1.json`：由 Rust 測試產生並比對、Hub 用 zod 驗證同一份 —— 兩邊格式一漂移 CI 就擋。
+- 頁面：總覽（代理程式線上／延遲／離線、危險連線數、未處理發現的嚴重度分佈）、`/agents` 列表。CI 的 Hub 煙霧測試加上註冊→gzip 報告→快照→頁面。
+
+> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示。

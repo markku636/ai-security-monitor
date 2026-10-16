@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
   const { t } = await getT();
-  const items = [{ href: '/', label: t('總覽') }];
+  const items = [
+    { href: '/', label: t('總覽') },
+    { href: '/agents', label: t('代理程式') },
+  ];
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar t={t} items={items} viewer={viewer} openMode={isOpenMode()} />

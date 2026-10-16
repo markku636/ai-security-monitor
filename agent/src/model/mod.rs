@@ -3,6 +3,7 @@
 pub mod allowlist;
 pub mod baseline;
 pub mod connection;
+pub mod contract;
 pub mod finding;
 pub mod report;
 pub mod verdict;

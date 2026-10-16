@@ -1,0 +1,70 @@
+{
+  "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+  "ts": "2026-10-16T09:31:00Z",
+  "connections": [
+    {
+      "proto": "tcp",
+      "local_ip": "192.0.2.10",
+      "local_port": 51234,
+      "remote_ip": "203.0.113.66",
+      "remote_port": 443,
+      "state": "ESTABLISHED",
+      "direction": "outbound",
+      "process": {
+        "pid": 4242,
+        "name": "updater.exe",
+        "exe": "C:\\Users\\demo\\AppData\\Local\\Temp\\updater.exe",
+        "parent_pid": 1000,
+        "user": "demo",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "geo": {
+        "country": "NL",
+        "asn": 64500,
+        "org": "Example Hosting"
+      },
+      "verdict": {
+        "level": "dangerous",
+        "reasons": [
+          {
+            "type": "anomaly",
+            "kind": "temp_dir_process",
+            "detail": "C:\\Users\\demo\\AppData\\Local\\Temp\\updater.exe"
+          },
+          {
+            "type": "intel_hit",
+            "feed_id": "abusech-feodo",
+            "name": "Feodo Tracker (recommended)",
+            "vendor": "abuse.ch",
+            "confidence": 90,
+            "license": "CC0 1.0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "attribution_required": false,
+            "fetched_at": "2026-10-16T09:00:00Z",
+            "source_url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+            "matched": "203.0.113.66",
+            "extra": {
+              "commercial_ok": true,
+              "feed_direction": "outbound"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "listeners": [
+    {
+      "proto": "tcp",
+      "bind_ip": "0.0.0.0",
+      "port": 6379,
+      "process": {
+        "pid": 900,
+        "name": "redis-server"
+      },
+      "exposed": true,
+      "reachability": {
+        "state": "open"
+      }
+    }
+  ]
+}

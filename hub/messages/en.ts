@@ -28,6 +28,35 @@ export const en: Record<string, string> = {
   '還沒有任何代理程式回報': 'No agent has reported yet',
   '在要保護的電腦上安裝 asa，然後執行：': 'Install asa on the machine you want to protect, then run:',
 
+  '線上 {online}、延遲 {stale}、離線 {offline}': 'Online {online}, stale {stale}, offline {offline}',
+  '危險連線': 'Dangerous connections',
+  '另有 {n} 條可疑': 'plus {n} suspicious',
+  '未處理的發現': 'Open findings',
+  '查看各代理程式 →': 'View agents →',
+
+  // ---- severity ----
+  '嚴重': 'critical',
+  '高': 'high',
+  '中': 'medium',
+  '低': 'low',
+  '資訊': 'info',
+
+  // ---- agents ----
+  '每台安裝 asa 並註冊到這個 Hub 的電腦或伺服器。': 'Every computer or server running asa that is enrolled in this hub.',
+  '線上': 'Online',
+  '延遲': 'Stale',
+  '離線': 'Offline',
+  '部分資料': 'Partial data',
+  '主機': 'Host',
+  '狀態': 'Status',
+  '系統': 'System',
+  '分數': 'Score',
+  '最後回報': 'Last seen',
+  '{n} 秒前': '{n}s ago',
+  '{n} 分鐘前': '{n} min ago',
+  '{n} 小時前': '{n} h ago',
+  '{n} 天前': '{n} d ago',
+
   // ---- login ----
   '貼上管理員金鑰（ASA_HUB_ADMIN_SECRET）登入': 'Paste the administrator key (ASA_HUB_ADMIN_SECRET) to sign in',
   '嘗試太多次，請一分鐘後再試': 'Too many attempts; try again in a minute',
