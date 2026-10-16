@@ -105,12 +105,17 @@ jobs:
           H=(-H 'content-type: application/json' -H 'x-asa-request: 1' -H 'sec-fetch-site: same-origin')
           test "$(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" -d '{"key":"wrong"}' http://127.0.0.1:3911/api/auth/login)" = "401"
           curl -sf -c cj.txt "${H[@]}" -d '{"key":"ci-admin-secret"}' http://127.0.0.1:3911/api/auth/login
-          curl -sf -b cj.txt http://127.0.0.1:3911/ | grep -q 'Security Hub'
+          curl -sf -b cj.txt http://127.0.0.1:3911/ -o page.out && grep -q 'Security Hub' page.out
           K='authorization: Bearer ci-client-key'
           curl -sf -H "$K" -H 'content-type: application/json' --data-binary @../contract/register.v1.json http://127.0.0.1:3911/api/v1/agents/register
           gzip -c ../contract/report.v1.json > rep.gz
           curl -sf -H "$K" -H 'content-type: application/json' -H 'content-encoding: gzip' --data-binary @rep.gz http://127.0.0.1:3911/api/v1/ingest/report | tee rep.json
           grep -q '"new":2' rep.json
           curl -sf -H "$K" -H 'content-type: application/json' --data-binary @../contract/snapshot.v1.json http://127.0.0.1:3911/api/v1/ingest/snapshot | grep -q '"dangerous":1'
-          curl -sf -b cj.txt http://127.0.0.1:3911/agents | grep -q 'demo-host'
+          curl -sf -b cj.txt http://127.0.0.1:3911/agents -o page.out && grep -q 'demo-host' page.out
+          curl -sf -b cj.txt 'http://127.0.0.1:3911/connections?verdict=dangerous' -o page.out && grep -q 'feodotracker' page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/findings -o page.out && grep -q 'ports.exposed_open' page.out
+          curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=findings' -o page.out && grep -q 'intel.outbound_match' page.out
+          curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=history' > /dev/null
+          curl -sf -H 'authorization: Bearer ci-admin-secret' http://127.0.0.1:3911/api/v1/fleet/summary -o page.out && grep -q '"intel_feeds"' page.out
           echo "hub smoke ok"

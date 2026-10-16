@@ -1,8 +1,9 @@
 // 寫入：註冊、報告（冪等＋finding 差異）、連線快照（整批替換＋目的地彙總）、心跳。
 import crypto from 'node:crypto';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
-import { agents, connections, destinations, findings, intelHits, reports, type SevCounts } from '@/drizzle/schema';
+import { agents, connections, destinations, findings, intelHits, reports } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
+import { recountAgent } from '@/lib/queries/findings';
 import { IngestRejected } from './guard';
 import type { FindingT, HeartbeatT, RegisterT, ReportT, SnapshotT } from './schema';
 
@@ -231,14 +232,7 @@ export async function applyReport(
       await t.insert(intelHits).values(hitRows.slice(i, i + 500));
     }
 
-    const sev = await t
-      .select({ severity: findings.severity, n: sql<number>`count(*)::int` })
-      .from(findings)
-      .where(and(eq(findings.agentId, r.agent.id), eq(findings.status, 'open')))
-      .groupBy(findings.severity);
-    const sevCounts: SevCounts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-    for (const s of sev) if (s.severity in sevCounts) sevCounts[s.severity as keyof SevCounts] = Number(s.n);
-    const open = Object.values(sevCounts).reduce((a, b) => a + b, 0);
+    const { sevCounts, open } = await recountAgent(t, r.agent.id);
 
     await t
       .update(agents)

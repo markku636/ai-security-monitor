@@ -56,4 +56,10 @@
 - Hub 限流改依報告完成時間（暫存報告恢復後可一次補送）、收過的報告重送直接回 duplicate 不吃限流，另加每 agent 每分鐘 30 份硬上限。
 - `docs/hub-contract.md`（＋英文版）：端點、錯誤處理、`asa watch` 流程。
 
-> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示；第 7 輪 cargo test 129 passed、vitest 24 passed，本機 agent 註冊到本機 hub，`watch --once` 上傳 345 條連線快照＋10 筆發現，hub 停機時報告進 outbox、恢復後自動補送。
+- Hub 儀表板（第 8 輪）：總覽（車隊平均分數圓環 ×5、危險／可疑連線、情資來源命中排行含授權與來源連結、對內攻擊來源、分數最低主機）；
+  `/connections` 車隊級連線（判定／方向篩選晶片附計數、情資來源與國家篩選、關鍵字、分頁；每列方向徽章＋判定晶片＋理由：情資來源徽章可點到原始清單、滑過看信心／授權／抓取時間；DB-IP 標註）；
+  `/findings` 篩選＋批次確認／暫停 30 天／重新開啟（寫稽核、即時重算各主機未處理數）；`/agents/[id]` 概況／連線／發現／報告紀錄分頁。
+- API：`GET /api/v1/fleet/summary`（公開檢視只給彙總）、`/api/v1/connections`、`/api/v1/connections/inbound-attackers`、`GET|POST /api/v1/findings`（≤500 筆、cookie 身分需同站）、`/api/v1/agents/{id}`。
+- 深色模式預設跟隨系統；CI 煙霧測試加上新頁面與 API。
+
+> 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示；第 7 輪 cargo test 129 passed、vitest 24 passed，本機 agent 註冊到本機 hub，`watch --once` 上傳 345 條連線快照＋10 筆發現，hub 停機時報告進 outbox、恢復後自動補送；第 8 輪 vitest 32 passed，本機以真實 agent 資料（約 300 條連線）驗證所有頁面 200、批次 API、無頭 Edge 截圖檢查淺色／深色／手機寬度版面。

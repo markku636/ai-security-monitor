@@ -14,11 +14,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// 沒選過主題（或選「跟隨系統」）時，在第一次繪製前依系統深色設定加上 .dark，避免閃白。
+const SYSTEM_THEME = "try{if(matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark')}catch(e){}";
+
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { lang } = await getT();
   const theme = (await cookies()).get(THEME_COOKIE)?.value;
   return (
-    <html lang={lang} className={theme === 'dark' ? 'dark' : undefined}>
+    <html lang={lang} className={theme === 'dark' ? 'dark' : undefined} suppressHydrationWarning>
+      <head>{theme === 'dark' || theme === 'light' ? null : <script dangerouslySetInnerHTML={{ __html: SYSTEM_THEME }} />}</head>
       <body className="min-h-screen font-sans">
         <I18nProvider lang={lang}>{children}</I18nProvider>
       </body>

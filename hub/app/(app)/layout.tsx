@@ -12,6 +12,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const items = [
     { href: '/', label: t('總覽') },
     { href: '/agents', label: t('代理程式') },
+    ...(viewer.role === 'admin'
+      ? [
+          { href: '/connections', label: t('連線') },
+          { href: '/findings', label: t('發現') },
+        ]
+      : []),
   ];
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
