@@ -127,7 +127,7 @@ export async function bruteForceSources(days = 30, limit = 20, agentId?: string)
   });
 }
 
-export async function latestSummary(agentId: string, kind: 'events' | 'traffic' | 'vuln' | 'hardening') {
+export async function latestSummary(agentId: string, kind: 'events' | 'traffic' | 'vuln' | 'hardening' | 'fim') {
   const rows = await getDb()
     .select()
     .from(agentSummaries)

@@ -1203,4 +1203,10 @@ export const en: Record<string, string> = {
   '攻擊手法與法規：': 'Techniques & compliance: ',
   '對應': 'Mapping',
   '攻擊手法總覽 →': 'Technique overview →',
+  '檔案與開機自啟': 'Files & autoruns',
+  '監看 {files} 個檔案、{autoruns} 個開機自啟項目': 'Watching {files} files and {autoruns} autorun items',
+  '{n} 個變更待確認': '{n} changes to review',
+  '沒有變更': 'No changes',
+  '重要檔案（hosts、啟動資料夾、排程工作、系統程式等）與開機自動執行項目的變更。第一次掃描只記下目前的狀態；之後有新增、修改、刪除才會列成問題。在那台電腦執行 ai-security-monitor fim accept 確認是自己改的。': 'Changes to important files (hosts, startup folders, scheduled tasks, system programs, …) and to autorun items. The first scan only records the current state; later additions, edits and deletions become findings. Run ai-security-monitor fim accept on that computer to confirm a change was yours.',
+  '還沒有資料（需要新版 agent）': 'No data yet (needs a newer agent)',
 };

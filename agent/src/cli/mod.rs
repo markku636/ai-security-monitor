@@ -15,6 +15,7 @@ pub mod connections_cmd;
 pub mod dns_cmd;
 pub mod doctor_cmd;
 pub mod events_cmd;
+pub mod fim_cmd;
 pub mod fw_cmd;
 pub mod harden_cmd;
 pub mod hub_cmd;

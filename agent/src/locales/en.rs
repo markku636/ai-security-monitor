@@ -7,6 +7,33 @@
 
 pub fn lookup(zh: &str) -> Option<&'static str> {
     Some(match zh {
+        // ---- fim ----
+        "檔案完整性與開機自啟：看哪些重要檔案或開機自動執行項目被改過、接受變更、重建基準" => "File integrity and autoruns: see which important files or startup items changed, accept changes, rebuild the baseline",
+        "基準建立時間、監看數量與待確認的變更（預設）" => "Baseline time, what is watched and changes waiting for review (default)",
+        "接受變更（確認是自己或軟體更新做的）：指定路徑或項目開頭，或 --all" => "Accept changes you or a software update made: give a path or item prefix, or --all",
+        "路徑或開機自啟項目（開頭符合就算）" => "Path or autorun item (prefix match)",
+        "接受全部" => "Accept everything",
+        "丟掉基準與變更清單，下次掃描重新記下目前的狀態" => "Drop the baseline and change list; the next scan records the current state again",
+        "還沒有基準：下次掃描（`scan` 或背景服務）會先記下目前的狀態，之後才會告警。" => "No baseline yet: the next scan (`scan` or the background service) records the current state first; alerts start after that.",
+        "基準建立於 {at}；監看 {files} 個檔案、{autoruns} 個開機自啟項目。" => "Baseline from {at}; watching {files} files and {autoruns} autorun items.",
+        "沒有待確認的變更。" => "No changes waiting for review.",
+        "路徑或項目" => "Path or item",
+        "確認是你自己或軟體更新做的：`ai-security-monitor fim accept <路徑>`（或 `--all`）。" => "If you or a software update made the change: `ai-security-monitor fim accept <path>` (or `--all`).",
+        "請指定路徑，或用 --all 接受全部" => "Give a path, or use --all to accept everything",
+        "已接受 {n} 個變更；下次上傳後 Hub 上的問題會跟著消失。" => "Accepted {n} changes; the findings disappear from the Hub after the next upload.",
+        "已清掉基準與變更清單；下次掃描會重新記下目前的狀態（不會告警）。" => "Baseline and change list cleared; the next scan records the current state again (no alerts).",
+        "新的開機自動執行項目：{name}" => "New autorun item: {name}",
+        "開機自動執行項目被改了：{name}" => "Autorun item changed: {name}",
+        "開機自動執行項目被移除：{name}" => "Autorun item removed: {name}",
+        "監看的位置多了檔案：{path}" => "New file in a watched location: {path}",
+        "監看的檔案內容變了：{path}" => "Watched file changed: {path}",
+        "監看的檔案被刪除：{path}" => "Watched file deleted: {path}",
+        "監看的檔案權限變了：{path}" => "Watched file permissions changed: {path}",
+        "第一次看到：{at}" => "First seen: {at}",
+        "如果是你自己或軟體更新做的變更，執行 `ai-security-monitor fim accept <路徑>` 確認；不認得就檢查是哪個程式寫入的，必要時隔離這台電腦。" => "If you or a software update made this change, confirm it with `ai-security-monitor fim accept <path>`; if you don't recognise it, find out which program wrote it and isolate the computer if needed.",
+        "還有 {n} 個檔案變更沒列出" => "{n} more file changes not listed",
+        "變更太多（常見於系統更新後）。用 `ai-security-monitor fim status` 看完整清單，確認沒問題後 `fim accept --all`。" => "Too many changes (common after a system update). See the full list with `ai-security-monitor fim status`, then `fim accept --all` once you are satisfied.",
+        "確認是系統或軟體更新造成的就全部接受。" => "Accept them all once you have confirmed they came from a system or software update.",
         // ---- error.rs ----
         "設定錯誤：{detail}" => "Config error: {detail}",
         "儲存錯誤：{detail}" => "Storage error: {detail}",

@@ -117,6 +117,8 @@ pub enum Command {
     Metrics(MetricsArgs),
     /// DNS 監看：這台電腦最近查了哪些網域、是哪個程式查的、哪些可疑（--follow 即時看）
     Dns(DnsArgs),
+    /// 檔案完整性與開機自啟：看哪些重要檔案或開機自動執行項目被改過、接受變更、重建基準
+    Fim(FimArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
     Events(EventsArgs),
     /// 漏洞與更新：作業系統是否仍在支援、多久沒更新、已安裝軟體的已知漏洞（Linux 套件查 OSV）
@@ -417,6 +419,28 @@ pub struct DnsArgs {
 pub enum DnsCmd {
     /// 背景 DNS 蒐集的狀態：資料來源、事件數、最後一筆、儲存位置
     Status,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct FimArgs {
+    #[command(subcommand)]
+    pub cmd: Option<FimCmd>,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum FimCmd {
+    /// 基準建立時間、監看數量與待確認的變更（預設）
+    Status,
+    /// 接受變更（確認是自己或軟體更新做的）：指定路徑或項目開頭，或 --all
+    Accept {
+        /// 路徑或開機自啟項目（開頭符合就算）
+        path: Option<String>,
+        /// 接受全部
+        #[arg(long)]
+        all: bool,
+    },
+    /// 丟掉基準與變更清單，下次掃描重新記下目前的狀態
+    Baseline,
 }
 
 #[derive(Args, Debug, Clone)]

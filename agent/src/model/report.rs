@@ -118,6 +118,9 @@ pub struct Summaries {
     /// VulnSummary（作業系統支援、更新、已知漏洞軟體、OSV）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vuln: Option<serde_json::Value>,
+    /// 檔案完整性＋開機自啟（監看數、變更數、基準建立時間）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fim: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

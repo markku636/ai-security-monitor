@@ -43,6 +43,11 @@ describe('mapping table', () => {
     expect(mapRule('firewall.anything_new').mitre).toEqual(['T1562.004']);
     expect(mapRule('vuln.app.7zip-cve-2025-0411').mitre).toEqual(['T1203']);
     expect(mapRule('metrics.disk_full')).toEqual({ mitre: [], compliance: [] });
+    // 檔案完整性與開機自啟：依分類對應
+    expect(mapRule('fim.startup.added').mitre).toEqual(['T1547.001']);
+    expect(mapRule('fim.autorun.service.changed').mitre).toEqual(['T1543.003']);
+    expect(mapRule('fim.autorun.run_key.added').compliance).toContain('pci4:11.5.2');
+    expect(mapRule('fim.custom.modified')).toEqual({ mitre: [], compliance: ['iso27001:A.8.9', 'nist800-53:SI-7', 'pci4:11.5.2'] });
     // 子技術算進上層技術；框架名稱篩整個框架
     expect(ruleHasTechnique('events.audit_log_cleared', 'T1070')).toBe(true);
     expect(ruleHasTechnique('events.audit_log_cleared', 'T1070.001')).toBe(true);

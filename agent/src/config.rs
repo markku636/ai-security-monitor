@@ -45,6 +45,8 @@ pub struct AgentConfig {
     pub hub: Option<HubConfig>,
     pub remote_actions: RemoteActionsConfig,
     pub metrics: MetricsConfig,
+    /// 檔案完整性＋開機自啟監控（`fim.*`）。
+    pub fim: FimConfig,
     /// DNS 監看（`dns.*`）。
     pub dns: DnsConfig,
     /// 自動更新（`update.mode`）。
@@ -66,6 +68,7 @@ impl Default for AgentConfig {
             hub: None,
             remote_actions: RemoteActionsConfig::default(),
             metrics: MetricsConfig::default(),
+            fim: FimConfig::default(),
             dns: DnsConfig::default(),
             update: UpdateConfig::default(),
             hub_advertise_url: None,
@@ -120,6 +123,27 @@ impl Default for DnsConfig {
         Self {
             enabled: true,
             upload: DnsUpload::All,
+        }
+    }
+}
+
+/// 檔案完整性＋開機自啟監控（掃描器 `files`）。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct FimConfig {
+    pub enabled: bool,
+    /// 額外監看的檔案或資料夾（資料夾含子資料夾）。
+    pub extra_paths: Vec<String>,
+    /// 不監看的路徑：前綴，或含 `*` 的萬用字元。
+    pub ignore: Vec<String>,
+}
+
+impl Default for FimConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            extra_paths: Vec::new(),
+            ignore: Vec::new(),
         }
     }
 }
@@ -631,6 +655,9 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "scan.snapshot_interval",
     "scan.scanners",
     "scan.online",
+    "fim.enabled",
+    "fim.extra_paths",
+    "fim.ignore",
     "scan.dns_names",
     "intel.allow_noncommercial",
     "intel.online_lookups",
@@ -680,6 +707,9 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "scan.snapshot_interval" => cfg.scan.snapshot_interval = parse_duration_str(key, value)?,
         "scan.scanners" => cfg.scan.scanners = parse_list(value),
         "scan.online" => cfg.scan.online = parse_bool(key, value)?,
+        "fim.enabled" => cfg.fim.enabled = parse_bool(key, value)?,
+        "fim.extra_paths" => cfg.fim.extra_paths = parse_list(value),
+        "fim.ignore" => cfg.fim.ignore = parse_list(value),
         "scan.dns_names" => cfg.scan.dns_names = parse_bool(key, value)?,
         "intel.allow_noncommercial" => cfg.intel.allow_noncommercial = parse_bool(key, value)?,
         "intel.online_lookups" => cfg.intel.online_lookups = parse_bool(key, value)?,

@@ -18,6 +18,7 @@ pub mod elevate;
 pub mod embedded;
 pub mod error;
 pub mod events;
+pub mod fim;
 pub mod firewall;
 pub mod hardening;
 pub mod hub;

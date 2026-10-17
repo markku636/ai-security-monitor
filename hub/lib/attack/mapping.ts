@@ -21,6 +21,7 @@ const C = {
   encryption: ['iso27001:A.8.24', 'nist800-53:SC-28', 'cis8:3.6'],
   remote: ['iso27001:A.8.5', 'nist800-53:AC-17'],
   integrity: ['iso27001:A.8.9', 'nist800-53:SI-7', 'cis8:4.1'],
+  fim: ['iso27001:A.8.9', 'nist800-53:SI-7', 'pci4:11.5.2'],
   media: ['iso27001:A.7.10', 'nist800-53:MP-7', 'cis8:10.3'],
 };
 
@@ -65,6 +66,25 @@ export const RULE_MAP: Record<string, Mapping> = {
   'events.defender_detection': { mitre: ['T1204.002'], compliance: C.malware },
   'events.remote_logon': { mitre: ['T1021.001'], compliance: [...C.remote, ...C.monitoring.slice(0, 2)] },
   'events.task_created': { mitre: ['T1053.005'], compliance: [...C.integrity.slice(0, 2), ...C.monitoring.slice(0, 2)] },
+  // ---- 檔案完整性與開機自啟（fim.<分類>.<變更>）----
+  'fim.hosts.*': { mitre: ['T1565.001'], compliance: C.fim },
+  'fim.startup.*': { mitre: ['T1547.001'], compliance: C.fim },
+  'fim.tasks.*': { mitre: ['T1053.005'], compliance: C.fim },
+  'fim.cron.*': { mitre: ['T1053.003'], compliance: C.fim },
+  'fim.drivers.*': { mitre: ['T1014', 'T1543.003'], compliance: C.fim },
+  'fim.boot.*': { mitre: ['T1542.003'], compliance: C.fim },
+  'fim.ssh_keys.*': { mitre: ['T1098.004'], compliance: C.fim },
+  'fim.launchd.*': { mitre: ['T1543.001'], compliance: C.fim },
+  'fim.systemd.*': { mitre: ['T1543.002'], compliance: C.fim },
+  'fim.system_bin.*': { mitre: ['T1554'], compliance: C.fim },
+  'fim.profile.*': { mitre: ['T1546.013'], compliance: C.fim },
+  'fim.etc_config.*': { mitre: [], compliance: C.fim },
+  'fim.custom.*': { mitre: [], compliance: C.fim },
+  'fim.many_changes': { mitre: [], compliance: C.fim },
+  'fim.autorun.run_key.*': { mitre: ['T1547.001'], compliance: C.fim },
+  'fim.autorun.winlogon.*': { mitre: ['T1547.004'], compliance: C.fim },
+  'fim.autorun.service.*': { mitre: ['T1543.003'], compliance: C.fim },
+  'fim.autorun.systemd.*': { mitre: ['T1543.002'], compliance: C.fim },
   // ---- 安全設定：Windows ----
   'hardening.win.uac.*': { mitre: ['T1548.002'], compliance: [...C.privilege, ...C.config.slice(0, 2)] },
   'hardening.win.defender.*': { mitre: ['T1562.001'], compliance: C.malware },

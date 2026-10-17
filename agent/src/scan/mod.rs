@@ -218,6 +218,7 @@ impl Pipeline {
                             ScannerId::Traffic => summaries.traffic = Some(s),
                             ScannerId::Events => summaries.events = Some(s),
                             ScannerId::Vuln => summaries.vuln = Some(s),
+                            ScannerId::Files => summaries.fim = Some(s),
                             ScannerId::Hardening => {
                                 summaries.hardening = serde_json::from_value(s).ok();
                             }

@@ -69,7 +69,13 @@ function lastUpload(a: Agent): Date | null {
 }
 
 async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
-  const [risky, history, release] = await Promise.all([riskyDestinations(10, a.id), agentReports(a.id, 60), latestRelease().catch(() => null)]);
+  const [risky, history, release, fimRow] = await Promise.all([
+    riskyDestinations(10, a.id),
+    agentReports(a.id, 60),
+    latestRelease().catch(() => null),
+    latestSummary(a.id, 'fim'),
+  ]);
+  const fim = (fimRow?.summary ?? null) as { watched_files?: number; autoruns?: number; changes?: number; baseline_created_at?: string } | null;
   const newer = agentNewVersion(a.version, a.updateInfo, release?.latest);
   const uploaded = lastUpload(a);
   const adv = a.advertising && Date.now() - Date.parse(a.advertising.at) <= 15 * 60_000 ? a.advertising : null;
@@ -86,6 +92,27 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
   const rows: [string, ReactNode][] = [
     [t('系統'), [a.osName ?? a.osFamily, a.osVersion].filter(Boolean).join(' ')],
     [t('架構'), a.arch],
+    [
+      t('檔案與開機自啟'),
+      fim ? (
+        <span key="fim">
+          {t('監看 {files} 個檔案、{autoruns} 個開機自啟項目', { files: fim.watched_files ?? 0, autoruns: fim.autoruns ?? 0 })}
+          {' · '}
+          {fim.changes ? (
+            <Link href={`/agents/${encodeURIComponent(a.id)}?tab=findings&scanner=files`} className="text-amber-700 hover:underline dark:text-amber-300">
+              {t('{n} 個變更待確認', { n: fim.changes })}
+            </Link>
+          ) : (
+            t('沒有變更')
+          )}
+          <Hint text={t('重要檔案（hosts、啟動資料夾、排程工作、系統程式等）與開機自動執行項目的變更。第一次掃描只記下目前的狀態；之後有新增、修改、刪除才會列成問題。在那台電腦執行 ai-security-monitor fim accept 確認是自己改的。')} />
+        </span>
+      ) : (
+        <span key="fim" className="text-slate-500">
+          {t('還沒有資料（需要新版 agent）')}
+        </span>
+      ),
+    ],
     [
       t('ai-security-monitor 版本'),
       <span key="v" className="inline-flex flex-wrap items-center gap-1">
