@@ -1133,8 +1133,8 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "上次上傳" => "Last upload",
         "失敗：{e}" => "Failed: {e}",
         // ---- upload ----
-        "這台電腦還沒加入 Hub：先申請加入（桌面版「加入公司 Hub」，或 ai-security-monitor enroll --auto）" =>
-            "This computer has not joined a Hub yet: request to join first (desktop app \"Join company Hub\", or ai-security-monitor enroll --auto)",
+        "這台電腦還沒加入 Hub：先申請加入（桌面版「設定 → 公司的 Security Hub」，或 ai-security-monitor enroll --auto）" =>
+            "This computer has not joined a Hub yet: request to join first (desktop app: Settings → Company Security Hub, or ai-security-monitor enroll --auto)",
         "確認 Hub 身分…" => "Checking the Hub identity…",
         "Hub 的身分和這台電腦記得的不同，已停止上傳（確認過指紋後重新加入：ai-security-monitor enroll --auto --repin）" =>
             "The Hub's identity differs from the one this computer remembers; upload stopped (after checking the fingerprint, re-join: ai-security-monitor enroll --auto --repin)",

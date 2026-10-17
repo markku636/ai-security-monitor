@@ -209,3 +209,9 @@ details > summary { cursor: pointer; }
 .update-banner { position: fixed; right: 18px; bottom: 18px; z-index: 20; display: flex; gap: 14px; align-items: center; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px 10px 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); font-size: 13px; max-width: 520px; }
 .radio-list { display: grid; gap: 2px; margin: 6px 0 0 4px; }
 .radio-list .radio-hint { margin: 0 0 6px 24px; }
+/* 設定頁的 Hub 區塊（加入、等候核准、更換） */
+.sub-h { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+.sub-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.sub-section > summary { font-size: 13px; }
+.card { transition: box-shadow 0.4s ease; scroll-margin-top: 12px; }
+.card.focus { box-shadow: 0 0 0 2px var(--accent); }

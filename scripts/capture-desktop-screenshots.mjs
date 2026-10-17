@@ -239,6 +239,22 @@ const DATA = {
   },
   ai: { answer: AI_ANSWER, tools: AI_TOOLS },
   hub_status: { hub_url: 'https://hub.example.com', hub_fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', pending: null },
+  // 「設定 → 公司的 Security Hub」還沒加入時找到的 Hub：同一個 Hub 從公司 DNS 和區網廣播各找到一次，另一個連不到
+  discovered: [
+    {
+      url: 'https://hub.example.com',
+      source: 'dns_srv',
+      detail: 'example.com',
+      identity: { name: 'Example Corp Security Hub', version: VERSION, edition: 'server', fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', enrollment: { keyless: true, mode: 'auto' } },
+    },
+    {
+      url: 'http://192.0.2.10:8088',
+      source: 'mdns',
+      detail: 'Example Corp Security Hub._aisecmon._tcp.local.',
+      identity: { name: 'Example Corp Security Hub', version: VERSION, edition: 'server', fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', enrollment: { keyless: true, mode: 'auto' } },
+    },
+    { url: 'http://198.51.100.40:8088', source: 'mdns', detail: 'lab-hub._aisecmon._tcp.local.', error: '連不到（5 秒逾時）' },
+  ],
   metrics: METRICS,
   update_status: {
     mode: 'notify',
@@ -264,6 +280,12 @@ const DATA = {
 function installMock(D) {
   const listeners = {};
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // 網址的 ?<截圖名稱>：-join 結尾的截圖用「還沒加入 Hub」的狀態
+  if (location.search.endsWith('-join')) {
+    D.hub_status = { hub_url: null, hub_fingerprint: null, pending: null };
+    D.overview.hub_url = null;
+    D.upload_status.enrolled = false;
+  }
   const emit = (name, payload) => (listeners[name] ?? []).forEach((cb) => cb({ event: name, payload }));
   const handlers = {
     overview: () => D.overview,
@@ -271,6 +293,12 @@ function installMock(D) {
     latest_report: () => D.latest_report,
     intel_feeds: () => D.intel_feeds,
     ai_providers: () => D.ai_providers,
+    ai_auth_status: () => ({
+      providers: [
+        { id: 'claude', label: 'Claude Code', installed: true, logged_in: true, method: 'claude.ai', email: 'demo@example.com', plan: 'pro', env_override: [] },
+        { id: 'codex', label: 'Codex CLI', installed: true, logged_in: true, method: 'chatgpt', env_override: [] },
+      ],
+    }),
     lookup_ip: ({ ip }) => D.ips[ip] ?? { ip, hits: [], geo: null, class: 'Public' },
     scan_now: () => D.latest_report,
     intel_update: () => [],
@@ -280,7 +308,10 @@ function installMock(D) {
     desktop_autostart_status: () => true,
     metrics_now: () => D.metrics,
     set_performance: ({ enabled }) => enabled,
-    discover_hubs: () => ({ hubs: [], pinned_fingerprint: D.hub_status.hub_fingerprint }),
+    discover_hubs: async () => {
+      await wait(300);
+      return { hubs: D.hub_status.hub_url ? [] : D.discovered, pinned_fingerprint: D.hub_status.hub_fingerprint };
+    },
     update_status: () => D.update_status,
     check_updates: () => ({ ...D.update_status, desktop: { ...D.update_status.desktop, checked_at: new Date().toISOString() } }),
     set_update_mode: ({ mode }) => ((D.update_status.mode = mode), D.update_status),
@@ -440,6 +471,8 @@ const SHOTS = [
     },
   ],
   ['desktop-settings', 'settings', false, async () => waitFor(`document.getElementById('auto-bg') && !document.getElementById('auto-bg').disabled && !document.getElementById('auto-tray').disabled`)],
+  // 還沒加入 Hub：設定頁的 Hub 區塊自動尋找，列出找到的 Hub
+  ['desktop-settings-join', 'settings', false, async () => waitFor(`document.querySelector('#join-found table') && !document.getElementById('join-search').disabled`)],
   [
     'desktop-settings-update',
     'settings',

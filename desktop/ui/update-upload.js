@@ -1,5 +1,5 @@
 // AI Security Monitor 桌面版：自動更新（右下角提示、設定頁）、立即上傳到 Hub（總覽頁）、
-// 讓區網找到這台的 Hub（設定頁）、尋找 Hub 時的說明。
+// 讓區網找到這台的 Hub（設定頁）、尋找 Hub 時的說明（設定頁的 Hub 區塊，見 hub-join.js）。
 // 和 app.js 共用 invoke／listen／esc／toast／ago（app.js 定義）；這個檔先載入，只定義函式，畫面載入後才執行。
 'use strict';
 

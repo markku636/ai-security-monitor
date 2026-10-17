@@ -63,7 +63,7 @@ The desktop app and the command-line version can live on the same computer; they
 2. Double-click it. If a blue "Windows protected your PC" box appears, click "**More info**", then "**Run anyway**".
    This happens because the installer has no paid code-signing certificate, so Windows does not recognise the publisher; it does not mean the file is bad. If you want to be sure, compare it with `SHA256SUMS` first.
 3. It installs for the current user; no administrator needed. Open "AI Security Monitor" from the Start menu.
-   The first time, it opens "Find your company's Security Hub" (尋找公司的 Security Hub). If it's just for your own computer, click the link at the bottom, "Not now, use it on this computer only" (先不要，只在這台電腦使用).
+   The first time, it opens Settings → Company Security Hub (設定 → 公司的 Security Hub) and looks for your company's Hub. If it's just for your own computer, click the link at the bottom of that section, "Not now, use it on this computer only" (先不要，只在這台電腦使用).
 4. On the "Overview" page click "**Update intel**" (downloads the blocklists), then "**Scan now**". (The app itself is in Traditional Chinese: 更新情資 and 立即掃描.)
 5. Read the results:
    - Overview: the security score and the connections that need attention most.
@@ -94,7 +94,7 @@ Just trying it on your own machine? Use `compose.standalone.yml` instead of `com
 
 1. The admin opens "Add a host" in the Hub sidebar and notes the **Hub fingerprint** at the top (a code like `72AS-YEXT-VNGO-NLC5-W2NM` that proves it's your company's Hub and not an impostor).
 2. On each computer, one of:
-   - **Desktop app**: on first start it looks for the company Hub by itself. If the fingerprint matches what the admin told you, click "**Request to join**" (申請加入). If nothing is found, type in the address the admin gave you.
+   - **Desktop app**: on first start it looks for the company Hub by itself in Settings → Company Security Hub (設定 → 公司的 Security Hub). If the fingerprint matches what the admin told you, click "**Request to join**" (申請加入). If nothing is found, type in the address the admin gave you in the same section; joining, switching or leaving a Hub later also happens there.
    - **Command line**: run `ai-security-monitor enroll --auto`, check the fingerprint and send the request, then `ai-security-monitor service install --yes` (you can install it before approval; it keeps waiting in the background).
    - **Not installed yet**: give colleagues the "Keyless install commands" from the "Add a host" page; the Hub address is already filled in.
 3. The admin compares the host name and check code (the computer shows the same code) under "Add a host → Hosts waiting for approval" and clicks "**Approve**". Done.
@@ -206,7 +206,7 @@ The background service already reports on a schedule (a full scan every 10 minut
 <details>
 <summary><b>Why can't my computer find the company Hub?</b></summary>
 
-"Find your company's Hub" relies on an SRV record in the company DNS or on LAN advertising (mDNS). It usually fails for one of three reasons:
+The automatic search in the desktop app's Settings → Company Security Hub (and `enroll --auto` on the command line) relies on an SRV record in the company DNS or on LAN advertising (mDNS). It usually fails for one of three reasons:
 
 1. **The Hub is only open to its own computer**: the standalone edition binds 127.0.0.1 by default, so other office computers can neither reach nor find it. Ask the administrator to switch to the server edition, or add `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` and `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<its LAN IP>:8088` to the Hub's `.env` (always with an admin key, and only on the company network).
 2. **The Hub runs in Docker Desktop**: its LAN advertising cannot leave Docker. On the computer running the Hub, turn on desktop app Settings → "Let computers on the LAN find the Hub on this computer", or run `ai-security-monitor config set hub.advertise_url http://<its LAN IP>:8088`; the background service then advertises it.
@@ -238,6 +238,7 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 |---|---|
 | ![Desktop connections](docs/images/windows-desktop-connections.png) Connections: verdict, reasons and intel source for every connection; click an IP for its country, organisation and which lists include it | ![Desktop AI analysis](docs/images/windows-desktop-ai.png) AI analysis: the local Claude Code / Codex looks things up through read-only tools and explains in plain language |
 | ![Desktop scan results](docs/images/windows-desktop-findings.png) Scan results: sorted by severity, expand for detail and how to fix | ![Desktop dark mode](docs/images/windows-desktop-overview-dark.png) Dark mode follows the Windows setting |
+| ![Desktop: join the company Hub](docs/images/windows-desktop-settings-join.png) Settings → Company Security Hub: finds the company Hub by itself; check the fingerprint and click *Request to join* | ![Desktop settings](docs/images/windows-desktop-settings.png) Settings: the joined Hub, background reporting, automatic updates |
 
 **Security Hub (web)**
 

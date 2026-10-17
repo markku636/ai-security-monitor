@@ -106,7 +106,7 @@ async function pageOverview() {
       <div class="stat"><div class="label">嚴重＋高</div><div class="value" style="color:var(--danger)">${r ? r.counts.critical + r.counts.high : '—'}</div><div class="hint"><a class="link" href="#findings">看掃描結果</a></div></div>
       <div class="stat"><div class="label">中</div><div class="value">${r ? r.counts.medium : '—'}</div><div class="hint">低 ${r?.counts.low ?? '—'}、資訊 ${r?.counts.info ?? '—'}</div></div>
       <div class="stat"><div class="label">威脅情資</div><div class="value">${o.intel.ok}/${o.intel.total}</div><div class="hint">${o.intel.checked_at ? `最後更新 ${ago(o.intel.checked_at)}` : '還沒下載'}${o.intel.source === 'hub' ? '・從 Hub' : o.intel.source === 'vendor' ? '・直接找廠商' : ''}${intelOld ? ' <span class="chip medium">過期</span>' : ''}</div></div>
-      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : '<a class="link" href="#join">尋找公司的 Hub</a>'}</div></div>
+      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : `<a class="link" href="${HUB_SECTION}">尋找公司的 Hub</a>`}</div></div>
     </div>
     <div class="grid" id="ov-metrics"><div class="stat"><div class="label">網路</div><div class="hint">載入中…</div></div></div>
     <div class="card" id="ov-upload" hidden></div>
@@ -588,20 +588,6 @@ function perfStateText(on) {
     : '未開啟：只統計網路流量。';
 }
 const TRAY_HINT = '登入 Windows／macOS／Linux 時自動開啟這個程式，但只放在右下角的系統匣，不會跳出視窗。想看狀況時再點系統匣圖示。';
-const NEEDS_CONFIRM = 'needs_confirm:';
-
-// 換到別的 Hub（指紋不同）要使用者明確確認；確認後帶 confirmed 再呼叫一次
-async function invokeConfirmed(cmd, args) {
-  try {
-    return await invoke(cmd, { ...args, confirmed: false });
-  } catch (e) {
-    const msg = String(e);
-    if (!msg.startsWith(NEEDS_CONFIRM)) throw e;
-    const ok = window.confirm(`${msg.slice(NEEDS_CONFIRM.length)}\n\n請先和管理員確認新的 Hub 指紋。確定要換到這個 Hub？`);
-    if (!ok) return null;
-    return invoke(cmd, { ...args, confirmed: true });
-  }
-}
 
 function serviceText(s) {
   const st = s?.status;
@@ -611,33 +597,14 @@ function serviceText(s) {
   return s.running ? '沒有設定開機啟動，但目前有背景回報在執行' : '未開啟';
 }
 
-async function pageSettings() {
+/** 設定頁。opts.focus＝'hub' 時捲到 Hub 區塊；opts.search 見 renderHubSection。 */
+async function pageSettings(opts = {}) {
   stopJoinPoll();
-  const o = await invoke('overview');
-  const st = await invoke('hub_status');
+  const [o, st] = await Promise.all([invoke('overview'), invoke('hub_status')]);
   $main.innerHTML = `
     <h1>設定</h1>
     <p class="sub">桌面版和命令列 ai-security-monitor、背景服務共用同一個設定目錄。</p>
-    <div class="card"><h2>公司的 Security Hub</h2>
-      <div class="kv">
-        <div>狀態</div><div>${st.hub_url ? '已加入' : st.pending ? `加入中（<a class="link" href="#join">查看</a>）` : '未加入（只在這台電腦使用）'}</div>
-        <div title="${esc(FP_HINT)}">Hub 指紋 (?)</div><div class="mono">${esc(st.hub_fingerprint ?? '—')}</div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <input type="text" id="hub-url" placeholder="https://hub.example.com" value="${esc(st.hub_url ?? st.pending?.hub_url ?? '')}" style="flex:1;min-width:260px" title="管理員給的 Hub 網址。必須是 https；公司內網（例如 192.168.x.x）或本機可以用 http。" />
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn" id="hub-test" title="確認這個網址連得到、是 Security Hub，並顯示它的版本與指紋">測試連線</button>
-        <a class="btn" href="#join" title="用公司 DNS 與區網廣播自動找 Hub">尋找公司的 Hub</a>
-        <button class="btn primary" id="hub-join" title="不需要金鑰：送出加入申請，管理員在 Hub 核准後就完成">申請加入</button>
-        ${st.hub_url ? '<button class="btn" id="hub-leave" title="這台電腦不再回報給這個 Hub">離開這個 Hub</button>' : ''}
-      </div>
-      <div id="hub-result" class="small" style="margin-top:8px"></div>
-      <details style="margin-top:8px"><summary class="small">我有註冊金鑰（進階）</summary>
-        <p class="small muted">管理員也可以在 Hub「新增主機」頁建立註冊金鑰（asa_ek_…）給你，用金鑰加入就不必等核准。</p>
-        <div class="row"><input type="text" id="hub-key" placeholder="asa_ek_…" style="flex:1;min-width:260px" autocomplete="off" spellcheck="false" /><button class="btn" id="hub-key-go">用金鑰加入</button></div>
-      </details>
-    </div>
+    <div class="card" id="set-hub"></div>
     <div class="card" id="set-lan" hidden></div>
     <div class="card"><h2>背景自動回報與自動更新</h2>
       <label class="row" title="${esc(BG_HINT)}"><input type="checkbox" id="auto-bg" disabled /> <b>開機／登入後在背景自動回報</b> <span class="small muted">(?)</span></label>
@@ -661,81 +628,14 @@ async function pageSettings() {
       <div>系統管理員權限</div><div>${o.elevated ? '是' : '否（部分檢查需要系統管理員才讀得到）'}</div>
     </div></div>`;
 
+  const hubEl = document.getElementById('set-hub');
+  renderHubSection(hubEl, st, opts);
   renderUpdateSection(document.getElementById('set-update'));
   renderLanSection(document.getElementById('set-lan'));
-  const $res = document.getElementById('hub-result');
-  const url = () => document.getElementById('hub-url').value.trim();
-  const busy = (b, on, label) => {
-    b.disabled = on;
-    if (on) {
-      b.dataset.label = b.textContent;
-      b.innerHTML = `<span class="spin"></span> ${label}`;
-    } else if (b.dataset.label) b.textContent = b.dataset.label;
-  };
-
-  document.getElementById('hub-test').onclick = async (ev) => {
-    if (!url()) return toast('請先輸入 Hub 網址');
-    busy(ev.currentTarget, true, '測試中…');
-    try {
-      const c = await invoke('hub_check', { url: url() });
-      const id = c.identity;
-      $res.innerHTML = `✓ 連得到 <span class="mono">${esc(c.url)}</span>：${esc(id?.name ?? 'Security Hub')} ${esc(c.health?.version ?? '')}
-        ${id ? `・指紋 <span class="mono">${esc(id.fingerprint)}</span>` : '・這個 Hub 版本較舊，沒有身分指紋（只能用註冊金鑰加入）'}
-        ${c.fingerprint_changed ? '<br><b style="color:var(--danger)">注意：這個 Hub 的指紋和這台電腦目前加入的不同。可能是另一個 Hub，或 Hub 重新安裝過；請先和管理員確認。</b>' : ''}`;
-    } catch (e) {
-      $res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(e)}</span>`;
-    } finally {
-      busy(ev.currentTarget, false);
-    }
-  };
-
-  document.getElementById('hub-join').onclick = async (ev) => {
-    if (!url()) return toast('請先輸入 Hub 網址，或按「尋找公司的 Hub」');
-    const b = ev.currentTarget;
-    busy(b, true, '確認 Hub…');
-    try {
-      const c = await invoke('hub_check', { url: url() });
-      if (!c.identity) throw new Error('這個 Hub 版本較舊，不支援免金鑰加入；請用註冊金鑰');
-      if (!window.confirm(`申請加入「${c.identity.name}」？\n網址：${c.url}\n指紋：${c.identity.fingerprint}\n\n請確認指紋和管理員給的一樣。`)) return;
-      const r = await invokeConfirmed('request_join', { url: c.url, fingerprint: c.identity.fingerprint });
-      if (r) location.hash = '#join';
-    } catch (e) {
-      $res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(e)}</span>`;
-    } finally {
-      busy(b, false);
-    }
-  };
-
-  document.getElementById('hub-key-go').onclick = async (ev) => {
-    const key = document.getElementById('hub-key').value.trim();
-    if (!url() || !key) return toast('請輸入 Hub 網址與註冊金鑰');
-    const b = ev.currentTarget;
-    busy(b, true, '加入中…');
-    try {
-      const r = await invokeConfirmed('enroll_with_key', { url: url(), key });
-      if (r) {
-        toast('已用金鑰加入 Hub');
-        pageSettings();
-      }
-    } catch (e) {
-      $res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(e)}</span>`;
-    } finally {
-      busy(b, false);
-    }
-  };
-
-  const leave = document.getElementById('hub-leave');
-  if (leave) {
-    leave.onclick = async () => {
-      if (!window.confirm('離開這個 Hub？\n\n這台電腦會停止回報、刪除這台保存的 Hub 金鑰。Hub 上這台主機的紀錄不會自動刪除，需要的話請管理員在 Hub 的「主機」頁刪除。')) return;
-      try {
-        await invoke('leave_hub');
-        toast('已離開 Hub');
-        pageSettings();
-      } catch (e) {
-        toast(String(e), 8000);
-      }
-    };
+  if (opts.focus === 'hub') {
+    hubEl.scrollIntoView({ block: 'start' });
+    hubEl.classList.add('focus');
+    setTimeout(() => hubEl.classList.remove('focus'), 1600);
   }
 
   // 開機自動啟動：兩個開關各自讀狀態
@@ -803,183 +703,39 @@ async function pageSettings() {
   };
 }
 
-// ---------------- 加入公司的 Security Hub ----------------
-const SOURCE = { explicit: '指定的網址', env: '環境變數', config: '設定檔', dns_srv: '公司 DNS', mdns: '區網廣播' };
-const SOURCE_HINT = {
-  explicit: '你輸入的網址',
-  env: '環境變數 AI_SECURITY_MONITOR_HUB_URL 指定的網址',
-  config: '這台電腦已經加入的 Hub（記在設定檔）',
-  dns_srv: '公司 DNS 的 _aisecmon._tcp SRV 紀錄（跨網段也找得到）',
-  mdns: '同一個網路裡的區網廣播（mDNS）',
-};
-const FP_HINT = '指紋是 Hub 的身分證號碼。請和管理員在 Hub「新增主機」頁看到的指紋比對，一樣才是公司的 Hub。';
-const CODE_HINT = '管理員在「待核准的主機」清單上會看到同一組核對碼，用來確認是這台電腦。';
-const SKIP_KEY = 'asm.join.skipped';
-let joinTimer = null;
-
-function stopJoinPoll() {
-  clearTimeout(joinTimer);
-  joinTimer = null;
-}
-
-function waitingCard(p) {
-  // Hub 是「自動允許加入」模式時申請一送出就核准了，這張卡只會閃一下
-  const auto = p.status === 'approved';
-  return `<div class="card"><h2>${auto ? 'Hub 已允許加入，正在完成…' : '等候管理員核准'}</h2>
-    <p class="small">已送出加入申請到 <b>${esc(p.hub_name)}</b>（<span class="mono">${esc(p.hub_url)}</span>）。${auto ? '' : '請管理員到 Hub 的「新增主機 → 待核准的主機」核對下面兩組號碼後按「核准」。'}</p>
-    <div class="kv">
-      <div title="${esc(FP_HINT)}">Hub 指紋 (?)</div><div class="mono">${esc(p.hub_fingerprint)}</div>
-      <div title="${esc(CODE_HINT)}">這台電腦的核對碼 (?)</div><div class="mono" style="font-size:16px">${esc(p.request_code)}</div>
-      <div>送出時間</div><div>${esc(ago(p.created_at))}</div>
-    </div>
-    <p class="small muted" id="join-state"><span class="spin"></span> 等候中，會自動確認…（關掉視窗也沒關係，背景服務會繼續等）</p>
-    <div class="row"><button class="btn" id="join-check">現在確認</button><button class="btn" id="join-cancel">取消申請</button></div>
-  </div>`;
-}
-
-async function pollJoin(auto) {
-  stopJoinPoll();
-  const el = document.getElementById('join-state');
-  const again = (ms) => {
-    if (location.hash === '#join') joinTimer = setTimeout(() => pollJoin(true), ms);
-  };
-  try {
-    const r = await invoke('join_poll');
-    if (r.status === 'approved') {
-      toast(`加入完成：已加入 ${r.hub_name}`);
-      location.hash = '#overview';
-      return;
-    }
-    if (r.status === 'rejected') {
-      $main.innerHTML = `<h1>加入公司的 Security Hub</h1><div class="card"><h2>申請被拒絕</h2><p class="small">管理員拒絕了這台電腦的加入申請${r.reason ? `：${esc(r.reason)}` : ''}。如有疑問請聯絡管理員。</p><div class="row"><button class="btn" id="join-again">重新尋找</button></div></div>`;
-      document.getElementById('join-again').onclick = () => pageJoin(true);
-      return;
-    }
-    if (r.status === 'expired' || r.status === 'none') {
-      toast('加入申請已過期或被刪除，請重新申請');
-      pageJoin(true);
-      return;
-    }
-    if (el && !auto) el.innerHTML = '<span class="spin"></span> 還沒核准，稍後會再自動確認…';
-    again(Math.max(5, r.poll_interval_s || 15) * 1000);
-  } catch (e) {
-    if (el) el.textContent = `確認失敗：${e}（稍後重試）`;
-    again(30000);
-  }
-}
-
-const normFp = (s) => String(s ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-
-function hubRows(list, pinned) {
-  return list
-    .map((h, i) => {
-      const id = h.identity;
-      const ok = id && !h.error && id.enrollment?.keyless;
-      const pin = pinned && id && normFp(id.fingerprint) === normFp(pinned);
-      const why = h.error ?? (id && !id.enrollment?.keyless ? '這個 Hub 不接受免金鑰加入' : '無法使用');
-      return `<tr>
-        <td><b>${esc(id?.name ?? '—')}</b><div class="small muted mono">${esc(h.url)}</div></td>
-        <td><span class="chip neutral" title="${esc(SOURCE_HINT[h.source] ?? '')}">${esc(SOURCE[h.source] ?? h.source)}</span>${h.detail ? `<div class="small muted">${esc(h.detail)}</div>` : ''}</td>
-        <td>${hubReach(h)}</td>
-        <td class="mono" title="${esc(FP_HINT)}">${esc(id?.fingerprint ?? '—')}${pin ? ' <span class="chip ok">這台記得的</span>' : ''}</td>
-        <td>${ok ? `<button class="btn primary" data-join="${i}">申請加入</button>` : h.error ? '' : `<span class="small muted">${esc(why)}</span>`}</td>
-      </tr>`;
-    })
-    .join('');
-}
-
-async function searchHubs(url) {
-  const box = document.getElementById('join-found');
-  box.innerHTML = '<p class="muted"><span class="spin"></span> 正在尋找（公司 DNS、區網廣播），約 3–10 秒…</p>';
-  try {
-    const r = await invoke('discover_hubs', { url: url || null });
-    if (!r.hubs.length) {
-      box.innerHTML = NO_HUB_HELP;
-      return;
-    }
-    const onlyConfig = r.hubs.every((h) => h.source === 'config');
-    box.innerHTML = `<table><thead><tr><th>Hub</th><th>找到的方式</th><th>連線</th><th title="${esc(FP_HINT)}">指紋 (?)</th><th></th></tr></thead><tbody>${hubRows(r.hubs, r.pinned_fingerprint)}</tbody></table>
-      <p class="small muted">找到好幾個時，請先問管理員公司的 Hub 指紋是哪一個。</p>${onlyConfig ? ONLY_CONFIG_HELP : ''}${r.hubs.some((h) => h.identity && !h.error) ? '' : NO_HUB_HELP}`;
-    for (const b of box.querySelectorAll('[data-join]')) {
-      b.onclick = async () => {
-        const h = r.hubs[Number(b.dataset.join)];
-        if (!window.confirm(`申請加入「${h.identity.name}」？\n網址：${h.url}\n指紋：${h.identity.fingerprint}\n\n請確認指紋和管理員給的一樣。`)) return;
-        b.disabled = true;
-        try {
-          await invoke('request_join', { url: h.url, fingerprint: h.identity.fingerprint });
-          pageJoin(false);
-        } catch (e) {
-          toast(String(e), 8000);
-          b.disabled = false;
-        }
-      };
-    }
-  } catch (e) {
-    box.innerHTML = `<p class="small">尋找失敗：${esc(e)}</p>`;
-  }
-}
-
-async function pageJoin(search = true) {
-  stopJoinPoll();
-  const st = await invoke('hub_status');
-  if (st.pending) {
-    $main.innerHTML = `<h1>加入公司的 Security Hub</h1><p class="sub">加入後，這台電腦的安全狀況會定期回報到公司的 Hub，由管理員集中查看。</p>${waitingCard(st.pending)}`;
-    document.getElementById('join-check').onclick = () => pollJoin(false);
-    document.getElementById('join-cancel').onclick = async () => {
-      if (!window.confirm('取消這次的加入申請？')) return;
-      await invoke('cancel_join');
-      pageJoin(true);
-    };
-    pollJoin(true);
-    return;
-  }
-  $main.innerHTML = `
-    <h1>尋找公司的 Security Hub</h1>
-    <p class="sub">不需要金鑰：找到公司的 Hub 後按「申請加入」；Hub 允許自動加入的話馬上完成，否則等管理員核准。${st.hub_url ? `（這台電腦目前已加入 <span class="mono">${esc(st.hub_url)}</span>）` : ''}</p>
-    <div class="card"><h2>找到的 Hub</h2><div id="join-found"></div>
-      <div class="row" style="margin-top:10px"><button class="btn" id="join-search" title="再查一次公司 DNS 與區網廣播（約 3–10 秒）">重新尋找</button></div></div>
-    <div class="card"><h2>或輸入管理員給的 Hub 網址</h2>
-      <div class="row"><input type="text" id="join-url" placeholder="https://hub.example.com" style="flex:1;min-width:240px" /><button class="btn" id="join-url-go">查詢這個網址</button></div>
-    </div>
-    <p class="small muted"><a class="link" href="#overview" id="join-skip">先不要，只在這台電腦使用</a></p>`;
-  document.getElementById('join-search').onclick = () => searchHubs();
-  document.getElementById('join-url-go').onclick = () => searchHubs(document.getElementById('join-url').value.trim());
-  document.getElementById('join-skip').onclick = () => {
-    try {
-      localStorage.setItem(SKIP_KEY, '1');
-    } catch {}
-  };
-  if (search) searchHubs();
-  else document.getElementById('join-found').innerHTML = '<p class="muted small">按「重新尋找」開始。</p>';
-}
-
 // ---------------- 路由 ----------------
-const PAGES = { overview: pageOverview, connections: pageConnections, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings, join: () => pageJoin(true) };
+// 網址是 #頁面 或 #頁面/區塊（目前只有 #settings/hub：設定頁的 Hub 區塊）
+const PAGES = { overview: pageOverview, connections: pageConnections, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
-  const page = (location.hash || '#overview').slice(1);
-  if (page !== 'join') stopJoinPoll();
+  let [page, section] = (location.hash || '#overview').slice(1).split('/');
+  let opts = section === 'hub' ? { focus: 'hub' } : {};
+  if (page === 'join') {
+    // 舊的「加入公司 Hub」頁已經併進設定頁：換成設定頁的 Hub 區塊並直接開始尋找
+    history.replaceState(null, '', HUB_SECTION);
+    page = 'settings';
+    opts = { focus: 'hub', search: true };
+  }
+  stopJoinPoll();
   for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('active', a.dataset.page === page);
   try {
-    await (PAGES[page] ?? pageOverview)();
+    await (PAGES[page] ?? pageOverview)(opts);
   } catch (e) {
     $main.innerHTML = `<h1>出錯了</h1><p class="sub">${esc(e)}</p>`;
   }
 }
 window.addEventListener('hashchange', route);
-// 第一次開啟、還沒加入任何 Hub：先帶到「尋找公司的 Security Hub」（按過「先不要」就不再自動帶）
+// 第一次開啟、還沒加入任何 Hub：先帶到設定頁的 Hub 區塊（按過「先不要」就不再自動帶）
 (async () => {
   if (!location.hash) {
     try {
       const st = await invoke('hub_status');
-      let skipped = false;
-      try {
-        skipped = localStorage.getItem(SKIP_KEY) === '1';
-      } catch {}
-      if (st.pending || (!st.hub_url && !skipped)) {
-        location.hash = '#join';
+      if (st.pending || (!st.hub_url && !joinSkipped())) {
+        location.hash = HUB_SECTION;
         return;
       }
-    } catch {}
+    } catch {
+      // 讀不到 Hub 狀態就照常開總覽
+    }
   }
   route();
 })();

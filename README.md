@@ -63,7 +63,7 @@
 2. 雙擊安裝檔。如果跳出藍色的「Windows 已保護您的電腦」，按「**其他資訊**」，再按「**仍要執行**」。
    這是因為安裝檔沒有付費的程式碼簽章，Windows 認不得發行者，不代表檔案有問題；不放心可以先比對 `SHA256SUMS`。
 3. 安裝到目前使用者，不需要系統管理員。裝好後從開始功能表打開「AI Security Monitor」。
-   第一次開啟會先出現「尋找公司的 Security Hub」，只用在自己電腦的話，按最下面的「先不要，只在這台電腦使用」。
+   第一次開啟會先帶到「設定 → 公司的 Security Hub」自動尋找公司的 Hub；只用在自己電腦的話，按這一區最下面的「先不要，只在這台電腦使用」。
 4. 在「總覽」頁先按「**更新情資**」（下載壞人名單），再按「**立即掃描**」。
 5. 看結果：
    - 「總覽」：安全分數和最需要注意的連線。
@@ -94,7 +94,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 
 1. 管理員打開 Hub 左側的「新增主機」，記下最上面的 **Hub 指紋**（一串像 `72AS-YEXT-VNGO-NLC5-W2NM` 的代碼，用來確認是自己公司的 Hub，不是別人架的假貨）。
 2. 同事那邊擇一：
-   - **桌面版**：第一次開啟就會自動找公司的 Hub。看到的指紋和管理員說的一樣，就按「**申請加入**」。找不到的話，可以輸入管理員給的網址。
+   - **桌面版**：第一次開啟就會在「設定 → 公司的 Security Hub」自動找公司的 Hub。看到的指紋和管理員說的一樣，就按「**申請加入**」。找不到的話，可以在同一區輸入管理員給的網址；之後要加入、更換或離開 Hub 也都在這裡。
    - **命令列版**：執行 `ai-security-monitor enroll --auto`，核對指紋後送出申請，再執行 `ai-security-monitor service install --yes`（還沒核准也可以先裝，它會在背景等）。
    - **還沒裝的電腦**：把「新增主機」頁上的「免金鑰安裝指令」給同事貼上執行，網址已經填好。
 3. 管理員在「新增主機 → 待核准的主機」核對主機名稱和核對碼（電腦端也會顯示同一組），按「**核准**」就完成。
@@ -206,7 +206,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 <details>
 <summary><b>為什麼找不到公司的 Hub？</b></summary>
 
-「尋找公司的 Hub」靠公司 DNS 的 SRV 紀錄或區網廣播（mDNS）。找不到通常是這三種情況：
+桌面版「設定 → 公司的 Security Hub」的自動尋找（和命令列 `enroll --auto`）靠公司 DNS 的 SRV 紀錄或區網廣播（mDNS）。找不到通常是這三種情況：
 
 1. **Hub 只開放給它自己那台電腦**：單機版預設只綁 127.0.0.1，辦公室其他電腦連不到也找不到。請管理員改用伺服器版，或在 Hub 的 `.env` 加 `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` 與 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<那台的區網 IP>:8088`（一定要有管理員金鑰，只在公司內網使用）。
 2. **Hub 跑在 Docker Desktop 裡**：它的區網廣播出不了 Docker。在跑 Hub 的那台電腦打開桌面版「設定 → 讓區網裡的電腦找到這台的 Hub」，或執行 `ai-security-monitor config set hub.advertise_url http://<那台的區網 IP>:8088`，由背景服務幫忙廣播。
@@ -238,6 +238,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 |---|---|
 | ![桌面版連線](docs/images/windows-desktop-connections.png) 連線：每條連線的判定、理由和情資出處，點 IP 看國家、組織和被哪些名單列入 | ![桌面版 AI 分析](docs/images/windows-desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具查資料，再用白話解釋 |
 | ![桌面版掃描結果](docs/images/windows-desktop-findings.png) 掃描結果：依嚴重程度排序，展開看細節和修正方式 | ![桌面版深色模式](docs/images/windows-desktop-overview-dark.png) 深色模式：跟著 Windows 的設定 |
+| ![桌面版加入公司的 Hub](docs/images/windows-desktop-settings-join.png) 設定 → 公司的 Security Hub：自動找到公司的 Hub，核對指紋後按「申請加入」 | ![桌面版設定](docs/images/windows-desktop-settings.png) 設定：已加入的 Hub、背景自動回報、自動更新 |
 
 **Security Hub（網頁）**
 

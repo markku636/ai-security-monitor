@@ -59,7 +59,7 @@ pub async fn upload_now(env: &Env, progress: Progress<'_>) -> AppResult<UploadSu
     let mut cfg = config::load_or_init(dir)?;
     let client = watch::client_from_config(dir, &cfg)?.ok_or_else(|| {
         AppError::Hub(
-            t!("這台電腦還沒加入 Hub：先申請加入（桌面版「加入公司 Hub」，或 ai-security-monitor enroll --auto）")
+            t!("這台電腦還沒加入 Hub：先申請加入（桌面版「設定 → 公司的 Security Hub」，或 ai-security-monitor enroll --auto）")
                 .into(),
         )
     })?;

@@ -49,9 +49,11 @@ Requests that nobody handles expire after 7 days.
 
 ## What the office user does
 
-- **Desktop app**: on first start, with no Hub configured, it opens *Find your company's Security Hub* → compare the fingerprint with the one
-  your administrator gave you → **Request to join** → wait for approval. If nothing is found, type the URL your administrator gave you.
-  *Settings* has the same options plus *Test connection*, *I have an enroll key*, *Leave this Hub*, and the two start-at-login switches.
+- **Desktop app**: joining, waiting for approval, switching and leaving all happen in *Settings → Company Security Hub*. On first start, with no Hub
+  configured, it opens that section and searches automatically → compare the fingerprint with the one your administrator gave you → **Request to join**
+  → done right away if the Hub allows automatic joining, otherwise wait for approval (it shows the Hub fingerprint and check code and keeps checking).
+  If nothing is found, type the URL your administrator gave you in the same section; it also has *Test connection*, *I have an enroll key*,
+  *Leave this Hub* and *Switch Hub or join again*.
 - **Command line**:
 
   ```bash
