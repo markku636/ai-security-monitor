@@ -1377,6 +1377,12 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "即時顯示 DNS 查詢，Ctrl+C 結束" => "Showing DNS lookups live, Ctrl+C to stop",
         "{key} 只能是 all、alerts 或 off" => "{key} must be all, alerts or off",
 
+        "監聽 DNS 封包需要 root 權限" => "Capturing DNS packets needs root privileges",
+        "無法開啟封包擷取：{e}" => "Could not open packet capture: {e}",
+        "無法設定封包過濾器：{e}" => "Could not set the packet filter: {e}",
+        "無法監聽網卡 {name}：{e}" => "Could not capture on interface {name}: {e}",
+        "網卡 {name} 的鏈路類型 {dlt} 不支援" => "Interface {name} has unsupported link type {dlt}",
+        "找不到可以監聽的網卡" => "No interface available to capture on",
         _ => return None,
     })
 }

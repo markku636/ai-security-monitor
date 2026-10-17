@@ -155,15 +155,17 @@ pub fn known_from_connections(conns: &[crate::model::connection::Connection]) ->
 /// 讀（必要時更新）存檔，回傳這些 IP 的名稱。非 Windows 回空的；讀快取失敗就用存檔裡已有的。
 pub async fn collect(dir: &Path, conns: &[crate::model::connection::Connection]) -> BTreeMap<String, Vec<String>> {
     let ips = public_remote_ips(conns);
-    if !cfg!(windows) || ips.is_empty() {
+    // 背景 DNS 監看（Windows ETW、Linux AF_PACKET、macOS BPF）已經替連線補上網域的，直接記下；
+    // 剩下對不到的，Windows 才去讀 DNS 快取（其他平台沒有可讀的快取）
+    let known = known_from_connections(conns);
+    if ips.is_empty() || (!cfg!(windows) && known.is_empty()) {
         return BTreeMap::new();
     }
     let ips = &ips;
     let now = chrono::Utc::now().timestamp().max(0) as u64;
     let mut db = DnsNames::load(dir);
-    // 背景 DNS 監看（ETW）已經替連線補上網域的，直接記下；剩下對不到的才去讀 DNS 快取
-    db.merge(&known_from_connections(conns), now);
-    if db.needs_probe(ips, now) {
+    db.merge(&known, now);
+    if cfg!(windows) && db.needs_probe(ips, now) {
         db.last_probe = now;
         let spec = crate::util::cmd::powershell(WINDOWS_CACHE_SCRIPT).timeout(15_000);
         if let Ok(out) = crate::util::cmd::CmdRunner::run(&crate::util::cmd::RealRunner, &spec).await {

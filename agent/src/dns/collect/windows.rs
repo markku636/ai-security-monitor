@@ -33,6 +33,7 @@ const EVENT_QUERY_COMPLETED: u16 = 3008;
 /// 查本機自己名稱的查詢。
 const LOCAL_NAME_OPTION: u64 = 0x8000_0000_0000;
 const ERROR_ACCESS_DENIED: u32 = 5;
+const ERROR_INVALID_PARAMETER: u32 = 87;
 const ERROR_ALREADY_EXISTS: u32 = 183;
 const TRACE_LEVEL_VERBOSE: u8 = 5;
 const INVALID_PROCESSTRACE: u64 = u64::MAX;
@@ -339,6 +340,10 @@ fn handle(r: &EVENT_RECORD) {
     };
     let qtype = get(&ctx.p_type).as_deref().and_then(le_u64).unwrap_or(0) as u16;
     let status = get(&ctx.p_status).as_deref().and_then(le_u64).unwrap_or(0) as u32;
+    // 87（ERROR_INVALID_PARAMETER）是 DNS Client 內部略過的題目（例如沒有 IPv6 時的 AAAA），不是解析結果
+    if status == ERROR_INVALID_PARAMETER {
+        return;
+    }
     let results = get(&ctx.p_results).map(|b| utf16z(&b)).unwrap_or_default();
     let (answers, cnames) = parse_win_query_results(&results);
     let rcode = if status == 0 && answers.is_empty() && cnames.is_empty() {
@@ -501,10 +506,13 @@ mod tests {
                 .expect("no ETW DNS event within 20s")
                 .expect("channel closed");
             if ev.name == target {
+                eprintln!("{ev:?}");
                 assert_eq!(ev.pid, Some(std::process::id()));
                 assert_eq!(ev.source, Source::Etw);
-                assert_eq!(ev.rcode, "NXDOMAIN");
-                break;
+                assert_ne!(ev.rcode, "ERR87");
+                if ev.rcode == "NXDOMAIN" {
+                    break;
+                }
             }
         }
     }

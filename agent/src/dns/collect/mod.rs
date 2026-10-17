@@ -1,7 +1,13 @@
 //! 依平台挑 DNS 資料來源：
 //! - Windows：ETW 即時事件（系統管理員／SYSTEM，有 PID）→ 做不到時改用 DNS 快取快照（每 30 秒，沒有 PID）。
-//! - Linux／macOS：之後加入（systemd-resolved 監看、監聽 53 port）。
+//! - Linux：AF_PACKET 監聽 53 port 回應（root；用 socket 表對到程式）。
+//! - macOS：BPF 監聽各網卡 53 port 回應（root；查詢都由 mDNSResponder 代送，程式改在連線表上反推）。
 
+#[cfg(target_os = "linux")]
+pub mod linux;
+#[cfg(target_os = "macos")]
+pub mod macos;
+pub mod packet;
 #[cfg(windows)]
 pub mod windows;
 
@@ -54,9 +60,39 @@ pub fn start(session: &str, tx: Sender<DnsEvent>, dropped: Arc<AtomicU64>) -> Co
             },
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        let _ = session;
+        packet_collector(
+            linux::PacketCapture::start(tx, dropped).map(|c| Box::new(c) as Box<dyn Send>),
+            true,
+        )
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = session;
+        packet_collector(
+            macos::BpfCapture::start(tx, dropped).map(|c| Box::new(c) as Box<dyn Send>),
+            false,
+        )
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = (session, tx, dropped);
         Collector::none(t!("這個平台的即時 DNS 蒐集還沒支援").into())
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn packet_collector(r: crate::error::AppResult<Box<dyn Send>>, has_process: bool) -> Collector {
+    match r {
+        Ok(guard) => Collector {
+            source: Some(Source::Packet),
+            has_process,
+            poll_cache: false,
+            notes: Vec::new(),
+            guard: Some(guard),
+        },
+        Err(e) => Collector::none(e.message()),
     }
 }

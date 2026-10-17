@@ -89,6 +89,18 @@ jobs:
             jq -e '.status.source == "etw" and .status.has_process and .status.events >= 1' dns-status.json > /dev/null
             $B --json dns --since 10m --limit 500 > dns-list.json
             jq -e '[.records[] | select(.name | startswith("asm-ci-watch-")) | select(.process != null)] | length >= 1' dns-list.json > /dev/null
+          else
+            # Linux AF_PACKET／macOS BPF：要 root；查一個網域，--follow 要看到回應封包
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              Q='getent hosts asm-ci-follow.example.com'
+            else
+              Q='dscacheutil -q host -a name asm-ci-follow.example.com; nslookup asm-ci-follow.example.com'
+            fi
+            (sleep 6; for i in 1 2 3; do sh -c "$Q" > /dev/null 2>&1 || true; sleep 2; done) &
+            sudo -E timeout 20 $B --json dns --follow > follow.jsonl || true
+            wait
+            grep asm-ci-follow follow.jsonl | head -3 || true
+            jq -se 'map(select(.name == "asm-ci-follow.example.com" and .source == "packet")) | length >= 1' follow.jsonl > /dev/null
           fi
 
       - name: Metrics smoke (interface counters, opt-in performance)
