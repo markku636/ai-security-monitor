@@ -49,6 +49,12 @@ function table() {
   guiRow('macos-x64.dmg', '**macOS Intel**<br>macOS desktop app (Intel)', '同上 · same as above');
   guiRow('linux-x64.AppImage', '**Linux 桌面（各發行版）**<br>Linux desktop app (any distro)', '免安裝：`chmod +x` 後執行<br>portable: `chmod +x`, then run');
   guiRow('linux-amd64.deb', '**Debian／Ubuntu 桌面**<br>Debian / Ubuntu desktop app', '`sudo apt install ./檔名.deb`');
+  if (has('latest.json')) {
+    const upd = ['latest.json', ...names.filter((n) => n.startsWith(gui('')) && n.endsWith('.app.tar.gz'))];
+    rows.push(
+      `| 桌面版自動更新用 · used by the desktop app's updater | ${upd.map((n) => `\`${n}\``).join('、')} | 桌面版自己會下載並驗證簽章，**不用手動下載**<br>downloaded and signature-checked by the app itself, **no need to download** |`,
+    );
+  }
   const cliFiles = CLI_PLATFORMS.filter(([s]) => has(cli(s)));
   if (cliFiles.length) {
     rows.push(

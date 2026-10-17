@@ -49,6 +49,16 @@ jobs:
           grep -q list_connections mcp.jsonl
           grep -q WHEA_UNCORRECTABLE_ERROR mcp.jsonl
           cargo run -q -- --json ai status > ai.json
+          # 自動更新設定、區網廣播設定、沒加入 Hub 時的立即上傳
+          cargo run -q -- config set update.mode auto
+          cargo run -q -- --json status > status.json
+          grep -q '"mode": *"auto"' status.json
+          cargo run -q -- config set update.mode notify
+          ! cargo run -q -- config set hub.advertise_url http://8.8.8.8:8088
+          ! cargo run -q -- upload 2> upload.err
+          grep -q 'enroll --auto' upload.err
+          cargo run -q -- --json discover --no-dns --no-mdns > discover.json
+          grep -q '"hint"' discover.json
 
       - name: Metrics smoke (interface counters, opt-in performance)
         shell: bash
@@ -377,6 +387,9 @@ jobs:
       ASA_HUB_CLIENT_SECRETS: ci-client-key
       # 舊名：確認 ASA_* 仍然有效（新名 AI_SECURITY_MONITOR_SECRETS_BACKEND）
       ASA_SECRETS_BACKEND: file
+      # watch --once 之後馬上 upload：不擋短時間內的第二份報告／快照
+      ASA_HUB_INGEST_MIN_INTERVAL_MS: 0
+      ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS: 0
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -409,6 +422,11 @@ jobs:
           sudo -E $BIN --config-dir "$CFG" watch --once --interval 1h
           curl -sf -H "$A" $B/api/v1/actions/$ID | tee action.json
           test "$(jq -r .action.status action.json)" = "succeeded"
+          # 立即上傳：補送暫存、快照、完整報告、心跳（帶自動更新狀態）
+          sudo -E $BIN --config-dir "$CFG" --json upload | tee upload.json
+          jq -e '.ok == true and .heartbeat == true and .report.findings >= 0 and .outbox.left == 0' upload.json > /dev/null
+          curl -sf -H "$A" "$B/api/v1/agents/$AID" | jq -e '.agent.updateInfo.mode == "notify" and .agent.updateInfo.owner == "agent"' > /dev/null
+          sudo -E $BIN --config-dir "$CFG" --json status | jq -e '.uploads.last_report_at != null and .update.mode == "notify"' > /dev/null
           sudo nft list set inet asa block4 | grep -q 198.51.100.77
           curl -sf -H "$A" "$B/api/v1/agents/$AID" | jq -e '.reports | length >= 1' > /dev/null
           # watch --once 也送了一個流量樣本（真實 Ubuntu runner 的介面計數器）

@@ -1,7 +1,9 @@
 name: release
 
 # 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim），
-# 以及桌面版安裝檔 AI-Security-Monitor-<ver>-*（Windows NSIS、macOS arm64／x64 dmg、Linux AppImage／deb；未簽章）。
+# 以及桌面版安裝檔 AI-Security-Monitor-<ver>-*（Windows NSIS、macOS arm64／x64 dmg、Linux AppImage／deb；未做程式碼簽章）。
+# 桌面版自動更新：用 secrets TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) 的 minisign 金鑰簽更新檔（NSIS、.app.tar.gz、AppImage），
+# scripts/updater-manifest.mjs 用 tauri.conf.json 的公鑰驗章後產生 latest.json（App 讀 releases/latest/download/latest.json）。
 # 改名過渡：另附同內容的 asa-<ver>-<平台> 給 0.1.x 的 asa self-update；映像同時推新名與舊名 ai-security-agent-hub。
 # 手動執行（workflow_dispatch）預設 dry_run：全部建置但不推映像、不建立 Release。
 on:
@@ -101,8 +103,8 @@ jobs:
       matrix:
         include:
           - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis, asset: windows-x64 }
-          - { os: macos-latest, target: aarch64-apple-darwin, bundles: dmg, asset: macos-arm64 }
-          - { os: macos-latest, target: x86_64-apple-darwin, bundles: dmg, asset: macos-x64 }
+          - { os: macos-latest, target: aarch64-apple-darwin, bundles: 'app,dmg', asset: macos-arm64 }
+          - { os: macos-latest, target: x86_64-apple-darwin, bundles: 'app,dmg', asset: macos-x64 }
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb', asset: linux-x64 }
     defaults:
       run:
@@ -128,28 +130,51 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file build-essential
       - run: npm ci
-      - name: Build installer (unsigned)
-        run: npx tauri build --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Build installer and signed updater artifacts
+        env:
+          # 更新檔的 minisign 簽章（不是作業系統的程式碼簽章）；私鑰只放在 GitHub secrets
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not set"; exit 1; }
+          npx tauri build --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.updater.conf.json
       - name: Package
         run: |
           set -euo pipefail
           V="${{ needs.verify.outputs.version }}"
           B="src-tauri/target/${{ matrix.target }}/release/bundle"
-          ls -lR "$B" | grep -Ei '\.(exe|dmg|appimage|deb)$' || true
+          ls -lR "$B" | grep -Ei '\.(exe|dmg|appimage|deb|tar\.gz|sig)$' || true
           mkdir -p ../dist
           one() { local f; f=$(find "$B/$1" -maxdepth 1 -type f -name "$2" | head -n 1); test -n "$f" || { echo "no $2 in $B/$1"; exit 1; }; cp "$f" "../dist/$3"; }
+          # 選用：有就複製（.deb 的更新簽章看 bundler 版本）
+          maybe() { local f; f=$(find "$B/$1" -maxdepth 1 -type f -name "$2" | head -n 1); if [ -n "$f" ]; then cp "$f" "../dist/$3"; fi; }
           case "${{ matrix.asset }}" in
-            windows-x64) one nsis '*-setup.exe' "AI-Security-Monitor-$V-windows-x64-setup.exe" ;;
-            macos-*) one dmg '*.dmg' "AI-Security-Monitor-$V-${{ matrix.asset }}.dmg" ;;
+            windows-x64)
+              one nsis '*-setup.exe' "AI-Security-Monitor-$V-windows-x64-setup.exe"
+              one nsis '*-setup.exe.sig' "AI-Security-Monitor-$V-windows-x64-setup.exe.sig"
+              ;;
+            macos-*)
+              one dmg '*.dmg' "AI-Security-Monitor-$V-${{ matrix.asset }}.dmg"
+              one macos '*.app.tar.gz' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz"
+              one macos '*.app.tar.gz.sig' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz.sig"
+              ;;
             linux-x64)
               one appimage '*.AppImage' "AI-Security-Monitor-$V-linux-x64.AppImage"
+              one appimage '*.AppImage.sig' "AI-Security-Monitor-$V-linux-x64.AppImage.sig"
               one deb '*.deb' "AI-Security-Monitor-$V-linux-amd64.deb"
+              maybe deb '*.deb.sig' "AI-Security-Monitor-$V-linux-amd64.deb.sig"
               dpkg-deb --info "../dist/AI-Security-Monitor-$V-linux-amd64.deb" | grep -E "Package|Version"
               dpkg-deb --info "../dist/AI-Security-Monitor-$V-linux-amd64.deb" | grep -q "Version: $V"
               ;;
           esac
-          # 安裝檔不該小於 1 MB（空殼或打包失敗）
-          for f in ../dist/*; do test "$(wc -c < "$f")" -gt 1000000 || { echo "too small: $f"; exit 1; }; done
+          # 安裝檔／更新檔不該小於 1 MB（空殼或打包失敗）；簽章檔不該是空的
+          for f in ../dist/*; do
+            case "$f" in
+              *.sig) test -s "$f" || { echo "empty signature: $f"; exit 1; } ;;
+              *) test "$(wc -c < "$f")" -gt 1000000 || { echo "too small: $f"; exit 1; } ;;
+            esac
+          done
           ls -l ../dist
       - uses: actions/upload-artifact@v4
         with:
@@ -218,6 +243,17 @@ jobs:
           path: dist
           pattern: desktop-*
           merge-multiple: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Updater manifest (latest.json, signatures verified against the app's public key)
+        run: |
+          set -euo pipefail
+          V="${{ needs.verify.outputs.version }}"
+          node scripts/updater-manifest.mjs "$V" dist
+          node -e "const m=require('./dist/latest.json'); for (const k of ['windows-x86_64-nsis','darwin-aarch64-app','darwin-x86_64-app','linux-x86_64-appimage']) if (!m.platforms[k]) { console.error('missing', k); process.exit(1) } console.log(JSON.stringify(m, (k, v) => k === 'signature' ? v.slice(0, 24) + '…' : v, 2))"
+          # 簽章已經寫進 latest.json，不另外發佈
+          rm -f dist/*.sig
       - name: Checksums and notes
         run: |
           set -euo pipefail
@@ -227,13 +263,14 @@ jobs:
           test "$(ls dist/ai-security-monitor-* | wc -l)" = 6
           test "$(ls dist/asa-* | wc -l)" = 6
           for f in dist/asa-*; do cmp "$f" "dist/ai-security-monitor-${f#dist/asa-}"; done
-          # 桌面版安裝檔：Windows setup.exe、macOS arm64／x64 dmg、Linux AppImage／deb
+          # 桌面版安裝檔：Windows setup.exe、macOS arm64／x64 dmg、Linux AppImage／deb；macOS 的自動更新檔 .app.tar.gz；latest.json
           V="${{ needs.verify.outputs.version }}"
-          for a in windows-x64-setup.exe macos-arm64.dmg macos-x64.dmg linux-x64.AppImage linux-amd64.deb; do
+          for a in windows-x64-setup.exe macos-arm64.dmg macos-x64.dmg linux-x64.AppImage linux-amd64.deb macos-arm64.app.tar.gz macos-x64.app.tar.gz; do
             test -f "dist/AI-Security-Monitor-$V-$a"
             grep -q "  AI-Security-Monitor-$V-$a\$" dist/SHA256SUMS
           done
-          test "$(ls dist/AI-Security-Monitor-* | wc -l)" = 5
+          test "$(ls dist/AI-Security-Monitor-* | wc -l)" = 7
+          grep -q "  latest.json\$" dist/SHA256SUMS
           # 安裝腳本照檔名精確比對 SHA256SUMS：多出來的桌面版行不影響
           for a in linux-x64 macos-arm64 windows-x64.exe; do
             test "$(awk -v n="ai-security-monitor-$V-$a" '{ f = $2; sub(/^\*/, "", f); if (f == n) print $1 }' dist/SHA256SUMS | wc -l)" = 1
