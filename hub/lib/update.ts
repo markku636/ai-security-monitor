@@ -3,11 +3,11 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
-import { env } from '@/lib/env';
+import { env, readEnv } from '@/lib/env';
 
 const KEY = 'update_check';
 const EVERY_MS = 6 * 3600_000;
-const API = 'https://api.github.com/repos/markku636/ai-security-agent/releases/latest';
+const API = 'https://api.github.com/repos/markku636/ai-security-monitor/releases/latest';
 
 export interface UpdateInfo {
   checkedAt: string;
@@ -17,7 +17,7 @@ export interface UpdateInfo {
 }
 
 function enabled(): boolean {
-  return process.env.ASA_HUB_UPDATE_CHECK !== '0' && process.env.NODE_ENV !== 'test';
+  return readEnv('ASA_HUB_UPDATE_CHECK') !== '0' && process.env.NODE_ENV !== 'test';
 }
 
 /** a 比 b 新（數字段比較；-rc 之類視為較舊）。 */

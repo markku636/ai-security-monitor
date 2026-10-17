@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { safeEqual } from '@/lib/auth/crypto';
 import { bearer } from '@/lib/auth/access';
 import { isApiTokenShape, verifyApiToken } from '@/lib/auth/tokens';
-import { env, isOpenMode } from '@/lib/env';
+import { env, isOpenMode, readEnv } from '@/lib/env';
 import { readJson } from '@/lib/http';
 import { isRunToken } from '@/lib/ai/run';
 import { callTool, TOOLS } from '@/lib/mcp/tools';
@@ -35,7 +35,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 
 async function authorized(req: Request): Promise<boolean> {
   const token = bearer(req);
-  const mcpToken = (process.env.ASA_HUB_MCP_TOKEN ?? '').trim();
+  const mcpToken = readEnv('ASA_HUB_MCP_TOKEN');
   if (token && mcpToken && safeEqual(token, mcpToken)) return true;
   // hub 自己跑 AI 時給 CLI 的一次性 token
   if (token && isRunToken(token)) return true;
@@ -62,7 +62,7 @@ async function handle(msg: Record<string, unknown>): Promise<unknown | null> {
       return ok(id, {
         protocolVersion: SUPPORTED.includes(asked) ? asked : PROTOCOL,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'asa-hub', version: env().version },
+        serverInfo: { name: 'ai-security-monitor-hub', version: env().version },
         instructions:
           'Read-only access to the Security Hub fleet: agents, findings, connections, threat-intel hits, traffic, crashes and security events. Always cite intel vendors and source_url; never claim to have changed anything.',
       });

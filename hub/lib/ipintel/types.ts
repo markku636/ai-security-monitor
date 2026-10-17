@@ -52,7 +52,7 @@ export interface ProviderResult {
   raw?: unknown;
 }
 
-/** asa agent 的黑名單在這個 IP 上的命中（intel_hits）。 */
+/** ai-security-monitor agent 的黑名單在這個 IP 上的命中（intel_hits）。 */
 export interface LocalHit {
   feedId: string;
   feedName: string;

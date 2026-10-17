@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { hasScope, type Identity } from '@/lib/auth/access';
 import { loadRegistry, type FeedEntry } from './registry';
+import { readEnv } from '@/lib/env';
 
 const MAX_BYTES = 96 * 1024 * 1024;
 const CONCURRENCY = 4;
@@ -37,7 +38,8 @@ export interface SyncOutcome {
 
 /** 快取目錄：`ASA_HUB_FEED_CACHE_DIR` ＞ 容器的 /data/feeds ＞ 開發時的 .data/feeds。 */
 export function cacheDir(): string {
-  if (process.env.ASA_HUB_FEED_CACHE_DIR) return process.env.ASA_HUB_FEED_CACHE_DIR;
+  const dir = readEnv('ASA_HUB_FEED_CACHE_DIR');
+  if (dir) return dir;
   if (fs.existsSync('/data') && process.platform !== 'win32') return '/data/feeds';
   return path.resolve(process.cwd(), '.data', 'feeds');
 }
@@ -140,7 +142,7 @@ async function fetchOne(f: FeedEntry, prev: MirrorMeta | null, fetchImpl: FetchF
   meta.checked_at = now.toISOString();
   let lastErr = 'no url';
   for (const url of expandUrls(f.urls[0], now)) {
-    const headers: Record<string, string> = { 'user-agent': `asa-hub/${version} (+https://github.com/markku636/ai-security-agent)` };
+    const headers: Record<string, string> = { 'user-agent': `asa-hub/${version} (+https://github.com/markku636/ai-security-monitor)` };
     if (prev?.sha256 && prev.url === url) {
       if (prev.etag) headers['if-none-match'] = prev.etag;
       if (prev.last_modified) headers['if-modified-since'] = prev.last_modified;
@@ -211,7 +213,7 @@ export function syncFeeds(opts: { force?: boolean; only?: string[]; fetchImpl?: 
           out.push({ feed_id: f.id, status: 'fresh', bytes: prev?.bytes ?? 0, ms: 0 });
           continue;
         }
-        out.push(await fetchOne(f, prev, opts.fetchImpl ?? fetch, opts.version ?? process.env.ASA_HUB_VERSION ?? 'dev'));
+        out.push(await fetchOne(f, prev, opts.fetchImpl ?? fetch, opts.version ?? (readEnv('ASA_HUB_VERSION') || 'dev')));
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
@@ -227,7 +229,7 @@ export function syncFeeds(opts: { force?: boolean; only?: string[]; fetchImpl?: 
 
 /** 背景補抓（agent 要清單或有人看情資頁時觸發；10 分鐘內最多檢查一次，不等結果）。 */
 export function syncInBackground(): void {
-  if (process.env.ASA_HUB_FEED_MIRROR === '0') return;
+  if (readEnv('ASA_HUB_FEED_MIRROR') === '0') return;
   if (g.__asaFeedSync || (g.__asaFeedSyncAt && Date.now() - g.__asaFeedSyncAt < 10 * 60_000)) return;
   g.__asaFeedSyncAt = Date.now();
   syncFeeds().catch(() => {});

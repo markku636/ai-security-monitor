@@ -2,10 +2,10 @@
 // agent 只拿到自己的 action_key（註冊時），用它驗 token。設了 ASA_HUB_ACTION_SIGNING_KEY 時資料庫裡沒有能偽造 token 的東西。
 // canonical JSON 的規則必須與 agent/src/hub/actions.rs 一致（contract/action.v1.json 兩邊都測）。
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { settings } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
+import { readEnv } from '@/lib/env';
 
 const SETTING_KEY = 'action_signing_key';
 
@@ -48,14 +48,11 @@ export function paramsHash(params: Record<string, unknown>): string {
 const g = globalThis as unknown as { __asaSigningKey?: string };
 
 /**
- * 簽署金鑰：`ASA_HUB_ACTION_SIGNING_KEY`（或 _FILE）優先；沒設就第一次用到時隨機產生並存進 settings 表，
+ * 簽署金鑰：`AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY`（舊名 `ASA_HUB_ACTION_SIGNING_KEY`，皆可 _FILE）優先；沒設就第一次用到時隨機產生並存進 settings 表，
  * 之後重啟沿用（換掉＝所有 agent 要重新註冊才拿得到新的 action_key）。
  */
 export async function signingKey(db: DB): Promise<string> {
-  const fromEnv = (process.env.ASA_HUB_ACTION_SIGNING_KEY_FILE
-    ? safeRead(process.env.ASA_HUB_ACTION_SIGNING_KEY_FILE)
-    : process.env.ASA_HUB_ACTION_SIGNING_KEY ?? ''
-  ).trim();
+  const fromEnv = readEnv('ASA_HUB_ACTION_SIGNING_KEY');
   if (fromEnv) return fromEnv;
   if (g.__asaSigningKey) return g.__asaSigningKey;
   const rows = await db.select().from(settings).where(eq(settings.key, SETTING_KEY)).limit(1);
@@ -69,14 +66,6 @@ export async function signingKey(db: DB): Promise<string> {
   }
   g.__asaSigningKey = key;
   return key;
-}
-
-function safeRead(p: string): string {
-  try {
-    return fs.readFileSync(p, 'utf8');
-  } catch {
-    return '';
-  }
 }
 
 export function resetSigningKeyForTests(): void {

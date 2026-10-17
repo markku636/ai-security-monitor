@@ -120,7 +120,7 @@ export function ReasonList({ reasons, t, max = 6 }: { reasons: Reason[]; t: TFn;
             return (
               <span
                 key={i}
-                title={[t('asa 自己的行為判斷，不是情資來源'), r.detail].filter(Boolean).join('\n')}
+                title={[t('ai-security-monitor 自己的行為判斷，不是情資來源'), r.detail].filter(Boolean).join('\n')}
                 className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
               >
                 <span className="opacity-70">{t('行為')} </span>

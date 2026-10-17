@@ -305,7 +305,7 @@ export function InstallCommandsView({ hub, keyValue }: { hub: string; keyValue: 
       <CmdBlock label={t('Linux／macOS 個人電腦（登入時啟動）')} cmd={`curl -fsSL ${hub}/install.sh | sh -s -- --key ${keyValue} --service user`} />
       <CmdBlock label={t('Windows 伺服器（系統管理員 PowerShell）')} cmd={`$env:ASA_ENROLL_KEY='${keyValue}'; $env:ASA_SERVICE='system'; irm ${hub}/install.ps1 | iex`} />
       <CmdBlock label={t('Windows 個人電腦（PowerShell）')} cmd={`$env:ASA_ENROLL_KEY='${keyValue}'; $env:ASA_SERVICE='user'; irm ${hub}/install.ps1 | iex`} />
-      <CmdBlock label={t('已經裝好 asa')} cmd={`asa enroll ${hub} --key ${keyValue}`} />
+      <CmdBlock label={t('已經裝好 ai-security-monitor')} cmd={`ai-security-monitor enroll ${hub} --key ${keyValue}`} />
     </div>
   );
 }

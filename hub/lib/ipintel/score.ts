@@ -1,5 +1,5 @@
 // IP 風險分數 0–100（規則式、純函式）：各訊號加權平均，再套確定性下限。
-// 權重與下限沿用 at-integration-tools 的 rule-v1，黑名單改用 asa agent 自己同步的清單命中。
+// 權重與下限沿用 at-integration-tools 的 rule-v1，黑名單改用 ai-security-monitor agent 自己同步的清單命中。
 import type { IpScore, LocalHit, Profile, RiskLevel, ScoreReason } from './types';
 
 export const WEIGHTS = {

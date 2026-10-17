@@ -8,6 +8,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { TOOLS } from '@/lib/mcp/tools';
 import { claudeEvents, codexEvents, type AiEvent } from './events';
+import { readEnv } from '@/lib/env';
 
 export type Provider = 'claude' | 'codex';
 export const PROVIDERS: Provider[] = ['claude', 'codex'];
@@ -72,7 +73,7 @@ export function childEnv(extra: Record<string, string> = {}): Record<string, str
 }
 
 export function internalUrl(): string {
-  return (process.env.ASA_HUB_INTERNAL_URL ?? `http://127.0.0.1:${process.env.PORT ?? 3000}`).replace(/\/$/, '');
+  return (readEnv('ASA_HUB_INTERNAL_URL') || `http://127.0.0.1:${process.env.PORT ?? 3000}`).replace(/\/$/, '');
 }
 
 export interface RunSpec {

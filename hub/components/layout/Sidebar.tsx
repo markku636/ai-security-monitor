@@ -13,7 +13,7 @@ export function Sidebar({ t, groups, viewer, openMode }: { t: TFn; groups: NavGr
       header={
         <div>
           <div className="text-base font-semibold tracking-tight">Security Hub</div>
-          <div className="text-xs text-slate-400">ai-security-agent</div>
+          <div className="text-xs text-slate-400">ai-security-monitor</div>
         </div>
       }
       footer={

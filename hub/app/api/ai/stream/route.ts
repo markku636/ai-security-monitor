@@ -11,6 +11,7 @@ import { PROVIDERS, resolveBin, runAi, running, SCOPE_PROMPTS, SYSTEM_PROMPT, ty
 import { getDb } from '@/lib/db';
 import { error, parseCookies, readJson, sourceIp } from '@/lib/http';
 import { LANG_COOKIE, resolveLang } from '@/lib/i18n/core';
+import { readEnv } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,7 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     return error(400, 'bad_request');
   }
-  const max = Number(process.env.ASA_HUB_AI_MAX_CONCURRENT ?? 2) || 2;
+  const max = Number(readEnv('ASA_HUB_AI_MAX_CONCURRENT') || 2) || 2;
   if (running() >= max) return error(429, 'too_many_running');
   const order: Provider[] = body.provider ? [body.provider] : PROVIDERS;
   const picked = order.map((p) => ({ p, bin: resolveBin(p) })).find((x) => x.bin);

@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
   return {
     title: 'Security Hub',
-    description: t('ai-security-agent 的中央儀表板：連線判定、威脅情資、防火牆、漏洞與 AI 分析'),
+    description: t('ai-security-monitor 的中央儀表板：連線判定、威脅情資、防火牆、漏洞與 AI 分析'),
   };
 }
 

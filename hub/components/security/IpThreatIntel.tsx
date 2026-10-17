@@ -290,7 +290,7 @@ export function IpThreatIntel({ view }: { view: IpIntelView }) {
         </h3>
         <div className="flex flex-wrap gap-2">
           <Pill
-            name={t('asa 黑名單')}
+            name={t('ai-security-monitor 黑名單')}
             hit={view.localHits.length > 0}
             href={null}
             title={view.localHits.length ? view.localHits.map((h) => `${h.vendor} · ${h.feedName}`).join('\n') : t('各主機同步的黑名單（FireHOL、Spamhaus、Tor 出口…）都沒有這個 IP')}

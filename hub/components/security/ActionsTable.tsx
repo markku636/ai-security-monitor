@@ -56,7 +56,7 @@ function Row({ a }: { a: ActionView }) {
           e === 'confirm_hostname'
             ? t('主機名稱不符')
             : e === 'agent_does_not_accept_actions'
-              ? t('這台主機沒有開啟遠端動作（asa enroll --accept-remote-actions）')
+              ? t('這台主機沒有開啟遠端動作（ai-security-monitor enroll --accept-remote-actions）')
               : t('操作失敗：{error}', { error: e }),
         );
       }

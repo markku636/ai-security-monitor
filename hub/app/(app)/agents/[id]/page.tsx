@@ -61,7 +61,7 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
   const rows: [string, string][] = [
     [t('系統'), [a.osName ?? a.osFamily, a.osVersion].filter(Boolean).join(' ')],
     [t('架構'), a.arch],
-    [t('asa 版本'), a.version],
+    [t('ai-security-monitor 版本'), a.version],
     [t('IP 位址'), a.ips.join(', ') || '—'],
     [t('執行身分'), a.elevated ? t('系統管理員') : t('一般使用者（部分資料可能缺漏）')],
     [t('執行方式'), a.serviceMode ? t('背景服務') : t('手動／排程')],
@@ -135,7 +135,7 @@ async function EventsTab({ t, a }: { t: TFn; a: Agent }) {
     counts_by_level?: Record<string, number>;
   };
   if (!crashes.length && !sec.length && !summary) {
-    return <EmptyState title={t('還沒有事件資料')}>{t('這台主機的 asa 掃描會帶上近 7 天的事件摘要。')}</EmptyState>;
+    return <EmptyState title={t('還沒有事件資料')}>{t('這台主機的 ai-security-monitor 掃描會帶上近 7 天的事件摘要。')}</EmptyState>;
   }
   return (
     <div className="space-y-4">
@@ -180,7 +180,7 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
     processActivity(a.id, 20),
   ]);
   if (!top.length && !procs.length) {
-    return <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 asa watch 後每分鐘會回報連線快照。')}</EmptyState>;
+    return <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>;
   }
   return (
     <div className="space-y-4">
@@ -208,7 +208,7 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
 
 async function VulnsTab({ t, a }: { t: TFn; a: Agent }) {
   const v = await agentVuln(a.id);
-  if (!v) return <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報（需要 asa 0.1 以上）。')}</EmptyState>;
+  if (!v) return <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報（需要 ai-security-monitor 0.1 以上）。')}</EmptyState>;
   const s = v.summary;
   const eco = Object.entries(s.by_ecosystem)
     .map(([k, n]) => `${k} ${n}`)
@@ -289,7 +289,7 @@ const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 } as const;
 
 async function HardeningTab({ t, a, sp }: { t: TFn; a: Agent; sp: Record<string, string | string[] | undefined> }) {
   const h = await agentHardening(a.id);
-  if (!h) return <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報；本機可用 asa harden 先看結果。')}</EmptyState>;
+  if (!h) return <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報；本機可用 ai-security-monitor harden 先看結果。')}</EmptyState>;
   const s = h.summary;
   const all = (Array.isArray(sp.show) ? sp.show[0] : sp.show) === 'all';
   const rows = s.results

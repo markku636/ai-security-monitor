@@ -4,17 +4,17 @@ export async function register(): Promise<void> {
   const { env } = await import('./lib/env');
   const e = env();
   if (!e.databaseUrl) {
-    console.warn('[asa-hub] ASA_HUB_DATABASE_URL is not set; the hub cannot store data');
+    console.warn('[ai-security-monitor-hub] AI_SECURITY_MONITOR_HUB_DATABASE_URL (or ASA_HUB_DATABASE_URL) is not set; the hub cannot store data');
     return;
   }
   if (!e.adminSecret) {
-    console.warn('[asa-hub] open mode (no ASA_HUB_ADMIN_SECRET): everyone is admin — bind to 127.0.0.1 only');
+    console.warn('[ai-security-monitor-hub] open mode (no AI_SECURITY_MONITOR_HUB_ADMIN_SECRET): everyone is admin — bind to 127.0.0.1 only');
   }
   try {
     const { ensureMigrated } = await import('./lib/db');
     await ensureMigrated();
-    console.log('[asa-hub] database ready');
+    console.log('[ai-security-monitor-hub] database ready');
   } catch (err) {
-    console.error('[asa-hub] migration failed; will retry on first request', err);
+    console.error('[ai-security-monitor-hub] migration failed; will retry on first request', err);
   }
 }

@@ -6,7 +6,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import * as schema from '@/drizzle/schema';
-import { env } from '@/lib/env';
+import { env, readEnv } from '@/lib/env';
 
 export type DB = PgDatabase<PgQueryResultHKT, typeof schema>;
 
@@ -23,7 +23,7 @@ export class DbNotConfigured extends Error {
 }
 
 export function migrationsFolder(): string {
-  return process.env.ASA_HUB_MIGRATIONS_DIR || path.join(process.cwd(), 'drizzle');
+  return readEnv('ASA_HUB_MIGRATIONS_DIR') || path.join(process.cwd(), 'drizzle');
 }
 
 export function getDb(): DB {

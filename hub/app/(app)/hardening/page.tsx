@@ -30,7 +30,7 @@ export default async function HardeningPage({ searchParams }: { searchParams: Pr
       </header>
       <HostFilter t={t} action="/hardening" current={agentId} />
       {!h.hosts.length ? (
-        <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報；本機可用 asa harden 先看結果。')}</EmptyState>
+        <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報；本機可用 ai-security-monitor harden 先看結果。')}</EmptyState>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-3">

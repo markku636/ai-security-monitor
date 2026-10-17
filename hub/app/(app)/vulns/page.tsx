@@ -28,7 +28,7 @@ export default async function VulnsPage({ searchParams }: { searchParams: Promis
       </header>
       <HostFilter t={t} action="/vulns" current={agentId} />
       {!v.hosts ? (
-        <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報（需要 asa 0.1 以上）。')}</EmptyState>
+        <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報（需要 ai-security-monitor 0.1 以上）。')}</EmptyState>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

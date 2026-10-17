@@ -1,6 +1,7 @@
 // 情資來源登錄（repo 根目錄 feeds/registry.json，與 agent 內嵌的是同一份）。
 import fs from 'node:fs';
 import path from 'node:path';
+import { readEnv } from '@/lib/env';
 
 export interface FeedLicense {
   name: string;
@@ -29,7 +30,7 @@ export interface FeedEntry {
 
 /** feeds/ 目錄：`ASA_HUB_FEEDS_DIR` ＞ 開發時的 ../feeds ＞ 容器內的 ./feeds。 */
 export function feedsDir(): string | null {
-  const candidates = [process.env.ASA_HUB_FEEDS_DIR, path.resolve(process.cwd(), '../feeds'), path.resolve(process.cwd(), 'feeds')];
+  const candidates = [readEnv('ASA_HUB_FEEDS_DIR') || undefined, path.resolve(process.cwd(), '../feeds'), path.resolve(process.cwd(), 'feeds')];
   for (const c of candidates) {
     if (c && fs.existsSync(path.join(c, 'registry.json'))) return c;
   }

@@ -42,7 +42,7 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
       <header>
         <h1 className="text-xl font-semibold">{t('封鎖審核')}</h1>
         <p className="text-sm text-slate-500">
-          {t('封鎖 IP、關閉 port 等防禦動作：核准後由主機上的 asa 驗證簽章再執行，結果會回報到這裡。')}
+          {t('封鎖 IP、關閉 port 等防禦動作：核准後由主機上的 ai-security-monitor 驗證簽章再執行，結果會回報到這裡。')}
         </p>
       </header>
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">

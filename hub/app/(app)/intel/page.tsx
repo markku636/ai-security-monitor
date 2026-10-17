@@ -151,7 +151,7 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
               {t('Hub 鏡像：{ok}／{total} 個來源有最新資料，最後檢查 {at}。', { ok: okCount, total: mirrored.length, at: lastSync ? since(new Date(lastSync), t) : t('從未') })}
             </p>
             <p className="text-xs text-slate-500">
-              {t('Hub 依每個來源的更新間隔自動向廠商抓清單；主機的 asa 會改從 Hub 下載（Hub 連不到時才直接找廠商），每 30 分鐘檢查一次。')}
+              {t('Hub 依每個來源的更新間隔自動向廠商抓清單；主機的 ai-security-monitor 會改從 Hub 下載（Hub 連不到時才直接找廠商），每 30 分鐘檢查一次。')}
             </p>
           </div>
           <FeedSyncButton />
@@ -177,7 +177,7 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
                         </Link>
                       </td>
                       <td className="py-1.5 pr-3 text-xs">
-                        {h.intelCheckedAt ? since(h.intelCheckedAt, t) : <span className="text-slate-400">{t('尚未回報（需要新版 asa）')}</span>}{' '}
+                        {h.intelCheckedAt ? since(h.intelCheckedAt, t) : <span className="text-slate-400">{t('尚未回報（需要新版 ai-security-monitor）')}</span>}{' '}
                         {h.intelCheckedAt && old ? <Badge tone="warn">{t('過期')}</Badge> : null}
                       </td>
                       <td className="py-1.5 pr-3 text-xs text-slate-500">

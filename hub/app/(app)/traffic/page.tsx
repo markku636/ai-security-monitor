@@ -28,7 +28,7 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
         <div>
           <h1 className="text-xl font-semibold">{t('流量')}</h1>
           <p className="text-sm text-slate-500">
-            {t('依各主機的連線快照彙整：最常連的目的地、新出現的目的地、各行程的連線數。逐封包分析請在主機上用 asa traffic analyze。')}
+            {t('依各主機的連線快照彙整：最常連的目的地、新出現的目的地、各行程的連線數。逐封包分析請在主機上用 ai-security-monitor traffic analyze。')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -43,7 +43,7 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
         </div>
       </header>
       <HostFilter t={t} action="/traffic" current={agentId} keep={{ days }} />
-      {!top.length ? <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 asa watch 後每分鐘會回報連線快照。')}</EmptyState> : null}
+      {!top.length ? <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState> : null}
       {risky.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('危險與可疑目的地')}</h2>

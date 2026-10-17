@@ -19,16 +19,28 @@ export interface HubEnv {
   staleAfterMs: number;
 }
 
+/** 改名後的新前綴：ASA_X 也接受 AI_SECURITY_MONITOR_X，新名優先（舊名繼續有效）。 */
+export const NEW_ENV_PREFIX = 'AI_SECURITY_MONITOR_';
+
+/** 同一個設定的候選變數名（新名在前）。 */
+export function envAliases(name: string): string[] {
+  return name.startsWith('ASA_') ? [NEW_ENV_PREFIX + name.slice(4), name] : [name];
+}
+
 function raw(name: string): string {
-  const file = process.env[`${name}_FILE`];
-  if (file) {
-    try {
-      return fs.readFileSync(file, 'utf8').trim();
-    } catch {
-      return '';
+  for (const n of envAliases(name)) {
+    const file = process.env[`${n}_FILE`];
+    if (file) {
+      try {
+        return fs.readFileSync(file, 'utf8').trim();
+      } catch {
+        return '';
+      }
     }
+    const v = (process.env[n] ?? '').trim();
+    if (v) return v;
   }
-  return (process.env[name] ?? '').trim();
+  return '';
 }
 
 /** 給其他模組讀選用設定（同樣支援 _FILE）。 */
@@ -56,13 +68,13 @@ export function loadEnv(): HubEnv {
     .map((s) => s.trim())
     .filter(Boolean);
   if (clientSecrets.length && !adminSecret) {
-    throw new EnvError('ASA_HUB_CLIENT_SECRETS needs ASA_HUB_ADMIN_SECRET to be set as well');
+    throw new EnvError('AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS needs AI_SECURITY_MONITOR_HUB_ADMIN_SECRET to be set as well (legacy ASA_HUB_* names also work)');
   }
   if (adminSecret && clientSecrets.includes(adminSecret)) {
-    throw new EnvError('ASA_HUB_ADMIN_SECRET and ASA_HUB_CLIENT_SECRETS must all be different');
+    throw new EnvError('AI_SECURITY_MONITOR_HUB_ADMIN_SECRET and AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS must all be different');
   }
   if (new Set(clientSecrets).size !== clientSecrets.length) {
-    throw new EnvError('ASA_HUB_CLIENT_SECRETS contains duplicates');
+    throw new EnvError('AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS contains duplicates');
   }
   return {
     adminSecret,

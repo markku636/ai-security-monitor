@@ -1,8 +1,8 @@
 {
-  "name": "asa-hub",
+  "name": "ai-security-monitor-hub",
   "version": "0.1.0",
   "private": true,
-  "description": "Security Hub for ai-security-agent (asa)",
+  "description": "Security Hub for ai-security-monitor",
   "license": "MIT",
   "scripts": {
     "dev": "next dev -p 3000",
