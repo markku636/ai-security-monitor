@@ -4,6 +4,19 @@ English | [繁體中文](desktop.md)
 
 `ai-security-monitor` itself is a CLI and a background service; the desktop app **AI Security Monitor** (`desktop/`, Tauri 2) is a windowed client that calls the same ai-security-monitor library directly.
 
+## Screenshots
+
+The screenshots use demo data (fictional host fin-laptop-07, documentation IP ranges) and are produced by `node scripts/capture-desktop-screenshots.mjs`:
+it serves `desktop/ui` from a local static server, injects fake Tauri command responses and captures the pages with headless Chrome / Edge, without reading any real config, running a scan or calling an AI.
+The UI itself is in Traditional Chinese.
+
+| | |
+|---|---|
+| ![Overview](images/desktop-overview.png) Overview: scores, finding counts, intel freshness, dangerous and suspicious connections | ![Connections](images/desktop-connections.png) Connections: verdicts, direction filters, reasons and intel sources, with IP analysis on the right |
+| ![Scan results](images/desktop-findings.png) Scan results: sorted by severity, expand for detail and advice | ![Threat intel](images/desktop-intel.png) Threat intel: entries, last update, whether it came from the Hub, license |
+| ![AI analysis](images/desktop-ai.png) AI analysis: tool calls and the answer stream in live | ![Settings](images/desktop-settings.png) Settings: agent id, config directory, Hub, background service |
+| ![Dark mode](images/desktop-overview-dark.png) Dark mode follows the Windows color setting | |
+
 ## Pages
 
 | Page | What it shows |

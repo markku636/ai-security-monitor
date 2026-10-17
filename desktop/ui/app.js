@@ -405,7 +405,7 @@ async function pageSettings() {
   const o = await invoke('overview');
   $main.innerHTML = `
     <h1>設定</h1>
-    <p class="sub">桌面版和命令列 asa、背景服務共用同一個設定目錄。</p>
+    <p class="sub">桌面版和命令列 ai-security-monitor、背景服務共用同一個設定目錄。</p>
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
       <div>agent id</div><div class="mono">${esc(o.agent_id)}</div>

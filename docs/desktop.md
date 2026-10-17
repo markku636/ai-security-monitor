@@ -4,6 +4,18 @@
 
 `ai-security-monitor` 本身是命令列和背景服務；桌面版 **AI Security Monitor**（`desktop/`，Tauri 2）是給用戶端看的視窗介面，直接呼叫同一份 ai-security-monitor 程式庫。
 
+## 畫面
+
+截圖用的是示範資料（虛構主機 fin-laptop-07、文件保留網段 IP），由 `node scripts/capture-desktop-screenshots.mjs` 產生：
+它用本機靜態伺服器提供 `desktop/ui`，注入假的 Tauri 指令回應，再用無頭 Chrome／Edge 擷取，不讀真實設定、不跑掃描、不呼叫 AI。
+
+| | |
+|---|---|
+| ![總覽](images/desktop-overview.png) 總覽：分數、問題數、情資新舊、危險與可疑連線 | ![連線](images/desktop-connections.png) 連線：判定、方向篩選、理由與情資來源，右邊是 IP 分析 |
+| ![掃描結果](images/desktop-findings.png) 掃描結果：依嚴重度排序，展開看細節與建議 | ![威脅情資](images/desktop-intel.png) 威脅情資：每個來源的筆數、最後更新、是否從 Hub、授權 |
+| ![AI 分析](images/desktop-ai.png) AI 分析：工具呼叫與回答即時顯示 | ![設定](images/desktop-settings.png) 設定：agent id、設定目錄、Hub、背景服務 |
+| ![深色模式](images/desktop-overview-dark.png) 深色模式：跟著 Windows 的深色設定 | |
+
 ## 功能
 
 | 頁面 | 內容 |

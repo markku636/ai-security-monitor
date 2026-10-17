@@ -2,6 +2,8 @@
 
 ## 未發佈
 
+- 文件：README 加上桌面版截圖、「架構」（mermaid 流程圖）與「資料夾結構」兩節，docs/desktop 加上各頁截圖；新增 `scripts/capture-desktop-screenshots.mjs`（注入示範資料的假 Tauri 回應擷取桌面版畫面）；桌面版設定頁的舊名「asa」改成 ai-security-monitor。
+
 ## v0.2.0 — 2026-10-17
 
 **改名為 AI Security Monitor（`ai-security-monitor`），並支援 Windows Server、可疑 IP 排名、IP 人工備註與新 logo。** 從 0.1.x 升級：舊設定、hub 註冊、金鑰與 `ASA_*` 環境變數都自動沿用，`asa self-update` 照樣能升上來；細節見下方「改名」與 README「從 asa／ai-security-agent 升級」。桌面版識別碼改了，要先解除安裝舊版。

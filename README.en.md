@@ -50,7 +50,13 @@ Client Agent → periodic reports → Server analysis → AI risk assessment →
 | ![Events](docs/images/events.png) Events & crashes: bugcheck codes with likely causes, brute-force sources, account lockouts | ![Intel](docs/images/intel.png) Threat intel: intel freshness per host, source licenses, confidence and hits |
 | ![Dark](docs/images/agent-hardening-dark.png) Dark mode: each check's current value, expected value and fix | ![Add a host](docs/images/install.png) Add a host: create an enroll key and get one-line install commands |
 
-> The screenshots use demo data from `scripts/demo-seed.mjs` (fictional hosts, documentation IP ranges). The UI is available in Traditional Chinese and English.
+**Desktop app** (AI Security Monitor, the windowed client)
+
+| | | |
+|---|---|---|
+| ![Desktop overview](docs/images/desktop-overview.png) Overview: this computer's scores, finding counts, intel freshness and suspicious connections | ![Desktop connections](docs/images/desktop-connections.png) Connections: verdicts, reasons and intel sources; click an IP for country / ASN and matching lists | ![Desktop AI analysis](docs/images/desktop-ai.png) AI analysis: the local Claude Code / Codex reads suspicious connections through read-only tools |
+
+> Screenshots use demo data (fictional hosts, documentation IP ranges): the Hub is filled by `scripts/demo-seed.mjs`, and the desktop app gets fake Tauri responses injected by `scripts/capture-desktop-screenshots.mjs`, without reading any real config. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md). The Hub UI is available in Traditional Chinese and English.
 
 ## Features
 
@@ -65,6 +71,52 @@ Client Agent → periodic reports → Server analysis → AI risk assessment →
 - **AI and MCP**: `ai-security-monitor ai ask|analyze` hands off to Claude Code or Codex CLI (read-only tools only); `ai-security-monitor mcp` lets Claude Code / Codex / Cursor / VS Code query this computer directly; the Hub has MCP across all hosts and AI analysis in the browser.
 - **Hub**: overview, hosts, connections, findings (bulk actions), vulnerabilities, hardening, traffic, events, intel, block review (HMAC-signed, host identity pinning), enroll keys, read-only API tokens, audit log, CSV export, Chinese/English, dark mode, mobile layout.
 - **Deploy and update**: start at boot (Windows service / systemd / launchd or per-user), `ai-security-monitor self-update` (verified against SHA256SUMS), one-line install scripts, Hub Docker image (amd64/arm64) and compose files.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph HOST["Each computer / server you protect"]
+    direction TB
+    CLI["ai-security-monitor<br/>CLI / background service (watch)"]
+    DESK["Desktop app AI Security Monitor<br/>Tauri, shares the agent library"]
+    CFG[("Config directory<br/>latest report, intel, offline queue")]
+    CLI --- CFG
+    DESK --- CFG
+  end
+
+  subgraph HUB["Security Hub"]
+    direction TB
+    API["Next.js API + web UI"]
+    DB[("PostgreSQL")]
+    MIRROR["Intel mirror"]
+    HMCP["MCP: /api/mcp (read-only)"]
+    API --- DB
+  end
+
+  VENDORS["Threat-intel vendors<br/>abuse.ch, Spamhaus, blocklist.de, ..."]
+  ADMIN["Admin browser"]
+  AI["Claude Code / Codex CLI"]
+
+  CLI -- "Snapshot + heartbeat: every 1 min<br/>Full report: every 10 min<br/>HTTPS + per-host token" --> API
+  API -- "Approved remote actions<br/>HMAC-signed" --> CLI
+  VENDORS --> MIRROR
+  MIRROR -- "Intel: checked every 30 min" --> CLI
+  ADMIN --> API
+  AI -- "ai-security-monitor mcp<br/>read-only by default" --> CLI
+  AI -- "read-only" --> HMCP
+```
+
+- **Scheduled reports**: `ai-security-monitor watch` (the background service started at boot) takes a connection snapshot (with intel verdicts) and sends a heartbeat every minute, and runs a full scan every 10 minutes.
+  Tune them with `ai-security-monitor config set scan.snapshot_interval` / `scan.interval`; the Hub can also ask for slower snapshots. Uploads use HTTPS (plain http only for localhost or private networks)
+  with the client key from enrollment plus this host's own agent token (pinned by the Hub on first sight, so another machine cannot impersonate it).
+- **Offline queue**: when the Hub is down or the network is out, full reports wait in `outbox/` in the config directory (up to 50) and are sent in order once the Hub is reachable again.
+- **Remote actions**: after an admin submits and approves a block in the Hub, the agent learns from its heartbeat that something is pending and fetches it. Every action carries an HMAC-SHA256 signature;
+  the agent verifies it and checks expiry and guardrails before running it and reporting back. Hosts enrolled without `--accept-remote-actions` never fetch actions.
+- **Threat intel**: the Hub downloads the lists in `feeds/registry.json` from each vendor and caches them (intel mirror). Agents check every 30 minutes, take lists from the Hub first when enrolled, and go to the vendor only for what the Hub lacks.
+- **Desktop app**: links the agent's Rust library directly and reads the same config directory, so it sees the background service's latest report, intel and Hub enrollment; reporting to the Hub stays with the background service.
+- **AI**: `ai-security-monitor mcp` (stdio or `--http`) lets Claude Code / Codex query this computer with read-only tools by default (actions such as blocking appear only with `--allow-actions`);
+  the Hub's `/api/mcp` covers every host and is entirely read-only. `ai-security-monitor ai`, the desktop app and the Hub's web AI analysis all run the Claude Code / Codex CLI you are signed in to, with these read-only tools.
 
 ## Install
 
@@ -141,6 +193,59 @@ See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/servi
 
 [Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
+
+## Repository layout
+
+```text
+ai-security-monitor/
+├── agent/                 Rust agent: the ai-security-monitor binary + library (the desktop app links this library too)
+│   ├── src/
+│   │   ├── bin/           Binary entry point
+│   │   ├── cli/           Commands (scan, connections, fw, intel, ai, mcp, enroll, watch, service, ...)
+│   │   ├── scan/          Full-scan pipeline and scoring
+│   │   ├── connections/   Connection snapshots, verdicts, connection history and beacon detection
+│   │   ├── intel/         Intel download, parsing, matching, country / ASN lookup
+│   │   ├── firewall/      Per-platform firewall reading, block plans and execution
+│   │   ├── ports/         Listening ports and real reachability
+│   │   ├── vuln/          Software inventory, OS support lifetime, OSV / known-vulnerability matching
+│   │   ├── hardening/     Hardening checks (rules from feeds/policies)
+│   │   ├── events/        Windows event logs, minidumps, journal, macOS crash reports
+│   │   ├── traffic/       flow-lite traffic view and pcap analysis
+│   │   ├── hub/           Hub client: uploads, offline queue (outbox), remote-action verification, watch parts
+│   │   ├── actions/       Preview and execution of actions such as blocking
+│   │   ├── mcp/           MCP server (stdio / HTTP) and tool definitions
+│   │   ├── ai/            Running the Claude Code / Codex CLI and parsing their event streams
+│   │   ├── service/       Start at boot (Windows service, systemd, launchd)
+│   │   ├── update/        self-update (verified against SHA256SUMS)
+│   │   ├── model/         Data model: report, finding, connection, allowlist, baseline
+│   │   ├── elevate/       Administrator / root detection
+│   │   ├── locales/       English translations
+│   │   └── util/          Shared helpers
+│   ├── prompts/           Prompts for AI analysis
+│   └── tests/fixtures/    Test data
+├── hub/                   Security Hub (Next.js + Tailwind)
+│   ├── app/               Pages (hosts, connections, findings, vulnerabilities, hardening, events, intel, action review, ...) and APIs (/api/v1, /api/mcp, /api/ai)
+│   ├── components/        UI components
+│   ├── lib/               DB queries, report ingest, remote actions and signing, intel mirror, IP intel, MCP tools, AI, auth
+│   ├── drizzle/           PostgreSQL schema and migrations
+│   ├── messages/          English translations
+│   ├── scripts/           i18n and client-import checks
+│   └── tests/             Unit and API route tests
+├── desktop/               Desktop app AI Security Monitor (Tauri 2)
+│   ├── src-tauri/         Rust shell: Tauri commands, tray, single instance
+│   └── ui/                Plain HTML / CSS / JS UI, no front-end build step
+├── contract/              agent <-> Hub JSON Schemas (register, report, snapshot, remote action)
+├── feeds/                 Data embedded in the binary
+│   ├── registry.json      Threat-intel sources (URL, format, confidence, license)
+│   ├── known-good.json    Known-good services and ranges
+│   ├── policies/          Windows / macOS / Linux hardening rules (YAML)
+│   ├── vuln/              OS support lifetimes, known-vulnerable software, risky ports
+│   └── events/            Bugcheck codes and event ID descriptions
+├── docker/                Hub Dockerfile and compose files (standalone, server, dev database)
+├── scripts/               One-line installers, demo data, screenshots, version and changelog checks
+├── docs/                  Topic docs and README screenshots (docs/images)
+└── .github/workflows/     CI and release workflows
+```
 
 ## Build from source
 

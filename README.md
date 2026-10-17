@@ -50,7 +50,13 @@ Client Agent → 定時回報 → Server 分析 → AI 判斷風險 → Dashboar
 | ![事件](docs/images/events.png) 當機與事件：藍屏代碼與可能原因、暴力破解來源、帳號鎖定 | ![情資](docs/images/intel.png) 威脅情資：每台主機的情資新舊、來源授權、信心與命中 |
 | ![深色](docs/images/agent-hardening-dark.png) 深色模式：每條檢查的目前值、期望值與修正方式 | ![新增主機](docs/images/install.png) 新增主機：建立註冊金鑰並產生一行安裝指令 |
 
-> 截圖用的是 `scripts/demo-seed.mjs` 產生的示範資料（虛構主機、文件保留網段 IP）。
+**桌面版**（AI Security Monitor，用戶端視窗介面）
+
+| | | |
+|---|---|---|
+| ![桌面版總覽](docs/images/desktop-overview.png) 總覽：這台電腦的分數、問題數、情資新舊與可疑連線 | ![桌面版連線](docs/images/desktop-connections.png) 連線：判定、理由與情資來源，點 IP 看國家／ASN 與命中清單 | ![桌面版 AI 分析](docs/images/desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具解讀可疑連線 |
+
+> 截圖用的是示範資料（虛構主機、文件保留網段 IP）：Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 注入假的 Tauri 回應，不讀任何真實設定。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
 
 ## 功能一覽
 
@@ -65,6 +71,52 @@ Client Agent → 定時回報 → Server 分析 → AI 判斷風險 → Dashboar
 - **AI 與 MCP**：`ai-security-monitor ai ask|analyze` 交給 Claude Code 或 Codex CLI（只開唯讀工具）；`ai-security-monitor mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有所有主機層級的 MCP 與網頁上的 AI 分析。
 - **Hub**：總覽、主機、連線、待處理問題（批次處理）、漏洞、安全設定、流量、事件、情資、封鎖審核（HMAC 簽章、主機身分釘選）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
 - **部署與更新**：開機自動啟動（Windows 服務／systemd／launchd 或使用者層）、`ai-security-monitor self-update`（比對 SHA256SUMS）、一行安裝腳本、Hub Docker 映像（amd64／arm64）與 compose。
+
+## 架構
+
+```mermaid
+flowchart LR
+  subgraph HOST["每台要保護的電腦／伺服器"]
+    direction TB
+    CLI["ai-security-monitor<br/>CLI／背景服務 watch"]
+    DESK["桌面版 AI Security Monitor<br/>Tauri，共用 agent 程式庫"]
+    CFG[("設定目錄<br/>最新報告、情資、離線佇列")]
+    CLI --- CFG
+    DESK --- CFG
+  end
+
+  subgraph HUB["Security Hub"]
+    direction TB
+    API["Next.js API＋網頁介面"]
+    DB[("PostgreSQL")]
+    MIRROR["情資鏡像"]
+    HMCP["MCP：/api/mcp（唯讀）"]
+    API --- DB
+  end
+
+  VENDORS["威脅情資廠商<br/>abuse.ch、Spamhaus、blocklist.de…"]
+  ADMIN["管理員瀏覽器"]
+  AI["Claude Code／Codex CLI"]
+
+  CLI -- "快照＋心跳：每 1 分鐘<br/>完整報告：每 10 分鐘<br/>HTTPS＋每台主機 token" --> API
+  API -- "核准過的遠端動作<br/>HMAC 簽章" --> CLI
+  VENDORS --> MIRROR
+  MIRROR -- "情資：每 30 分鐘檢查" --> CLI
+  ADMIN --> API
+  AI -- "ai-security-monitor mcp<br/>預設唯讀" --> CLI
+  AI -- "唯讀" --> HMCP
+```
+
+- **定時回報**：`ai-security-monitor watch`（開機自動啟動的背景服務）每 1 分鐘拍一次連線快照（含情資判定）並送心跳，每 10 分鐘跑一次完整掃描；
+  間隔可用 `ai-security-monitor config set scan.snapshot_interval`／`scan.interval` 調整，Hub 也能要求快照放慢。上傳走 HTTPS（http 只允許本機或私網），
+  帶註冊時拿到的 client 金鑰和這台主機自己的 agent token（Hub 第一次看到就釘選，別台冒用會被擋）。
+- **離線佇列**：Hub 停機或網路斷線時，完整報告先存在設定目錄的 `outbox/`（最多 50 份），下次連得上再依序補送。
+- **遠端動作**：管理員在 Hub 送出封鎖並核准後，agent 從心跳得知有待處理的動作才去領取；每個動作都帶 HMAC-SHA256 簽章，agent 驗章、檢查期限與護欄後才執行並回報結果。
+  註冊時沒加 `--accept-remote-actions` 的主機完全不領取。
+- **情資**：Hub 依 `feeds/registry.json` 向各廠商下載清單並快取（情資鏡像），agent 每 30 分鐘檢查一次，已註冊就先向 Hub 拿，Hub 沒有的才直接找廠商。
+- **桌面版**：直接連結 agent 的 Rust 程式庫，讀同一個設定目錄，所以看得到背景服務的最新報告、情資與 Hub 註冊；回報 Hub 仍由背景服務負責。
+- **AI**：`ai-security-monitor mcp`（stdio 或 `--http`）讓 Claude Code／Codex 查這台電腦，預設只有唯讀工具（封鎖等動作要加 `--allow-actions` 才會出現）；
+  Hub 的 `/api/mcp` 查所有主機，全部唯讀。`ai-security-monitor ai`、桌面版和 Hub 網頁上的 AI 分析，都是呼叫你已登入的 Claude Code／Codex CLI 並掛上這些唯讀工具。
 
 ## 安裝
 
@@ -142,6 +194,59 @@ ai-security-monitor service install --yes        # 開機／登入後自動回�
 [連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
+## 資料夾結構
+
+```text
+ai-security-monitor/
+├── agent/                 Rust agent：ai-security-monitor 執行檔＋程式庫（桌面版也連結這份程式庫）
+│   ├── src/
+│   │   ├── bin/           執行檔進入點
+│   │   ├── cli/           各命令（scan、connections、fw、intel、ai、mcp、enroll、watch、service…）
+│   │   ├── scan/          完整掃描流程與分數計算
+│   │   ├── connections/   連線快照、判定、連線歷史與週期性連線（beacon）偵測
+│   │   ├── intel/         情資下載、解析、比對、國家／ASN 查詢
+│   │   ├── firewall/      各平台防火牆讀取、封鎖計畫與執行
+│   │   ├── ports/         監聽 port 與實際可達性
+│   │   ├── vuln/          軟體清單、作業系統支援期限、OSV／已知漏洞比對
+│   │   ├── hardening/     系統硬化檢查（套用 feeds/policies 的規則）
+│   │   ├── events/        Windows 事件記錄、minidump、journal、macOS 當機報告
+│   │   ├── traffic/       flow-lite 流量觀察與 pcap 分析
+│   │   ├── hub/           Hub 客戶端：上傳、離線佇列（outbox）、遠端動作驗章、watch 零件
+│   │   ├── actions/       封鎖等動作的預覽與執行
+│   │   ├── mcp/           MCP server（stdio／HTTP）與工具定義
+│   │   ├── ai/            呼叫 Claude Code／Codex CLI、解析串流事件
+│   │   ├── service/       開機自動啟動（Windows 服務、systemd、launchd）
+│   │   ├── update/        self-update（比對 SHA256SUMS）
+│   │   ├── model/         報告、發現、連線、白名單、基準線等資料模型
+│   │   ├── elevate/       系統管理員權限偵測
+│   │   ├── locales/       英文翻譯
+│   │   └── util/          共用工具
+│   ├── prompts/           AI 分析用的提示詞
+│   └── tests/fixtures/    測試資料
+├── hub/                   Security Hub（Next.js＋Tailwind）
+│   ├── app/               頁面（主機、連線、待處理問題、漏洞、安全設定、事件、情資、封鎖審核…）與 API（/api/v1、/api/mcp、/api/ai）
+│   ├── components/        介面元件
+│   ├── lib/               資料庫查詢、回報寫入、遠端動作與簽章、情資鏡像、IP 情資、MCP 工具、AI、登入與權限
+│   ├── drizzle/           PostgreSQL schema 與 migration
+│   ├── messages/          英文翻譯
+│   ├── scripts/           i18n 與 client import 檢查
+│   └── tests/             單元測試與 API 路由測試
+├── desktop/               桌面版 AI Security Monitor（Tauri 2）
+│   ├── src-tauri/         Rust 殼：Tauri 指令、系統匣、單一實例
+│   └── ui/                純 HTML／CSS／JS 介面，沒有前端建置步驟
+├── contract/              agent ↔ Hub 的 JSON Schema（註冊、報告、快照、遠端動作）
+├── feeds/                 隨執行檔內嵌的資料
+│   ├── registry.json      情資來源清單（網址、格式、信心、授權）
+│   ├── known-good.json    已知良好的服務與網段
+│   ├── policies/          Windows／macOS／Linux 硬化檢查規則（YAML）
+│   ├── vuln/              作業系統支援期限、常見軟體已知漏洞、高風險 port
+│   └── events/            藍屏代碼與事件 ID 說明
+├── docker/                Hub 的 Dockerfile 與 compose（單機版、伺服器版、開發用資料庫）
+├── scripts/               一行安裝腳本、示範資料、截圖、版本與變更紀錄檢查
+├── docs/                  各主題文件與 README 截圖（docs/images）
+└── .github/workflows/     CI 與發佈流程
+```
+
 ## 從原始碼建置
 
 ```bash
@@ -156,7 +261,7 @@ npm run verify                                        # typecheck、i18n、測�
 cd desktop && npm ci && npx tauri build              # 產生 NSIS 安裝檔
 ```
 
-示範資料：`node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；截圖：`node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`。
+示範資料：`node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；截圖：`node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；桌面版截圖：`node scripts/capture-desktop-screenshots.mjs`（不需要 Hub）。
 
 ## 資料來源與授權
 
