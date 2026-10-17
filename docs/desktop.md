@@ -43,7 +43,8 @@
 | 掃描結果 | 最新報告的問題，依嚴重度排序、展開看細節與建議 |
 | 威脅情資 | 每個來源的筆數、最後更新、是否從 Hub 下載；更新過期的或全部重抓 |
 | AI 分析 | 用本機已登入的 Claude Code 或 Codex CLI（你的訂閱）分析可疑連線、最新報告或自由提問；即時顯示回答與工具呼叫 |
-| 設定 | agent id、設定目錄、Hub 網址、背景服務狀態 |
+| 加入公司 Hub | 免金鑰加入：自動尋找公司的 Security Hub（公司 DNS、區網廣播）、顯示指紋、「申請加入」後等管理員核准（關掉視窗也會在背景繼續等）。第一次開啟、還沒加入 Hub 時會自動帶到這頁（按「先不要」就不再帶）。詳見 [enrollment.md](enrollment.md) |
+| 設定 | **公司的 Security Hub**：網址欄、「測試連線」（版本與指紋）、「尋找公司的 Hub」、「申請加入」、「我有註冊金鑰」、「離開這個 Hub」（只刪這台的設定與金鑰，Hub 上的主機紀錄要管理員刪）；要換到指紋不同的 Hub 會先清楚警告並要求確認。**開機自動啟動**：「開機／登入後在背景自動回報」（＝`ai-security-monitor service install --yes`，裝在目前使用者底下、不跳 UAC；會一併換掉舊版 asa 的登入啟動項目並搬設定）、「登入時開啟桌面版」（常駐系統匣、不跳視窗）。另有 agent id、設定目錄等 |
 
 關閉視窗只會縮到系統匣；系統匣選單有「開啟主視窗」「開啟 Security Hub」「結束」。同時只會開一個實例。
 
@@ -65,6 +66,8 @@
 - 共用同一個設定目錄（`%APPDATA%\ai-security-monitor` 等），所以看得到背景 `ai-security-monitor watch` 的最新報告、情資與 Hub 註冊。
 - 連線頁是唯讀快照：**不寫入**連線歷史，避免頻繁重新整理干擾背景服務的週期性連線（beacon）判斷。
 - AI 分析掛的是 ai-security-monitor 的唯讀 MCP 工具；MCP server 就是桌面版執行檔本身——帶命令列參數啟動時（例如 `ai-security-monitor-desktop.exe mcp --tools …`）它會當 ai-security-monitor CLI 執行。
+- 「開機／登入後在背景自動回報」登記的是**桌面版執行檔本身**（`…\AI Security Monitor\ai-security-monitor-desktop.exe watch --service`；Windows 是 `HKCU\…\Run` 的 `ai-security-monitor`、macOS 是 LaunchAgent、Linux 是 systemd --user 或 XDG autostart）。安裝檔更新時路徑不變，所以更新後不用重設；Linux AppImage 會改用 AppImage 檔本身的路徑（`APPIMAGE`），不是每次都不同的暫時掛載點。已經另外裝了命令列版服務的話，打開開關會改成用桌面版執行檔。
+- 「登入時開啟桌面版」用 `ai-security-monitor-desktop --tray` 啟動：只放到系統匣、不開視窗（Windows 是 `HKCU\…\Run` 的「AI Security Monitor」）。
 - 桌面版不需要系統管理員；部分檢查（Security 事件記錄、minidump）需要系統管理員才讀得到，會在報告裡標示。
 
 ## 建置

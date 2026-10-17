@@ -235,9 +235,17 @@ flowchart LR
 
 ### 7. 把主機加進 Hub
 
-1. Hub 左側「新增主機」→ 建立註冊金鑰，頁面會給出已填好網址與金鑰的各平台一行安裝指令，在主機上貼上執行即可。
-2. 已經裝好命令列版的主機：`ai-security-monitor enroll https://hub.example.com --key asa_ek_…`，再 `ai-security-monitor service install --yes`（伺服器加 `--system`）讓它定時回報。
-3. 桌面版和命令列版共用同一個設定目錄：在同一台電腦用上面的指令註冊後，桌面版「設定」頁就會顯示 Hub（視窗裡目前不能直接註冊）。
+**免金鑰、自動尋找（建議）**：電腦自己找到公司的 Hub、送出加入申請，管理員在 Hub 按「核准」就完成，不用發金鑰。
+
+1. 管理員：Hub 左側「新增主機」→ 記下最上面的 **Hub 指紋**；把「免金鑰安裝指令」給同事（已預填這個 Hub 的網址），
+   或在公司 DNS 加 `_ai-security-monitor._tcp` 的 SRV 紀錄、在區網開啟 Hub 廣播（mDNS）讓電腦自己找到。可設定「自動核准的網段」（例如 `192.168.10.0/24`）。
+2. 電腦端：桌面版第一次開啟會顯示「尋找公司的 Security Hub」→ 核對指紋 → 「申請加入」；命令列版執行 `ai-security-monitor enroll --auto`
+   （或貼上 Hub 給的一行安裝指令），再 `ai-security-monitor service install --yes`。
+3. 管理員在「新增主機 → 待核准的主機」核對主機名稱與核對碼後按「核准」。電腦記下 Hub 指紋，之後 Hub 身分不符就拒絕上傳。
+   Hub 在 Docker Desktop／bridge 網路裡時廣播出不了區網：見 [自動尋找 Hub、免金鑰加入](docs/enrollment.md)。
+
+**用註冊金鑰**：「新增主機」頁也能建立註冊金鑰，給出已填好網址與金鑰的一行安裝指令；已經裝好命令列版的主機用
+`ai-security-monitor enroll https://hub.example.com --key asa_ek_…`，再 `ai-security-monitor service install --yes`（伺服器加 `--system`）。
 
 **確認**：Hub 的「主機」頁出現這台主機，幾分鐘內有最新回報；主機上 `ai-security-monitor status` 顯示已註冊。
 
@@ -295,7 +303,7 @@ ai-security-monitor service install --yes        # 開機／登入後自動回�
 
 ## 文件
 
-[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
+[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
 ## 資料夾結構

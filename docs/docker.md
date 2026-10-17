@@ -43,7 +43,10 @@ docker compose -f docker/compose.yml --env-file .env up -d
 |---|---|
 | `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **必填**。容器裡的 127.0.0.1 不是主機的 loopback，所以 Docker 裡不允許沒金鑰的開放模式（要的話設 `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1`） |
 | `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **必填**。compose 用它組 `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
-| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址 |
+| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址（也是 mDNS 廣播的 `url=`） |
+| `AI_SECURITY_MONITOR_HUB_MDNS` | 區網 mDNS 廣播（伺服器版預設開）。**Docker Desktop 與 bridge 網路不會把 multicast 送到區網**：Linux 用 `network_mode: host`，或在區網任一台執行 `ai-security-monitor hub advertise --url <對外網址>`，見 [enrollment.md](enrollment.md#mdns-廣播) |
+| `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | `0`＝關閉免金鑰加入申請（預設開） |
+| `AI_SECURITY_MONITOR_HUB_NAME` | 電腦端看到的 Hub 名稱（預設 Security Hub） |
 | `AI_SECURITY_MONITOR_HUB_HOST_PORT`／`AI_SECURITY_MONITOR_HUB_BIND` | 主機 port（8088）與綁定位址 |
 | `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.2.1`） |
 | `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY`／`AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN`／`AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY`／`AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` 完全不對外查詢 |

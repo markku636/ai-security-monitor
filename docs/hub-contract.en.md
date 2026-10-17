@@ -70,6 +70,42 @@ After an admin approves an action on the hub (currently `block_ip`, `unblock_ip`
 
 Signing key: `AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY` (or `_FILE`); if unset, one is generated on first use and stored in the database. After changing it, agents must register again to get the new `action_key`.
 
+### Keyless enrollment
+
+Agents can join without an enroll key: they send an enrollment request, an admin approves it in the Hub (or the source IP is inside an
+auto-approve network), and the agent then gets an enroll key bound to its own agent id. How to use it: [enrollment.en.md](enrollment.en.md).
+All binary values are base64url without padding; fingerprints/codes are RFC 4648 base32.
+
+- **Hub identity** – `GET /api/v1/hub/identity[?nonce=<16–128 chars [A-Za-z0-9_-]>]` (public). Response: `contract/hub-identity.v1.json`
+  `{ name, version, edition, algorithm: "ed25519", public_key, fingerprint, enrollment: { keyless }, nonce?, signature? }`.
+  `fingerprint` = first 20 base32 characters of SHA-256(raw 32-byte public key), in groups of 4 (`72AS-YEXT-VNGO-NLC5-W2NM`);
+  `signature` = Ed25519 over `asa-hub-identity|v1|<nonce>|<fingerprint>`. The key pair is generated once and stored in `settings.hub_identity`.
+  120 requests/min per IP.
+- **Request** – `POST /api/v1/agents/enroll-request` (no Authorization). Body: `contract/enroll-request.v1.json`
+  `{ agent, accept_remote_actions, request_secret (43–128 chars), hub_fingerprint? }`. Response 201 (200 when the same agent + secret repeats):
+  `{ request_id, status, auto_approved, request_code, poll_interval_s, expires_at, hub: { name, version, fingerprint } }`.
+  `request_code` = first 8 base32 characters of SHA-256(`asa-enroll-code|<request_secret>`) as `XXXX-XXXX`; the agent computes it locally too.
+  Errors: 403 `enroll_requests_disabled` (`AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0`), 409 `hub_fingerprint_mismatch` `{fingerprint}`,
+  429 `too_many_requests` (120 per IP per 10 min), 503 `too_many_pending` (500 pending), 400 `bad_request` `{rule}`.
+  Only the secret's SHA-256 is stored. Auto-approval uses the TCP peer address (hooked in the Hub's HTTP server) — X-Forwarded-For only when
+  `AI_SECURITY_MONITOR_HUB_TRUST_PROXY` is on; agents that already exist but never pinned a token are never auto-approved.
+- **Poll** – `GET /api/v1/agents/enroll-request/{id}` with `Authorization: Bearer <request_secret>`. Response: `contract/enroll-status.v1.json`
+  `{ request_id, status: pending|approved|rejected|expired, request_code, poll_interval_s, expires_at, reason?, credentials? }`.
+  Unknown id and wrong secret both return 404 (constant-time comparison); 30 failures per IP per 10 min → 429.
+  `credentials` = `{ agent_id, client_key, hub_fingerprint, signature }` only while approved, not revoked and not yet claimed (or claimed less than
+  10 minutes ago); `signature` = Ed25519 over `asa-enroll-approved|v1|<request_id>|<agent_id>|<sha256hex(client_key)>`, verified by the agent with
+  the public key it pinned before sending the request. `client_key` is an `asa_ek_…` enroll key derived from a Hub secret (never stored in clear)
+  and **bound to that agent id**: using it for another agent id returns 403 `key_bound_to_other_agent` on every agent endpoint.
+- The agent then calls `POST /api/v1/agents/register` exactly as with a normal key (`X-ASA-Agent-Token` pinning unchanged); the first successful
+  register marks the request as claimed. Pending requests expire after 7 days; approved but unclaimed ones also expire (and their key is revoked).
+- **Admin** (session + CSRF, or admin Bearer): `GET /api/v1/admin/enroll-requests?status=pending|all` (never returns secrets or keys),
+  `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`,
+  `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }` (IPv4 prefix ≥ /8, IPv6 ≥ /16; the GET also reports mDNS status and the
+  SRV/TXT records to add). Audit: `enroll_request.created|approved|rejected|auto_approved`, `enroll_settings.updated`.
+- **Agent side**: the Hub fingerprint is pinned in `config.json` (`hub.fingerprint`, `hub.public_key`). `watch` checks
+  `/api/v1/hub/identity` at start and stops uploading if it differs; a pending request lives in `<config>/hub-enroll-request.json` (secret in the
+  keychain / secrets file) and `watch` keeps polling it.
+
 ## `ai-security-monitor watch` loop
 
 1. Load config and key → `register` (identity and version are refreshed on every start).

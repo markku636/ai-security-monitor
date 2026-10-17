@@ -69,6 +69,38 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 
 簽署金鑰：`AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY`（或 `_FILE`）；沒設就第一次用到時隨機產生並存進資料庫。換金鑰後 agent 要重新註冊才拿得到新的 `action_key`。
 
+### 免金鑰加入
+
+電腦不用註冊金鑰也能加入：送出加入申請，管理員在 Hub 核准（或來源 IP 在自動核准網段內）後，拿到一把綁定自己 agent id 的註冊金鑰。
+操作方式見 [enrollment.md](enrollment.md)。二進位值一律 base64url（無補位）；指紋與核對碼用 RFC 4648 base32。
+
+- **Hub 身分**：`GET /api/v1/hub/identity[?nonce=<16–128 字元 [A-Za-z0-9_-]>]`（公開）。回應 `contract/hub-identity.v1.json`
+  `{ name, version, edition, algorithm: "ed25519", public_key, fingerprint, enrollment: { keyless }, nonce?, signature? }`。
+  `fingerprint`＝SHA-256(公鑰 32 bytes) 的 base32 前 20 字、每 4 字一組（`72AS-YEXT-VNGO-NLC5-W2NM`）；
+  `signature`＝Ed25519 簽 `asa-hub-identity|v1|<nonce>|<fingerprint>`。金鑰第一次用到時產生，存在 `settings.hub_identity`。每 IP 每分鐘 120 次。
+- **送出申請**：`POST /api/v1/agents/enroll-request`（不帶 Authorization）。內容 `contract/enroll-request.v1.json`
+  `{ agent, accept_remote_actions, request_secret（43–128 字元）, hub_fingerprint? }`。回應 201（同一台、同一個密語重送回 200）：
+  `{ request_id, status, auto_approved, request_code, poll_interval_s, expires_at, hub: { name, version, fingerprint } }`。
+  `request_code`＝SHA-256(`asa-enroll-code|<request_secret>`) 的 base32 前 8 字（`XXXX-XXXX`），agent 自己也算得出來。
+  錯誤：403 `enroll_requests_disabled`（`AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0`）、409 `hub_fingerprint_mismatch` `{fingerprint}`、
+  429 `too_many_requests`（每 IP 每 10 分鐘 120 個）、503 `too_many_pending`（待核准 500 個）、400 `bad_request` `{rule}`。
+  密語只存 SHA-256。自動核准只看 TCP 對端位址（Hub 的 HTTP 伺服器掛勾取得）；開了 `AI_SECURITY_MONITOR_HUB_TRUST_PROXY` 才看 X-Forwarded-For；
+  已存在但從沒釘選過 token 的 agent 一律不自動核准。
+- **輪詢**：`GET /api/v1/agents/enroll-request/{id}`，`Authorization: Bearer <request_secret>`。回應 `contract/enroll-status.v1.json`
+  `{ request_id, status: pending|approved|rejected|expired, request_code, poll_interval_s, expires_at, reason?, credentials? }`。
+  不存在與密語錯誤一律 404（常數時間比對）；同一 IP 10 分鐘錯 30 次 → 429。
+  `credentials`＝`{ agent_id, client_key, hub_fingerprint, signature }`，只在已核准、金鑰沒被撤銷、還沒被領取（或領取後 10 分鐘內）時給；
+  `signature`＝Ed25519 簽 `asa-enroll-approved|v1|<request_id>|<agent_id>|<sha256hex(client_key)>`，agent 用送申請前釘選的公鑰驗。
+  `client_key` 是 `asa_ek_…` 註冊金鑰（由 Hub 的密鑰衍生、不存明文），**綁定那台的 agent id**：拿去用別的 agent id 在任何 agent 端點都回 403 `key_bound_to_other_agent`。
+- 之後 agent 照一般金鑰流程 `POST /api/v1/agents/register`（`X-ASA-Agent-Token` 釘選不變）；第一次註冊成功就標記為已領取。
+  待核准 7 天過期；核准後一直沒領取也會過期（金鑰一併撤銷）。
+- **管理**（session＋CSRF，或管理員 Bearer）：`GET /api/v1/admin/enroll-requests?status=pending|all`（不回密語與金鑰）、
+  `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`、
+  `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }`（IPv4 前綴至少 /8、IPv6 至少 /16；GET 另外回 mDNS 狀態與要加的 SRV／TXT 紀錄）。
+  稽核：`enroll_request.created|approved|rejected|auto_approved`、`enroll_settings.updated`。
+- **agent 端**：Hub 指紋釘選在 `config.json`（`hub.fingerprint`、`hub.public_key`）。`watch` 啟動時查 `/api/v1/hub/identity`，不符就停止上傳；
+  等候中的申請存在 `<設定目錄>/hub-enroll-request.json`（密語在系統金鑰圈／密鑰檔），`watch` 會接著輪詢。
+
 ## `ai-security-monitor watch` 流程
 
 1. 讀設定與金鑰 → `register`（每次啟動都更新身分與版本）。

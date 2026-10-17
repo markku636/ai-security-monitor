@@ -64,6 +64,20 @@ curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/down
 
 ## 從 Security Hub 安裝
 
+**免金鑰（建議）**：Hub「新增主機」頁的「免金鑰安裝指令」已預填這個 Hub 的網址，在電腦上執行後會送出加入申請，管理員在同一頁按「核准」即可
+（也可以設定自動核准的網段）。電腦也能自己找到 Hub（公司 DNS 的 SRV 紀錄、區網廣播）：`ai-security-monitor enroll --auto`，桌面版第一次開啟就會帶你做。
+詳見 [自動尋找 Hub、免金鑰加入](enrollment.md)。
+
+```powershell
+$env:AI_SECURITY_MONITOR_SERVICE='user'; irm https://hub.example.com/install.ps1 | iex      # Windows（伺服器用 'system'＋系統管理員 PowerShell）
+```
+
+```bash
+curl -fsSL https://hub.example.com/install.sh | sh -s -- --service user                     # Linux／macOS（伺服器用 --service system）
+```
+
+**用註冊金鑰**：
+
 Hub 的「新增主機」頁（`/install`）會建立一把註冊金鑰，並給出已填好 Hub 網址與金鑰的指令；
 `<hub>/install.sh`、`<hub>/install.ps1` 是同一份腳本，只是預設註冊到那個 Hub（腳本公開、不含金鑰）。
 註冊金鑰在「設定與金鑰 → 註冊金鑰」列出用了幾台主機、最後使用時間，撤銷後用那把金鑰的主機會被拒絕。

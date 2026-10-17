@@ -2,6 +2,20 @@
 
 ## 未發佈
 
+- **自動尋找 Hub、免金鑰加入**（[docs/enrollment.md](docs/enrollment.md)）：辦公室電腦不用金鑰、不用手動設定就能加入公司的 Security Hub。
+  - **尋找**：依序用明確給的網址（`enroll --hub`、Hub 預填的安裝指令、`AI_SECURITY_MONITOR_HUB_URL`）→ 公司 DNS 的 SRV 紀錄 `_ai-security-monitor._tcp.<搜尋網域>`（TXT 可帶 `url=`、`fp=`；Windows 讀 DNS 尾碼、Linux `/etc/resolv.conf`、macOS `scutil --dns`）→ 區網 mDNS／DNS-SD `_ai-security-monitor._tcp.local`。新增 `ai-security-monitor discover`（只列出）與 `enroll --auto [--hub URL] [--wait 15m] [--repin]`；`enroll` 沒給 `--key` 就走免金鑰。
+  - **Hub 身分（TOFU）**：Hub 第一次啟動產生 Ed25519 身分金鑰（存在 `settings`），`GET /api/v1/hub/identity?nonce=` 回名稱、版本、公鑰、指紋（`XXXX-XXXX-XXXX-XXXX-XXXX`）與對 nonce 的簽章。電腦端驗章後才列出，加入時釘選指紋；之後同網址或自動找到的 Hub 指紋不同就拒絕上傳（`watch` 啟動時檢查），要明確 `enroll --auto --repin` 才換。用金鑰註冊的電腦也會釘選（舊電腦升級後第一次連上時補記）。「新增主機」與「設定與金鑰」頁顯示 Hub 指紋。
+  - **加入申請**：`POST /api/v1/agents/enroll-request`（不帶金鑰，帶主機資訊與一組隨機密語，Hub 只存雜湊）→ 管理員在「新增主機 → 待核准的主機」核准／拒絕（可多選，側欄有待核准數字），或來源 IP 在「自動核准的網段」（CIDR，預設空白）內就直接核准 → 電腦以密語輪詢 `GET …/enroll-request/{id}`，核准後拿到**綁定這台 agent id** 的註冊金鑰（Hub 簽章，電腦用釘選的公鑰驗），照一般流程註冊。電腦端與管理頁顯示同一組核對碼。自動核准只看 TCP 真正的來源位址（Hub 在 HTTP 伺服器掛勾取得；開了 `TRUST_PROXY` 才看 X-Forwarded-For）。限流、待核准上限 500、7 天過期、領取後停止發金鑰；核准／拒絕／自動核准／修改網段都寫稽核。新表 `enrollment_requests`（migration 0009），`enroll_keys` 多 `bound_agent_id`：綁定的金鑰拿去用別的 agent id 一律 403 `key_bound_to_other_agent`。`AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0` 可關閉。
+  - **等候可續**：待核准的申請存在設定目錄（密語在金鑰圈／密鑰檔），再執行 `enroll --auto` 或背景服務（`watch`）都會接著等，核准後自動開始回報。
+  - **mDNS 廣播**：Hub 伺服器版預設在區網廣播（`AI_SECURITY_MONITOR_HUB_MDNS`，TXT 帶指紋與 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL`）；Docker Desktop／bridge 網路的 multicast 出不了區網，可用 Linux `network_mode: host`，或新的 `ai-security-monitor hub advertise --url <對外網址>` 在區網任一台代為廣播（先驗 Hub 身分）。「新增主機」頁的「自動尋找」卡片顯示廣播狀態，並產生 Windows DNS Server／BIND 的 SRV、TXT 紀錄指令。新設定 `AI_SECURITY_MONITOR_HUB_NAME`。
+  - **安裝腳本**：沒給金鑰時預設免金鑰：Hub 提供的 `/install.ps1`、`/install.sh`（已預填網址）會送出加入申請、等 2 分鐘（`AI_SECURITY_MONITOR_ENROLL_WAIT`／`--wait`），還沒核准也照樣裝好背景服務繼續等；通用腳本加 `AI_SECURITY_MONITOR_AUTO_ENROLL=1`（`--auto-enroll`）改用自動尋找。「新增主機」頁有「下載預填此 Hub 的安裝指令（不含金鑰）」。
+  - **桌面版**：第一次開啟、還沒加入 Hub 時顯示「尋找公司的 Security Hub」：列出找到的 Hub 與指紋 → 申請加入 → 等候核准（顯示 Hub 指紋與核對碼，自動確認）→ 完成；也可以輸入管理員給的網址。側欄新增「加入公司 Hub」。
+  - **相容**：原本的金鑰註冊完全照舊；Hub 的稽核來源 IP 不再在沒開 `TRUST_PROXY` 時採用用戶端可偽造的 `X-Real-IP`。
+- **桌面版設定頁：Hub 網址與開機自動啟動**：
+  - **Hub**：網址欄、「測試連線」（`/api/health`＋Hub 身分：版本與指紋）、「尋找公司的 Hub」、「申請加入」（免金鑰，等候狀態可續）、進階「我有註冊金鑰」（原本的金鑰註冊）、「離開這個 Hub」（只刪這台的設定與金鑰，Hub 上的主機紀錄不會刪）。要換到指紋和目前不同的 Hub 會清楚警告並要求確認。網址只接受 https，http 限本機與私網。
+  - **開機自動啟動**：「開機／登入後在背景自動回報」＝使用者層的 `service install --yes`／`uninstall --yes`（不提權，同一份計畫：會換掉舊版 asa 的登入啟動項目並搬設定目錄），顯示已開啟／執行中／找到舊版 asa；登記的是桌面版執行檔本身（安裝路徑更新後不變；Linux AppImage 改用 `APPIMAGE` 的實際檔案位置）。「登入時開啟桌面版」用 tauri-plugin-autostart 以 `--tray` 啟動，只放系統匣不跳視窗，預設關。
+  - `scripts/capture-desktop-screenshots.mjs` 補上新指令的假回應，重新擷取設定頁截圖。
+
 - **桌面版 logo 放大**：系統圖示（標題列、工作列、系統匣、安裝檔）改用裁掉留白的來源重新產生，海豹撐滿圖示高度；側欄品牌圖從 36px 放大到 56px；開啟時先顯示大 logo 的啟動畫面約 1 秒後淡出（系統設定「減少動態效果」時不顯示）。`scripts/capture-desktop-screenshots.mjs` 以減少動態效果擷取，截圖不會拍到啟動畫面。
 - **Hub：批次分析 IP、IP 旁的風險圖示**：連線頁「可疑 IP 排名」每列可勾選（含全選本頁），勾選後可「查詢外部情資（N 個）」（每 5 個送一次並顯示「已查 x／y」進度，內網位址自動略過，快取內的不重打，可勾「略過快取重查」）、「請 AI 分析選取的 IP」（最多 20 個，AI 會拿到每個 IP 的連線紀錄、黑名單命中、備註與外部情資快取）或「清除選取」；沒勾時有「全部查詢（前 N 名）」。新增 `POST /api/v1/ip-intel/batch`（`{ ips: string[] ≤ 50, force? }`，管理員＋CSRF，最多同時查 3 個，稽核一筆 `ip_intel.batch`）；每日額度的計數改成排隊寫入，並行查詢不會少算。排名多了可排序的「外部風險」欄（`rsort=risk`）；排名、連線表、總覽卡片、主機頁、事件與流量頁、IP 分析頁的 IP 旁都有外部風險圖示（低 ✓／中 !／高 ▲／極高 ✕／尚未查詢 ?，滑過看分數與查詢時間；內網不顯示），排名上方有圖示說明。AI 助手新增範圍「一次分析多個 IP」（`/ai?scope=ips&ips=…`），MCP 的 `lookup_indicator` 對 IP 也會帶人工備註與快取的外部情資（只讀快取）。
 

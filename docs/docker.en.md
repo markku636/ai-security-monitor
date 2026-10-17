@@ -43,7 +43,10 @@ See [.env.example](../.env.example) for the full list. The important ones:
 |---|---|
 | `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **Required.** 127.0.0.1 inside a container is not the host's loopback, so open mode without a key is refused in Docker (set `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1` to override) |
 | `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **Required.** Used by compose to build `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
-| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` |
+| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` (also the mDNS `url=`) |
+| `AI_SECURITY_MONITOR_HUB_MDNS` | Local network mDNS advertising (on by default for the server edition). **Docker Desktop and bridge networking do not pass multicast to the LAN**: use `network_mode: host` on Linux, or run `ai-security-monitor hub advertise --url <public url>` on any LAN machine, see [enrollment.en.md](enrollment.en.md#mdns-advertising) |
+| `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | `0` = disable keyless enrollment requests (on by default) |
+| `AI_SECURITY_MONITOR_HUB_NAME` | Hub name shown to computers (default Security Hub) |
 | `AI_SECURITY_MONITOR_HUB_HOST_PORT` / `AI_SECURITY_MONITOR_HUB_BIND` | Host port (8088) and bind address |
 | `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | Image tag (default `latest`; e.g. `slim`, `0.2.1`) |
 | `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY` / `AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN` / `AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY` / `AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | Keys for "External threat intel" on the IP page (optional; can also be set under Settings & keys → Threat intel sources); `AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` disables outbound lookups |

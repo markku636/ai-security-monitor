@@ -64,6 +64,21 @@ Platform names: `windows-x64.exe`, `windows-arm64.exe`, `macos-arm64`, `macos-x6
 
 ## Install from the Security Hub
 
+**Keyless (recommended)**: the *keyless install commands* on the Hub's *Add hosts* page have the Hub URL prefilled. Running one sends an
+enrollment request and an administrator clicks **Approve** on the same page (or sets auto-approve networks). Computers can also find the Hub
+on their own (company DNS SRV record, local network broadcast): `ai-security-monitor enroll --auto`; the desktop app walks you through it on first start.
+See [Automatic Hub discovery and keyless enrollment](enrollment.en.md).
+
+```powershell
+$env:AI_SECURITY_MONITOR_SERVICE='user'; irm https://hub.example.com/install.ps1 | iex      # Windows (servers: 'system' + administrator PowerShell)
+```
+
+```bash
+curl -fsSL https://hub.example.com/install.sh | sh -s -- --service user                     # Linux / macOS (servers: --service system)
+```
+
+**With an enroll key**:
+
 The Hub's "Add a host" page (`/install`) creates an enroll key and shows commands with the Hub URL and key filled in;
 `<hub>/install.sh` and `<hub>/install.ps1` are the same scripts, defaulting to that Hub (the scripts are public and contain no key).
 "Settings & keys → Enroll keys" lists how many hosts use each key and when it was last used; revoking a key rejects the hosts that use it.

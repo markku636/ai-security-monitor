@@ -44,7 +44,8 @@ With `--frame windows` the script instead writes versions wrapped in a Windows 1
 | Scan results | Findings from the latest report, sorted by severity, expandable for detail and advice |
 | Threat intel | Per source: entries, last update, whether it came from the Hub; update stale lists or refetch everything |
 | AI analysis | Uses the Claude Code or Codex CLI you are signed in to (your subscription) to analyze suspicious connections, the latest report, or a free-form question, streaming answers and tool calls |
-| Settings | Agent id, config directory, Hub URL, background service status |
+| Join company Hub | Keyless enrollment: find your company's Security Hub (company DNS, local network broadcast), show its fingerprint, *Request to join*, then wait for an administrator to approve (keeps waiting in the background if you close the window). On first start with no Hub it opens this page automatically (unless you clicked *Not now*). See [enrollment.en.md](enrollment.en.md) |
+| Settings | **Company Security Hub**: URL field, *Test connection* (version and fingerprint), *Find your company's Hub*, *Request to join*, *I have an enroll key*, *Leave this Hub* (deletes only this computer's settings and key; the host record on the Hub stays until an administrator deletes it). Switching to a Hub with a different fingerprint shows a clear warning and needs confirmation. **Start automatically**: *Report in the background after startup/sign-in* (= `ai-security-monitor service install --yes`, installed for the current user, no UAC; it also replaces an old asa start-at-login entry and moves its settings) and *Open the desktop app at sign-in* (tray only, no window). Plus agent id and config directory |
 
 Closing the window minimizes it to the system tray; the tray menu has Open, Open Security Hub and Quit. Only one instance runs at a time.
 
@@ -66,6 +67,8 @@ moves `%APPDATA%\ai-security-agent` to `%APPDATA%\ai-security-monitor`, and the 
 - It shares the config directory (`%APPDATA%\ai-security-monitor` etc.), so it sees the background `ai-security-monitor watch`'s latest report, intel and Hub enrollment.
 - The Connections page takes a read-only snapshot: it does **not** append to the connection history, so frequent refreshes don't skew the service's beacon detection.
 - AI analysis mounts ai-security-monitor's read-only MCP tools; the MCP server is the desktop executable itself — started with command-line arguments (e.g. `ai-security-monitor-desktop.exe mcp --tools …`) it runs as the ai-security-monitor CLI.
+- *Report in the background* registers **the desktop executable itself** (`…\AI Security Monitor\ai-security-monitor-desktop.exe watch --service`; on Windows the `ai-security-monitor` value under `HKCU\…\Run`, a LaunchAgent on macOS, systemd --user or XDG autostart on Linux). The installed path does not change on updates, so nothing needs to be redone; a Linux AppImage registers the AppImage file itself (`APPIMAGE`), not the per-run temporary mount. If the command-line service was installed before, turning the switch on points it at the desktop executable.
+- *Open the desktop app at sign-in* starts `ai-security-monitor-desktop --tray`: tray icon only, no window (on Windows the "AI Security Monitor" value under `HKCU\…\Run`).
 - No administrator rights needed; some checks (Security event log, minidumps) need an administrator and are marked as such in the report.
 
 ## Build

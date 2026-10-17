@@ -235,9 +235,20 @@ The script verifies the release's `SHA256SUMS` and stops on a mismatch; options 
 
 ### 7. Add a host to the Hub
 
-1. In the Hub, "Add host" → create an enroll key; the page gives a ready-made one-line install command per platform with the Hub URL and key filled in. Run it on the host.
-2. On a host that already has the command line: `ai-security-monitor enroll https://hub.example.com --key asa_ek_…`, then `ai-security-monitor service install --yes` (`--system` on servers) so it reports on a schedule.
-3. The desktop app and the command line share the config directory: after enrolling on the same computer, the desktop app's Settings page shows the Hub (it cannot enroll from the window yet).
+**Keyless, automatic discovery (recommended)**: computers find your company's Hub and send an enrollment request; an administrator clicks
+**Approve** in the Hub and that's it — no keys to hand out.
+
+1. Administrator: Hub sidebar "Add host" → note the **Hub fingerprint** at the top; give colleagues the *keyless install command* (the Hub URL
+   is prefilled), or add an `_ai-security-monitor._tcp` SRV record to the company DNS / turn on Hub advertising (mDNS) so computers find it
+   themselves. Optionally set *auto-approve networks* (e.g. `192.168.10.0/24`).
+2. Computer: the desktop app opens *Find your company's Security Hub* on first start → compare the fingerprint → *Request to join*; on the command
+   line run `ai-security-monitor enroll --auto` (or paste the Hub's one-line install command), then `ai-security-monitor service install --yes`.
+3. The administrator checks host name and check code under "Add host → Pending hosts" and clicks **Approve**. The computer pins the Hub
+   fingerprint and refuses to upload if the Hub identity ever changes. A Hub inside Docker Desktop / bridge networking cannot advertise to the
+   LAN: see [Automatic Hub discovery and keyless enrollment](docs/enrollment.en.md).
+
+**With an enroll key**: the "Add host" page can also create an enroll key and gives one-line install commands with URL and key filled in; on a host
+that already has the command line run `ai-security-monitor enroll https://hub.example.com --key asa_ek_…`, then `ai-security-monitor service install --yes` (`--system` on servers).
 
 **Check**: the host appears on the Hub's "Hosts" page with a fresh report within a few minutes; `ai-security-monitor status` on the host shows it is enrolled.
 
@@ -295,7 +306,7 @@ See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/servi
 
 ## Docs
 
-[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
+[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
 ## Repository layout
