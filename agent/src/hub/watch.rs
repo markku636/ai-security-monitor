@@ -75,6 +75,7 @@ pub async fn snapshot(
     let agent_id = agent_id.to_string();
     let mut payload = tokio::task::spawn_blocking(move || -> AppResult<SnapshotPayload> {
         let mut snap = crate::connections::take(&dir)?;
+        crate::dns::annotate_domains(&mut snap.connections);
         let now = Utc::now().timestamp() as u64;
         history::append(&dir, now, &history::pairs_of(&snap.connections))?;
         let hist = history::load(&dir, now.saturating_sub(history::RETENTION_SECS))?;

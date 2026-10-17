@@ -624,6 +624,7 @@ mod tests {
             verdict: Verdict::default(),
             bytes_in: None,
             bytes_out: None,
+            domain: None,
         }
     }
 

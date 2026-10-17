@@ -60,6 +60,37 @@ jobs:
           cargo run -q -- --json discover --no-dns --no-mdns > discover.json
           grep -q '"hint"' discover.json
 
+      - name: DNS smoke (live collection)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AI_SECURITY_MONITOR_CONFIG_DIR="$RUNNER_TEMP/asm-dns" AI_SECURITY_MONITOR_SECRETS_BACKEND=file
+          cargo build -q
+          B=./target/debug/ai-security-monitor
+          $B --json dns status > dns-status.json
+          jq -e '.enabled == true and .upload == "all"' dns-status.json > /dev/null
+          $B --json intel lookup kqfcpqbyqllgbr.net > lookup.json
+          jq -e '.domain.looks_generated == true and .domain.registrable == "kqfcpqbyqllgbr.net"' lookup.json > /dev/null
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # runner 有系統管理員權限：ETW 即時事件要抓到這個程式自己查的網域（含 PID）
+            cargo test -q --locked --lib dns::collect::windows -- --ignored --nocapture
+            # --follow：Resolve-DnsName 走 DNS Client，應該看到 powershell 查的網域
+            (sleep 8; powershell -NoProfile -Command "Resolve-DnsName asm-ci-follow.example.com -ErrorAction SilentlyContinue" > /dev/null 2>&1 || true) &
+            timeout 20 $B --json dns --follow > follow.jsonl || true
+            wait
+            grep asm-ci-follow follow.jsonl | head -3
+            jq -se 'map(select(.name == "asm-ci-follow.example.com" and .source == "etw" and (.process // "" | ascii_downcase | test("powershell")))) | length >= 1' follow.jsonl > /dev/null
+            # 背景 watch 跑一分多鐘：每分鐘聚合寫進 dns/、狀態是 etw
+            (for i in 1 2 3 4 5 6; do sleep 10; powershell -NoProfile -Command "Resolve-DnsName asm-ci-watch-$i.example.com -ErrorAction SilentlyContinue" > /dev/null 2>&1 || true; done) &
+            timeout 85 $B watch --no-upload -q > watch.log 2>&1 || true
+            wait
+            $B --json dns status > dns-status.json
+            jq '.status' dns-status.json
+            jq -e '.status.source == "etw" and .status.has_process and .status.events >= 1' dns-status.json > /dev/null
+            $B --json dns --since 10m --limit 500 > dns-list.json
+            jq -e '[.records[] | select(.name | startswith("asm-ci-watch-")) | select(.process != null)] | length >= 1' dns-list.json > /dev/null
+          fi
+
       - name: Metrics smoke (interface counters, opt-in performance)
         shell: bash
         run: |

@@ -94,6 +94,7 @@ pub fn sample_connection() -> Connection {
         },
         bytes_in: None,
         bytes_out: None,
+        domain: None,
     }
 }
 

@@ -87,6 +87,9 @@ pub struct Connection {
     pub bytes_in: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bytes_out: Option<u64>,
+    /// 遠端 IP 最近一次被解析時的網域（背景 DNS 蒐集提供；沒有就是 None）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
 }
 
 impl Connection {

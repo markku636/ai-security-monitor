@@ -115,6 +115,8 @@ pub enum Command {
     Traffic(TrafficArgs),
     /// 網路流量統計與效能：各介面與各程式的上傳／下載量；開啟後另有 CPU、記憶體、磁碟、電池
     Metrics(MetricsArgs),
+    /// DNS 監看：這台電腦最近查了哪些網域、是哪個程式查的、哪些可疑（--follow 即時看）
+    Dns(DnsArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
     Events(EventsArgs),
     /// 漏洞與更新：作業系統是否仍在支援、多久沒更新、已安裝軟體的已知漏洞（Linux 套件查 OSV）
@@ -387,6 +389,34 @@ pub struct TrafficArgs {
     /// 多久讀一次連線表
     #[arg(long, default_value = "2s", value_name = "DUR")]
     pub every: String,
+}
+
+#[derive(Args, Debug, Clone)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct DnsArgs {
+    #[command(subcommand)]
+    pub cmd: Option<DnsCmd>,
+    /// 看最近多久
+    #[arg(long, default_value = "15m", value_name = "DUR")]
+    pub since: String,
+    /// 只看可疑的（情資命中、像亂數產生的網域、少見頂級網域）
+    #[arg(long)]
+    pub suspicious: bool,
+    /// 只看這個程式（名稱，不分大小寫，例 chrome.exe）
+    #[arg(long, value_name = "NAME")]
+    pub process: Option<String>,
+    /// 最多列幾筆
+    #[arg(long, default_value_t = 50)]
+    pub limit: usize,
+    /// 即時顯示新的查詢（Ctrl+C 結束；Windows 以系統管理員執行才看得到是哪個程式）
+    #[arg(long)]
+    pub follow: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum DnsCmd {
+    /// 背景 DNS 蒐集的狀態：資料來源、事件數、最後一筆、儲存位置
+    Status,
 }
 
 #[derive(Args, Debug, Clone)]

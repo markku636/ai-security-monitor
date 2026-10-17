@@ -1275,6 +1275,8 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     // 停止訊號（Ctrl-C／SIGTERM／服務停止）：等待與掃描中都會被打斷，服務停止不必等完整掃描跑完
     let stop = crate::service::instance::stopped();
     tokio::pin!(stop);
+    // 背景 DNS 蒐集（dns.enabled，--once 不開）
+    let mut dns_rt: Option<crate::dns::runtime::DnsRuntime> = None;
 
     loop {
         let now = tokio::time::Instant::now();
@@ -1330,11 +1332,24 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             };
         }
         if now >= next_snap && !a.once {
-            let want = match config::load(&env.config_dir) {
-                Ok(c) => c.hub_advertise_url,
-                Err(_) => cfg.hub_advertise_url.clone(),
+            let fresh = config::load(&env.config_dir).ok();
+            let want = match &fresh {
+                Some(c) => c.hub_advertise_url.clone(),
+                None => cfg.hub_advertise_url.clone(),
             };
             advertiser = reconcile_advertiser(env, advertiser, want).await;
+            // DNS 監看：設定改了下一輪就跟著開／關
+            let dns_on = fresh.as_ref().map(|c| c.dns.enabled).unwrap_or(cfg.dns.enabled);
+            if dns_on && dns_rt.is_none() {
+                dns_rt = Some(crate::dns::runtime::DnsRuntime::spawn(
+                    env.config_dir.clone(),
+                    crate::dns::runtime::SERVICE_SESSION,
+                ));
+            } else if !dns_on {
+                if let Some(rt) = dns_rt.take() {
+                    rt.shutdown().await;
+                }
+            }
         }
         if now >= next_snap {
             if intel_loaded.elapsed() > Duration::from_secs(3600) {
@@ -1501,6 +1516,9 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     }
     if let Some(adv) = advertiser {
         adv.shutdown().await;
+    }
+    if let Some(rt) = dns_rt {
+        rt.shutdown().await;
     }
     if restart_after_update {
         if let Some(e) = &exe {

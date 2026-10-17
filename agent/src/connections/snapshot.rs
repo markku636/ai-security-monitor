@@ -206,6 +206,7 @@ pub fn take_with(config_dir: &Path, hash_exes: bool) -> AppResult<SnapshotResult
                     verdict: Verdict::default(),
                     bytes_in: None,
                     bytes_out: None,
+                    domain: None,
                 });
             }
             ProtocolSocketInfo::Udp(u) => {
@@ -237,6 +238,7 @@ pub fn take_with(config_dir: &Path, hash_exes: bool) -> AppResult<SnapshotResult
                     verdict: Verdict::default(),
                     bytes_in: None,
                     bytes_out: None,
+                    domain: None,
                 });
             }
         }

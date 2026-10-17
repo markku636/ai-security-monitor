@@ -44,6 +44,7 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Ports(a) => super::ports_cmd::run(&env, a).await,
         Command::Traffic(a) => super::traffic_cmd::run(&env, a).await,
         Command::Metrics(a) => super::metrics_cmd::run(&env, a).await,
+        Command::Dns(a) => super::dns_cmd::run(&env, a).await,
         Command::Events(a) => super::events_cmd::run(&env, a).await,
         Command::Vuln(a) => super::vuln_cmd::run(&env, a).await,
         Command::Harden(a) => super::harden_cmd::run(&env, a).await,

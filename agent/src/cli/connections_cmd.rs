@@ -67,9 +67,15 @@ fn render(conns: &[Connection], a: &ConnectionsArgs) -> String {
             c.verdict.level.label().to_string(),
             c.proto.clone(),
             format!("{}:{}", c.local_ip, c.local_port),
-            match c.geo.as_ref().and_then(|g| g.country.clone()) {
-                Some(cc) => format!("{} [{cc}]", c.remote_display()),
-                None => c.remote_display(),
+            {
+                let remote = match &c.domain {
+                    Some(d) => format!("{} ({d})", c.remote_display()),
+                    None => c.remote_display(),
+                };
+                match c.geo.as_ref().and_then(|g| g.country.clone()) {
+                    Some(cc) => format!("{remote} [{cc}]"),
+                    None => remote,
+                }
             },
             c.state.clone(),
             c.process
@@ -102,10 +108,12 @@ fn render(conns: &[Connection], a: &ConnectionsArgs) -> String {
 async fn one_shot(env: &Env, a: &ConnectionsArgs) -> AppResult<Vec<Connection>> {
     let with_intel = a.intel;
     let dir = env.config_dir.clone();
+    let dns_dir = super::dns_cmd::data_dir(env).0;
     let allowlist = Allowlist::load(&dir)?;
     let baseline = Baseline::load(&dir)?;
     tokio::task::spawn_blocking(move || -> AppResult<Vec<Connection>> {
         let mut snap = crate::connections::take(&dir)?;
+        crate::dns::annotate_domains_from_store(&dns_dir, &mut snap.connections);
         let now = crate::util::time::now().timestamp() as u64;
         history::append(&dir, now, &history::pairs_of(&snap.connections))?;
         let hist = history::load(&dir, now.saturating_sub(history::RETENTION_SECS))?;

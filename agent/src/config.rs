@@ -45,6 +45,8 @@ pub struct AgentConfig {
     pub hub: Option<HubConfig>,
     pub remote_actions: RemoteActionsConfig,
     pub metrics: MetricsConfig,
+    /// DNS 監看（`dns.*`）。
+    pub dns: DnsConfig,
     /// 自動更新（`update.mode`）。
     pub update: UpdateConfig,
     /// 這台電腦的背景服務（`watch`）用 mDNS 在區網廣播的 Hub 網址（`config set hub.advertise_url <URL>`）；
@@ -64,8 +66,60 @@ impl Default for AgentConfig {
             hub: None,
             remote_actions: RemoteActionsConfig::default(),
             metrics: MetricsConfig::default(),
+            dns: DnsConfig::default(),
             update: UpdateConfig::default(),
             hub_advertise_url: None,
+        }
+    }
+}
+
+/// DNS 查詢紀錄要不要上傳 Hub。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DnsUpload {
+    /// 全部上傳（預設）。
+    #[default]
+    All,
+    /// 只上傳告警（可疑查詢）與統計。
+    Alerts,
+    /// 不上傳。
+    Off,
+}
+
+impl DnsUpload {
+    pub fn parse(v: &str) -> Option<Self> {
+        match v.trim().to_ascii_lowercase().as_str() {
+            "all" => Some(Self::All),
+            "alerts" => Some(Self::Alerts),
+            "off" | "none" => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Alerts => "alerts",
+            Self::Off => "off",
+        }
+    }
+}
+
+/// DNS 監看：背景服務即時記錄這台電腦查了哪些網域（哪個程式查的），本機保留 7 天。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct DnsConfig {
+    /// 開啟背景 DNS 蒐集（預設開）。
+    pub enabled: bool,
+    /// 上傳 Hub 的程度：all／alerts／off（只在加入 Hub 時有作用）。
+    pub upload: DnsUpload,
+}
+
+impl Default for DnsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            upload: DnsUpload::All,
         }
     }
 }
@@ -587,6 +641,8 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "metrics.performance",
     "metrics.interval",
     "metrics.process_network",
+    "dns.enabled",
+    "dns.upload",
     "update.mode",
     "hub.advertise_url",
 ];
@@ -640,6 +696,11 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
             cfg.metrics.interval = v;
         }
         "metrics.process_network" => cfg.metrics.process_network = parse_bool(key, value)?,
+        "dns.enabled" => cfg.dns.enabled = parse_bool(key, value)?,
+        "dns.upload" => {
+            cfg.dns.upload = DnsUpload::parse(value)
+                .ok_or_else(|| AppError::InvalidArg(tf!("{key} 只能是 all、alerts 或 off", key = key)))?
+        }
         "update.mode" => {
             cfg.update.mode = UpdateMode::parse(value)
                 .ok_or_else(|| AppError::InvalidArg(tf!("{key} 只能是 off、notify 或 auto", key = key)))?
@@ -1058,6 +1119,12 @@ mod tests {
         set_value(&mut c, "lang", "EN").unwrap();
         assert_eq!(c.lang.as_deref(), Some("en"));
         // 效能蒐集預設關，要明確開
+        assert!(c.dns.enabled && c.dns.upload == DnsUpload::All);
+        set_value(&mut c, "dns.upload", "alerts").unwrap();
+        assert_eq!(c.dns.upload, DnsUpload::Alerts);
+        set_value(&mut c, "dns.enabled", "off").unwrap();
+        assert!(!c.dns.enabled);
+        assert!(set_value(&mut c, "dns.upload", "some").is_err());
         assert!(!c.metrics.performance);
         set_value(&mut c, "metrics.performance", "true").unwrap();
         assert!(c.metrics.performance);
