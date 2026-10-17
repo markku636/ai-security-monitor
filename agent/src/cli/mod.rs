@@ -48,6 +48,12 @@ pub async fn run() -> i32 {
     crate::util::env::seed_from_legacy(args::CLAP_ENV);
     let lang = resolve_lang(&argv);
     i18n::set_lang(lang);
+    if launch_mode(argv.len() <= 1, console_owned_by_this_process()) == LaunchMode::DoubleClicked {
+        // 在檔案總管雙擊命令列版：只印 help 主控台會一閃而過，改成說明＋等 Enter
+        print_double_click_help();
+        wait_for_enter();
+        return EXIT_OK;
+    }
 
     let cmd = localize_command(args::Cli::command());
     let matches = match cmd.try_get_matches_from(&argv) {
@@ -81,6 +87,93 @@ pub async fn run() -> i32 {
             }
         }
     }
+}
+
+/// 啟動方式：在檔案總管雙擊（沒有參數、主控台是這個行程自己開的）或一般命令列。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchMode {
+    Normal,
+    DoubleClicked,
+}
+
+/// 沒帶任何參數、而且主控台只有這個行程（不是從終端機執行）→ 當成雙擊開啟。
+pub fn launch_mode(no_args: bool, console_owned: bool) -> LaunchMode {
+    if no_args && console_owned {
+        LaunchMode::DoubleClicked
+    } else {
+        LaunchMode::Normal
+    }
+}
+
+/// Windows：主控台的行程清單只有自己（檔案總管雙擊時系統替這個行程新開了主控台）。其他平台一律 false。
+fn console_owned_by_this_process() -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Console::GetConsoleProcessList;
+        let mut pids = [0u32; 4];
+        GetConsoleProcessList(pids.as_mut_ptr(), pids.len() as u32) == 1
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+pub const RELEASES_URL: &str = "https://github.com/markku636/ai-security-monitor/releases/latest";
+
+#[cfg(test)]
+const DOUBLE_CLICK_STRINGS: &[&str] = &[
+    "AI Security Monitor {v}（命令列版）",
+    "這個檔案是命令列工具，要在終端機（PowerShell 或命令提示字元）裡執行；直接雙擊只會看到這段說明。",
+    "想要視窗介面：請下載桌面版安裝檔",
+    "一行安裝命令列版（在 PowerShell 貼上執行，會加入 PATH）：",
+    "常用命令：",
+    "檢查環境與權限",
+    "完整掃描一次",
+    "目前的連線，比對威脅情資",
+    "所有命令",
+    "按 Enter 關閉…",
+];
+
+/// 雙擊命令列版時的說明：這是什麼、視窗版在哪、怎麼安裝、常用命令。
+pub fn double_click_help() -> String {
+    let v = crate::VERSION;
+    [
+        tf!("AI Security Monitor {v}（命令列版）", v = v),
+        String::new(),
+        t!("這個檔案是命令列工具，要在終端機（PowerShell 或命令提示字元）裡執行；直接雙擊只會看到這段說明。")
+            .to_string(),
+        String::new(),
+        t!("想要視窗介面：請下載桌面版安裝檔").to_string(),
+        format!("  AI-Security-Monitor-{v}-windows-x64-setup.exe"),
+        format!("  {RELEASES_URL}"),
+        String::new(),
+        t!("一行安裝命令列版（在 PowerShell 貼上執行，會加入 PATH）：").to_string(),
+        "  irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex".to_string(),
+        String::new(),
+        t!("常用命令：").to_string(),
+        format!("  ai-security-monitor doctor               {}", t!("檢查環境與權限")),
+        format!("  ai-security-monitor scan                 {}", t!("完整掃描一次")),
+        format!(
+            "  ai-security-monitor connections --intel  {}",
+            t!("目前的連線，比對威脅情資")
+        ),
+        format!("  ai-security-monitor --help               {}", t!("所有命令")),
+        String::new(),
+    ]
+    .join("\n")
+}
+
+fn print_double_click_help() {
+    println!("{}", double_click_help());
+}
+
+fn wait_for_enter() {
+    use std::io::Write;
+    print!("{}", t!("按 Enter 關閉…"));
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    let _ = std::io::stdin().read_line(&mut line);
 }
 
 fn report_error(e: &AppError, json: bool) {
@@ -160,6 +253,30 @@ pub fn localize_command(mut cmd: clap::Command) -> clap::Command {
 #[cfg(test)]
 mod help_tests {
     use super::*;
+
+    #[test]
+    fn double_click_pauses_only_without_args_on_own_console() {
+        assert_eq!(launch_mode(true, true), LaunchMode::DoubleClicked);
+        // 有參數（例如從捷徑帶參數）或從終端機執行（主控台是共用的）：照舊
+        assert_eq!(launch_mode(false, true), LaunchMode::Normal);
+        assert_eq!(launch_mode(true, false), LaunchMode::Normal);
+        assert_eq!(launch_mode(false, false), LaunchMode::Normal);
+    }
+
+    #[test]
+    fn double_click_help_points_to_the_gui_and_the_installer() {
+        let h = double_click_help();
+        assert!(
+            h.contains(&format!("AI-Security-Monitor-{}-windows-x64-setup.exe", crate::VERSION)),
+            "{h}"
+        );
+        assert!(h.contains(RELEASES_URL) && h.contains("install.ps1 | iex"), "{h}");
+        assert!(h.contains("connections --intel") && h.contains("doctor"), "{h}");
+        // 不切全域語言（別的測試同時在跑）：直接查英文對照表
+        for zh in DOUBLE_CLICK_STRINGS {
+            assert!(crate::locales::en::lookup(zh).is_some(), "no English for {zh}");
+        }
+    }
 
     fn collect(cmd: &clap::Command, out: &mut Vec<String>) {
         if let Some(a) = cmd.get_about() {

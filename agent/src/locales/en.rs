@@ -1011,6 +1011,27 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         }
         "✓ 已結束 {n} 個舊版（asa）常駐 watch" => "✓ Stopped {n} resident watch process(es) of the old version (asa)",
         "舊版 asa（service install 會換成新名）" => "Old asa (service install switches it to the new name)",
+        "· 舊版 asa 的常駐 watch 還在使用 {legacy}，這次先沿用它；執行 ai-security-monitor service install --yes 換掉舊服務時會搬到 {new}" => {
+            "· The old asa resident watch is still using {legacy}, so this run uses it too; it moves to {new} when you replace the old service with ai-security-monitor service install --yes"
+        }
+        "舊版 asa 還在使用 {dir}，沒有搬移；結束它之後再執行一次 ai-security-monitor service install --yes" => {
+            "The old asa is still using {dir}, so it was not moved; stop it and run ai-security-monitor service install --yes again"
+        }
+        // ---- 在檔案總管雙擊命令列版 ----
+        "AI Security Monitor {v}（命令列版）" => "AI Security Monitor {v} (command-line version)",
+        "這個檔案是命令列工具，要在終端機（PowerShell 或命令提示字元）裡執行；直接雙擊只會看到這段說明。" => {
+            "This file is a command-line tool: run it in a terminal (PowerShell or Command Prompt). Double-clicking it only shows this message."
+        }
+        "想要視窗介面：請下載桌面版安裝檔" => "For the windowed app, download the desktop installer",
+        "一行安裝命令列版（在 PowerShell 貼上執行，會加入 PATH）：" => {
+            "Install the command-line version in one line (paste into PowerShell; adds it to PATH):"
+        }
+        "常用命令：" => "Common commands:",
+        "檢查環境與權限" => "check the environment and permissions",
+        "完整掃描一次" => "run a full scan",
+        "目前的連線，比對威脅情資" => "current connections, matched against threat intel",
+        "所有命令" => "all commands",
+        "按 Enter 關閉…" => "Press Enter to close…",
         "複製註冊資料 {from} → {to}" => "Copy enrollment {from} → {to}",
         "沒有登入時也要執行（例如伺服器開機後）：sudo loginctl enable-linger $USER，或改用 --system" => "To run without a login session (e.g. right after a server boots): sudo loginctl enable-linger $USER, or use --system",
         "XDG autostart 只在登入桌面時啟動；伺服器請用 --system" => "XDG autostart only starts with a desktop login; use --system on servers",

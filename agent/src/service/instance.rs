@@ -97,6 +97,36 @@ impl InstanceLock {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// 這個設定目錄的鎖正被別的常駐行程占用（只探測：不建立鎖檔、不改內容，拿到也馬上放掉）。
+    pub fn is_held(config_dir: &Path) -> bool {
+        let path = config_dir.join(LOCK_FILE);
+        if !path.is_file() {
+            return false;
+        }
+        let mut opts = OpenOptions::new();
+        opts.read(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            opts.share_mode(0);
+        }
+        match opts.open(&path) {
+            Ok(_file) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::io::AsRawFd;
+                    // 拿得到就是沒人占用；關檔時自動放開
+                    if unsafe { libc::flock(_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+                        return true;
+                    }
+                }
+                false
+            }
+            // Windows：別人獨占開著 → sharing violation
+            Err(e) => e.raw_os_error() == Some(32),
+        }
+    }
 }
 
 struct LogFile {
@@ -223,6 +253,24 @@ mod tests {
         // 同一行程另開一次：Windows 會 sharing violation；Unix flock 對同行程不同 fd 也互斥
         assert!(InstanceLock::acquire(d.path()).unwrap().is_none());
         drop(a);
+        assert!(InstanceLock::acquire(d.path()).unwrap().is_some());
+    }
+
+    #[test]
+    fn is_held_only_probes() {
+        let d = tempfile::tempdir().unwrap();
+        // 沒有鎖檔：沒人占用，也不建立
+        assert!(!InstanceLock::is_held(d.path()));
+        assert!(!d.path().join(LOCK_FILE).exists());
+        let a = InstanceLock::acquire(d.path()).unwrap().unwrap();
+        assert!(InstanceLock::is_held(d.path()));
+        drop(a);
+        assert!(!InstanceLock::is_held(d.path()));
+        // 探測不改鎖檔內容，探測後照樣拿得到
+        assert_eq!(
+            std::fs::read_to_string(d.path().join(LOCK_FILE)).unwrap().trim(),
+            std::process::id().to_string()
+        );
         assert!(InstanceLock::acquire(d.path()).unwrap().is_some());
     }
 

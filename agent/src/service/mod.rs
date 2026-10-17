@@ -101,6 +101,8 @@ pub struct Target {
     pub legacy: bool,
     /// system 安裝：改名前的系統設定目錄還在、新目錄還沒有 → 安裝時搬過去。
     pub legacy_config_dir: Option<PathBuf>,
+    /// user 安裝：這次沿用了改名前的使用者設定目錄（舊版常駐 watch 還在用）→ 停掉舊版後搬到 `config_dir`。
+    pub migrate_user_dir: Option<PathBuf>,
     /// 使用者層要強制檔案密鑰庫（安裝時有設 AI_SECURITY_MONITOR_SECRETS_BACKEND=file）。
     pub secrets_file: bool,
     /// 設定目錄就是預設位置：使用者層的命令列可以省略 --config-dir（Windows Run 有 260 字元上限）。
@@ -352,6 +354,18 @@ pub fn plan_install(t: &Target) -> Plan {
         // 先拆掉改名前的 asa 服務，免得新舊兩個常駐行程同時跑
         steps.extend(legacy_removal_steps(t));
         notes.push(t!("已移除舊版（asa）的開機自動啟動；之後只用 ai-security-monitor").to_string());
+    }
+    if t.scope == Scope::User {
+        if let Some(from) = &t.migrate_user_dir {
+            // 舊版常駐 watch 還開著舊目錄：先結束它，再把舊目錄搬到新位置（服務改用新目錄）
+            if !steps.iter().any(|s| matches!(s, Step::StopLegacyWatchers)) {
+                steps.push(Step::StopLegacyWatchers);
+            }
+            steps.push(Step::MigrateDir {
+                from: from.clone(),
+                to: t.config_dir.clone(),
+            });
+        }
     }
     if t.scope == Scope::System {
         if let Some(from) = &t.legacy_config_dir {
@@ -685,6 +699,11 @@ fn stop_watchers(config_dir: &Path) -> usize {
     kill_watchers(running_watchers(Some(config_dir)))
 }
 
+/// 有改名前（asa）的常駐 watch 在跑。
+pub fn legacy_watcher_running() -> bool {
+    !watchers_named(None, LEGACY_PROCESS_NAMES).is_empty()
+}
+
 fn stop_legacy_watchers() -> usize {
     kill_watchers(watchers_named(None, LEGACY_PROCESS_NAMES))
 }
@@ -817,10 +836,12 @@ pub async fn apply(plan: &Plan, runner: &dyn CmdRunner) -> AppResult<Vec<String>
                     out.push(tf!("✓ 已結束 {n} 個舊版（asa）常駐 watch", n = n));
                 }
             }
-            Step::MigrateDir { from, to } => match crate::config::migrate_legacy_dir(to, from)? {
-                crate::config::Migration::NotNeeded => {}
-                _ => out.push(format!("✓ {}", s.describe())),
-            },
+            Step::MigrateDir { from, to } => {
+                match crate::config::migrate_after_stop(to, from, std::time::Duration::from_secs(15))? {
+                    crate::config::Migration::NotNeeded => {}
+                    _ => out.push(format!("✓ {}", s.describe())),
+                }
+            }
             Step::CopyEnrollment { from, to } => {
                 if copy_enrollment(from, to)? {
                     out.push(format!("✓ {}", s.describe()));
@@ -952,9 +973,15 @@ pub async fn current_target(
             .await
             .map(|o| o.ok())
             .unwrap_or(false);
+    // 使用者層：這次沿用了舊目錄（舊版常駐 watch 還在用）→ 服務改用新目錄，安裝時搬過去
+    let deferred = crate::config::deferred_migration().filter(|d| d.legacy == user_config_dir);
+    let user_dir = deferred
+        .as_ref()
+        .map(|d| d.new.clone())
+        .unwrap_or_else(|| user_config_dir.to_path_buf());
     let config_dir = match scope {
         Scope::System => system_config_dir(os),
-        Scope::User => user_config_dir.to_path_buf(),
+        Scope::User => user_dir.clone(),
     };
     let legacy_config_dir = match scope {
         Scope::System => Some(legacy_system_config_dir(os)).filter(|l| l.is_dir() && !config_dir.exists()),
@@ -973,12 +1000,13 @@ pub async fn current_target(
         existing: false,
         legacy: false,
         legacy_config_dir,
+        migrate_user_dir: deferred.filter(|_| scope == Scope::User).map(|d| d.legacy),
         secrets_file: crate::secrets::backend_env()
             .map(|v| v.eq_ignore_ascii_case("file"))
             .unwrap_or(false),
         default_config_dir: dirs::config_dir()
             .map(|d| d.join(crate::config::APP_DIR_NAME))
-            .is_some_and(|d| d == user_config_dir),
+            .is_some_and(|d| d == user_dir),
     };
     let st = scope_status(&t, runner).await;
     t.existing = st.installed;
@@ -1027,6 +1055,7 @@ mod tests {
             existing: false,
             legacy: false,
             legacy_config_dir: None,
+            migrate_user_dir: None,
             secrets_file: false,
             default_config_dir: false,
         }
@@ -1172,6 +1201,52 @@ mod tests {
         assert!(is_process_name("ai-security-mon", PROCESS_NAMES));
         assert!(!is_process_name("ai-security-mo", PROCESS_NAMES));
         assert!(!is_process_name("ai-security-monitor.exe", LEGACY_PROCESS_NAMES));
+    }
+
+    #[test]
+    fn user_install_migrates_the_deferred_legacy_user_dir() {
+        // 這次沿用了舊目錄（舊版常駐 watch 還在用）：先停舊版、再搬到新目錄，服務用新目錄
+        let mut t = legacy(Os::Windows, Scope::User);
+        t.migrate_user_dir = Some(PathBuf::from(r"C:\Users\me\AppData\Roaming\ai-security-agent"));
+        t.default_config_dir = true;
+        let p = plan_install(&t);
+        let stop = p
+            .steps
+            .iter()
+            .position(|s| matches!(s, Step::StopLegacyWatchers))
+            .unwrap();
+        let mig = p
+            .steps
+            .iter()
+            .position(|s| matches!(s, Step::MigrateDir { from, to } if from.ends_with("ai-security-agent") && to == &t.config_dir))
+            .unwrap();
+        assert!(stop < mig);
+        assert_eq!(
+            p.steps.iter().filter(|s| matches!(s, Step::StopLegacyWatchers)).count(),
+            1,
+            "no duplicate stop step"
+        );
+        // 新的 Run 值在搬完之後才寫，命令列不帶 --config-dir（預設的新目錄）
+        let run = p
+            .steps
+            .iter()
+            .position(|s| matches!(s, Step::Run { args, .. } if args.first().is_some_and(|a| a == "add")))
+            .unwrap();
+        assert!(mig < run);
+        assert!(!t.run_args().iter().any(|a| a == "--config-dir"));
+        // 沒有舊的開機自動啟動（例如手動跑的 asa watch --service）也先結束舊行程
+        let mut l = target(Os::Linux, Scope::User);
+        l.migrate_user_dir = Some(PathBuf::from("/home/me/.config/ai-security-agent"));
+        let p = plan_install(&l);
+        assert!(matches!(p.steps[0], Step::StopLegacyWatchers));
+        assert!(matches!(&p.steps[1], Step::MigrateDir { to, .. } if to == &l.config_dir));
+        // 系統服務不搬使用者目錄
+        let mut s = target(Os::Linux, Scope::System);
+        s.migrate_user_dir = Some(PathBuf::from("/home/me/.config/ai-security-agent"));
+        assert!(!plan_install(&s)
+            .steps
+            .iter()
+            .any(|x| matches!(x, Step::MigrateDir { .. })));
     }
 
     #[test]

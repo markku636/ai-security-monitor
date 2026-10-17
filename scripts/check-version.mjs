@@ -1,4 +1,5 @@
-// 發版前檢查：hub/package.json、agent/Cargo.toml、agent/Cargo.lock 的版本都等於 <version>，CHANGELOG 有 `## v<version>`。
+// 發版前檢查：agent（Cargo.toml／lock）、hub（package(-lock).json、env.ts 預設）、桌面版（package(-lock).json、tauri.conf.json、Cargo.toml／lock）、
+// docker/Dockerfile 的 ASA_HUB_VERSION 都等於 <version>，CHANGELOG 有 `## v<version>`。
 // 用法：node scripts/check-version.mjs <version> [--no-changelog]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,27 @@ const locked = /\[\[package\]\]\r?\nname = "ai-security-monitor"\r?\nversion = "
 if (locked !== version) {
   errors.push(`agent/Cargo.lock has ai-security-monitor ${locked} (run cargo update -p ai-security-monitor)`);
 }
+
+// 桌面版：安裝檔名與 App 版本取自 tauri.conf.json
+for (const p of ['desktop/package.json', 'desktop/src-tauri/tauri.conf.json']) {
+  const v = JSON.parse(read(p)).version;
+  if (v !== version) errors.push(`${p} is ${v}`);
+}
+for (const p of ['hub/package-lock.json', 'desktop/package-lock.json']) {
+  const j = JSON.parse(read(p));
+  if (j.version !== version || j.packages?.['']?.version !== version) errors.push(`${p} is ${j.version} (run npm install)`);
+}
+const dcargo = /\[package\][\s\S]*?^version\s*=\s*"([^"]+)"/m.exec(read('desktop/src-tauri/Cargo.toml'))?.[1];
+if (dcargo !== version) errors.push(`desktop/src-tauri/Cargo.toml is ${dcargo}`);
+const dlock = read('desktop/src-tauri/Cargo.lock');
+for (const name of ['ai-security-monitor', 'ai-security-monitor-desktop']) {
+  const v = new RegExp(`\\[\\[package\\]\\]\\r?\\nname = "${name}"\\r?\\nversion = "([^"]+)"`).exec(dlock)?.[1];
+  if (v !== version) errors.push(`desktop/src-tauri/Cargo.lock has ${name} ${v}`);
+}
+const dockerfile = [...read('docker/Dockerfile').matchAll(/ARG ASA_HUB_VERSION=(\S+)/g)].map((m) => m[1]);
+if (!dockerfile.length || dockerfile.some((v) => v !== version)) errors.push(`docker/Dockerfile ASA_HUB_VERSION is ${dockerfile.join(', ')}`);
+const envDefault = /npm_package_version \|\| '([^']+)'/.exec(read('hub/lib/env.ts'))?.[1];
+if (envDefault !== version) errors.push(`hub/lib/env.ts fallback version is ${envDefault}`);
 
 if (!flags.includes('--no-changelog') && !new RegExp(`^## v${version.replace(/\./g, '\\.')}\\b`, 'm').test(read('CHANGELOG.md'))) {
   errors.push(`CHANGELOG.md has no "## v${version}" section`);

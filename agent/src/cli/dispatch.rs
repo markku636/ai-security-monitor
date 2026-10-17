@@ -7,6 +7,20 @@ use crate::error::AppResult;
 
 pub async fn dispatch(cli: Cli) -> AppResult<()> {
     let config_dir = config::config_dir(cli.global.config_dir.as_deref())?;
+    // 舊版常駐 watch 還在用舊目錄：這次沿用舊目錄，提示一行（service 命令自己處理遷移、常駐行程不印）
+    let daemon = matches!(&cli.cmd, Command::Watch(a) if a.service) || matches!(&cli.cmd, Command::Service { .. });
+    if let Some(d) = config::deferred_migration().filter(|d| d.busy && d.legacy == config_dir) {
+        if !daemon && !cli.global.quiet {
+            eprintln!(
+                "{}",
+                tf!(
+                    "· 舊版 asa 的常駐 watch 還在使用 {legacy}，這次先沿用它；執行 ai-security-monitor service install --yes 換掉舊服務時會搬到 {new}",
+                    legacy = d.legacy.display(),
+                    new = d.new.display()
+                )
+            );
+        }
+    }
     let env = Env {
         global: cli.global.clone(),
         config_dir,

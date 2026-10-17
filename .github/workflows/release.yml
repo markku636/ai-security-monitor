@@ -1,6 +1,7 @@
 name: release
 
-# 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim）。
+# 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim），
+# 以及桌面版安裝檔 AI-Security-Monitor-<ver>-*（Windows NSIS、macOS arm64／x64 dmg、Linux AppImage／deb；未簽章）。
 # 改名過渡：另附同內容的 asa-<ver>-<平台> 給 0.1.x 的 asa self-update；映像同時推新名與舊名 ai-security-agent-hub。
 # 手動執行（workflow_dispatch）預設 dry_run：全部建置但不推映像、不建立 Release。
 on:
@@ -91,6 +92,71 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  desktop:
+    needs: verify
+    name: desktop (${{ matrix.asset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis, asset: windows-x64 }
+          - { os: macos-latest, target: aarch64-apple-darwin, bundles: dmg, asset: macos-arm64 }
+          - { os: macos-latest, target: x86_64-apple-darwin, bundles: dmg, asset: macos-x64 }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb', asset: linux-x64 }
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: ${{ matrix.target }}
+      - name: Linux build deps (Tauri 2 prerequisites)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file build-essential
+      - run: npm ci
+      - name: Build installer (unsigned)
+        run: npx tauri build --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Package
+        run: |
+          set -euo pipefail
+          V="${{ needs.verify.outputs.version }}"
+          B="src-tauri/target/${{ matrix.target }}/release/bundle"
+          ls -lR "$B" | grep -Ei '\.(exe|dmg|appimage|deb)$' || true
+          mkdir -p ../dist
+          one() { local f; f=$(find "$B/$1" -maxdepth 1 -type f -name "$2" | head -n 1); test -n "$f" || { echo "no $2 in $B/$1"; exit 1; }; cp "$f" "../dist/$3"; }
+          case "${{ matrix.asset }}" in
+            windows-x64) one nsis '*-setup.exe' "AI-Security-Monitor-$V-windows-x64-setup.exe" ;;
+            macos-*) one dmg '*.dmg' "AI-Security-Monitor-$V-${{ matrix.asset }}.dmg" ;;
+            linux-x64)
+              one appimage '*.AppImage' "AI-Security-Monitor-$V-linux-x64.AppImage"
+              one deb '*.deb' "AI-Security-Monitor-$V-linux-amd64.deb"
+              dpkg-deb --info "../dist/AI-Security-Monitor-$V-linux-amd64.deb" | grep -E "Package|Version"
+              dpkg-deb --info "../dist/AI-Security-Monitor-$V-linux-amd64.deb" | grep -q "Version: $V"
+              ;;
+          esac
+          # 安裝檔不該小於 1 MB（空殼或打包失敗）
+          for f in ../dist/*; do test "$(wc -c < "$f")" -gt 1000000 || { echo "too small: $f"; exit 1; }; done
+          ls -l ../dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+
   hub-image:
     needs: verify
     runs-on: ubuntu-latest
@@ -137,7 +203,7 @@ jobs:
           cache-from: type=gha
 
   release:
-    needs: [verify, agent, hub-image]
+    needs: [verify, agent, desktop, hub-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -146,6 +212,11 @@ jobs:
           path: dist
           # 只拿 agent 執行檔（build-push-action 另外會上傳 .dockerbuild 紀錄）
           pattern: agent-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: desktop-*
           merge-multiple: true
       - name: Checksums and notes
         run: |
@@ -156,15 +227,28 @@ jobs:
           test "$(ls dist/ai-security-monitor-* | wc -l)" = 6
           test "$(ls dist/asa-* | wc -l)" = 6
           for f in dist/asa-*; do cmp "$f" "dist/ai-security-monitor-${f#dist/asa-}"; done
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            node scripts/changelog-section.mjs "${{ needs.verify.outputs.version }}" > notes.md
-          else
-            echo "dry run" > notes.md
-          fi
+          # 桌面版安裝檔：Windows setup.exe、macOS arm64／x64 dmg、Linux AppImage／deb
+          V="${{ needs.verify.outputs.version }}"
+          for a in windows-x64-setup.exe macos-arm64.dmg macos-x64.dmg linux-x64.AppImage linux-amd64.deb; do
+            test -f "dist/AI-Security-Monitor-$V-$a"
+            grep -q "  AI-Security-Monitor-$V-$a\$" dist/SHA256SUMS
+          done
+          test "$(ls dist/AI-Security-Monitor-* | wc -l)" = 5
+          # 安裝腳本照檔名精確比對 SHA256SUMS：多出來的桌面版行不影響
+          for a in linux-x64 macos-arm64 windows-x64.exe; do
+            test "$(awk -v n="ai-security-monitor-$V-$a" '{ f = $2; sub(/^\*/, "", f); if (f == n) print $1 }' dist/SHA256SUMS | wc -l)" = 1
+          done
+          # Release 說明：這版重點、該下載哪個檔（依實際資產名）、安裝與升級、CHANGELOG（dry run 也產生，方便先檢查）
+          node scripts/release-notes.mjs "$V" dist > notes.md
+          cat notes.md
       - uses: actions/upload-artifact@v4
         with:
           name: release-dist
           path: dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
       - name: Create GitHub Release
         if: env.PUBLISH == 'true' && github.ref_type == 'tag'
         env:

@@ -6,10 +6,17 @@
 //! `/Library/Application Support/ai-security-monitor`），由 service 安裝時以 `--config-dir` 帶入。
 //!
 //! 改名遷移：預設位置的新目錄還不存在、但舊的 `ai-security-agent` 目錄存在時，第一次解析就把它搬過來
-//! （改名；改名失敗——例如舊版常駐行程還開著檔案——就整個複製），`agent_id`、密鑰檔、允許清單、基準線、
+//! （改名；改名失敗就整個複製，並在新目錄留 `.migrated-from` 標記），`agent_id`、密鑰檔、允許清單、基準線、
 //! 情資都保留。明確指定的 `--config-dir`／環境變數一律照用，不搬。
+//!
+//! 舊版（0.1.x）的常駐 watch 還在用舊目錄（`watch.lock` 被占用，或有 `asa watch --service` 在跑）時**不搬**：
+//! 這次直接讀寫舊目錄，等 `service install` 換掉舊服務時再搬，免得新目錄變成一份之後不再更新的快照。
+//! 已經是這種過期快照的新目錄（複製標記之後舊目錄又有更新；或 0.2.0 沒留標記、`agent_id` 相同且舊目錄較新）
+//! 在下一次舊目錄沒被占用時重新同步：過期的新目錄改名成 `ai-security-monitor.bak-<時間>` 保留，再重新搬一次。
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +27,8 @@ pub const CONFIG_FILE: &str = "config.json";
 pub const APP_DIR_NAME: &str = "ai-security-monitor";
 /// 改名前（0.1.x）的使用者設定目錄名。
 pub const LEGACY_APP_DIR_NAME: &str = "ai-security-agent";
+/// 複製式遷移留在新目錄的標記（來源、時間、方式）。
+pub const MIGRATION_MARKER: &str = ".migrated-from";
 /// 不含前綴的環境變數名（見 `util::env`）：`AI_SECURITY_MONITOR_CONFIG_DIR`，舊名 `ASA_CONFIG_DIR`。
 pub const ENV_CONFIG_DIR: &str = "CONFIG_DIR";
 
@@ -143,29 +152,253 @@ pub fn config_dir(explicit: Option<&Path>) -> AppResult<PathBuf> {
 }
 
 /// `<base>/ai-security-monitor`；必要時先從 `<base>/ai-security-agent` 遷移。
-/// 遷移失敗時回舊目錄（照舊能用，下次再試）。
+/// 舊版常駐行程還在用舊目錄、或遷移失敗時回舊目錄（照舊能用，之後再搬），並記下來給 `deferred_migration()`。
 pub fn default_dir_in(base: &Path) -> PathBuf {
+    default_dir_with(base, &legacy_in_use)
+}
+
+/// `default_dir_in`，但「舊目錄是否被占用」由呼叫端判斷（測試不看主機上的行程）。
+pub fn default_dir_with(base: &Path, busy: &dyn Fn(&Path, &Path) -> bool) -> PathBuf {
     let new = base.join(APP_DIR_NAME);
     let legacy = base.join(LEGACY_APP_DIR_NAME);
-    match migrate_legacy_dir(&new, &legacy) {
-        Ok(_) => new,
-        Err(_) => legacy,
+    let (dir, res) = resolve_default_dir(&new, &legacy, busy);
+    let busy = match res {
+        Resolution::LegacyBusy => Some(true),
+        Resolution::LegacyFallback => Some(false),
+        Resolution::New(_) => None,
+    };
+    if let Some(busy) = busy {
+        if let Ok(mut d) = DEFERRED.lock() {
+            *d = Some(Deferred { legacy, new, busy });
+        }
+    }
+    dir
+}
+
+/// 這次沒有遷移、沿用舊目錄的原因。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Deferred {
+    pub legacy: PathBuf,
+    pub new: PathBuf,
+    /// true：舊版常駐 watch 還在用舊目錄；false：遷移失敗。
+    pub busy: bool,
+}
+
+static DEFERRED: Mutex<Option<Deferred>> = Mutex::new(None);
+
+/// 這個行程解析預設設定目錄時沿用了舊目錄（`service install` 會在換掉舊服務後搬過去）。
+pub fn deferred_migration() -> Option<Deferred> {
+    DEFERRED.lock().ok().and_then(|d| d.clone())
+}
+
+/// 預設設定目錄的解析結果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resolution {
+    /// 用新目錄（必要時剛遷移／重新同步完）。
+    New(Migration),
+    /// 舊版常駐 watch 還在用舊目錄：這次沿用舊目錄、不搬。
+    LegacyBusy,
+    /// 遷移失敗：沿用舊目錄，下次再試。
+    LegacyFallback,
+}
+
+/// 舊目錄正被舊版常駐 watch 使用：鎖檔被占用，或有舊名（asa）的常駐 watch 在跑而新目錄的鎖沒人拿
+/// （0.2.x 自我更新後檔名還是 asa 的常駐行程用的是新目錄，會占用新目錄的鎖）。
+pub fn legacy_in_use(legacy: &Path, new: &Path) -> bool {
+    use crate::service::instance::InstanceLock;
+    InstanceLock::is_held(legacy) || (crate::service::legacy_watcher_running() && !InstanceLock::is_held(new))
+}
+
+/// 決定這次用哪個目錄，必要時遷移或重新同步。`busy(legacy, new)` 只在真的要搬時才呼叫。
+pub fn resolve_default_dir(new: &Path, legacy: &Path, busy: &dyn Fn(&Path, &Path) -> bool) -> (PathBuf, Resolution) {
+    if !legacy.is_dir() {
+        return (new.to_path_buf(), Resolution::New(Migration::NotNeeded));
+    }
+    let resync = new.exists();
+    if resync && !is_stale_snapshot(new, legacy) {
+        return (new.to_path_buf(), Resolution::New(Migration::NotNeeded));
+    }
+    if busy(legacy, new) {
+        return (legacy.to_path_buf(), Resolution::LegacyBusy);
+    }
+    let r = if resync {
+        resync_from_legacy(new, legacy)
+    } else {
+        migrate_legacy_dir(new, legacy)
+    };
+    match r {
+        Ok(m) => (new.to_path_buf(), Resolution::New(m)),
+        Err(_) => (legacy.to_path_buf(), Resolution::LegacyFallback),
     }
 }
 
 /// 遷移結果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Migration {
-    /// 不需要（新目錄已存在，或沒有舊目錄）。
+    /// 不需要（新目錄已存在且不是過期快照，或沒有舊目錄）。
     NotNeeded,
     /// 舊目錄改名成新目錄。
     Renamed,
-    /// 改名失敗，已整個複製（舊目錄保留）。
+    /// 改名失敗，已整個複製（舊目錄保留，新目錄有 `.migrated-from` 標記）。
     Copied,
+    /// 新目錄是過期快照：已備份成 `…bak-<時間>` 並重新從舊目錄搬過來。
+    Resynced,
 }
 
-/// 新目錄不存在、舊目錄存在時把舊目錄搬過去：先改名，失敗再複製到暫存目錄後改名。
-/// 複製時略過單一實例鎖（舊版常駐行程獨占開啟）；其他檔案讀不到就放棄並回錯誤（舊目錄不動）。
+/// `.migrated-from` 的內容。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MigrationMarker {
+    pub from: String,
+    /// RFC 3339。
+    pub at: String,
+    /// `copy` 或 `rename`。
+    pub mode: String,
+}
+
+fn write_marker(new: &Path, legacy: &Path, mode: &str) {
+    let m = MigrationMarker {
+        from: legacy.display().to_string(),
+        at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        mode: mode.into(),
+    };
+    if let Ok(text) = serde_json::to_string_pretty(&m) {
+        let _ = std::fs::write(new.join(MIGRATION_MARKER), text);
+    }
+}
+
+pub fn read_marker(dir: &Path) -> Option<MigrationMarker> {
+    serde_json::from_str(&std::fs::read_to_string(dir.join(MIGRATION_MARKER)).ok()?).ok()
+}
+
+/// 標記的時間；解析不了就用標記檔的修改時間。
+fn marker_time(dir: &Path, m: &MigrationMarker) -> Option<SystemTime> {
+    chrono::DateTime::parse_from_rfc3339(&m.at)
+        .ok()
+        .map(SystemTime::from)
+        .or_else(|| {
+            std::fs::metadata(dir.join(MIGRATION_MARKER))
+                .and_then(|md| md.modified())
+                .ok()
+        })
+}
+
+/// 目錄裡（遞迴）最新的檔案修改時間；不算鎖檔與遷移標記。
+pub fn newest_mtime(dir: &Path) -> Option<SystemTime> {
+    let mut newest: Option<SystemTime> = None;
+    for e in std::fs::read_dir(dir).ok()?.flatten() {
+        let Ok(ty) = e.file_type() else { continue };
+        let t = if ty.is_dir() {
+            newest_mtime(&e.path())
+        } else if ty.is_file() {
+            let name = e.file_name();
+            if name == crate::service::instance::LOCK_FILE || name == MIGRATION_MARKER {
+                continue;
+            }
+            e.metadata().and_then(|m| m.modified()).ok()
+        } else {
+            None
+        };
+        if let Some(t) = t {
+            newest = Some(newest.map_or(t, |n| n.max(t)));
+        }
+    }
+    newest
+}
+
+fn agent_id_of(dir: &Path) -> String {
+    load(dir).map(|c| c.agent_id.trim().to_string()).unwrap_or_default()
+}
+
+/// 新目錄是之前複製過來、之後舊目錄又有更新的過期快照：
+/// - 有 `.migrated-from`（mode=copy）：舊目錄最新的檔案比標記時間新。
+/// - 沒有標記（0.2.0 複製的）：`agent_id` 相同，且新目錄最新的檔案比舊目錄最新的舊。
+///
+/// 新目錄的鎖被占用（有常駐行程在用）時一律不算。
+pub fn is_stale_snapshot(new: &Path, legacy: &Path) -> bool {
+    if crate::service::instance::InstanceLock::is_held(new) {
+        return false;
+    }
+    let Some(legacy_newest) = newest_mtime(legacy) else {
+        return false;
+    };
+    match read_marker(new) {
+        Some(m) => m.mode == "copy" && marker_time(new, &m).is_some_and(|t| legacy_newest > t),
+        None => {
+            let id = agent_id_of(new);
+            !id.is_empty() && id == agent_id_of(legacy) && newest_mtime(new).is_none_or(|n| n < legacy_newest)
+        }
+    }
+}
+
+/// 過期快照的備份位置：`<new>.bak-<本機時間>`（同名已存在就加序號）。
+fn backup_path(new: &Path) -> PathBuf {
+    let name = new
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| APP_DIR_NAME.into());
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let mut p = new.with_file_name(format!("{name}.bak-{stamp}"));
+    let mut i = 1;
+    while p.exists() {
+        p = new.with_file_name(format!("{name}.bak-{stamp}-{i}"));
+        i += 1;
+    }
+    p
+}
+
+/// 把過期的新目錄改名成備份，再從舊目錄重新搬一次；搬不成就把備份改回來。
+pub fn resync_from_legacy(new: &Path, legacy: &Path) -> AppResult<Migration> {
+    let bak = backup_path(new);
+    std::fs::rename(new, &bak).map_err(|e| {
+        AppError::Storage(tf!(
+            "無法把 {from} 搬到 {to}：{e}",
+            from = new.display(),
+            to = bak.display(),
+            e = e
+        ))
+    })?;
+    match migrate_legacy_dir(new, legacy) {
+        Ok(_) => Ok(Migration::Resynced),
+        Err(e) => {
+            if !new.exists() {
+                let _ = std::fs::rename(&bak, new);
+            }
+            Err(e)
+        }
+    }
+}
+
+/// 舊目錄沒被占用時的完整遷移：新目錄不存在就搬，新目錄是過期快照就重新同步。
+pub fn migrate_or_resync(new: &Path, legacy: &Path) -> AppResult<Migration> {
+    if !legacy.is_dir() {
+        return Ok(Migration::NotNeeded);
+    }
+    if new.exists() {
+        if is_stale_snapshot(new, legacy) {
+            return resync_from_legacy(new, legacy);
+        }
+        return Ok(Migration::NotNeeded);
+    }
+    migrate_legacy_dir(new, legacy)
+}
+
+/// `service install` 的遷移步驟：舊服務剛停掉，鎖可能還要一下子才放開（最多等 `wait`）。
+pub fn migrate_after_stop(new: &Path, legacy: &Path, wait: std::time::Duration) -> AppResult<Migration> {
+    let start = std::time::Instant::now();
+    while crate::service::instance::InstanceLock::is_held(legacy) {
+        if start.elapsed() >= wait {
+            return Err(AppError::Storage(tf!(
+                "舊版 asa 還在使用 {dir}，沒有搬移；結束它之後再執行一次 ai-security-monitor service install --yes",
+                dir = legacy.display()
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    migrate_or_resync(new, legacy)
+}
+
+/// 新目錄不存在、舊目錄存在時把舊目錄搬過去：先改名，失敗再複製到暫存目錄後改名（留 `.migrated-from` 標記）。
+/// 複製時略過單一實例鎖；其他檔案讀不到就放棄並回錯誤（舊目錄不動）。舊目錄是否被占用由呼叫端先判斷。
 pub fn migrate_legacy_dir(new: &Path, legacy: &Path) -> AppResult<Migration> {
     if new.exists() || !legacy.is_dir() {
         return Ok(Migration::NotNeeded);
@@ -174,6 +407,7 @@ pub fn migrate_legacy_dir(new: &Path, legacy: &Path) -> AppResult<Migration> {
         store::ensure_dir(parent)?;
     }
     if std::fs::rename(legacy, new).is_ok() {
+        write_marker(new, legacy, "rename");
         return Ok(Migration::Renamed);
     }
     let name = new
@@ -183,7 +417,10 @@ pub fn migrate_legacy_dir(new: &Path, legacy: &Path) -> AppResult<Migration> {
     let tmp = new.with_file_name(format!(".{name}.migrating-{}", uuid::Uuid::new_v4().simple()));
     let copied = copy_tree(legacy, &tmp).and_then(|()| std::fs::rename(&tmp, new));
     match copied {
-        Ok(()) => Ok(Migration::Copied),
+        Ok(()) => {
+            write_marker(new, legacy, "copy");
+            Ok(Migration::Copied)
+        }
         Err(e) => {
             let _ = std::fs::remove_dir_all(&tmp);
             if new.exists() {
@@ -336,7 +573,7 @@ mod tests {
     fn default_dir_migrates_legacy_once() {
         let base = tempfile::tempdir().unwrap();
         let (legacy, agent_id) = legacy_tree(base.path());
-        let dir = default_dir_in(base.path());
+        let dir = default_dir_with(base.path(), &lock_only);
         assert_eq!(dir, base.path().join(APP_DIR_NAME));
         assert_eq!(load(&dir).unwrap().agent_id, agent_id);
         assert!(dir.join("secrets.json").exists());
@@ -349,7 +586,7 @@ mod tests {
         // 新目錄已存在：之後再出現舊目錄也不碰
         std::fs::create_dir_all(&legacy).unwrap();
         std::fs::write(legacy.join(CONFIG_FILE), r#"{"agent_id":"other"}"#).unwrap();
-        assert_eq!(default_dir_in(base.path()), dir);
+        assert_eq!(default_dir_with(base.path(), &lock_only), dir);
         assert_eq!(load(&dir).unwrap().agent_id, agent_id);
         assert_eq!(migrate_legacy_dir(&dir, &legacy).unwrap(), Migration::NotNeeded);
     }
@@ -357,7 +594,7 @@ mod tests {
     #[test]
     fn fresh_install_has_nothing_to_migrate() {
         let base = tempfile::tempdir().unwrap();
-        let dir = default_dir_in(base.path());
+        let dir = default_dir_with(base.path(), &lock_only);
         assert_eq!(dir, base.path().join(APP_DIR_NAME));
         assert!(!base.path().join(LEGACY_APP_DIR_NAME).exists());
     }
@@ -373,6 +610,286 @@ mod tests {
         assert!(new.join("intel").join("feodo.txt").exists());
         assert!(!new.join(crate::service::instance::LOCK_FILE).exists());
         assert!(legacy.join(CONFIG_FILE).exists());
+    }
+
+    /// 測試用的「舊目錄被占用」判斷：只看鎖檔（不看主機上的行程）。
+    fn lock_only(legacy: &Path, _new: &Path) -> bool {
+        crate::service::instance::InstanceLock::is_held(legacy)
+    }
+
+    fn set_tree_mtime(dir: &Path, t: SystemTime) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            if e.file_type().unwrap().is_dir() {
+                set_tree_mtime(&e.path(), t);
+            } else {
+                std::fs::File::options()
+                    .write(true)
+                    .open(e.path())
+                    .unwrap()
+                    .set_modified(t)
+                    .unwrap();
+            }
+        }
+    }
+
+    fn backups(base: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(base)
+            .unwrap()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("{APP_DIR_NAME}.bak-"))
+            })
+            .map(|e| e.path())
+            .collect()
+    }
+
+    fn write_marker_at(new: &Path, legacy: &Path, mode: &str, at: chrono::DateTime<chrono::Utc>) {
+        let m = MigrationMarker {
+            from: legacy.display().to_string(),
+            at: at.to_rfc3339(),
+            mode: mode.into(),
+        };
+        std::fs::write(new.join(MIGRATION_MARKER), serde_json::to_string(&m).unwrap()).unwrap();
+    }
+
+    /// 0.2.0 在舊版常駐 watch 還在跑時留下的快照：整份複製、之後舊目錄繼續更新。
+    fn snapshot_of(legacy: &Path, new: &Path) {
+        copy_tree(legacy, new).unwrap();
+        std::fs::write(new.join("latest.json"), "{\"from\":\"snapshot\"}").unwrap();
+        set_tree_mtime(new, SystemTime::now() - std::time::Duration::from_secs(3600));
+        std::fs::write(legacy.join("latest.json"), "{\"from\":\"legacy\"}").unwrap();
+    }
+
+    #[test]
+    fn locked_legacy_is_used_in_place_not_copied() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, agent_id) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        let lock = crate::service::instance::InstanceLock::acquire(&legacy)
+            .unwrap()
+            .unwrap();
+        // 舊版常駐 watch 拿著鎖：不複製，這次直接用舊目錄
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!((dir.as_path(), res), (legacy.as_path(), Resolution::LegacyBusy));
+        assert!(!new.exists(), "no snapshot copy while the old watcher runs");
+        // 真正的判斷（鎖＋行程）也認得被占用的鎖
+        assert!(legacy_in_use(&legacy, &new));
+        // default_dir_with 記下沿用舊目錄的原因（service install 依此搬移）
+        assert_eq!(default_dir_with(base.path(), &lock_only), legacy);
+        let d = deferred_migration().unwrap();
+        assert!(d.busy && d.legacy == legacy && d.new == new);
+        // 舊服務換掉、鎖放開：正常啟動時才搬（改名），資料都在
+        drop(lock);
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!(dir, new);
+        assert_eq!(res, Resolution::New(Migration::Renamed));
+        assert_eq!(load(&new).unwrap().agent_id, agent_id);
+        assert!(new.join("secrets.json").exists() && new.join("intel").join("feodo.txt").exists());
+        assert!(!legacy.exists());
+        assert_eq!(read_marker(&new).unwrap().mode, "rename");
+    }
+
+    #[test]
+    fn running_legacy_watcher_without_lock_counts_as_busy() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, _) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        let (dir, res) = resolve_default_dir(&new, &legacy, &|_, _| true);
+        assert_eq!((dir, res), (legacy.clone(), Resolution::LegacyBusy));
+        assert!(!new.exists());
+        // 不需要搬的時候根本不問（例如新目錄已存在且不是快照）
+        std::fs::create_dir_all(&new).unwrap();
+        save(
+            &new,
+            &AgentConfig {
+                agent_id: "independent".into(),
+                ..AgentConfig::default()
+            },
+        )
+        .unwrap();
+        let (dir, res) = resolve_default_dir(&new, &legacy, &|_, _| panic!("busy probe called"));
+        assert_eq!((dir, res), (new, Resolution::New(Migration::NotNeeded)));
+    }
+
+    #[test]
+    fn copy_migration_writes_a_marker() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, agent_id) = legacy_tree(base.path());
+        // 舊版行程還開著鎖檔時呼叫底層遷移（Windows 改名會失敗、改走複製）
+        let lock = crate::service::instance::InstanceLock::acquire(&legacy)
+            .unwrap()
+            .unwrap();
+        let new = base.path().join(APP_DIR_NAME);
+        let m = migrate_legacy_dir(&new, &legacy).unwrap();
+        drop(lock);
+        assert_eq!(load(&new).unwrap().agent_id, agent_id);
+        let marker = read_marker(&new).unwrap();
+        assert_eq!(marker.from, legacy.display().to_string());
+        assert!(chrono::DateTime::parse_from_rfc3339(&marker.at).is_ok());
+        match m {
+            Migration::Copied => assert_eq!(marker.mode, "copy"),
+            Migration::Renamed => assert_eq!(marker.mode, "rename"),
+            other => panic!("{other:?}"),
+        }
+        // 剛複製完、舊目錄沒有更新：不是過期快照
+        assert!(!is_stale_snapshot(&new, &legacy));
+    }
+
+    #[test]
+    fn copy_snapshot_is_resynced_when_legacy_changed_later() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, agent_id) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        snapshot_of(&legacy, &new);
+        write_marker_at(
+            &new,
+            &legacy,
+            "copy",
+            chrono::Utc::now() - chrono::Duration::minutes(30),
+        );
+        assert!(is_stale_snapshot(&new, &legacy));
+        // 舊目錄還被占用：照樣先用舊目錄（它才是最新的），快照不動
+        let lock = crate::service::instance::InstanceLock::acquire(&legacy)
+            .unwrap()
+            .unwrap();
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!((dir, res), (legacy.clone(), Resolution::LegacyBusy));
+        assert!(backups(base.path()).is_empty());
+        drop(lock);
+        // 放開後：快照備份成 .bak-<時間>，重新從舊目錄搬
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!((dir, res), (new.clone(), Resolution::New(Migration::Resynced)));
+        assert_eq!(
+            std::fs::read_to_string(new.join("latest.json")).unwrap(),
+            "{\"from\":\"legacy\"}"
+        );
+        assert_eq!(load(&new).unwrap().agent_id, agent_id);
+        let bak = backups(base.path());
+        assert_eq!(bak.len(), 1);
+        assert_eq!(
+            std::fs::read_to_string(bak[0].join("latest.json")).unwrap(),
+            "{\"from\":\"snapshot\"}"
+        );
+        // 之後就穩定了
+        assert_eq!(migrate_or_resync(&new, &legacy).unwrap(), Migration::NotNeeded);
+    }
+
+    #[test]
+    fn copy_snapshot_without_later_legacy_changes_is_kept() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, _) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        snapshot_of(&legacy, &new);
+        write_marker_at(
+            &new,
+            &legacy,
+            "copy",
+            chrono::Utc::now() + chrono::Duration::minutes(30),
+        );
+        assert!(!is_stale_snapshot(&new, &legacy));
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!((dir, res), (new.clone(), Resolution::New(Migration::NotNeeded)));
+        assert!(legacy.exists() && backups(base.path()).is_empty());
+        // 改名式遷移的標記不觸發重新同步
+        write_marker_at(
+            &new,
+            &legacy,
+            "rename",
+            chrono::Utc::now() - chrono::Duration::minutes(30),
+        );
+        assert!(!is_stale_snapshot(&new, &legacy));
+    }
+
+    #[test]
+    fn unmarked_snapshot_from_0_2_0_is_resynced() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, agent_id) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        // 0.2.0 複製時沒有留標記：agent_id 相同、新目錄最新的檔案比舊目錄舊
+        snapshot_of(&legacy, &new);
+        assert!(read_marker(&new).is_none());
+        assert!(is_stale_snapshot(&new, &legacy));
+        assert_eq!(default_dir_with(base.path(), &lock_only), new);
+        assert_eq!(
+            std::fs::read_to_string(new.join("latest.json")).unwrap(),
+            "{\"from\":\"legacy\"}"
+        );
+        assert_eq!(load(&new).unwrap().agent_id, agent_id);
+        assert_eq!(backups(base.path()).len(), 1);
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn unmarked_dir_that_is_newer_or_another_agent_is_kept() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, _) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        snapshot_of(&legacy, &new);
+        // 新目錄之後有更新（新版已經在用）：不是快照
+        std::fs::write(new.join("latest.json"), "{\"from\":\"new\"}").unwrap();
+        set_tree_mtime(&legacy, SystemTime::now() - std::time::Duration::from_secs(7200));
+        assert!(!is_stale_snapshot(&new, &legacy));
+        // 另一個 agent_id（各自獨立的安裝）：不碰
+        std::fs::write(new.join("latest.json"), "{}").unwrap();
+        set_tree_mtime(&new, SystemTime::now() - std::time::Duration::from_secs(10_000));
+        std::fs::write(legacy.join("latest.json"), "{}").unwrap();
+        save(
+            &new,
+            &AgentConfig {
+                agent_id: "other-agent".into(),
+                ..AgentConfig::default()
+            },
+        )
+        .unwrap();
+        set_tree_mtime(&new, SystemTime::now() - std::time::Duration::from_secs(10_000));
+        assert!(!is_stale_snapshot(&new, &legacy));
+        let (dir, res) = resolve_default_dir(&new, &legacy, &lock_only);
+        assert_eq!((dir, res), (new, Resolution::New(Migration::NotNeeded)));
+        assert!(backups(base.path()).is_empty());
+    }
+
+    #[test]
+    fn new_dir_in_use_is_never_a_stale_snapshot() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, _) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        snapshot_of(&legacy, &new);
+        assert!(is_stale_snapshot(&new, &legacy));
+        let lock = crate::service::instance::InstanceLock::acquire(&new).unwrap().unwrap();
+        assert!(!is_stale_snapshot(&new, &legacy));
+        drop(lock);
+    }
+
+    #[test]
+    fn migrate_after_stop_waits_for_the_lock() {
+        let base = tempfile::tempdir().unwrap();
+        let (legacy, agent_id) = legacy_tree(base.path());
+        let new = base.path().join(APP_DIR_NAME);
+        let lock = crate::service::instance::InstanceLock::acquire(&legacy)
+            .unwrap()
+            .unwrap();
+        // 一直沒放開：放棄、什麼都不搬
+        assert!(migrate_after_stop(&new, &legacy, std::time::Duration::from_millis(300)).is_err());
+        assert!(!new.exists());
+        // 等待期間放開：照樣搬
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(lock);
+        });
+        let m = migrate_after_stop(&new, &legacy, std::time::Duration::from_secs(10)).unwrap();
+        t.join().unwrap();
+        assert_eq!(m, Migration::Renamed);
+        assert_eq!(load(&new).unwrap().agent_id, agent_id);
+        // 過期快照也在這一步重新同步
+        let (legacy2, _) = legacy_tree(&base.path().join("b"));
+        let new2 = base.path().join("b").join(APP_DIR_NAME);
+        snapshot_of(&legacy2, &new2);
+        assert_eq!(
+            migrate_after_stop(&new2, &legacy2, std::time::Duration::from_secs(1)).unwrap(),
+            Migration::Resynced
+        );
     }
 
     #[test]
