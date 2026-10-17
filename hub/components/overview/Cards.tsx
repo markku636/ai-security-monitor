@@ -1,6 +1,7 @@
 // 總覽頁的卡片（server component）。
 import Link from 'next/link';
 import type { Scores } from '@/drizzle/schema';
+import { IpLink } from '@/components/security/IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from '@/components/security/Verdict';
 import { Card } from '@/components/ui/Card';
 import { Gauge } from '@/components/ui/Gauge';
@@ -53,7 +54,9 @@ export function RiskyConnectionsCard({ t, risky }: { t: TFn; risky: RiskyResult 
             <div className="flex flex-wrap items-center gap-2">
               <VerdictChip verdict={c.verdict} t={t} />
               <DirectionBadge direction={c.direction} t={t} />
-              <span className="font-mono text-xs">{endpoint(c.remoteIp ?? c.localIp, c.remotePort ?? c.localPort)}</span>
+              <IpLink ip={c.remoteIp} className="font-mono text-xs">
+                {endpoint(c.remoteIp ?? c.localIp, c.remotePort ?? c.localPort)}
+              </IpLink>
               <span className="text-xs text-slate-500">
                 {c.hostname} · {c.processName ?? '—'}
               </span>
@@ -121,7 +124,9 @@ export function AttackersCard({ t, attackers }: { t: TFn; attackers: Attackers }
         {attackers.map((a) => (
           <li key={a.remoteIp} className="flex flex-wrap items-center gap-2 py-2">
             <VerdictChip verdict={a.worst} t={t} />
-            <span className="font-mono text-xs">{a.remoteIp}</span>
+            <IpLink ip={a.remoteIp} className="font-mono text-xs">
+              {a.remoteIp}
+            </IpLink>
             <span className="text-xs text-slate-500">
               {t('{hosts} 台主機、{conns} 條連線', { hosts: a.hosts, conns: a.conns })}
               {a.country ? ` · ${a.country}` : ''}

@@ -16,7 +16,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
   await requireAdmin();
   const { t } = await getT();
   const sp = await searchParams;
-  const scope = ['fleet', 'agent', 'traffic', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
+  const scope = ['fleet', 'connections', 'indicator', 'agent', 'traffic', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
   const [agents, recent] = await Promise.all([
     listAgents(),
     getDb().select().from(aiAnalyses).orderBy(desc(aiAnalyses.createdAt)).limit(20),
@@ -35,6 +35,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
         agents={agents.map((a) => ({ id: a.id, hostname: a.hostname }))}
         initialScope={scope}
         initialAgent={strParam(sp, 'agent_id', 64)}
+        initialIndicator={strParam(sp, 'q', 64)}
       />
       {recent.length ? (
         <Card title={t('最近的分析')}>

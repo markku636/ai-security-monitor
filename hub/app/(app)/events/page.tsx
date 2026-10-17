@@ -79,7 +79,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
               {brute.map((b) => (
                 <li key={b.sourceIp} className="flex flex-col gap-1 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <a className="font-mono text-xs hover:underline" href={`/intel?q=${encodeURIComponent(b.sourceIp)}`}>
+                    <a className="font-mono text-xs hover:underline" href={`/ip/${encodeURIComponent(b.sourceIp)}`}>
                       {b.sourceIp}
                     </a>
                     <span className="text-xs text-slate-500">

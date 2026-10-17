@@ -1,5 +1,6 @@
 // POST：在 hub 主機跑 Claude Code／Codex，用 SSE 串流事件（文字、工具呼叫、結果）。斷線就整棵行程收掉。
 import crypto from 'node:crypto';
+import { isIP } from 'node:net';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { aiAnalyses } from '@/drizzle/schema';
@@ -17,7 +18,8 @@ export const maxDuration = 900;
 
 const Body = z.object({
   provider: z.enum(['claude', 'codex']).optional(),
-  scope: z.enum(['fleet', 'traffic', 'events', 'agent']).default('fleet'),
+  scope: z.enum(['fleet', 'connections', 'indicator', 'traffic', 'events', 'agent']).default('fleet'),
+  indicator: z.string().max(64).refine((s) => isIP(s) > 0).optional(),
   agent_id: z.string().max(64).optional(),
   prompt: z.string().max(4000).optional(),
   max_turns: z.number().int().min(1).max(30).default(12),
@@ -40,10 +42,13 @@ export async function POST(req: Request): Promise<Response> {
   const picked = order.map((p) => ({ p, bin: resolveBin(p) })).find((x) => x.bin);
   if (!picked?.bin) return error(503, 'no_ai_cli', { hint: 'install and sign in to claude or codex on the hub host' });
   if (body.scope === 'agent' && !body.agent_id) return error(400, 'bad_request', { rule: 'agent_id' });
+  if (body.scope === 'indicator' && !body.indicator) return error(400, 'bad_request', { rule: 'indicator' });
 
   const lang = resolveLang(parseCookies(req)[LANG_COOKIE], req.headers.get('accept-language'));
   const base = body.prompt?.trim() || (lang === 'en' ? SCOPE_PROMPTS[body.scope].en : SCOPE_PROMPTS[body.scope].zh);
-  const prompt = body.scope === 'agent' ? `${base}\n\nagent_id: ${body.agent_id}` : base;
+  // 指定裝置時只看那一台（每種範圍都適用）
+  let prompt = body.indicator ? `${base}\n\nIP: ${body.indicator}` : base;
+  if (body.agent_id) prompt += `\n\n${lang === 'en' ? 'Only look at this host' : '只看這一台主機'}：agent_id: ${body.agent_id}`;
   const id = `ai_${crypto.randomBytes(8).toString('hex')}`;
   const actor = actorOf(who);
   const db = getDb();

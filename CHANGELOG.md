@@ -5,6 +5,9 @@
 改進：
 - Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。
+- IP 分析頁 `/ip/<ip>`：連線表、總覽、主機頁、流量、事件、暴力破解來源上的 IP 都能點進去，看這個 IP 被哪些情資來源列名（附來源連結）、哪台主機的哪個程式連過、連線狀態、被判可疑的理由與歷史；附 VirusTotal／AbuseIPDB／GreyNoise／Shodan／IPinfo 外部查詢連結（只是連結，hub 不會自動送出 IP）。
+- AI 助手新增「分析可疑連線」與「分析單一 IP」範圍，每種範圍都能選特定裝置；連線頁與 IP 頁有「請 AI 分析」按鈕直接帶入。
+- 理由標籤分清楚來源：情資命中標「情資」，asa 自己的異常判斷（週期性連線、新目的地等）標「行為」，滑過會說明不是情資來源。
 
 ## v0.1.0 — 2026-10-17
 
@@ -162,5 +165,9 @@
 - `docs/intel.md`、`docs/firewall.md`（＋英文版）：方向與判定規則、各情資來源的信心／預設／授權、封鎖挑選規則、各平台防火牆後端與安全設計。
 - 常駐服務（`asa watch --service`）啟動時，若有權限且期望狀態裡有封鎖／關閉的 port／情資網段，就重新套用（pf、nftables 重開機不保留）；CI 三平台的服務測試先封鎖一個 IP、確認服務 log 有重新套用。
 - 修正：`--direction` 的可選值說明在英文介面顯示中文；help 測試現在也檢查 ValueEnum 可選值。
+
+- IP 分析頁 `/ip/<ip>`：連線表、總覽、主機頁、流量、事件、暴力破解來源上的 IP 都能點進去，看這個 IP 被哪些情資來源列名（附來源連結）、哪台主機的哪個程式連過、連線狀態、被判可疑的理由與歷史；附 VirusTotal／AbuseIPDB／GreyNoise／Shodan／IPinfo 外部查詢連結（只是連結，hub 不會自動送出 IP）。
+- AI 助手新增「分析可疑連線」與「分析單一 IP」範圍，每種範圍都能選特定裝置；連線頁與 IP 頁有「請 AI 分析」按鈕直接帶入。
+- 理由標籤分清楚來源：情資命中標「情資」，asa 自己的異常判斷（週期性連線、新目的地等）標「行為」，滑過會說明不是情資來源。
 
 > 驗證：`cargo test`（123 passed）、`cargo clippy --all-targets -- -D warnings`；實機 `asa intel update` 16 個來源 3.6 s（IPsum 12.5 萬、blocklist.de 2.5 萬、KEV 1746）；`asa intel lookup` 對 Spamhaus／Feodo 列名 IP 判危險並列出 6 個來源，8.8.8.8 判安全；`asa scan` 含情資 1 s；`asa fw audit` 實機抓到作用中 Public 設定檔關閉與 Redis 6379／SMB 445 可從網路連入，完整掃描 3.3 s；`fw sync-blocklist --dry-run` 從 16052 筆選出 1 萬筆（Windows 上限）0.9 s；本機只做預演，實際寫入由 CI 三平台 E2E 驗證；Hub：vitest 14 passed、`next build` 6 s，本機對 PostgreSQL 18 容器驗證健康檢查、未登入 307、錯誤金鑰 401、登入、中英文頁面與稽核寫入；第 6 輪 vitest 22 passed，本機對 PostgreSQL 以契約檔完成註冊→gzip 報告→快照→頁面顯示；第 7 輪 cargo test 129 passed、vitest 24 passed，本機 agent 註冊到本機 hub，`watch --once` 上傳 345 條連線快照＋10 筆發現，hub 停機時報告進 outbox、恢復後自動補送；第 8 輪 vitest 32 passed，本機以真實 agent 資料（約 300 條連線）驗證所有頁面 200、批次 API、無頭 Edge 截圖檢查淺色／深色／手機寬度版面；第 9 輪 cargo test 133 passed、vitest 43 passed，本機真實 agent enroll（--accept-remote-actions）→ hub 核准封鎖 → agent 驗章通過、因非管理員回報失敗（不動本機防火牆），實際寫入由 CI e2e 驗證；第 10 輪 cargo test 144 passed，合成擷取檔（pcap 與 pcapng、816 個封包）全部偵測命中，本機即時模式 10 秒列出 39 條流與各行程；第 11 輪 cargo test 164 passed，本機 30 天 1980 筆事件 3.6 秒（非管理員），完整掃描含事件 5.8 秒，hub 收到 4 筆事件類發現（記憶體不足 42 次等）；第 12 輪 cargo test 178 passed，stdio／HTTP MCP 實測（lookup_ip、list_connections、explain_code、session、DNS rebinding 403），假 claude CLI 讀取 asa 產生的 MCP 設定並實際呼叫工具，專案層級 install 寫入 .mcp.json；第 13 輪 vitest 48 passed，本機真實 agent 上傳事件摘要後 /events、/traffic、主機分頁皆 200，Hub MCP crash_history 回 50 筆；第 13b 輪 vitest 54 passed（含假 CLI 的 SSE 全流程、env 不外洩、斷線殺行程），本機 hub 以一次性 token 讓 CLI 呼叫 /api/mcp 成功並串流回網頁；第 14 輪 cargo test 188 passed、vitest 54 passed，本機 Windows 11 25H2 讀到 140 個軟體 2.4 秒完成，判定作業系統支援到 2027-10-12、最近更新 KB5127648，抓到 Python 3.10 已停止支援；第 15 輪 cargo test 197 passed、vitest 54 passed，本機 Windows 20 條檢查一次 PowerShell 2.8 秒（81 分：BitLocker、安全開機、AutoRun、LLMNR 未通過），自訂策略關閉內建與新增檢查皆生效，MCP hardening_status／vuln_summary 實測；第 16 輪 vitest 57 passed，本機真實 agent 上傳後 /vulns、/hardening、主機兩個新分頁與 API 皆 200，無頭 Edge 截圖檢查淺色／深色／手機寬度與分數趨勢；第 17 輪 cargo test 207 passed，本機只做預覽與唯讀狀態（不在這台安裝），服務模式 watch 實測單一實例鎖、靜默與 log 檔，實際安裝由 CI 三平台驗證（Windows 服務、systemd、LaunchDaemon 與三種使用者層皆通過安裝→執行→log→移除）；第 17b 輪 cargo test 210 passed，本機以鏡像實測 install.ps1 安裝、重裝改名舊檔、竄改雜湊被拒（exit 1），self-update 對 GitHub 正確回報尚無 Release；第 18 輪 vitest 63 passed，本機以網頁建立的註冊金鑰讓真實 agent 註冊並上傳 19 筆發現（金鑰顯示 1 台主機），export token 下載 CSV、管理端點 403，/install.sh 填入 Hub 網址，截圖檢查管理與安裝頁；第 19 輪本機建置映像 70 秒（含 AI CLI 1.6 GB），單機版 compose 12 秒健康，真實 agent 以網頁建立的註冊金鑰註冊並上傳 19 筆發現，入口腳本缺金鑰／資料庫時拒絕啟動；發版 dry run 六個平台的 asa 都建置成功（含 Windows arm64、Linux musl 靜態檔）；第 20 輪以示範資料截圖 12 張。

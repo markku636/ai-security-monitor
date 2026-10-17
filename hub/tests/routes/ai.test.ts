@@ -100,6 +100,8 @@ describe('/api/ai', () => {
 
   it('validates input and refuses unknown providers', async () => {
     expect((await streamRoute(req('/api/ai/stream', { method: 'POST', headers: admin, body: { scope: 'agent' } }))).status).toBe(400);
+    expect((await streamRoute(req('/api/ai/stream', { method: 'POST', headers: admin, body: { scope: 'indicator' } }))).status).toBe(400);
+    expect((await streamRoute(req('/api/ai/stream', { method: 'POST', headers: admin, body: { scope: 'indicator', indicator: 'evil.example; rm -rf' } }))).status).toBe(400);
     expect((await streamRoute(req('/api/ai/stream', { method: 'POST', headers: admin, body: { provider: 'codex' } }))).status).toBe(503);
     expect((await streamRoute(req('/api/ai/stream', { method: 'POST', body: {} }))).status).toBe(401);
   });

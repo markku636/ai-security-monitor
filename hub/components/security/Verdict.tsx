@@ -91,6 +91,7 @@ export function SourceBadge({ r, t }: { r: Reason; t: TFn }) {
   }`;
   const body = (
     <>
+      <span className="opacity-70">{t('情資')}</span>
       <span className="font-medium">{r.vendor ?? r.feed_id}</span>
       <span className="opacity-70">{r.confidence ?? 0}%</span>
     </>
@@ -119,9 +120,10 @@ export function ReasonList({ reasons, t, max = 6 }: { reasons: Reason[]; t: TFn;
             return (
               <span
                 key={i}
-                title={r.detail}
+                title={[t('asa 自己的行為判斷，不是情資來源'), r.detail].filter(Boolean).join('\n')}
                 className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
               >
+                <span className="opacity-70">{t('行為')} </span>
                 {anomalyLabel(t, r.kind ?? '')}
               </span>
             );

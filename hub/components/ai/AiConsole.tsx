@@ -25,18 +25,21 @@ export function AiConsole({
   agents,
   initialScope,
   initialAgent,
+  initialIndicator,
 }: {
   providers: { id: string; available: boolean }[];
   agents: { id: string; hostname: string }[];
   initialScope: string;
   initialAgent?: string;
+  initialIndicator?: string;
 }) {
   const { t } = useT();
   const router = useRouter();
   const available = providers.filter((p) => p.available);
   const [provider, setProvider] = useState(available[0]?.id ?? '');
   const [scope, setScope] = useState(initialScope);
-  const [agent, setAgent] = useState(initialAgent ?? agents[0]?.id ?? '');
+  const [agent, setAgent] = useState(initialAgent ?? '');
+  const [indicator, setIndicator] = useState(initialIndicator ?? '');
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
@@ -45,8 +48,10 @@ export function AiConsole({
   const busy = status === 'running';
 
   const scopes: [string, string][] = [
-    ['fleet', t('所有主機')],
-    ['agent', t('單一主機')],
+    ['fleet', t('整體狀況')],
+    ['connections', t('分析可疑連線')],
+    ['indicator', t('分析單一 IP')],
+    ['agent', t('單一主機完整檢查')],
     ['traffic', t('解讀流量')],
     ['events', t('分析當機與資安事件')],
   ];
@@ -61,7 +66,7 @@ export function AiConsole({
       const res = await fetch('/api/ai/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-asa-request': '1' },
-        body: JSON.stringify({ provider: provider || undefined, scope, agent_id: scope === 'agent' ? agent : undefined, prompt: prompt.trim() || undefined }),
+        body: JSON.stringify({ provider: provider || undefined, scope, agent_id: agent || (scope === 'agent' ? agents[0]?.id : undefined), indicator: scope === 'indicator' ? indicator.trim() : undefined, prompt: prompt.trim() || undefined }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -129,10 +134,17 @@ export function AiConsole({
             ))}
           </select>
         </label>
-        {scope === 'agent' ? (
+        {scope === 'indicator' ? (
           <label className="flex flex-col gap-1 text-xs text-slate-500">
-            {t('主機')}
+            IP
+            <input className={`${field} font-mono`} value={indicator} onChange={(e) => setIndicator(e.target.value)} disabled={busy} maxLength={64} placeholder="203.0.113.7" />
+          </label>
+        ) : null}
+        {agents.length ? (
+          <label className="flex flex-col gap-1 text-xs text-slate-500">
+            {t('裝置')}
             <select className={field} value={agent} onChange={(e) => setAgent(e.target.value)} disabled={busy}>
+              {scope === 'agent' ? null : <option value="">{t('所有裝置')}</option>}
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.hostname}

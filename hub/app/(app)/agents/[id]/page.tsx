@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ConnectionsView } from '@/components/security/ConnectionsView';
 import { FindingsView } from '@/components/security/FindingsView';
+import { IpLink } from '@/components/security/IpLink';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -103,9 +104,9 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
               <li key={`${d.remoteIp}-${d.remotePort}-${d.direction}`} className="flex flex-wrap items-center gap-2 py-2">
                 <VerdictChip verdict={d.worstVerdict} t={t} />
                 <DirectionBadge direction={d.direction} t={t} />
-                <span className="font-mono text-xs">
+                <IpLink ip={d.remoteIp} className="font-mono text-xs">
                   {d.remoteIp}:{d.remotePort}
-                </span>
+                </IpLink>
                 <span className="text-xs text-slate-500">
                   {d.processName ?? '—'}
                   {d.country ? ` · ${d.country}` : ''}

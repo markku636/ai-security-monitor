@@ -213,8 +213,16 @@ export const SYSTEM_PROMPT = (lang: 'zh-TW' | 'en') => `You are a defensive secu
 Answer in ${lang === 'en' ? 'English' : 'Traditional Chinese (繁體中文, Taiwan usage)'}.`;
 
 export const SCOPE_PROMPTS: Record<string, { zh: string; en: string }> = {
-  fleet: { zh: '整體來看，這個車隊目前最需要處理的資安問題是什麼？依急迫程度排序。', en: 'Across the fleet, what are the most urgent security problems right now? Rank them.' },
-  traffic: { zh: '解讀車隊的網路流量：哪些目的地或行程可疑？哪些看起來正常？', en: 'Interpret the fleet traffic: which destinations or processes look suspicious, which look normal?' },
+  fleet: { zh: '整體來看，所有主機目前最需要處理的資安問題是什麼？依急迫程度排序。', en: 'Across all hosts, what are the most urgent security problems right now? Rank them.' },
+  connections: {
+    zh: '分析目前判定為可疑或危險的連線：依目的地／行程分組，說明每一組為什麼被判可疑（情資命中還是行為判斷）、對方可能是什麼服務（用 lookup_indicator 查 IP 的國家／ASN／情資）、哪些可能是誤報、哪些真的需要處理，最後給出處置（需要的話建議封鎖，操作者可在「封鎖審核」核准）。',
+    en: 'Analyze the connections currently rated suspicious or dangerous: group them by destination/process, explain why each group was flagged (intel hit or behavior), what the remote service probably is (use lookup_indicator for country/ASN/intel), which are likely false positives and which need action, then give next steps (suggest blocks if needed; the operator approves them on Block approvals).',
+  },
+  indicator: {
+    zh: '分析這個 IP（見下方）：用 lookup_indicator 查它的情資命中（附來源）、國家／ASN、哪些主機的哪個程式連過、連線狀態與次數；判斷它大概是什麼服務（CDN、雲端、廣告、更新伺服器、掃描器、C2…），被判可疑的理由是情資還是行為判斷、是不是誤報，最後給出建議（放著、加白名單、或建議封鎖）。',
+    en: 'Analyze this IP (below): use lookup_indicator for its intel hits (with sources), country/ASN, which hosts and processes connected to it, connection states and counts; work out what service it probably is (CDN, cloud, ads, update server, scanner, C2, …), whether the suspicious rating comes from intel or behavior and whether it is a false positive, then recommend what to do (leave it, allowlist it, or suggest a block).',
+  },
+  traffic: { zh: '解讀網路流量：哪些目的地或行程可疑？哪些看起來正常？', en: 'Interpret the traffic: which destinations or processes look suspicious, which look normal?' },
   events: { zh: '分析各主機的當機原因（藍屏代碼、模組、時間模式），並評估資安事件是否需要處理。', en: 'Analyze crash root causes on each host (bugcheck codes, modules, timing patterns) and assess whether the security events need action.' },
   agent: { zh: '檢查這台主機（agent_id 見下方）：連線、發現、當機與資安事件，給出結論與處置。', en: 'Review this host (agent_id below): connections, findings, crashes and security events; give a verdict and next steps.' },
 };

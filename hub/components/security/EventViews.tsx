@@ -1,5 +1,6 @@
 // 當機與資安事件、流量目的地的表格（server component，只吃 t）。
 import Link from 'next/link';
+import { IpLink, ipHref } from '@/components/security/IpLink';
 import { DirectionBadge, SourceBadge, VerdictChip } from '@/components/security/Verdict';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
@@ -138,7 +139,9 @@ export function SecurityTable({ t, rows, showHost = true }: { t: TFn; rows: Hit[
               <td className="px-3 py-2 whitespace-nowrap">{securityRuleLabel(t, h.rule)}</td>
               {showHost ? <td className="px-3 py-2 whitespace-nowrap">{h.hostname}</td> : null}
               <td className="px-3 py-2 font-mono text-xs">
-                {[h.sourceIp, h.userName].filter(Boolean).join(' · ')}
+                {h.sourceIp ? <IpLink ip={h.sourceIp}>{h.sourceIp}</IpLink> : null}
+                {h.sourceIp && h.userName ? ' · ' : ''}
+                {h.userName ?? ''}
                 {Array.isArray(h.intel) && h.intel.length ? (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(h.intel as { feed_id: string; vendor: string; confidence: number; source_url: string }[]).map((x, i) => (
@@ -186,7 +189,7 @@ export function DestinationTable({ t, rows, showHost = true }: { t: TFn; rows: D
                 <DirectionBadge direction={d.direction} t={t} />
               </td>
               <td className="px-3 py-2 font-mono text-xs">
-                <Link className="hover:underline" href={`/intel?q=${encodeURIComponent(d.remoteIp)}`}>
+                <Link className="hover:underline" href={ipHref(d.remoteIp)}>
                   {d.remoteIp}:{d.remotePort}
                 </Link>
               </td>

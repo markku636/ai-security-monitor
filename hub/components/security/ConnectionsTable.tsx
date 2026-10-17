@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { endpoint } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import type { ConnectionRow } from '@/lib/queries/connections';
+import { IpLink } from './IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
 
 export function ConnectionsTable({ rows, t, showHost = true }: { rows: ConnectionRow[]; t: TFn; showHost?: boolean }) {
@@ -44,7 +45,9 @@ export function ConnectionsTable({ rows, t, showHost = true }: { rows: Connectio
                   <span>{endpoint(c.localIp, c.localPort)}</span>
                 ) : (
                   <>
-                    <div>{endpoint(c.remoteIp, c.remotePort)}</div>
+                    <div>
+                      <IpLink ip={c.remoteIp}>{endpoint(c.remoteIp, c.remotePort)}</IpLink>
+                    </div>
                     <div className="text-slate-500">{t('本機 {ep}', { ep: endpoint(c.localIp, c.localPort) })}</div>
                   </>
                 )}

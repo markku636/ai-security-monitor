@@ -91,6 +91,9 @@ export async function lookupIndicator(q: string) {
         processName: connections.processName,
         country: connections.country,
         org: connections.org,
+        asn: connections.asn,
+        state: connections.state,
+        reasons: connections.reasons,
         at: connections.at,
       })
       .from(connections)
