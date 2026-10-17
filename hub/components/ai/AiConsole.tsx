@@ -3,6 +3,7 @@
 // AI 分析主控台：選範圍與 AI，送出後以 SSE 即時顯示回答文字與工具呼叫；可中途停止。
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { Markdown } from '@/components/ui/Markdown';
 import { AI_MAX_IPS, splitIpList } from '@/lib/ai/scope';
 import { useT } from '@/lib/i18n/client';
 
@@ -217,7 +218,7 @@ export function AiConsole({
               {l.text}
             </div>
           ))}
-          {answer ? <div className="whitespace-pre-wrap text-sm leading-relaxed">{answer}</div> : null}
+          {answer ? <Markdown text={answer} /> : null}
           {status && status !== 'running' ? (
             <div className="text-xs text-slate-500">
               {status === 'done' ? t('完成') : status === 'cancelled' ? t('已停止') : t('發生錯誤')}

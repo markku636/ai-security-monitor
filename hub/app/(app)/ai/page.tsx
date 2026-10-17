@@ -1,6 +1,7 @@
 import { desc } from 'drizzle-orm';
 import { AiConsole } from '@/components/ai/AiConsole';
 import { Card } from '@/components/ui/Card';
+import { Markdown } from '@/components/ui/Markdown';
 import { aiAnalyses } from '@/drizzle/schema';
 import { PROVIDERS, resolveBin } from '@/lib/ai/run';
 import { AI_MAX_IPS, splitIpList } from '@/lib/ai/scope';
@@ -51,7 +52,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
                       {r.provider} · {r.status} · {t('{n} 次工具呼叫', { n: r.toolsCalled })} · {since(r.createdAt, t)}
                     </span>
                   </summary>
-                  {r.resultText ? <div className="mt-2 whitespace-pre-wrap text-sm">{r.resultText}</div> : null}
+                  {r.resultText ? <Markdown text={r.resultText} className="mt-2" /> : null}
                   {r.error ? <pre className="mt-2 whitespace-pre-wrap text-xs text-red-700 dark:text-red-400">{r.error}</pre> : null}
                 </details>
               </li>

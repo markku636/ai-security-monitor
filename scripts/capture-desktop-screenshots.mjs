@@ -194,26 +194,24 @@ const METRICS = {
   },
 };
 
-const AI_ANSWER = `結論：這台電腦有 1 組危險連線、3 組可疑連線，其中 updater.exe 需要立刻處理。
+// 真的 Claude Code／Codex 回答是 Markdown（標題、粗體、表格、清單），桌面版用 ui/markdown.js 顯示
+const AI_ANSWER = `## 結論
 
-1. updater.exe → 203.0.113.66:443（危險，2 條連線）
-   情資：abuse.ch Feodo Tracker 列名（信心 90%，CC0 1.0），這份清單只收錄殭屍網路的控制伺服器。
-   行為：程式從 %TEMP% 執行；事件記錄顯示同一個檔案被註冊成服務 UpdaterSvc。誤報機率低。
+這台電腦有 **1 組危險連線**、**3 組可疑連線**，其中 **updater.exe 需要立刻處理**。
 
-2. powershell.exe → 198.51.100.80:8443（可疑）
-   CINS Army 列名（75%）＋命令列程式直接連外。先確認是不是 IT 的維運腳本。
+| 程式 | 目的地 | 判定 | 依據 |
+|---|---|---|---|
+| updater.exe | 203.0.113.66:443 | 危險（2 條連線） | abuse.ch Feodo Tracker 列名（信心 90%，CC0 1.0），只收錄殭屍網路的控制伺服器；程式從 \`%TEMP%\` 執行並被註冊成服務 UpdaterSvc，誤報機率低 |
+| powershell.exe | 198.51.100.80:8443 | 可疑 | CINS Army 列名（75%）＋命令列程式直接連外，先確認是不是 IT 的維運腳本 |
+| syncagent.exe | 198.51.100.140:4444 | 可疑 | 沒有情資來源列名，是行為判斷：每 60 秒一次、非常規律，port 4444 也常被遠端控制工具使用 |
+| （外部連入） | 198.51.100.23 → 本機 3389 | 可疑 | 遠端桌面被暴力破解（10 分鐘 96 次失敗），blocklist.de 列名 |
 
-3. syncagent.exe → 198.51.100.140:4444（可疑）
-   沒有情資來源列名，是行為判斷：每 60 秒一次、非常規律，port 4444 也常被遠端控制工具使用。
+## 建議
 
-4. 198.51.100.23 → 本機 3389（可疑）
-   遠端桌面被暴力破解（10 分鐘 96 次失敗），blocklist.de 列名。
-
-建議
-- 先隔離這台主機，結束 updater.exe 並停用 UpdaterSvc。
-- 封鎖 203.0.113.66：ai-security-monitor fw block 203.0.113.66 --yes（或在 Hub 送出封鎖，核准後由 agent 執行）。
-- 用 Microsoft Defender 完整掃描，並更改這台電腦上登入過的帳號密碼。
-- 遠端桌面不要直接對外開放，改走 VPN。
+1. 先隔離這台主機，結束 updater.exe 並停用 UpdaterSvc。
+2. 封鎖 203.0.113.66：\`ai-security-monitor fw block 203.0.113.66 --yes\`（或在 Hub 送出封鎖，核准後由 agent 執行）。
+3. 用 Microsoft Defender 完整掃描，並**更改這台電腦上登入過的帳號密碼**。
+4. 遠端桌面不要直接對外開放，改走 VPN。
 `;
 const AI_TOOLS = [
   ['list_connections', '{"verdict":["dangerous","suspicious"]}'],

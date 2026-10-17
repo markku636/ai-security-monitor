@@ -465,6 +465,7 @@ async function pageAi() {
 }
 
 let aiUnlisten = null;
+let aiText = '';
 async function runAi() {
   const go = document.getElementById('go');
   const out = document.getElementById('out');
@@ -473,13 +474,14 @@ async function runAi() {
   aiState.scope = document.getElementById('scope').value;
   aiState.prompt = document.getElementById('prompt').value;
   go.disabled = true;
+  aiText = '';
   out.textContent = '';
   out.classList.remove('muted');
   tools.innerHTML = '';
   status.innerHTML = '<span class="spin"></span> 分析中…';
   if (aiUnlisten) aiUnlisten();
   aiUnlisten = await listen('ai-event', ({ payload: e }) => {
-    if (e.type === 'text') out.textContent += e.text;
+    if (e.type === 'text') renderMarkdown(out, (aiText += e.text));
     else if (e.type === 'tool') tools.insertAdjacentHTML('beforeend', `<div class="ai-tool">→ ${esc(e.name)} ${esc(e.input ?? '')}</div>`);
     else if (e.type === 'tool_result' && !e.ok) tools.insertAdjacentHTML('beforeend', `<div class="ai-tool err">✗ ${esc(e.preview)}</div>`);
     else if (e.type === 'start') status.innerHTML = `<span class="spin"></span> ${esc(e.provider)} 分析中…`;
@@ -487,7 +489,7 @@ async function runAi() {
   });
   try {
     const r = await invoke('ai_ask', { provider: document.getElementById('prov').value, scope: aiState.scope, prompt: aiState.prompt });
-    if (!out.textContent.trim() && r.text) out.textContent = r.text;
+    if (!aiText.trim() && r.text) renderMarkdown(out, (aiText = r.text));
     status.textContent = r.is_error ? '結束（有錯誤）' : `完成，呼叫了 ${r.tools_called} 次工具`;
   } catch (e) {
     status.textContent = '';
