@@ -177,6 +177,82 @@ export async function inboundAttackers(limit = 20) {
   }));
 }
 
+const DEST_WORST = sql`min(case ${destinations.worstVerdict} when 'dangerous' then 0 else 1 end)`;
+
+/**
+ * 可疑／危險 IP 排名：長期目的地表依遠端 IP 跨主機、跨 port 彙總。
+ * seen＝被快照看到的累計次數（每次快照每個 ip:port:方向 算一次），live＝最新快照裡仍判定可疑／危險的條數。
+ */
+export async function riskyIpRanking(limit = 10, agentId?: string) {
+  const db = getDb();
+  const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];
+  if (agentId) conds.push(eq(destinations.agentId, agentId));
+  const [rows, total] = await Promise.all([
+    db
+      .select({
+        remoteIp: destinations.remoteIp,
+        worst: sql<number>`${DEST_WORST}::int`,
+        seen: sql<number>`sum(${destinations.seenCount})::int`,
+        hosts: sql<number>`count(distinct ${destinations.agentId})::int`,
+        ports: sql<number[]>`array_agg(distinct ${destinations.remotePort})`,
+        directions: sql<string[]>`array_agg(distinct ${destinations.direction})`,
+        processes: sql<(string | null)[]>`array_agg(distinct ${destinations.processName})`,
+        country: sql<string | null>`max(${destinations.country})`,
+        org: sql<string | null>`max(${destinations.org})`,
+        firstSeenAt: sql<string>`min(${destinations.firstSeenAt})`,
+        lastSeenAt: sql<string>`max(${destinations.lastSeenAt})`,
+      })
+      .from(destinations)
+      .innerJoin(agents, eq(agents.id, destinations.agentId))
+      .where(and(...conds))
+      .groupBy(destinations.remoteIp)
+      .orderBy(DEST_WORST, desc(sql`sum(${destinations.seenCount})`), desc(sql`max(${destinations.lastSeenAt})`))
+      .limit(limit),
+    db
+      .select({ n: sql<number>`count(distinct ${destinations.remoteIp})::int` })
+      .from(destinations)
+      .innerJoin(agents, eq(agents.id, destinations.agentId))
+      .where(and(...conds)),
+  ]);
+  const ips = rows.map((r) => r.remoteIp);
+  const live = ips.length
+    ? await db
+        .select({ ip: sql<string>`${connections.remoteIp}`, n: count() })
+        .from(connections)
+        .innerJoin(agents, eq(agents.id, connections.agentId))
+        .where(
+          and(
+            isNull(agents.deletedAt),
+            inArray(connections.remoteIp, ips),
+            inArray(connections.verdict, ['dangerous', 'suspicious']),
+            agentId ? eq(connections.agentId, agentId) : undefined,
+          ),
+        )
+        .groupBy(connections.remoteIp)
+    : [];
+  const liveBy = new Map(live.map((r) => [r.ip, Number(r.n)]));
+  return {
+    total: Number(total[0]?.n ?? 0),
+    items: rows.map((r, i) => ({
+      rank: i + 1,
+      remoteIp: r.remoteIp,
+      worst: (r.worst === 0 ? 'dangerous' : 'suspicious') as VerdictLevel,
+      seen: Number(r.seen),
+      live: liveBy.get(r.remoteIp) ?? 0,
+      hosts: Number(r.hosts),
+      ports: [...(r.ports ?? [])].sort((a, b) => a - b).slice(0, 8),
+      directions: r.directions ?? [],
+      processes: (r.processes ?? []).filter((p): p is string => !!p).slice(0, 5),
+      country: r.country,
+      org: r.org,
+      firstSeenAt: r.firstSeenAt,
+      lastSeenAt: r.lastSeenAt,
+    })),
+  };
+}
+
+export type RiskyIpRanking = Awaited<ReturnType<typeof riskyIpRanking>>;
+
 /** 看過的危險／可疑目的地（長期彙總表，不只最新快照）。 */
 export async function riskyDestinations(limit = 10, agentId?: string) {
   const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];

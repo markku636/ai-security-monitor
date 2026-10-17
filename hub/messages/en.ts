@@ -154,6 +154,22 @@ export const en: Record<string, string> = {
   '指標': 'Indicators',
   '授權': 'License',
   '對內攻擊來源': 'Inbound attack sources',
+  // ---- 可疑 IP 排名（連線頁） ----
+  '可疑 IP 排名': 'Suspicious IP ranking',
+  '曾被判定可疑或危險的遠端 IP，共 {n} 個；依危險程度與累計次數排序':
+    '{n} remote IPs ever rated suspicious or dangerous, ranked by severity and times seen',
+  '遠端 IP': 'Remote IP',
+  '每次連線快照看到一次就加 1（同一個 IP 的不同 port、不同主機會加總）':
+    'Adds 1 each time a connection snapshot sees it (summed across ports and hosts for the same IP)',
+  '累計次數': 'Times seen',
+  '最新快照裡仍判定可疑或危險的連線條數；0 代表目前沒有在連':
+    'Connections still rated suspicious or dangerous in the latest snapshot; 0 means not connected right now',
+  '方向／port': 'Direction / port',
+  '最後看到': 'Last seen',
+  '第一次看到：{at}': 'First seen: {at}',
+  '目前沒有被判定可疑或危險的遠端 IP。': 'No remote IP has been rated suspicious or dangerous.',
+  '顯示前 50 名 →': 'Show top 50 →',
+  '只看前 10 名': 'Top 10 only',
   '{hosts} 台主機、{conns} 條連線': '{hosts} host(s), {conns} connection(s)',
   '查看對內連線 →': 'View inbound connections →',
   '分數最低的主機': 'Lowest-scoring hosts',

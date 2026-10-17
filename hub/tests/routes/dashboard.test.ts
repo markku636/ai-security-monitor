@@ -17,7 +17,7 @@ import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
 import { resetThrottleForTests } from '@/lib/ingest/route';
-import { inboundAttackers, listConnections, parseConnectionFilter } from '@/lib/queries/connections';
+import { inboundAttackers, listConnections, parseConnectionFilter, riskyIpRanking } from '@/lib/queries/connections';
 import { listFindings, parseFindingFilter } from '@/lib/queries/findings';
 import { topIndicators, topIntelFeeds } from '@/lib/queries/intel';
 import { toQuery } from '@/lib/queries/params';
@@ -39,6 +39,8 @@ function clientPost(pathname: string, body: unknown) {
 const admin = { authorization: 'Bearer test-admin' };
 
 let db: DB;
+/** beforeAll 回報的完整快照（排名測試再送一次，資料不變只累加次數）。 */
+let fullSnap: Record<string, unknown>;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -69,6 +71,7 @@ beforeAll(async () => {
   safe.geo = { country: 'AU', asn: 13335, org: 'Cloudflare' };
   safe.verdict = { level: 'safe', reasons: [{ type: 'known_good', list: 'public-dns', detail: 'Cloudflare DNS' }] };
   snap.connections.push(inbound, safe);
+  fullSnap = structuredClone(snap);
   expect((await snapshot(clientPost('/api/v1/ingest/snapshot', snap))).status).toBe(200);
 });
 
@@ -119,6 +122,34 @@ describe('connection queries', () => {
     expect(a[0]).toMatchObject({ remoteIp: '198.51.100.23', worst: 'dangerous', hosts: 1, conns: 1 });
     expect(a[0].feeds).toEqual(['blocklist-de-all']);
     expect(a[0].ports).toEqual([3389]);
+  });
+
+  it('ranks risky remote IPs by severity and times seen, with live counts', async () => {
+    // 同一份快照再回報一次：每個可疑／危險目的地的累計次數 +1，安全的 1.1.1.1 不進排名
+    const again = { ...structuredClone(fullSnap), ts: new Date().toISOString() };
+    expect((await snapshot(clientPost('/api/v1/ingest/snapshot', again))).status).toBe(200);
+
+    const r = await riskyIpRanking(10);
+    expect(r.items.map((x) => x.remoteIp)).not.toContain('1.1.1.1');
+    expect(r.total).toBe(r.items.length);
+    expect(r.items.map((x) => x.rank)).toEqual(r.items.map((_, i) => i + 1));
+    expect(r.items.find((x) => x.remoteIp === '203.0.113.66')).toMatchObject({
+      worst: 'dangerous',
+      seen: 2,
+      live: 1,
+      hosts: 1,
+      directions: ['outbound'],
+    });
+    expect(r.items.find((x) => x.remoteIp === '198.51.100.23')).toMatchObject({
+      worst: 'dangerous',
+      seen: 2,
+      live: 1,
+      ports: [50123],
+      directions: ['inbound'],
+      processes: ['svchost.exe'],
+    });
+
+    expect((await riskyIpRanking(10, 'no-such-agent')).items).toEqual([]);
   });
 
   it('summarises intel hits by feed and indicator with sources', async () => {
