@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { notificationChannels, notificationLog, notificationRules, notificationSeen } from '@/drizzle/schema';
+import { InputError } from '@/lib/admin-write';
 import type { DB } from '@/lib/db';
 import { CHANNEL_KINDS, maskConfig, prepareConfig, targetOf, type ChannelKind } from './channels';
 import { secretKey } from './secret';
@@ -40,11 +41,7 @@ export const RuleBody = z.object({
 
 export const RulePatch = RuleBody.partial();
 
-export class NotifyInputError extends Error {
-  constructor(public code: string) {
-    super(code);
-  }
-}
+export class NotifyInputError extends InputError {}
 
 export async function notifyView(db: DB) {
   const key = await secretKey(db);

@@ -358,6 +358,9 @@ async function runSafely(): Promise<void> {
     // 沒有任何啟用的規則就不開交易
     const [n] = await db.select({ n: count() }).from(notificationRules).where(eq(notificationRules.enabled, true));
     if (Number(n?.n ?? 0) > 0) await runNotifications(db);
+    // 自動回應（全域開關關閉時只會解除到期的封鎖）
+    const { runAutoResponse } = await import('@/lib/response/engine');
+    await runAutoResponse(db);
   } catch (err) {
     console.warn('[ai-security-monitor-hub] notifications failed', err instanceof Error ? err.message : err);
   } finally {
@@ -365,7 +368,7 @@ async function runSafely(): Promise<void> {
   }
 }
 
-/** Hub 啟動時呼叫：每分鐘一輪。 */
+/** Hub 啟動時呼叫：每分鐘一輪（通知＋自動回應）。 */
 export function startNotifyScheduler(everyMs = 60_000): void {
   if (g.__asaNotifyTimer) return;
   g.__asaNotifyTimer = setInterval(() => void runSafely(), everyMs);

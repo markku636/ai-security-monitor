@@ -753,3 +753,66 @@ export const notificationLog = pgTable(
   },
   (t) => [index('notification_log_status_idx').on(t.status, t.createdAt)],
 );
+
+/** 主機群組：自動回應規則可以只套用到某個群組；之後的集中設定也依群組推送。 */
+export const agentGroups = pgTable('agent_groups', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  /** 集中設定（安全選項）；空＝不推送。 */
+  config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+});
+
+export const agentGroupMembers = pgTable(
+  'agent_group_members',
+  {
+    groupId: text('group_id')
+      .notNull()
+      .references(() => agentGroups.id, { onDelete: 'cascade' }),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.groupId, t.agentId] }), index('agent_group_members_agent_idx').on(t.agentId)],
+);
+
+/** 自動回應規則：觸發條件 → 自動封鎖來源 IP（有到期時間）。全域開關預設關。 */
+export const responseRules = pgTable('response_rules', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  /** intel_inbound／bruteforce／finding */
+  trigger: text('trigger').notNull(),
+  /** bruteforce 的 threshold、finding 的 rule（可結尾 *）。 */
+  params: jsonb('params').$type<Record<string, unknown>>().notNull().default({}),
+  blockMinutes: integer('block_minutes').notNull().default(60),
+  /** 重複觸犯：第二次 ×6、第三次以後 ×24。 */
+  escalate: boolean('escalate').notNull().default(true),
+  groupId: text('group_id'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+});
+
+/** 自動封鎖紀錄：active → released（到期或手動解除）。 */
+export const responseBlocks = pgTable(
+  'response_blocks',
+  {
+    id: text('id').primaryKey(),
+    ruleId: text('rule_id'),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    ip: text('ip').notNull(),
+    reason: text('reason').notNull().default(''),
+    level: integer('level').notNull().default(0),
+    status: text('status').notNull().default('active'),
+    blockedAt: ts('blocked_at').notNull().defaultNow(),
+    expiresAt: ts('expires_at').notNull(),
+    releasedAt: ts('released_at'),
+    blockActionId: text('block_action_id'),
+    unblockActionId: text('unblock_action_id'),
+  },
+  (t) => [index('response_blocks_status_idx').on(t.status, t.expiresAt), index('response_blocks_agent_ip_idx').on(t.agentId, t.ip)],
+);
