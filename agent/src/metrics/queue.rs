@@ -1,6 +1,8 @@
 //! 本機保存：
 //! - `metrics/queue.jsonl`：還沒送到 Hub 的樣本（一行一個；Hub 暫時連不上時累積，最多 [`MAX_QUEUE`] 個，丟最舊的）；
 //! - `metrics/recent.json`：最近 [`RECENT`] 個樣本（桌面版的小圖、`get_metrics` 工具用），不管有沒有加入 Hub。
+//!
+//! 24 小時的彙總歷史在 [`super::history`]。
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

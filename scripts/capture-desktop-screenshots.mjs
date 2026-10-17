@@ -194,6 +194,103 @@ const METRICS = {
   },
 };
 
+// 「效能與流量」頁（metrics_history）：最近 1 小時每分鐘一點、最近 24 小時每 5 分鐘一點。
+// 故事和總覽一致：辦公時段的起伏，最後幾分鐘 updater.exe 一直往外傳；24 小時裡半夜筆電睡著（沒有資料，圖上斷開）。
+const DISKS = [
+  { mount: 'C:\\', fs: 'NTFS', used: 338 * GB, total: 476 * GB },
+  { mount: 'D:\\', fs: 'NTFS', used: 731 * GB, total: 931 * GB },
+];
+METRICS.current.perf.disks = DISKS;
+METRICS.current.perf.disk_read_bytes = 38 * MB * 60;
+METRICS.current.perf.disk_write_bytes = 12 * MB * 60;
+METRICS.current.perf.top_cpu = [
+  { name: 'updater.exe', pid: 6120, count: 1, cpu_pct: 71.4, rss: 96 * MB },
+  { name: 'chrome.exe', count: 31, cpu_pct: 6.2, rss: 3.1 * GB },
+  { name: 'MsMpEng.exe', pid: 3312, count: 1, cpu_pct: 4.8, rss: 310 * MB },
+  { name: 'Teams.exe', count: 6, cpu_pct: 2.9, rss: 1.2 * GB },
+  { name: 'Code.exe', count: 9, cpu_pct: 1.7, rss: 1.4 * GB },
+];
+METRICS.current.perf.top_mem = [
+  { name: 'chrome.exe', count: 31, cpu_pct: 6.2, rss: 3.1 * GB },
+  { name: 'Code.exe', count: 9, cpu_pct: 1.7, rss: 1.4 * GB },
+  { name: 'Teams.exe', count: 6, cpu_pct: 2.9, rss: 1.2 * GB },
+  { name: 'OneDrive.exe', pid: 8840, count: 1, cpu_pct: 0.4, rss: 420 * MB },
+  { name: 'MsMpEng.exe', pid: 3312, count: 1, cpu_pct: 4.8, rss: 310 * MB },
+];
+METRICS.current.net.processes = [
+  { name: 'updater.exe', rx_bytes: 0.02 * MB * 60, tx_bytes: 5.8 * MB * 60 },
+  { name: 'chrome.exe', rx_bytes: 0.6 * MB * 60, tx_bytes: 0.05 * MB * 60 },
+];
+METRICS.current.net.process_source = 'estats';
+
+/** 一個時間點的各程式速率（B/s）：活躍度 a（0–1）、i 讓曲線有起伏、upload＝updater.exe 往外傳。 */
+function demoProcs(a, i, upload) {
+  const w = (k) => 0.75 + 0.25 * Math.sin(i / 3.1 + k);
+  const procs = [
+    { name: 'chrome.exe', rx: 620 * 1024 * a * w(1), tx: 48 * 1024 * a * w(2) },
+    { name: 'Teams.exe', rx: 190 * 1024 * a * w(3), tx: 140 * 1024 * a * w(4) },
+    { name: 'OneDrive.exe', rx: (i % 17 < 3 ? 900 : 40) * 1024 * a, tx: (i % 23 < 2 ? 700 : 20) * 1024 * a },
+    { name: 'updater.exe', rx: upload ? 18 * 1024 : 0, tx: upload ? 5.8 * MB : 0 },
+    { name: 'svchost.exe', rx: 36 * 1024 * (0.4 + a) * w(5), tx: 9 * 1024 * (0.4 + a) },
+    { name: 'msedge.exe', rx: 70 * 1024 * a * w(6), tx: 8 * 1024 * a },
+    { name: 'Code.exe', rx: 22 * 1024 * a * w(7), tx: 6 * 1024 * a },
+  ].filter((p) => p.rx + p.tx > 0);
+  return { procs, procs_other: { name: '', rx: 30 * 1024 * a, tx: 6 * 1024 * a } };
+}
+
+function demoPoint(ts, secs, a, i, upload) {
+  const { procs, procs_other } = demoProcs(a, i, upload);
+  const rx = procs.reduce((s, p) => s + p.rx, 0) * 1.08 + procs_other.rx;
+  const tx = procs.reduce((s, p) => s + p.tx, 0) * 1.08 + procs_other.tx;
+  const cpu = upload ? 88 + 4 * Math.sin(i) : 6 + 22 * a + 6 * Math.sin(i / 2.7);
+  return {
+    ts,
+    secs,
+    rx,
+    tx,
+    procs,
+    procs_other,
+    cpu: Math.round(cpu * 10) / 10,
+    cpu_max: Math.round(Math.min(100, cpu * (1.6 + 0.3 * Math.sin(i))) * 10) / 10,
+    mem_used: Math.round(16 * GB * (0.52 + 0.18 * a + 0.03 * Math.sin(i / 5))),
+    mem_total: 16 * GB,
+    disk_read: (2 + 30 * a * (0.6 + 0.4 * Math.sin(i / 1.9))) * MB * (i % 29 === 0 ? 3 : 1),
+    disk_write: (0.8 + 9 * a * (0.6 + 0.4 * Math.cos(i / 2.3))) * MB,
+  };
+}
+
+// 圖上的時間固定在當地今天 17:32（不管什麼時候跑這個腳本，24 小時圖的上班／半夜起伏都在對的鐘點）
+const USAGE_NOW = new Date(new Date(now).setHours(17, 32, 0, 0)).getTime();
+const HOUR_POINTS = Array.from({ length: 60 }, (_, k) => {
+  const i = 59 - k;
+  const ts = new Date(Math.floor((USAGE_NOW - i * 60_000) / 60_000) * 60_000).toISOString();
+  return { ...demoPoint(ts, 60, 0.7 + 0.25 * Math.sin(k / 6), k, i < 6), battery: Math.round(76 + i * 0.25) };
+});
+const DAY_POINTS = Array.from({ length: 288 }, (_, k) => {
+  const i = 287 - k;
+  const t = Math.floor((USAGE_NOW - i * 300_000) / 300_000) * 300_000;
+  const ts = new Date(t).toISOString();
+  const h = new Date(t).getHours() + new Date(t).getMinutes() / 60;
+  // 01:00–06:30 筆電睡著：沒有資料
+  if (h >= 1 && h < 6.5) return { ts, secs: 0 };
+  const a = h >= 9 && h < 18.5 ? 0.75 + 0.2 * Math.sin(k / 9) : h >= 18.5 && h < 23 ? 0.35 : 0.12;
+  const battery = Math.max(18, Math.min(100, Math.round(h >= 9 && h < 13 ? 100 - (h - 9) * 9 : h >= 13 && h < 14 ? 64 + (h - 13) * 30 : h >= 14 && h < 18.5 ? 94 - (h - 14) * 4 : 90)));
+  return { ...demoPoint(ts, 300, a, k, i < 2), battery };
+});
+const usageHistory = (range) => ({
+  range,
+  step_s: range === '24h' ? 300 : 60,
+  source: 'background',
+  interval: '1m',
+  performance_enabled: true,
+  process_network: true,
+  has_processes: true,
+  platform: 'windows',
+  elevated: false,
+  points: range === '24h' ? DAY_POINTS : HOUR_POINTS,
+  current: METRICS.current,
+});
+
 // 真的 Claude Code／Codex 回答是 Markdown（標題、粗體、表格、清單），桌面版用 ui/markdown.js 顯示
 const AI_ANSWER = `## 結論
 
@@ -256,6 +353,7 @@ const DATA = {
     { url: 'http://198.51.100.40:8088', source: 'mdns', detail: 'lab-hub._aisecmon._tcp.local.', error: '連不到（5 秒逾時）' },
   ],
   metrics: METRICS,
+  usage: { '1h': usageHistory('1h'), '24h': usageHistory('24h') },
   update_status: {
     mode: 'notify',
     current: VERSION,
@@ -307,6 +405,7 @@ function installMock(D) {
     background_service_status: () => D.background_service,
     desktop_autostart_status: () => true,
     metrics_now: () => D.metrics,
+    metrics_history: ({ range }) => D.usage[range] ?? D.usage['1h'],
     // 即時流量：每次呼叫回一個平滑變化的假樣本
     traffic_live: () => {
       const k = (window.__liveK = (window.__liveK ?? 0) + 1);
@@ -514,6 +613,38 @@ const SHOTS = [
     },
   ],
   ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table') && document.querySelector('#ov-metrics .spark')`)],
+  // 流量與效能 → 最近 1 小時：滑鼠停在網路速度圖上（十字線＋各線的值）
+  [
+    'desktop-usage',
+    'traffic/1h',
+    false,
+    async () => {
+      await waitFor(`document.querySelector('#us-net .tchart-svg path') && document.querySelector('#us-procs .tchart-svg path') && document.querySelector('#us-cpu .tchart-svg path')`);
+      await evaluate(`(() => {
+        const s = document.querySelector('#us-net .tchart-svg');
+        const r = s.getBoundingClientRect();
+        s.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + r.width * 0.78, clientY: r.top + r.height / 2, bubbles: true }));
+      })()`);
+      await waitFor(`!document.querySelector('#us-net .tchart-tip').hidden`);
+    },
+  ],
+  // 同一頁往下：CPU、記憶體、磁碟讀寫、各磁碟區、最吃資源的程式、電池
+  [
+    'desktop-usage-perf',
+    'traffic/1h',
+    false,
+    async () => {
+      await waitFor(`document.querySelector('#us-cpu .tchart-svg path') && document.querySelector('#us-top table') && document.querySelector('#us-battery .tchart-svg path')`);
+      await evaluate(`document.getElementById('us-cpu').closest('.card').scrollIntoView({ block: 'start' })`);
+    },
+  ],
+  // 深色＋最近 24 小時（半夜筆電睡著的時段沒有資料，圖上斷開）
+  [
+    'desktop-usage-dark',
+    'traffic/24h',
+    true,
+    async () => waitFor(`/5 分鐘/.test(document.getElementById('us-source').textContent) && document.querySelector('#us-cpu .tchart-svg path')`),
+  ],
 ];
 
 const only = args.only ? new Set(args.only.split(',')) : null;
@@ -521,7 +652,8 @@ const captured = [];
 for (const [name, page, dark, prepare] of SHOTS) {
   if (only && !only.has(name)) continue;
   // 桌面版視窗預設 1200×780（tauri.conf.json）；連線頁右邊有 IP 分析欄，用放大後的視窗
-  const [width, height] = page === 'connections' ? [1440, 860] : [1200, 780];
+  // 流量與效能的歷史分頁比較長：用加高的視窗
+  const [width, height] = page === 'connections' ? [1440, 860] : page.startsWith('traffic/') ? [1200, 960] : [1200, 780];
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   // 減少動態效果：略過啟動畫面（splash.js），截到的是頁面本身
   await send('Emulation.setEmulatedMedia', {
@@ -535,7 +667,8 @@ for (const [name, page, dark, prepare] of SHOTS) {
   await waitFor(`document.readyState === 'complete' && document.getElementById('brand-host').textContent === 'fin-laptop-07' && !!document.querySelector('#ov-conn table')`);
   if (page !== 'overview') {
     await evaluate(`location.hash = '#${page}'`);
-    await waitFor(`document.querySelector('#nav a.active')?.dataset.page === '${page}' && !/載入中/.test(document.querySelector('#main .sub')?.textContent ?? '')`);
+    // page 可以帶區塊（traffic/1h）：側欄比對的是 / 前面的頁名
+    await waitFor(`document.querySelector('#nav a.active')?.dataset.page === '${page.split('/')[0]}' && !/載入中/.test(document.querySelector('#main .sub')?.textContent ?? '')`);
   }
   // 先回到頁首（prepare 裡要拍下面某一段的自己捲過去）
   await evaluate(`document.getElementById('main').scrollTop = 0`);

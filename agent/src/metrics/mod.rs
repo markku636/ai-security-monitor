@@ -5,11 +5,13 @@
 //! - 效能（`metrics.performance = true`）：CPU、記憶體、置換空間、各磁碟用量與讀寫、開機時間、負載、
 //!   最吃 CPU／記憶體的前 5 個程式、電池。只送到這台電腦加入的 Security Hub；Hub 無法從遠端開啟。
 //!
-//! `watch` 每 `metrics.interval`（預設 1 分鐘，最短 30 秒）取一個樣本：存進最近 1 小時（桌面版小圖用），
+//! `watch` 每 `metrics.interval`（預設 1 分鐘，最短 30 秒）取一個樣本：存進最近 1 小時（桌面版小圖用）
+//! 與本機 24 小時歷史（每 5 分鐘一格，見 [`history`]），
 //! 有加入 Hub 時放進待送佇列並分批送到 `POST /api/v1/ingest/metrics`（離線時累積、恢復後補送）。
 //! 取樣在背景執行緒做、有逾時，永遠不會卡住 `watch` 的其他工作。
 
 pub mod battery;
+pub mod history;
 pub mod net;
 pub mod perf;
 pub mod procnet;

@@ -18,6 +18,14 @@
   --info: #075985;
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
+  /* 圖表的分類色（固定順序，跑過 dataviz 驗證：深淺色各自的色階）、格線、座標軸、圖表底色 */
+  --chart-3: #1baf7a;
+  --chart-4: #8b5cf6;
+  --chart-5: #d03f8f;
+  --chart-6: #b98900;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #64748b;
+  --chart-surface: #ffffff;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -40,10 +48,19 @@
     --info-soft: #082f49;
     --chart-1: #3987e5;
     --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #9085e9;
+    --chart-5: #d55181;
+    --chart-6: #c98500;
+    --chart-grid: #1e293b;
+    --chart-axis: #94a3b8;
+    --chart-surface: #111a2c;
     color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
+/* hidden 一定要藏得住（.filters、.update-banner 這類有 display 的元素也是） */
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   font: 14px/1.5 "Segoe UI", "Microsoft JhengHei UI", "PingFang TC", system-ui, sans-serif;
@@ -230,3 +247,49 @@ th.sortable:hover { color: var(--accent); }
 .dot.rx { background: #0d9488; }
 .dot.tx { background: #d97706; }
 .seg { display: inline-flex; gap: 4px; }
+/* 總覽的小圖可以點，到「流量與效能」的最近 1 小時 */
+.spark-link { display: block; color: inherit; text-decoration: none; border-radius: 6px; }
+.spark-link:hover .spark, .spark-link:focus-visible .spark { filter: brightness(1.15); }
+.spark-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 「流量與效能」頁：分頁列（即時／最近 1 小時／最近 24 小時）與歷史圖表（chart.js、usage.js） */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.segs { display: inline-flex; }
+.segbtn { display: inline-block; text-decoration: none; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.segbtn + .segbtn { margin-left: -1px; }
+.segbtn:first-child { border-radius: 8px 0 0 8px; }
+.segbtn:last-child { border-radius: 0 8px 8px 0; }
+.segbtn:hover:not(.on) { background: var(--accent-soft); }
+.segbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .segbtn.on { color: #042f2e; } }
+.segbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; position: relative; }
+#us-body { transition: opacity 0.2s; }
+#us-body.loading { opacity: 0.6; }
+.us-sum { margin: -4px 0 6px; }
+.usage-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+.usage-grid > .card { margin-bottom: 0; }
+.usage-grid + .card, .usage-grid + div > .card { margin-top: 14px; }
+.usage-grid.tight { gap: 18px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.us-proc-table { margin-top: 10px; }
+.us-proc-table td { padding: 4px 8px; }
+.us-proc-table td svg { vertical-align: middle; }
+.tchart { margin: 0; }
+.tchart-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.tchart-key { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.tchart-key-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tchart-box { position: relative; width: 100%; }
+.tchart-svg { display: block; touch-action: none; user-select: none; overflow: visible; }
+.tchart-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.tchart-axis { font-size: 11px; fill: var(--chart-axis); font-variant-numeric: tabular-nums; }
+.tchart-empty { font-size: 12px; fill: var(--chart-axis); }
+.tchart-tip { position: absolute; top: 4px; z-index: 10; min-width: 150px; max-width: 300px; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+.tchart-tip-time { color: var(--muted); margin-bottom: 4px; }
+.tchart-tip-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+.tchart-tip-name { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tchart-tip-val { color: var(--text); font-variant-numeric: tabular-nums; }
+.vol + .vol { margin-top: 10px; }
+.vol-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.meter { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--chart-1); border-radius: 4px; }
+.meter.hot > i { background: var(--danger); }
+.tabs-row { display: flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }

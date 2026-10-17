@@ -77,6 +77,19 @@ The MCP tool `get_metrics` returns the same plus a summary of the last hour (pea
 - Re-sending never double counts: the Hub keys samples by (host, sample time).
 - The last 60 samples are also kept locally (`metrics/recent.json`) for the desktop sparklines and `get_metrics`.
 
+## Local 24-hour history
+
+The desktop app's *Traffic & performance → Last 24 hours* reads a history kept on this computer, **even without a Hub**:
+
+- Every sample from the background service is added to the current 5-minute bucket (`<config dir>/metrics/history-open.json`, 1–2 KB, rewritten once a minute);
+  when the next 5 minutes start, the finished bucket is appended to `metrics/history.jsonl` (one line per bucket).
+- Each bucket has download / upload bytes and bytes per program (top 12, the rest folded into "other"); with performance on, also CPU average and
+  maximum, memory average and maximum, disk read/write bytes, and the volumes and battery from the last sample.
+- Only 24 hours are kept (288 buckets, about 300 KB). The file is rewritten only once an hour's worth of old lines has piled up; broken lines (say,
+  a write cut off by a power loss) are skipped and dropped at the next rewrite, and a broken current-bucket file just starts over with the next sample.
+  Nothing needs fixing by hand.
+- When the background service is not running, the desktop app samples once a minute while it is open (including in the tray) and writes to the same history.
+
 ## Hub
 
 - **Tables**: `host_metrics` (one row per sample) and `host_metrics_hourly` (hourly rollups: totals, per card, top 10 programs, CPU average/peak,
@@ -104,7 +117,7 @@ The MCP tool `get_metrics` returns the same plus a summary of the last hour (pea
 
 ## Privacy
 
-- Data goes only to the Hub this computer joined; without a Hub it stays on the computer (last hour).
+- Data goes only to the Hub this computer joined; without a Hub it stays on the computer (the last hour of samples plus 24 hours of 5-minute summaries).
 - No packet contents, URLs or file names: network data is byte counts, card names and program names; performance data is numbers plus program name, pid and memory.
 - Performance is off by default and decided on the computer itself; the Hub has no way to turn it on. When it is turned off, the Hub resolves open performance findings.
 

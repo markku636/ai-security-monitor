@@ -138,12 +138,12 @@ const fmtBytes = (n) => {
 const fmtRate = (n) => (n == null ? '—' : `${fmtBytes(n)}/s`);
 const fmtPct = (n) => (n == null ? '—' : `${Math.round(n)}%`);
 
-/** 小折線圖（一條或兩條線；pct 時固定 0–100）。 */
+/** 小折線圖（一條或兩條線；pct 時固定 0–100）。點下去到「流量與效能」頁看完整的圖。 */
 function sparkline(series, { pct = false, label = '' } = {}) {
   const W = 160;
   const H = 36;
   const all = series.flatMap((s) => s.values).filter((v) => v != null);
-  if (all.length < 2) return '<div class="spark-empty">累積幾分鐘後會畫出變化</div>';
+  if (all.length < 2) return '<a class="spark-link spark-empty" href="#traffic/1h" title="看「流量與效能」頁">累積幾分鐘後會畫出變化</a>';
   const max = pct ? 100 : Math.max(...all, 1);
   const n = Math.max(...series.map((s) => s.values.length));
   const x = (i) => (n <= 1 ? W / 2 : (i / (n - 1)) * (W - 2) + 1);
@@ -160,7 +160,7 @@ function sparkline(series, { pct = false, label = '' } = {}) {
       return d ? `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : '';
     })
     .join('');
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">${lines}</svg>`;
+  return `<a class="spark-link" href="#traffic/1h" title="點一下看「流量與效能」的完整圖表" aria-label="${esc(`${label}：看「流量與效能」的完整圖表`)}"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${lines}</svg></a>`;
 }
 
 let metricsTimer = null;
@@ -1028,11 +1028,12 @@ function renderLive() {
 }
 
 // ---------------- 路由 ----------------
-// 網址是 #頁面 或 #頁面/區塊（目前只有 #settings/hub：設定頁的 Hub 區塊）
-const PAGES = { overview: pageOverview, connections: pageConnections, traffic: pageTraffic, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
+// 網址是 #頁面 或 #頁面/區塊：#settings/hub＝設定頁的 Hub 區塊；#traffic/1h、#traffic/24h＝流量與效能的歷史分頁（#traffic 是即時）
+// 「流量與效能」（traffic）由 usage.js 的 pageTrafficTabs 分成即時／最近 1 小時／最近 24 小時三個分頁
+const PAGES = { overview: pageOverview, connections: pageConnections, traffic: pageTrafficTabs, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
   let [page, section] = (location.hash || '#overview').slice(1).split('/');
-  let opts = section === 'hub' ? { focus: 'hub' } : {};
+  let opts = section === 'hub' ? { focus: 'hub' } : { section };
   if (page === 'join') {
     // 舊的「加入公司 Hub」頁已經併進設定頁：換成設定頁的 Hub 區塊並直接開始尋找
     history.replaceState(null, '', HUB_SECTION);
@@ -1040,6 +1041,7 @@ async function route() {
     opts = { focus: 'hub', search: true };
   }
   stopJoinPoll();
+  stopUsageRefresh();
   for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('active', a.dataset.page === page);
   try {
     await (PAGES[page] ?? pageOverview)(opts);

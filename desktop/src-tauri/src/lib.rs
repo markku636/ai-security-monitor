@@ -31,6 +31,7 @@ mod ai_auth;
 mod lan;
 mod live;
 mod updates;
+mod usage;
 
 type CmdResult<T> = Result<T, String>;
 
@@ -42,7 +43,7 @@ struct AppState {
     config_dir: PathBuf,
     intel: Mutex<Option<(Instant, Arc<IntelDb>)>>,
     ai_running: AtomicBool,
-    /// 沒有背景服務時，桌面版自己取樣（只在記憶體、不寫進背景服務的待送佇列）。
+    /// 沒有背景服務時，桌面版自己取樣（最近 1 小時在記憶體、24 小時歷史寫進設定目錄；不寫進背景服務的待送佇列）。見 [`usage`]。
     metrics: asa_lib::metrics::Shared,
     metrics_recent: Mutex<Vec<asa_lib::metrics::MetricsSample>>,
 }
@@ -505,72 +506,6 @@ async fn cancel_join(state: State<'_, AppState>) -> CmdResult<()> {
     keyless::clear_pending(&state.config_dir).map_err(err)
 }
 
-// ---------------- 網路流量與效能 ----------------
-
-/// 小圖用的精簡樣本：時間、上傳／下載速率；開啟效能蒐集時加 CPU、記憶體、最滿的磁碟（%）。
-fn point(s: &asa_lib::metrics::MetricsSample) -> Value {
-    let (rx, tx) = s.rates();
-    let p = s.perf.as_ref();
-    let mem = p.and_then(|p| (p.mem_total > 0).then(|| p.mem_used as f64 * 100.0 / p.mem_total as f64));
-    let disk = p.and_then(|p| {
-        p.disks
-            .iter()
-            .filter(|d| d.total > 0)
-            .map(|d| d.used as f64 * 100.0 / d.total as f64)
-            .reduce(f64::max)
-    });
-    json!({ "ts": s.ts, "rx": rx, "tx": tx, "cpu": p.map(|p| p.cpu_pct), "mem": mem, "disk": disk })
-}
-
-/// 總覽的流量／效能卡片：背景服務在跑而且最近有樣本就用它的（最近 1 小時）；否則桌面版自己量
-/// （開著視窗時每次呼叫取一個樣本，只留在記憶體）。效能只在使用者開啟時才量。
-#[tauri::command]
-async fn metrics_now(state: State<'_, AppState>) -> CmdResult<Value> {
-    use asa_lib::metrics;
-    let dir = &state.config_dir;
-    let cfg = config::load_or_init(dir).map_err(err)?;
-    let opts = metrics::Options::from_config(&cfg.metrics);
-    let every = metrics::interval_of(&cfg.metrics);
-    let recent = metrics::queue::recent(dir);
-    let fresh = recent.last().is_some_and(|s| {
-        (chrono::Utc::now() - s.ts).to_std().unwrap_or_default() <= every * 2 + Duration::from_secs(30)
-            && s.perf.is_some() == opts.performance
-    });
-    let (current, history, source) = if fresh {
-        (recent.last().cloned(), recent, "background")
-    } else {
-        let s = metrics::tick(&state.metrics, opts).await;
-        let mut h = state.metrics_recent.lock().await;
-        if let Some(s) = &s {
-            h.push(s.clone());
-            let n = h.len();
-            if n > 60 {
-                h.drain(..n - 60);
-            }
-        }
-        (s, h.clone(), "desktop")
-    };
-    Ok(json!({
-        "performance_enabled": cfg.metrics.performance,
-        "interval": cfg.metrics.interval,
-        "source": source,
-        "current": current,
-        "points": history.iter().map(point).collect::<Vec<_>>(),
-    }))
-}
-
-/// 開／關效能蒐集（metrics.performance）。背景服務每輪重讀設定，不用重新啟動。
-#[tauri::command]
-async fn set_performance(state: State<'_, AppState>, enabled: bool) -> CmdResult<bool> {
-    let dir = &state.config_dir;
-    let mut cfg = config::load_or_init(dir).map_err(err)?;
-    config::set_value(&mut cfg, "metrics.performance", if enabled { "true" } else { "false" }).map_err(err)?;
-    config::save(dir, &cfg).map_err(err)?;
-    // 換設定後重新累積（避免小圖混著有／沒有效能的樣本）
-    state.metrics_recent.lock().await.clear();
-    Ok(cfg.metrics.performance)
-}
-
 /// 用預設瀏覽器開網址（只接受 http/https）。
 #[tauri::command]
 fn open_url(url: String) -> CmdResult<()> {
@@ -657,6 +592,8 @@ pub fn run(start_in_tray: bool) {
                 show_main(app.handle());
             }
             updates::spawn_background(app.handle().clone(), start_in_tray);
+            // 背景服務沒在跑時，桌面版開著就自己累積流量／效能歷史
+            usage::spawn_sampler(app.handle().clone());
             // 有開「背景自動回報」卻沒在跑（例如更新安裝時被結束）：把它啟動起來
             let dir = app.state::<AppState>().config_dir.clone();
             tauri::async_runtime::spawn(async move {
@@ -696,9 +633,10 @@ pub fn run(start_in_tray: bool) {
             set_background_service,
             desktop_autostart_status,
             set_desktop_autostart,
-            metrics_now,
+            usage::metrics_now,
+            usage::metrics_history,
             live::traffic_live,
-            set_performance,
+            usage::set_performance,
             open_url,
             updates::update_status,
             updates::set_update_mode,

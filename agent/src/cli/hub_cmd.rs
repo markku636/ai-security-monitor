@@ -996,6 +996,8 @@ async fn metrics_round(env: &Env, st: &mut MetricsState, agent_id: &str, client:
     match crate::metrics::tick(&st.collector, opts).await {
         Some(s) => {
             let _ = crate::metrics::queue::remember(&env.config_dir, &s);
+            // 本機 24 小時歷史（桌面版「效能與流量」頁）：沒加入 Hub 也記
+            let _ = crate::metrics::history::record(&env.config_dir, &s);
             if client.is_some() {
                 if let Err(e) = crate::metrics::queue::push(&env.config_dir, &s) {
                     log(env, &tf!("流量資料暫存失敗：{e}", e = e.message()));
