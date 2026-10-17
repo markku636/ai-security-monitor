@@ -24,4 +24,6 @@
 
 Optional rule sets the user may add (not bundled): SigmaHQ (DRL 1.1), Neo23x0 signature-base (DRL), Emerging Threats Suricata rules (BSD). Keep their attribution when importing.
 
+Hub "Attack techniques & compliance": technique IDs and English names from [MITRE ATT&CK®](https://attack.mitre.org/) (© The MITRE Corporation, used under the [ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/); ATT&CK is a registered trademark of The MITRE Corporation). The rule → technique / control mapping, Chinese names and summaries are our own; compliance controls are referenced by number with our own short titles only (no standard text is reproduced).
+
 Bundled code in the Hub: country flag SVGs from [`country-flag-icons`](https://gitlab.com/catamphetamine/country-flag-icons) (MIT, © 2020 @catamphetamine).

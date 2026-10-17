@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip, FilterRow, Pager, SearchBox, toggled } from '@/components/ui/Filters';
 import { HostFilter } from '@/components/ui/HostFilter';
 import { sevLabel } from '@/components/ui/Severity';
+import { controlLabel, techniqueLabel } from '@/components/security/AttackTags';
 import { getT } from '@/lib/i18n/server';
 import { listFindings, parseFindingFilter, SEVERITIES, STATUSES, toFindingView, type FindingFilter } from '@/lib/queries/findings';
 import { toQuery } from '@/lib/queries/params';
@@ -19,6 +20,8 @@ function href(base: string, f: FindingFilter, patch: Partial<FindingFilter>): st
       severity: n.severity,
       scanner: n.scanner,
       q: n.q,
+      technique: n.technique,
+      control: n.control,
       offset: n.offset || undefined,
     })
   );
@@ -37,7 +40,7 @@ export async function FindingsView({ base, params, agentId }: { base: string; pa
             t={t}
             action={base}
             current={f.agentId}
-            keep={{ status: f.status.join(','), severity: f.severity.join(','), scanner: f.scanner.join(','), q: f.q }}
+            keep={{ status: f.status.join(','), severity: f.severity.join(','), scanner: f.scanner.join(','), q: f.q, technique: f.technique, control: f.control }}
           />
         )}
         <FilterRow label={t('狀態')}>
@@ -54,6 +57,23 @@ export async function FindingsView({ base, params, agentId }: { base: string; pa
             </FilterChip>
           ))}
         </FilterRow>
+        {f.technique || f.control ? (
+          <FilterRow label={t('對應')}>
+            {f.technique ? (
+              <FilterChip href={href(base, f, { technique: undefined, offset: 0 })} active>
+                MITRE {f.technique} {techniqueLabel(f.technique, t)} ✕
+              </FilterChip>
+            ) : null}
+            {f.control ? (
+              <FilterChip href={href(base, f, { control: undefined, offset: 0 })} active>
+                {f.control.includes(':') ? controlLabel(f.control, t) : f.control} ✕
+              </FilterChip>
+            ) : null}
+            <a href="/mitre" className="text-xs text-teal-700 hover:underline dark:text-teal-300">
+              {t('攻擊手法總覽 →')}
+            </a>
+          </FilterRow>
+        ) : null}
         <SearchBox
           t={t}
           action={base}
@@ -65,6 +85,8 @@ export async function FindingsView({ base, params, agentId }: { base: string; pa
             status: f.status.join(','),
             severity: f.severity.join(','),
             scanner: f.scanner.join(','),
+            technique: f.technique,
+            control: f.control,
           }}
         />
       </div>

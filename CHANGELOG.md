@@ -2,6 +2,7 @@
 
 ## 未發佈
 
+- **攻擊手法與法規（MITRE ATT&CK＋ISO 27001／NIST 800-53／PCI DSS 4／CIS v8）**：Hub 依每個問題的規則對應到 MITRE ATT&CK 技術與法規控制項（對應表自己寫的，在 Hub 端算，所以舊版 agent 的問題也有、改對應表不用重新掃描）。新頁「攻擊手法與法規」（`/mitre`）：戰術欄 × 技術格，顯示待處理問題數與主機數（子技術算進上層技術），可選 7／30 天／全部、篩主機；四個框架各列控制項與問題數。問題清單展開後顯示手法與法規標籤（滑過看白話說明），點標籤或格子＝問題頁 `technique=`／`control=` 篩選（也接受整個框架，例 `control=iso27001`）。對應是參考用，不等於稽核或認證。
 - **IP 反查網域**：IP 分析頁新增「這個 IP 上的網域」。一、主機連線時解析過的名稱：Windows 電腦上傳連線快照時，順便讀 DNS 快取，附上**目前有連線**的公網 IP 是從哪個網域解析來的（只送這些、不送整份快取；名稱在電腦上記 24 小時，Hub 保留 30 天）；`ai-security-monitor config set scan.dns_names false` 可關掉。可疑 IP 排名與連線表的 IP 底下也會顯示這個網域。二、反解（PTR）。三、外部被動 DNS 反查：按「查詢網域」才把 IP 送給 HackerTarget（免金鑰，每天次數少）、VirusTotal（要金鑰）、AlienVault OTX（金鑰選填），顯示看過的網域總數與清單（最多 200 個、最後看到時間）。這三個來源不算進風險分數、批次查詢與「查詢全部未分析」不會用到，結果存在自己的快取（清除「外部情資查詢快取」時一起清）。金鑰可在「設定與金鑰 → 外部情資來源」貼上或用 `AI_SECURITY_MONITOR_HUB_VIRUSTOTAL_KEY`／`…_OTX_KEY`／`…_HACKERTARGET_KEY`。資料庫 migration 0013（`ip_domains`、`ip_domain_lookups`）。
 
 ## v0.5.0 — 2026-10-18

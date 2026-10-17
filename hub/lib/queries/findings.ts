@@ -1,6 +1,7 @@
 // 發現（finding）查詢與批次處理：確認、暫停、重新開啟。
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { agents, findings, type SevCounts } from '@/drizzle/schema';
+import { mapRule, matchingRules, ruleHasControl, ruleHasTechnique } from '@/lib/attack/mapping';
 import { getDb, type DB } from '@/lib/db';
 import { likePattern } from './connections';
 import { clampInt, listParam, strParam, type Params } from './params';
@@ -17,6 +18,10 @@ export interface FindingFilter {
   severity: Severity[];
   scanner: string[];
   q?: string;
+  /** MITRE ATT&CK 技術（例 T1110；含子技術）。 */
+  technique?: string;
+  /** 法規控制項（例 iso27001:A.8.8）或整個框架（例 iso27001）。 */
+  control?: string;
   limit: number;
   offset: number;
 }
@@ -30,6 +35,8 @@ export function parseFindingFilter(p: Params): FindingFilter {
     severity: listParam(p, 'severity', SEVERITIES),
     scanner: listParam(p, 'scanner', SCANNERS),
     q: strParam(p, 'q', 100),
+    technique: /^T\d{4}(\.\d{3})?$/.test(strParam(p, 'technique', 12) ?? '') ? strParam(p, 'technique', 12) : undefined,
+    control: /^[a-z0-9-]{2,16}(:[A-Za-z0-9.-]{1,16})?$/.test(strParam(p, 'control', 40) ?? '') ? strParam(p, 'control', 40) : undefined,
     limit: clampInt(p, 'limit', 100, 1, 200),
     offset: clampInt(p, 'offset', 0, 0, 100_000),
   };
@@ -37,8 +44,10 @@ export function parseFindingFilter(p: Params): FindingFilter {
 
 const SEV_ORDER = sql`case ${findings.severity} when 'critical' then 0 when 'high' then 1 when 'medium' then 2 when 'low' then 3 else 4 end`;
 
-function where(f: FindingFilter, skip: { severity?: boolean; status?: boolean } = {}): SQL {
+function where(f: FindingFilter, skip: { severity?: boolean; status?: boolean } = {}, rules?: string[]): SQL {
   const conds: SQL[] = [isNull(agents.deletedAt)];
+  // 手法／法規篩選：事先算好符合的規則（沒有任何規則符合＝空結果）
+  if (rules) conds.push(rules.length ? inArray(findings.rule, rules) : sql`false`);
   if (f.agentId) conds.push(eq(findings.agentId, f.agentId));
   if (!skip.status && f.status.length) conds.push(inArray(findings.status, f.status));
   if (!skip.severity && f.severity.length) conds.push(inArray(findings.severity, f.severity));
@@ -52,14 +61,21 @@ function where(f: FindingFilter, skip: { severity?: boolean; status?: boolean } 
   return and(...conds)!;
 }
 
+/** 手法／法規篩選對應的規則；沒有這兩種篩選回 undefined。 */
+async function rulesFor(db: DB, f: FindingFilter): Promise<string[] | undefined> {
+  if (!f.technique && !f.control) return undefined;
+  return matchingRules(db, (r) => (!f.technique || ruleHasTechnique(r, f.technique)) && (!f.control || ruleHasControl(r, f.control)));
+}
+
 export async function listFindings(f: FindingFilter) {
   const db = getDb();
+  const rules = await rulesFor(db, f);
   const facet = (k: typeof findings.severity | typeof findings.status, skip: { severity?: boolean; status?: boolean }) =>
     db
       .select({ k, n: count() })
       .from(findings)
       .innerJoin(agents, eq(agents.id, findings.agentId))
-      .where(where(f, skip))
+      .where(where(f, skip, rules))
       .groupBy(k);
   const [items, total, bySeverity, byStatus] = await Promise.all([
     db
@@ -86,7 +102,7 @@ export async function listFindings(f: FindingFilter) {
       })
       .from(findings)
       .innerJoin(agents, eq(agents.id, findings.agentId))
-      .where(where(f))
+      .where(where(f, {}, rules))
       .orderBy(SEV_ORDER, desc(findings.lastSeenAt), findings.findingId)
       .limit(f.limit)
       .offset(f.offset),
@@ -94,7 +110,7 @@ export async function listFindings(f: FindingFilter) {
       .select({ n: count() })
       .from(findings)
       .innerJoin(agents, eq(agents.id, findings.agentId))
-      .where(where(f)),
+      .where(where(f, {}, rules)),
     facet(findings.severity, { severity: true }),
     facet(findings.status, { status: true }),
   ]);
@@ -224,6 +240,8 @@ export function toFindingView(r: FindingRow) {
     suppressedUntil: r.suppressedUntil ? r.suppressedUntil.toISOString() : null,
     allowlistedBy: r.allowlistedBy,
     tags: r.tags ?? [],
+    // MITRE ATT&CK／法規：Hub 依規則對應（舊版 agent 的問題也有）
+    ...mapRule(r.rule),
     intelHits: r.intelHits,
     proposed: (Array.isArray(r.actions) ? r.actions : []) as ProposedActionJson[],
   };

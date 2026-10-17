@@ -7,6 +7,7 @@ import { useState, useTransition } from 'react';
 import { apiPost } from '@/lib/api-client';
 import { since } from '@/lib/format';
 import { useT } from '@/lib/i18n/client';
+import { AttackTags } from './AttackTags';
 import { SourceBadge, sevText, statusText } from './Verdict';
 
 export interface FindingView {
@@ -27,6 +28,8 @@ export interface FindingView {
   suppressedUntil: string | null;
   allowlistedBy: string | null;
   tags: string[];
+  mitre: string[];
+  compliance: string[];
   intelHits: { feed_id: string; name: string; vendor: string; confidence: number; license: string; source_url: string; fetched_at?: string; matched?: string }[];
   proposed: { kind: string; params: Record<string, unknown>; description: string; destructive?: boolean }[];
 }
@@ -170,6 +173,7 @@ export function FindingsTable({ rows, canWrite, showHost = true }: { rows: Findi
                     <summary className="cursor-pointer">
                       <span className="font-medium">{f.title}</span>
                       <span className="ml-2 font-mono text-xs text-slate-500">{f.rule}</span>
+                      {f.mitre.length ? <span className="ml-2 font-mono text-[11px] text-violet-700 dark:text-violet-300">{f.mitre.join(' ')}</span> : null}
                     </summary>
                     <div className="mt-2 space-y-2 text-xs text-slate-600 dark:text-slate-300">
                       <p className="whitespace-pre-wrap">{f.detail}</p>
@@ -178,6 +182,12 @@ export function FindingsTable({ rows, canWrite, showHost = true }: { rows: Findi
                           <span className="font-semibold">{t('建議：')}</span>
                           {f.recommendation}
                         </p>
+                      ) : null}
+                      {f.mitre.length || f.compliance.length ? (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="font-semibold">{t('攻擊手法與法規：')}</span>
+                          <AttackTags mitre={f.mitre} compliance={f.compliance} t={t} />
+                        </div>
                       ) : null}
                       {f.intelHits.length ? (
                         <div className="flex flex-wrap items-center gap-1">

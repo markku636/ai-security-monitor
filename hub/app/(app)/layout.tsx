@@ -63,7 +63,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           },
           {
             title: t('事件'),
-            items: [{ href: '/events', label: t('當機與事件'), hint: t('藍屏、程式當掉、暴力破解'), icon: 'event' }],
+            items: [
+              { href: '/events', label: t('當機與事件'), hint: t('藍屏、程式當掉、暴力破解'), icon: 'event' },
+              { href: '/mitre', label: t('攻擊手法與法規'), hint: t('MITRE ATT&CK 與 ISO、NIST、PCI、CIS 對應'), icon: 'matrix' },
+            ],
           },
           {
             title: t('工具'),
