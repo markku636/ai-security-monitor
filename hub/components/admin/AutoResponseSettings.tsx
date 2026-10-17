@@ -169,7 +169,7 @@ export function AutoResponseSettings({ view }: { view: ResponseView }) {
                     </td>
                     <td className="px-2 py-1.5 text-right">
                       {b.status === 'active' ? (
-                        <button type="button" className={SMALL} disabled={pending} onClick={() => act(() => send(`/api/v1/admin/response/blocks/${b.id}/release`, 'POST'), t('已送出解除'))}>
+                        <button type="button" className={SMALL} disabled={pending} onClick={() => act(() => send(`/api/v1/admin/response/blocks/${b.id}/unblock`, 'POST'), t('已送出解除'))}>
                           {t('立即解除')}
                         </button>
                       ) : null}

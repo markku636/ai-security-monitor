@@ -6,7 +6,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { POST as groupPost } from '@/app/api/v1/admin/groups/route';
 import { DELETE as groupDelete } from '@/app/api/v1/admin/groups/[id]/route';
 import { GET as responseGet, PUT as responsePut } from '@/app/api/v1/admin/response/route';
-import { POST as releasePost } from '@/app/api/v1/admin/response/blocks/[id]/release/route';
+import { POST as releasePost } from '@/app/api/v1/admin/response/blocks/[id]/unblock/route';
 import { POST as rulePost } from '@/app/api/v1/admin/response/rules/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
 import { actions, agents, auditLog, responseBlocks, responseRules, securityEvents, settings } from '@/drizzle/schema';
@@ -155,7 +155,7 @@ describe('admin API', () => {
     expect(view.settings.enabled).toBe(true);
     expect(view.blocks[0]).toMatchObject({ hostname: 'demo-host', ip: ATTACKER, status: 'active' });
     const id = view.blocks[0].id;
-    expect((await releasePost(req(`/api/v1/admin/response/blocks/${id}/release`, { method: 'POST', headers: admin }), { params: Promise.resolve({ id }) })).status).toBe(200);
+    expect((await releasePost(req(`/api/v1/admin/response/blocks/${id}/unblock`, { method: 'POST', headers: admin }), { params: Promise.resolve({ id }) })).status).toBe(200);
     expect((await db.select().from(responseBlocks))[0].status).toBe('released');
     const audits = await db.select().from(auditLog).where(eq(auditLog.action, 'response.released'));
     expect(audits[0]).toMatchObject({ actor: 'admin:bearer', actorRole: 'admin' });
