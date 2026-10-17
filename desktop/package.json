@@ -1,10 +1,10 @@
 {
-  "name": "asa-desktop",
+  "name": "ai-security-monitor-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "AI Security Agent desktop app (Tauri). The UI in ui/ is plain HTML/CSS/JS with no build step.",
+  "description": "AI Security Monitor desktop app (Tauri). The UI in ui/ is plain HTML/CSS/JS with no build step.",
   "scripts": {
-    "icon": "node scripts/make-icon.mjs src-tauri/icons/source.png && tauri icon src-tauri/icons/source.png",
+    "icon": "tauri icon src-tauri/icons/source.png",
     "dev": "tauri dev",
     "build": "tauri build"
   },

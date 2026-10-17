@@ -2,14 +2,14 @@
 
 English | [繁體中文](desktop.md)
 
-`asa` itself is a CLI and a background service; the desktop app (`desktop/`, Tauri 2) is a windowed client that calls the same asa library directly.
+`ai-security-monitor` itself is a CLI and a background service; the desktop app **AI Security Monitor** (`desktop/`, Tauri 2) is a windowed client that calls the same ai-security-monitor library directly.
 
 ## Pages
 
 | Page | What it shows |
 |---|---|
 | Overview | Security score (connections / exposure / vulnerabilities / hardening), critical + high count, intel freshness, Hub enrollment, dangerous and suspicious connections; Scan now, Update intel, Open Security Hub |
-| Connections | Every current connection, filtered by verdict and direction with search; the same program talking to the same remote is merged into one row; reasons are labeled Intel (click to open the source list) or Behavior (asa's own heuristic); optional 10-second auto refresh |
+| Connections | Every current connection, filtered by verdict and direction with search; the same program talking to the same remote is merged into one row; reasons are labeled Intel (click to open the source list) or Behavior (ai-security-monitor's own heuristic); optional 10-second auto refresh |
 | IP analysis | Click an IP: country / ASN, which intel sources list it, which local programs talk to it, VirusTotal / AbuseIPDB links, and "Ask AI about this IP" |
 | Scan results | Findings from the latest report, sorted by severity, expandable for detail and advice |
 | Threat intel | Per source: entries, last update, whether it came from the Hub; update stale lists or refetch everything |
@@ -18,11 +18,24 @@ English | [繁體中文](desktop.md)
 
 Closing the window minimizes it to the system tray; the tray menu has Open, Open Security Hub and Quit. Only one instance runs at a time.
 
+## Upgrading from the "AI Security Agent" desktop app
+
+From 0.2.0 the desktop app is called **AI Security Monitor** and its application identifier changed from `dev.asa.desktop` to
+`dev.ai-security-monitor.desktop`, so the new installer installs a separate app and does **not** replace or remove the old one:
+
+1. Quit the old app (tray icon → Quit).
+2. Settings → Apps → Installed apps → "AI Security Agent" → Uninstall (this also removes its Start menu shortcut).
+3. Install the new `AI Security Monitor_<version>_x64-setup.exe`.
+4. (Optional) Delete the old WebView cache `%LOCALAPPDATA%\dev.asa.desktop`; the new app uses `%LOCALAPPDATA%\dev.ai-security-monitor.desktop`.
+
+Scan reports, threat intel, Hub enrollment and keys live in the agent's config directory, not in those folders: the first 0.2.0 command-line run
+moves `%APPDATA%\ai-security-agent` to `%APPDATA%\ai-security-monitor`, and the new desktop app picks it up without re-enrolling.
+
 ## How it relates to the CLI and service
 
-- It shares the config directory (`%APPDATA%\ai-security-agent` etc.), so it sees the background `asa watch`'s latest report, intel and Hub enrollment.
+- It shares the config directory (`%APPDATA%\ai-security-monitor` etc.), so it sees the background `ai-security-monitor watch`'s latest report, intel and Hub enrollment.
 - The Connections page takes a read-only snapshot: it does **not** append to the connection history, so frequent refreshes don't skew the service's beacon detection.
-- AI analysis mounts asa's read-only MCP tools; the MCP server is the desktop executable itself — started with command-line arguments (e.g. `asa-desktop.exe mcp --tools …`) it runs as the asa CLI.
+- AI analysis mounts ai-security-monitor's read-only MCP tools; the MCP server is the desktop executable itself — started with command-line arguments (e.g. `ai-security-monitor-desktop.exe mcp --tools …`) it runs as the ai-security-monitor CLI.
 - No administrator rights needed; some checks (Security event log, minidumps) need an administrator and are marked as such in the report.
 
 ## Build
@@ -30,7 +43,7 @@ Closing the window minimizes it to the system tray; the tray menu has Open, Open
 ```bash
 cd desktop
 npm ci                 # just @tauri-apps/cli
-npm run icon           # (optional) regenerate icons
+npm run icon           # (optional) regenerate every icon size from src-tauri/icons/source.png (the project logo)
 npx tauri build        # Windows: src-tauri/target/release/bundle/nsis/*-setup.exe
 ```
 

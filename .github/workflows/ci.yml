@@ -211,8 +211,8 @@ jobs:
         run: |
           set -euo pipefail
           cargo build -q --locked
-          ./target/debug/asa-desktop.exe --lang en --help | grep -q "Usage"
-          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | ./target/debug/asa-desktop.exe mcp > mcp.jsonl
+          ./target/debug/ai-security-monitor-desktop.exe --lang en --help | grep -q "Usage"
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | ./target/debug/ai-security-monitor-desktop.exe mcp > mcp.jsonl
           grep -q list_connections mcp.jsonl
 
   hub:

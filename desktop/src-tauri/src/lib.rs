@@ -1,5 +1,5 @@
-//! AI Security Agent 桌面版：系統匣常駐，視窗顯示本機的連線判定、掃描結果、情資狀態，
-//! 並可用本機的 Claude Code／Codex CLI 做 AI 分析。資料與設定跟 `asa`（含背景的 `asa watch`）共用同一個設定目錄。
+//! AI Security Monitor 桌面版：系統匣常駐，視窗顯示本機的連線判定、掃描結果、情資狀態，
+//! 並可用本機的 Claude Code／Codex CLI 做 AI 分析。資料與設定跟 `ai-security-monitor`（含背景的 `ai-security-monitor watch`）共用同一個設定目錄。
 
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -247,7 +247,7 @@ fn parse_provider(s: &str) -> Option<Provider> {
     }
 }
 
-/// AI 分析（本機 Claude Code／Codex CLI＋asa 的唯讀 MCP 工具）。事件即時送到視窗的 `ai-event`。
+/// AI 分析（本機 Claude Code／Codex CLI＋ai-security-monitor 的唯讀 MCP 工具）。事件即時送到視窗的 `ai-event`。
 #[tauri::command]
 async fn ai_ask(
     app: AppHandle,
@@ -341,7 +341,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &hub, &quit])?;
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().cloned().expect("icon"))
-                .tooltip("AI Security Agent")
+                .tooltip("AI Security Monitor")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, e| match e.id.as_ref() {

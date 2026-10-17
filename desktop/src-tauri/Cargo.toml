@@ -1,24 +1,24 @@
 [package]
-name = "asa-desktop"
+name = "ai-security-monitor-desktop"
 version = "0.1.0"
 edition = "2021"
-description = "AI Security Agent desktop app (GUI for asa)"
+description = "AI Security Monitor desktop app (GUI for ai-security-monitor)"
 license = "MIT"
-default-run = "asa-desktop"
+default-run = "ai-security-monitor-desktop"
 
 [lib]
-name = "asa_desktop_lib"
+name = "ai_security_monitor_desktop_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "asa-desktop"
+name = "ai-security-monitor-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# 同一份 asa 程式庫：GUI 直接呼叫掃描、連線、情資、AI；帶命令列參數啟動時就當 asa CLI 用（AI 的 MCP server 走這條）
+# 同一份 ai-security-monitor 程式庫：GUI 直接呼叫掃描、連線、情資、AI；帶命令列參數啟動時就當 ai-security-monitor CLI 用（AI 的 MCP server 走這條）
 ai-security-monitor = { path = "../../agent", default-features = false, features = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"

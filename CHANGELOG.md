@@ -24,6 +24,10 @@
 - CI：agent 多跑 `windows-2022`（`windows-latest` 是 Server 2025），兩台 Windows Server runner 都驗證 `harden` 判斷成 server、沒有任何檢查出錯，`vuln` 認得作業系統支援期限。
 - 示範資料（`scripts/demo-seed.mjs`）新增 Windows Server 2022 Datacenter（Server Core）網域控制站 `dc-01`（RDP 暴力破解、帳號鎖定、NTLM 失敗爆量、伺服器硬化結果），agent 版本改 0.2.0。
 
+**桌面版改名 AI Security Monitor**：視窗標題、系統匣提示、安裝檔名稱改成 AI Security Monitor，執行檔 `ai-security-monitor-desktop.exe`，圖示換成新 logo（戴高帽、拿心跳盾牌的海豹）。
+應用程式識別碼 `dev.asa.desktop` → `dev.ai-security-monitor.desktop`，所以**新版不會覆蓋舊版**：請先結束並到「設定 → 應用程式」解除安裝舊的「AI Security Agent」，再安裝新版；
+舊的 WebView 快取 `%LOCALAPPDATA%\dev.asa.desktop` 可以刪掉。報告、情資與 Hub 註冊在 agent 設定目錄（`%APPDATA%\ai-security-monitor`），新版直接沿用。詳見 `docs/desktop.md`。
+
 改進：
 - Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。

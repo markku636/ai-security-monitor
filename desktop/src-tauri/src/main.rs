@@ -1,4 +1,4 @@
-//! 桌面版入口：沒有參數就開視窗；帶命令列參數（例如 AI 掛的 `mcp --tools …`）就當 asa CLI 執行。
+//! 桌面版入口：沒有參數就開視窗；帶命令列參數（例如 AI 掛的 `mcp --tools …`）就當 ai-security-monitor CLI 執行。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
@@ -10,5 +10,5 @@ fn main() {
         let code = rt.block_on(asa_lib::cli::run());
         std::process::exit(code);
     }
-    asa_desktop_lib::run();
+    ai_security_monitor_desktop_lib::run();
 }

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AI Security Agent",
+  "productName": "AI Security Monitor",
   "version": "0.1.0",
-  "identifier": "dev.asa.desktop",
+  "identifier": "dev.ai-security-monitor.desktop",
   "build": {
     "frontendDist": "../ui"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AI Security Agent",
+        "title": "AI Security Monitor",
         "width": 1200,
         "height": 780,
         "minWidth": 860,

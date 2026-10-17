@@ -58,6 +58,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai-security-monitor-desktop"
+version = "0.1.0"
+dependencies = [
+ "ai-security-monitor",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-single-instance",
+ "tokio",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -142,20 +156,6 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
-
-[[package]]
-name = "asa-desktop"
-version = "0.1.0"
-dependencies = [
- "ai-security-monitor",
- "chrono",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-single-instance",
- "tokio",
-]
 
 [[package]]
 name = "async-broadcast"

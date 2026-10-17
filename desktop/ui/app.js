@@ -1,4 +1,4 @@
-// AI Security Agent 桌面版介面：純 HTML／JS，透過 Tauri 指令呼叫 asa 程式庫。
+// AI Security Monitor 桌面版介面：純 HTML／JS，透過 Tauri 指令呼叫 ai-security-monitor 程式庫。
 'use strict';
 
 const { invoke } = window.__TAURI__.core;
@@ -50,7 +50,7 @@ function reasonHtml(r) {
     case 'intel_hit':
       return `<span class="reason intel" data-url="${esc(r.source_url)}" title="${esc(`${r.vendor} · ${r.name}\n信心 ${r.confidence}%\n授權：${r.license ?? ''}\n點一下開啟原始清單`)}"><span class="k">情資</span>${esc(r.vendor)} ${esc(r.confidence)}%</span>`;
     case 'anomaly':
-      return `<span class="reason behavior" title="${esc(`asa 自己的行為判斷，不是情資來源\n${r.detail ?? ''}`)}"><span class="k">行為</span>${esc(ANOMALY[r.kind] ?? r.kind)}</span>`;
+      return `<span class="reason behavior" title="${esc(`ai-security-monitor 自己的行為判斷，不是情資來源\n${r.detail ?? ''}`)}"><span class="k">行為</span>${esc(ANOMALY[r.kind] ?? r.kind)}</span>`;
     case 'reputation':
       return `<span class="reason plain" title="${esc(r.detail)}">${esc(r.provider)} 名譽 ${esc(r.score)}</span>`;
     case 'known_good':
@@ -84,14 +84,14 @@ async function pageOverview() {
   $main.innerHTML = `<h1>總覽</h1><p class="sub">載入中…</p>`;
   const o = await invoke('overview');
   document.getElementById('brand-host').textContent = o.hostname || o.report?.hostname || '本機';
-  document.getElementById('side-foot').innerHTML = `asa ${esc(o.version)}<br>${o.watcher_running ? '背景服務執行中' : '背景服務沒有在跑'}`;
+  document.getElementById('side-foot').innerHTML = `ai-security-monitor ${esc(o.version)}<br>${o.watcher_running ? '背景服務執行中' : '背景服務沒有在跑'}`;
   const r = o.report;
   const s = r?.score;
   const bar = (label, v) => `<div class="stat"><div class="label">${label}</div><div class="value">${v ?? '—'}</div><div class="bar"><i style="width:${v ?? 0}%"></i></div></div>`;
   const intelOld = !o.intel.checked_at || Date.now() - Date.parse(o.intel.checked_at) > 6 * 3600e3;
   $main.innerHTML = `
     <div class="head">
-      <div><h1>總覽</h1><p class="sub">這台電腦目前的安全狀況（資料與背景的 asa 共用）。</p></div>
+      <div><h1>總覽</h1><p class="sub">這台電腦目前的安全狀況（資料與背景的 ai-security-monitor 共用）。</p></div>
       <div class="row">
         <button class="btn primary" id="scan">立即掃描</button>
         <button class="btn" id="upd">更新情資</button>
@@ -106,7 +106,7 @@ async function pageOverview() {
       <div class="stat"><div class="label">嚴重＋高</div><div class="value" style="color:var(--danger)">${r ? r.counts.critical + r.counts.high : '—'}</div><div class="hint"><a class="link" href="#findings">看掃描結果</a></div></div>
       <div class="stat"><div class="label">中</div><div class="value">${r ? r.counts.medium : '—'}</div><div class="hint">低 ${r?.counts.low ?? '—'}、資訊 ${r?.counts.info ?? '—'}</div></div>
       <div class="stat"><div class="label">威脅情資</div><div class="value">${o.intel.ok}/${o.intel.total}</div><div class="hint">${o.intel.checked_at ? `最後更新 ${ago(o.intel.checked_at)}` : '還沒下載'}${o.intel.source === 'hub' ? '・從 Hub' : o.intel.source === 'vendor' ? '・直接找廠商' : ''}${intelOld ? ' <span class="chip medium">過期</span>' : ''}</div></div>
-      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint mono">${esc(o.hub_url ?? 'asa enroll <網址> --key …')}</div></div>
+      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint mono">${esc(o.hub_url ?? 'ai-security-monitor enroll <網址> --key …')}</div></div>
     </div>
     <div class="card"><h2>危險與可疑連線</h2><div id="ov-conn" class="muted">載入中…</div></div>`;
   document.getElementById('scan').onclick = () => scanNow();
@@ -347,7 +347,7 @@ async function pageAi() {
   const usable = providers.filter((p) => p.found);
   $main.innerHTML = `
     <h1>AI 分析</h1>
-    <p class="sub">用這台電腦上已登入的 Claude Code 或 Codex CLI（你的訂閱）分析；AI 只能透過 asa 的唯讀工具查資料，不會改動任何設定。</p>
+    <p class="sub">用這台電腦上已登入的 Claude Code 或 Codex CLI（你的訂閱）分析；AI 只能透過 ai-security-monitor 的唯讀工具查資料，不會改動任何設定。</p>
     <div class="card">
       <div class="row" style="margin-bottom:10px">
         <label class="small">AI <select id="prov">${usable.map((p) => `<option value="${p.id}">${esc(p.label)}${p.logged_in ? '' : '（可能未登入）'}</option>`).join('')}</select></label>
@@ -409,7 +409,7 @@ async function pageSettings() {
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
       <div>agent id</div><div class="mono">${esc(o.agent_id)}</div>
-      <div>asa 版本</div><div>${esc(o.version)}</div>
+      <div>ai-security-monitor 版本</div><div>${esc(o.version)}</div>
       <div>設定目錄</div><div class="mono">${esc(o.config_dir)}</div>
       <div>系統管理員權限</div><div>${o.elevated ? '是' : '否（部分檢查需要系統管理員才讀得到）'}</div>
     </div></div>
@@ -417,9 +417,9 @@ async function pageSettings() {
       <div>狀態</div><div>${o.hub_url ? '已註冊' : '未註冊'}</div>
       <div>網址</div><div>${o.hub_url ? `<a class="link" data-url="${esc(o.hub_url)}">${esc(o.hub_url)}</a>` : '—'}</div>
     </div>
-    ${o.hub_url ? '' : '<p class="small muted">要集中管理多台電腦：在 Hub 的「新增主機」頁建立註冊金鑰，然後在命令列執行 <span class="mono">asa enroll &lt;Hub 網址&gt; --key &lt;金鑰&gt; --yes</span>。</p>'}</div>
+    ${o.hub_url ? '' : '<p class="small muted">要集中管理多台電腦：在 Hub 的「新增主機」頁建立註冊金鑰，然後在命令列執行 <span class="mono">ai-security-monitor enroll &lt;Hub 網址&gt; --key &lt;金鑰&gt; --yes</span>。</p>'}</div>
     <div class="card"><h2>背景服務</h2>
-      <p class="small">${o.watcher_running ? '✓ 背景的 asa watch 正在執行：定時掃描、上傳到 Hub、每 30 分鐘更新情資。' : '背景服務沒有在跑。命令列執行 <span class="mono">asa service install --user --yes</span> 讓它登入時自動啟動。'}</p>
+      <p class="small">${o.watcher_running ? '✓ 背景的 ai-security-monitor watch 正在執行：定時掃描、上傳到 Hub、每 30 分鐘更新情資。' : '背景服務沒有在跑。命令列執行 <span class="mono">ai-security-monitor service install --user --yes</span> 讓它登入時自動啟動。'}</p>
       <p class="small muted">關閉這個視窗只會縮到系統匣；從系統匣選「結束」才會離開。</p>
     </div>`;
 }

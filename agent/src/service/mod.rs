@@ -1167,6 +1167,7 @@ mod tests {
             assert!(is_process_name(n, PROCESS_NAMES), "{n}");
         }
         assert!(!is_process_name("asa-desktop.exe", PROCESS_NAMES));
+        assert!(!is_process_name("ai-security-monitor-desktop.exe", PROCESS_NAMES));
         // Linux /proc/<pid>/comm 只有 15 字元
         assert!(is_process_name("ai-security-mon", PROCESS_NAMES));
         assert!(!is_process_name("ai-security-mo", PROCESS_NAMES));
