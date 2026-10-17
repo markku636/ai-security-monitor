@@ -4,6 +4,19 @@ English | [繁體中文](desktop.md)
 
 `ai-security-monitor` itself is a CLI and a background service; the desktop app **AI Security Monitor** (`desktop/`, Tauri 2) is a windowed client that calls the same ai-security-monitor library directly.
 
+## Install
+
+Download from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) (current version v0.2.1):
+
+| Platform | File | First launch (the installers are not code-signed) |
+|---|---|---|
+| Windows 10/11 | `AI-Security-Monitor-<version>-windows-x64-setup.exe`, double-click; installs for the current user | "Windows protected your PC" → "More info" → "Run anyway" |
+| macOS Apple Silicon / Intel | `…-macos-arm64.dmg` / `…-macos-x64.dmg`, drag to Applications | Right-click → Open → Open, or `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| Linux | `…-linux-x64.AppImage` (`chmod +x`, then run) or `…-linux-amd64.deb` (`sudo apt install ./<file>.deb`) | Just start it |
+
+After installing, the window opens on "Overview" and the AI Security Monitor icon appears in the system tray (menu bar on macOS).
+`ai-security-monitor-<version>-windows-x64.exe` is the command-line tool, not the desktop app; double-clicking it only shows a help message.
+
 ## Screenshots
 
 The screenshots use demo data (fictional host fin-laptop-07, documentation IP ranges) and are produced by `node scripts/capture-desktop-screenshots.mjs`:
@@ -38,7 +51,7 @@ From 0.2.0 the desktop app is called **AI Security Monitor** and its application
 
 1. Quit the old app (tray icon → Quit).
 2. Settings → Apps → Installed apps → "AI Security Agent" → Uninstall (this also removes its Start menu shortcut).
-3. Install the new `AI Security Monitor_<version>_x64-setup.exe`.
+3. Install the new `AI-Security-Monitor-<version>-windows-x64-setup.exe`.
 4. (Optional) Delete the old WebView cache `%LOCALAPPDATA%\dev.asa.desktop`; the new app uses `%LOCALAPPDATA%\dev.ai-security-monitor.desktop`.
 
 Scan reports, threat intel, Hub enrollment and keys live in the agent's config directory, not in those folders: the first 0.2.0 command-line run

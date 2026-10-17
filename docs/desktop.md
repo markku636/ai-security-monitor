@@ -4,6 +4,19 @@
 
 `ai-security-monitor` 本身是命令列和背景服務；桌面版 **AI Security Monitor**（`desktop/`，Tauri 2）是給用戶端看的視窗介面，直接呼叫同一份 ai-security-monitor 程式庫。
 
+## 安裝
+
+從 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載（目前版本 v0.2.1）：
+
+| 平台 | 檔案 | 第一次開啟（安裝檔沒有程式碼簽章） |
+|---|---|---|
+| Windows 10／11 | `AI-Security-Monitor-<版本>-windows-x64-setup.exe`，雙擊安裝到目前使用者 | 「Windows 已保護您的電腦」→「其他資訊」→「仍要執行」 |
+| macOS Apple Silicon／Intel | `…-macos-arm64.dmg`／`…-macos-x64.dmg`，拖到「應用程式」 | 右鍵 →「打開」→「打開」，或 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| Linux | `…-linux-x64.AppImage`（`chmod +x` 後執行）或 `…-linux-amd64.deb`（`sudo apt install ./檔名.deb`） | 直接開啟 |
+
+裝好後視窗會開在「總覽」，系統匣（macOS 是選單列）出現 AI Security Monitor 圖示。
+`ai-security-monitor-<版本>-windows-x64.exe` 是命令列版，不是桌面版，雙擊只會顯示說明。
+
 ## 畫面
 
 截圖用的是示範資料（虛構主機 fin-laptop-07、文件保留網段 IP），由 `node scripts/capture-desktop-screenshots.mjs` 產生：
@@ -37,7 +50,7 @@
 
 1. 先結束舊版（系統匣圖示 → 結束）。
 2. 設定 → 應用程式 → 已安裝的應用程式 → 「AI Security Agent」→ 解除安裝（舊版的開始功能表捷徑一併移除）。
-3. 安裝新版 `AI Security Monitor_<版本>_x64-setup.exe`。
+3. 安裝新版 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`。
 4. （選用）刪除舊版留下的 WebView 快取 `%LOCALAPPDATA%\dev.asa.desktop`；新版用 `%LOCALAPPDATA%\dev.ai-security-monitor.desktop`。
 
 掃描報告、情資、Hub 註冊與金鑰都放在 agent 的設定目錄，不在上面的資料夾：命令列第一次執行 0.2.0 時會把 `%APPDATA%\ai-security-agent`

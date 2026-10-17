@@ -2,7 +2,33 @@
 
 English | [繁體中文](install.md)
 
-## One-line install
+## Which download do I need?
+
+Current version: **v0.2.1**; all files are on [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
+
+| Your situation | Download |
+|---|---|
+| Everyday user who wants a window | Desktop app: `AI-Security-Monitor-<version>-windows-x64-setup.exe`, `…-macos-arm64.dmg` (Apple Silicon), `…-macos-x64.dmg` (Intel), `…-linux-x64.AppImage`, `…-linux-amd64.deb`; see "Desktop app" below |
+| Servers (including Windows Server / Server Core), automation | Command line: the one-line install below, or download `ai-security-monitor-<version>-<platform>` directly (a command-line tool: run it in a terminal; double-clicking only shows a help message) |
+| One place for many hosts | Security Hub (Docker), see [docker.en.md](docker.en.md) |
+| `asa-<version>-*` | Only for 0.1.x `asa self-update`; ignore them |
+| `SHA256SUMS` | SHA256 of every file |
+
+System requirements and step-by-step instructions for every path (with how to check it worked) are in the [README "Install" section](../README.en.md#install).
+
+## Desktop app
+
+The installers are not code-signed, so the OS warns the first time:
+
+| Platform | Install | First launch |
+|---|---|---|
+| Windows 10/11 | Double-click `AI-Security-Monitor-<version>-windows-x64-setup.exe` (per-user install, no administrator) | "Windows protected your PC" → "More info" → "Run anyway" |
+| macOS | Open the `.dmg` and drag AI Security Monitor to Applications | Right-click → Open → Open; if it says it is damaged: `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| Linux | AppImage: `chmod +x`, then run; deb: `sudo apt install ./AI-Security-Monitor-<version>-linux-amd64.deb` | Just start it |
+
+Uninstall the old "AI Security Agent" desktop app (0.1.x) first; the new one does not replace it (see [desktop.en.md](desktop.en.md)).
+
+## One-line install (command line)
 
 ```bash
 # Linux / macOS
@@ -62,5 +88,6 @@ From 0.2.0 the executable is called `ai-security-monitor` instead of `asa`; no n
 
 - Run `asa self-update --yes` (releases also ship `asa-<version>-<platform>` for old versions to find), or re-run the install script above (it installs `ai-security-monitor` and points out an old `asa`).
 - On first run the config directory `…/ai-security-agent` moves to `…/ai-security-monitor`; `agent_id`, Hub enrollment, keys, allowlist and baseline carry over, and the `asa` keychain entry is copied to the new name.
+  While an old `asa` resident watch is still running (`watch.lock` held), nothing is moved: that run uses the old directory and prints a one-line hint; the following `service install` stops the old version and then moves it. A stale copy that 0.2.0 left in this situation (same `agent_id`, older than the old directory) is renamed to `ai-security-monitor.bak-<time>` and re-synced from the old directory on the next migration.
 - Then run `ai-security-monitor service install --yes` (add `--system` for the system service): it removes the old `asa` service / Run value / unit / plist and installs the new names.
 - `ai-security-monitor mcp install` removes the old `asa` MCP entry before writing the new one.

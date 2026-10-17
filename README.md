@@ -120,30 +120,123 @@ flowchart LR
 
 ## 安裝
 
-**agent（ai-security-monitor）**
+目前版本 **v0.2.1**。所有檔案都在 [Releases（最新版）](https://github.com/markku636/ai-security-monitor/releases/latest)，每個檔案都列在 `SHA256SUMS`。
 
-```bash
-# Linux / macOS
-curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
-```
+### 下載哪一個？
 
-```powershell
-# Windows／Windows Server（PowerShell）
-irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
-```
+| 你的情況 | 用哪個 | 檔案 |
+|---|---|---|
+| 一般使用者，想要視窗介面 | **桌面版**（雙擊安裝） | Windows 10／11：`AI-Security-Monitor-<版本>-windows-x64-setup.exe`<br>macOS Apple Silicon（M1 以後）：`AI-Security-Monitor-<版本>-macos-arm64.dmg`<br>macOS Intel：`AI-Security-Monitor-<版本>-macos-x64.dmg`<br>Linux：`AI-Security-Monitor-<版本>-linux-x64.AppImage`（免安裝）或 `…-linux-amd64.deb`（Debian／Ubuntu） |
+| 伺服器（含 Windows Server、Server Core）、自動化、沒有桌面環境 | **命令列版**，用一行安裝指令（會比對 SHA256、可順便設定開機自動啟動） | 見下方步驟 4、5；也可以直接下載 `ai-security-monitor-<版本>-<平台>`（`windows-x64.exe`、`windows-arm64.exe`、`linux-x64`、`linux-arm64`、`macos-arm64`、`macos-x64`）。這是命令列工具，要在終端機裡執行，**雙擊只會顯示說明** |
+| 要在一個網頁集中看多台主機 | **Security Hub**（Docker） | 映像 `ghcr.io/markku636/ai-security-monitor-hub`，見步驟 6 |
+| `asa-<版本>-*` | 不用下載 | 給 0.1.x 的 `asa self-update` 自動使用，內容和命令列版一樣，請忽略 |
+| `SHA256SUMS` | 校驗碼 | 所有檔案的 SHA256；安裝腳本與 `self-update` 會自動比對 |
 
-腳本會比對 Release 的 `SHA256SUMS`，不符就停止。也可以從 [Releases](https://github.com/markku636/ai-security-monitor/releases) 直接下載執行檔。細節見 [docs/install.md](docs/install.md)。
+**系統需求**
 
-**Security Hub（Docker）**
+| | 需求 |
+|---|---|
+| 桌面版 Windows | Windows 10／11（x64）；需要 Microsoft Edge WebView2（Windows 10／11 內建，沒有時安裝檔會自動下載） |
+| 桌面版 macOS | macOS 10.13 以上（Apple Silicon 或 Intel） |
+| 桌面版 Linux | x64，Ubuntu 22.04／Debian 12 以上（glibc 2.35 以上）；deb 會自動安裝 WebKitGTK 4.1，系統匣圖示需要桌面支援 AppIndicator |
+| 命令列版 | Windows 10／11、Windows Server 2016／2019／2022／2025（含 Server Core），x64 或 ARM64；macOS 11 以上；Linux x64／ARM64（靜態連結，不挑發行版） |
+| Security Hub | Docker 24 以上（含 Compose v2），amd64 或 arm64 |
 
-```bash
-git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
-cp .env.example .env    # 填 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
-docker compose -f docker/compose.standalone.yml --env-file .env up -d   # 單機版：http://127.0.0.1:8088
-# 伺服器版：docker compose -f docker/compose.yml --env-file .env up -d
-```
+桌面版和命令列版的安裝檔都**沒有程式碼簽章**，第一次開啟時系統會跳警告，照下面的步驟放行即可。
 
-映像是 `ghcr.io/markku636/ai-security-monitor-hub`。登入後到「新增主機」建立註冊金鑰，複製各平台的一行安裝指令。細節見 [docs/docker.md](docs/docker.md)。
+### 1. 桌面版：Windows
+
+1. 裝過舊的「AI Security Agent」桌面版（0.1.x）的話，先到「設定 → 應用程式」解除安裝（新版不會覆蓋它）。
+2. 從 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`。
+3. 雙擊安裝檔。出現「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。
+4. 安裝到目前使用者，不需要系統管理員。完成後從開始功能表開啟「AI Security Monitor」。
+
+**確認**：視窗出現「總覽」，右下角系統匣有 AI Security Monitor 圖示。
+
+### 2. 桌面版：macOS
+
+1. Apple Silicon（M1、M2…）下載 `AI-Security-Monitor-<版本>-macos-arm64.dmg`，Intel 下載 `…-macos-x64.dmg`。不確定的話：蘋果選單 →「關於這台 Mac」，看「晶片」或「處理器」。
+2. 打開 dmg，把「AI Security Monitor」拖到「應用程式」。
+3. 第一次開啟：在「應用程式」對它按右鍵 →「打開」→ 再按「打開」。如果顯示「已損毀，無法打開」，在終端機執行：
+   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
+
+**確認**：視窗出現，選單列有 AI Security Monitor 圖示。
+
+### 3. 桌面版：Linux
+
+- AppImage（各發行版通用，免安裝）：
+  `chmod +x AI-Security-Monitor-<版本>-linux-x64.AppImage && ./AI-Security-Monitor-<版本>-linux-x64.AppImage`
+- deb（Debian／Ubuntu）：
+  `sudo apt install ./AI-Security-Monitor-<版本>-linux-amd64.deb`，之後從應用程式選單開啟「AI Security Monitor」。
+
+**確認**：視窗出現「總覽」。
+
+### 4. 命令列版：Windows、Windows Server
+
+1. 開 PowerShell。要裝成開機就啟動的系統服務，請用「以系統管理員身分執行」。
+2. 貼上執行：
+
+   ```powershell
+   irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
+   ```
+
+   預設裝到 `%LOCALAPPDATA%\ai-security-monitor\bin` 並加進 PATH。
+3. 開一個**新的** PowerShell 視窗，執行 `ai-security-monitor version`。
+4. （選用）登入後自動啟動：`ai-security-monitor service install --yes`；伺服器開機就啟動：`ai-security-monitor service install --system --yes`（系統管理員）。
+
+**確認**：`ai-security-monitor version` 印出 `ai-security-monitor 0.2.1 …`；`ai-security-monitor service status` 看得到服務。
+
+### 5. 命令列版：Linux、macOS
+
+1. 在終端機執行：
+
+   ```bash
+   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
+   ```
+
+   預設裝到 `/usr/local/bin`，沒有權限就裝到 `~/.local/bin`。
+2. 執行 `ai-security-monitor version`。
+3. （選用）`ai-security-monitor service install --yes` 登入後啟動；伺服器用 `sudo ai-security-monitor service install --system --yes`。
+
+**確認**：`ai-security-monitor version` 印出版本；`ai-security-monitor doctor` 列出環境檢查結果。
+
+腳本會比對 Release 的 `SHA256SUMS`，不符就停止；指定版本、安裝位置、內部鏡像等選項見 [docs/install.md](docs/install.md)。
+
+### 6. Security Hub（Docker）
+
+1. 取得 compose 檔並填好兩個必填值：
+
+   ```bash
+   git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
+   cp .env.example .env    # 填 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
+   ```
+
+2. 啟動：
+
+   ```bash
+   docker compose -f docker/compose.standalone.yml --env-file .env up -d   # 單機版：http://127.0.0.1:8088
+   # 伺服器版：docker compose -f docker/compose.yml --env-file .env up -d
+   ```
+
+3. 用 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
+
+**確認**：`curl http://127.0.0.1:8088/api/health` 回 `"db":"ok"`，網頁看得到登入頁。細節見 [docs/docker.md](docs/docker.md)。
+
+### 7. 把主機加進 Hub
+
+1. Hub 左側「新增主機」→ 建立註冊金鑰，頁面會給出已填好網址與金鑰的各平台一行安裝指令，在主機上貼上執行即可。
+2. 已經裝好命令列版的主機：`ai-security-monitor enroll https://hub.example.com --key asa_ek_…`，再 `ai-security-monitor service install --yes`（伺服器加 `--system`）讓它定時回報。
+3. 桌面版和命令列版共用同一個設定目錄：在同一台電腦用上面的指令註冊後，桌面版「設定」頁就會顯示 Hub（視窗裡目前不能直接註冊）。
+
+**確認**：Hub 的「主機」頁出現這台主機，幾分鐘內有最新回報；主機上 `ai-security-monitor status` 顯示已註冊。
+
+### 8. 從 0.1.x（asa）或 0.2.0 升級
+
+- **命令列版**：`asa self-update --yes`（0.1.x）或 `ai-security-monitor self-update --yes`（0.2.x），再執行 `ai-security-monitor service install --yes`（系統服務加 `--system`）換掉舊的 `asa` 服務。舊設定、Hub 註冊、金鑰都沿用。
+- **桌面版**：0.1.x 的「AI Security Agent」要先解除安裝再裝新版；0.2.x 直接安裝新版。
+- 細節見下方「[從 asa／ai-security-agent 升級](#從-asaai-security-agent-升級)」。
+
+**確認**：`ai-security-monitor version` 是新版，`ai-security-monitor service status` 沒有「舊版 asa」。
 
 ## 快速上手
 
@@ -180,7 +273,7 @@ ai-security-monitor service install --yes        # 開機／登入後自動回�
 
 0.2.0 起專案改名為 ai-security-monitor（執行檔 `asa` → `ai-security-monitor`，GitHub 舊網址會自動轉址），不用重新註冊：
 
-- **自動沿用**：第一次執行新版時，設定目錄 `…/ai-security-agent` 搬到 `…/ai-security-monitor`（`agent_id`、Hub 註冊、白名單、基準線、情資都在），鑰匙圈的 `asa` 項目複製到新名；
+- **自動沿用**：第一次執行新版時，設定目錄 `…/ai-security-agent` 搬到 `…/ai-security-monitor`（`agent_id`、Hub 註冊、白名單、基準線、情資都在），鑰匙圈的 `asa` 項目複製到新名。舊版 `asa` 的常駐 watch 還在跑時先不搬、直接沿用舊目錄（會提示一行），等 `service install` 換掉舊服務時才搬，所以不會留下一份不再更新的副本（0.2.0 留下的這種副本，0.2.1 會在下次搬移時備份成 `ai-security-monitor.bak-<時間>` 並重新同步）；
   `ai-security-monitor service install` 移除舊的 `asa` 服務／Run 值／unit／plist 換成新名（系統層目錄也一起搬），`ai-security-monitor mcp install` 把舊的 `asa` MCP 項目換掉。舊版可以直接 `asa self-update --yes` 升上來。
 - **環境變數**：新前綴 `AI_SECURITY_MONITOR_*`（Hub 是 `AI_SECURITY_MONITOR_HUB_*`），舊的 `ASA_*`／`ASA_HUB_*` 照樣有效，只寫舊名的 `.env` 不用改。
 - **刻意不改**：防火牆物件名（Windows 群組 `ASA`、`ASA: …` 規則、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`、`fw unblock --all-asa`）、通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、資料庫 `asa_hub` 與 compose 專案名，舊的規則與資料都認得。

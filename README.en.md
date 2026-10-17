@@ -120,30 +120,123 @@ flowchart LR
 
 ## Install
 
-**Agent (ai-security-monitor)**
+Current version: **v0.2.1**. Every file is on [Releases (latest)](https://github.com/markku636/ai-security-monitor/releases/latest) and listed in `SHA256SUMS`.
 
-```bash
-# Linux / macOS
-curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
-```
+### Which download do I need?
 
-```powershell
-# Windows / Windows Server (PowerShell)
-irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
-```
+| Your situation | Use | File |
+|---|---|---|
+| Everyday user who wants a window | **Desktop app** (double-click to install) | Windows 10/11: `AI-Security-Monitor-<version>-windows-x64-setup.exe`<br>macOS Apple Silicon (M1 and later): `AI-Security-Monitor-<version>-macos-arm64.dmg`<br>macOS Intel: `AI-Security-Monitor-<version>-macos-x64.dmg`<br>Linux: `AI-Security-Monitor-<version>-linux-x64.AppImage` (portable) or `…-linux-amd64.deb` (Debian/Ubuntu) |
+| Servers (including Windows Server and Server Core), automation, no desktop | **Command line**, via the one-line install (verifies SHA256, can set up autostart) | See steps 4 and 5; or download `ai-security-monitor-<version>-<platform>` directly (`windows-x64.exe`, `windows-arm64.exe`, `linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`). It is a command-line tool: run it in a terminal, **double-clicking only shows a help message** |
+| One web page for many hosts | **Security Hub** (Docker) | Image `ghcr.io/markku636/ai-security-monitor-hub`, see step 6 |
+| `asa-<version>-*` | Don't download | Used automatically by 0.1.x `asa self-update`; identical to the command-line files, ignore them |
+| `SHA256SUMS` | Checksums | SHA256 of every file; the install scripts and `self-update` check it for you |
 
-The script checks the release's `SHA256SUMS` and stops on a mismatch. You can also download the binaries from [Releases](https://github.com/markku636/ai-security-monitor/releases). See [docs/install.en.md](docs/install.en.md).
+**System requirements**
 
-**Security Hub (Docker)**
+| | Requirement |
+|---|---|
+| Desktop app, Windows | Windows 10/11 (x64); needs Microsoft Edge WebView2 (built into Windows 10/11; the installer downloads it if missing) |
+| Desktop app, macOS | macOS 10.13 or later (Apple Silicon or Intel) |
+| Desktop app, Linux | x64, Ubuntu 22.04 / Debian 12 or later (glibc 2.35+); the deb pulls in WebKitGTK 4.1; the tray icon needs AppIndicator support |
+| Command line | Windows 10/11, Windows Server 2016/2019/2022/2025 (including Server Core), x64 or ARM64; macOS 11 or later; Linux x64/ARM64 (statically linked, any distro) |
+| Security Hub | Docker 24+ with Compose v2, amd64 or arm64 |
 
-```bash
-git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
-cp .env.example .env    # set AI_SECURITY_MONITOR_HUB_ADMIN_SECRET and AI_SECURITY_MONITOR_HUB_DB_PASSWORD
-docker compose -f docker/compose.standalone.yml --env-file .env up -d   # standalone: http://127.0.0.1:8088
-# server: docker compose -f docker/compose.yml --env-file .env up -d
-```
+The installers and binaries are **not code-signed**, so the OS warns the first time; the steps below show how to allow them.
 
-The image is `ghcr.io/markku636/ai-security-monitor-hub`. Sign in, open "Add a host" to create an enroll key, and copy the one-line command for each platform. See [docs/docker.en.md](docs/docker.en.md).
+### 1. Desktop app: Windows
+
+1. If you have the old "AI Security Agent" desktop app (0.1.x), uninstall it first in Settings → Apps (the new app does not replace it).
+2. Download `AI-Security-Monitor-<version>-windows-x64-setup.exe` from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
+3. Double-click it. When "Windows protected your PC" appears, click "More info" → "Run anyway".
+4. It installs for the current user (no administrator needed). Start "AI Security Monitor" from the Start menu.
+
+**Check**: the window opens on "Overview" and the AI Security Monitor icon appears in the system tray.
+
+### 2. Desktop app: macOS
+
+1. Apple Silicon (M1, M2, …): download `AI-Security-Monitor-<version>-macos-arm64.dmg`; Intel: `…-macos-x64.dmg`. Not sure? Apple menu → About This Mac → "Chip" or "Processor".
+2. Open the dmg and drag "AI Security Monitor" to Applications.
+3. First launch: right-click it in Applications → Open → Open. If macOS says it "is damaged and can't be opened", run in Terminal:
+   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
+
+**Check**: the window opens and the icon appears in the menu bar.
+
+### 3. Desktop app: Linux
+
+- AppImage (any distro, no install):
+  `chmod +x AI-Security-Monitor-<version>-linux-x64.AppImage && ./AI-Security-Monitor-<version>-linux-x64.AppImage`
+- deb (Debian/Ubuntu):
+  `sudo apt install ./AI-Security-Monitor-<version>-linux-amd64.deb`, then start "AI Security Monitor" from the app menu.
+
+**Check**: the window opens on "Overview".
+
+### 4. Command line: Windows, Windows Server
+
+1. Open PowerShell. To install it as a system service that starts at boot, use "Run as administrator".
+2. Paste:
+
+   ```powershell
+   irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
+   ```
+
+   It installs to `%LOCALAPPDATA%\ai-security-monitor\bin` and adds it to PATH.
+3. Open a **new** PowerShell window and run `ai-security-monitor version`.
+4. (Optional) Start at login: `ai-security-monitor service install --yes`; start at boot on a server: `ai-security-monitor service install --system --yes` (administrator).
+
+**Check**: `ai-security-monitor version` prints `ai-security-monitor 0.2.1 …`; `ai-security-monitor service status` shows the service.
+
+### 5. Command line: Linux, macOS
+
+1. In a terminal:
+
+   ```bash
+   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
+   ```
+
+   It installs to `/usr/local/bin`, or `~/.local/bin` without permission.
+2. Run `ai-security-monitor version`.
+3. (Optional) `ai-security-monitor service install --yes` to start at login; on servers `sudo ai-security-monitor service install --system --yes`.
+
+**Check**: `ai-security-monitor version` prints the version; `ai-security-monitor doctor` lists the environment checks.
+
+The script verifies the release's `SHA256SUMS` and stops on a mismatch; options for version, location and internal mirrors are in [docs/install.en.md](docs/install.en.md).
+
+### 6. Security Hub (Docker)
+
+1. Get the compose files and fill in the two required values:
+
+   ```bash
+   git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
+   cp .env.example .env    # set AI_SECURITY_MONITOR_HUB_ADMIN_SECRET and AI_SECURITY_MONITOR_HUB_DB_PASSWORD
+   ```
+
+2. Start it:
+
+   ```bash
+   docker compose -f docker/compose.standalone.yml --env-file .env up -d   # standalone: http://127.0.0.1:8088
+   # server: docker compose -f docker/compose.yml --env-file .env up -d
+   ```
+
+3. Sign in with `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`.
+
+**Check**: `curl http://127.0.0.1:8088/api/health` returns `"db":"ok"` and the sign-in page loads. Details in [docs/docker.en.md](docs/docker.en.md).
+
+### 7. Add a host to the Hub
+
+1. In the Hub, "Add host" → create an enroll key; the page gives a ready-made one-line install command per platform with the Hub URL and key filled in. Run it on the host.
+2. On a host that already has the command line: `ai-security-monitor enroll https://hub.example.com --key asa_ek_…`, then `ai-security-monitor service install --yes` (`--system` on servers) so it reports on a schedule.
+3. The desktop app and the command line share the config directory: after enrolling on the same computer, the desktop app's Settings page shows the Hub (it cannot enroll from the window yet).
+
+**Check**: the host appears on the Hub's "Hosts" page with a fresh report within a few minutes; `ai-security-monitor status` on the host shows it is enrolled.
+
+### 8. Upgrading from 0.1.x (asa) or 0.2.0
+
+- **Command line**: `asa self-update --yes` (0.1.x) or `ai-security-monitor self-update --yes` (0.2.x), then `ai-security-monitor service install --yes` (`--system` for the system service) to replace the old `asa` service. Settings, Hub enrollment and keys carry over.
+- **Desktop app**: uninstall the 0.1.x "AI Security Agent" first, then install the new one; from 0.2.x just install the new version.
+- Details in "[Upgrading from asa / ai-security-agent](#upgrading-from-asa--ai-security-agent)" below.
+
+**Check**: `ai-security-monitor version` shows the new version and `ai-security-monitor service status` no longer lists "old asa".
 
 ## Quick start
 
@@ -180,7 +273,7 @@ Run `ai-security-monitor --help` or `ai-security-monitor <command> --help` for e
 
 From 0.2.0 the project is called ai-security-monitor (the `asa` executable is now `ai-security-monitor`; the old GitHub URL redirects). No need to re-enroll:
 
-- **Migrated automatically**: on first run the config directory `…/ai-security-agent` moves to `…/ai-security-monitor` (`agent_id`, Hub enrollment, allowlist, baseline and intel included) and the `asa` keychain entry is copied to the new name;
+- **Migrated automatically**: on first run the config directory `…/ai-security-agent` moves to `…/ai-security-monitor` (`agent_id`, Hub enrollment, allowlist, baseline and intel included) and the `asa` keychain entry is copied to the new name. While an old `asa` resident watch is still running, the old directory is used in place (with a one-line hint) and moved when `service install` replaces the old service, so no stale copy is left behind (a stale copy left by 0.2.0 is backed up as `ai-security-monitor.bak-<time>` and re-synced on the next migration);
   `ai-security-monitor service install` replaces the old `asa` service / Run value / unit / plist with the new names (moving the system config directory too), and `ai-security-monitor mcp install` replaces the old `asa` MCP entry. Old installs can upgrade with `asa self-update --yes`.
 - **Environment variables**: the new prefix is `AI_SECURITY_MONITOR_*` (`AI_SECURITY_MONITOR_HUB_*` for the Hub); the old `ASA_*` / `ASA_HUB_*` names still work, so an `.env` with only the old names needs no changes.
 - **Intentionally unchanged**: firewall object names (Windows group `ASA`, `ASA: …` rules, nft `table inet asa`, ipsets `asa_*`, pf anchor `com.asa`, `fw unblock --all-asa`), the `x-asa-*` headers, the `asa_` / `asa_ek_` token prefixes, the `asa_hub` database and the compose project names, so existing rules and data are still recognised.

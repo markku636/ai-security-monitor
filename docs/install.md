@@ -2,7 +2,33 @@
 
 [English](install.en.md) | 繁體中文
 
-## 一行安裝
+## 下載哪一個？
+
+目前版本 **v0.2.1**，檔案都在 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest)。
+
+| 你的情況 | 下載 |
+|---|---|
+| 一般使用者，要視窗介面 | 桌面版：`AI-Security-Monitor-<版本>-windows-x64-setup.exe`、`…-macos-arm64.dmg`（Apple Silicon）、`…-macos-x64.dmg`（Intel）、`…-linux-x64.AppImage`、`…-linux-amd64.deb`，安裝步驟見下方「桌面版」 |
+| 伺服器（含 Windows Server／Server Core）、自動化 | 命令列版：用下方「一行安裝」；或直接下載 `ai-security-monitor-<版本>-<平台>`（命令列工具，在終端機執行，雙擊只會顯示說明） |
+| 集中看多台主機 | Security Hub（Docker），見 [docker.md](docker.md) |
+| `asa-<版本>-*` | 給 0.1.x 的 `asa self-update` 用，請忽略 |
+| `SHA256SUMS` | 所有檔案的 SHA256 |
+
+系統需求與每條路線的完整步驟（含怎麼確認裝好了）見 [README「安裝」](../README.md#安裝)。
+
+## 桌面版
+
+安裝檔沒有程式碼簽章，第一次開啟會有警告：
+
+| 平台 | 安裝 | 第一次開啟 |
+|---|---|---|
+| Windows 10／11 | 雙擊 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`（裝到目前使用者，不需系統管理員） | 「Windows 已保護您的電腦」→「其他資訊」→「仍要執行」 |
+| macOS | 打開 `.dmg`，把 AI Security Monitor 拖到「應用程式」 | 右鍵 →「打開」→「打開」；顯示已損毀時 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| Linux | AppImage：`chmod +x` 後執行；deb：`sudo apt install ./AI-Security-Monitor-<版本>-linux-amd64.deb` | 直接開啟 |
+
+裝過舊的「AI Security Agent」桌面版（0.1.x）要先解除安裝，新版不會覆蓋它（見 [desktop.md](desktop.md)）。
+
+## 一行安裝（命令列版）
 
 ```bash
 # Linux / macOS
@@ -62,5 +88,6 @@ ai-security-monitor service restart --yes         # 讓常駐的 ai-security-mon
 
 - 直接 `asa self-update --yes`（Release 另附 `asa-<版本>-<平台>` 給舊版找），或重跑上面的安裝腳本（會裝成 `ai-security-monitor`，找到舊的 `asa` 會提示）。
 - 第一次執行新版時，設定目錄 `…/ai-security-agent` 自動搬到 `…/ai-security-monitor`，`agent_id`、Hub 註冊、金鑰、白名單、基準線都沿用；鑰匙圈的 `asa` 項目會複製到新名。
+  舊版 `asa` 的常駐 watch 還在跑（`watch.lock` 被占用）時先不搬，這次直接用舊目錄並提示一行；下一步的 `service install` 結束舊版後才搬。0.2.0 在這種情況留下的過期副本（`agent_id` 相同、比舊目錄舊），會在下次搬移時改名成 `ai-security-monitor.bak-<時間>` 保留，再重新從舊目錄搬一次。
 - 接著執行 `ai-security-monitor service install --yes`（系統服務加 `--system`）：會移除舊的 `asa` 服務／Run 值／unit／plist，換成新名稱。
 - `ai-security-monitor mcp install` 會刪掉舊的 `asa` MCP 項目再寫入新的。

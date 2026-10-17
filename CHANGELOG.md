@@ -2,7 +2,24 @@
 
 ## 未發佈
 
-- 文件：README 加上桌面版截圖、「架構」（mermaid 流程圖）與「資料夾結構」兩節，docs/desktop 加上各頁截圖；新增 `scripts/capture-desktop-screenshots.mjs`（注入示範資料的假 Tauri 回應擷取桌面版畫面）；桌面版設定頁的舊名「asa」改成 ai-security-monitor。
+## v0.2.1 — 2026-10-17
+
+**桌面版有安裝檔了（Windows、macOS、Linux），雙擊命令列版不再一閃即逝，並修正從 0.1.x 升級時設定目錄變成過期副本的問題。** 一般使用者請下載 `AI-Security-Monitor-0.2.1-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；`ai-security-monitor-0.2.1-*` 是命令列版，給伺服器與自動化用。README 的「安裝」改成「下載哪一個？」表格加上每條路線的步驟。
+
+**桌面版安裝檔**：Release 多了 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`（NSIS，裝到目前使用者）、`…-macos-arm64.dmg`、`…-macos-x64.dmg`、`…-linux-x64.AppImage`、`…-linux-amd64.deb`，都列在 `SHA256SUMS`（安裝腳本與 `self-update` 依檔名精確比對，不受影響）。安裝檔沒有程式碼簽章：Windows 在 SmartScreen 按「其他資訊」→「仍要執行」，macOS 第一次右鍵 →「打開」（或 `xattr -dr com.apple.quarantine`）。裝過 0.1.x 的「AI Security Agent」桌面版要先解除安裝。
+
+**雙擊命令列版**：在檔案總管雙擊 `ai-security-monitor-<版本>-windows-x64.exe`（沒有參數、主控台是它自己開的）時，不再只印 help 就關掉視窗，改成說明這是命令列版、桌面版安裝檔在哪、一行安裝指令與常用命令，按 Enter 才關閉。從終端機執行或帶參數時行為不變。
+
+**修正：舊版常駐 watch 還在跑時的設定目錄遷移**：0.2.0 遇到舊版 `asa watch` 正在使用 `…/ai-security-agent`（`watch.lock` 被占用）時，會把舊目錄整份複製到 `…/ai-security-monitor`；之後舊版繼續寫舊目錄、新版只看新目錄，新目錄就變成一份不再更新的副本，真正換掉舊服務後也不會再搬。現在：
+- 舊目錄被占用（鎖檔被占用，或有舊名 `asa` 的常駐 watch 在跑而新目錄沒人用）時**不複製**，這次直接讀寫舊目錄，並提示一行「執行 `ai-security-monitor service install --yes` 換掉舊服務時會搬」。桌面版也一樣沿用舊目錄。
+- `service install`（使用者層）會先移除舊的 Run 值／unit／plist、結束舊版常駐行程，等鎖放開（最多 15 秒）再搬目錄，新服務改用新目錄；舊目錄沒被占用時，一般啟動也會照常搬。
+- 複製式遷移會在新目錄留 `.migrated-from`（來源、時間、方式）。之後舊目錄又有更新、或新目錄是 0.2.0 留下的副本（沒有標記、`agent_id` 相同、最新的檔案比舊目錄舊），下一次舊目錄沒被占用時重新同步：過期的新目錄改名成 `ai-security-monitor.bak-<時間>` 保留，再重新從舊目錄搬一次。新目錄有常駐行程在用時一律不動。
+
+**Release 說明**：GitHub Release 的說明改由 `scripts/release-notes.mjs` 產生：這版重點、依實際資產名列出的「下載哪一個？」表格、未簽章安裝檔的開啟方式、一行安裝、從 0.1.x／0.2.x 升級，最後才是完整變更；dry run 也會產生並上傳 `release-notes` 供檢查。`scripts/check-version.mjs` 另外檢查桌面版（package(-lock).json、tauri.conf.json、Cargo.toml／lock）、Hub 的 package-lock.json 與 env.ts 預設值、Dockerfile 的 `ASA_HUB_VERSION`。
+
+**文件**：
+- README（中英）的「安裝」：目前版本、「下載哪一個？」表格（桌面版、命令列版、Hub、`asa-*` 別名、`SHA256SUMS`）、系統需求，以及桌面版 Windows／macOS／Linux、命令列版 Windows／Windows Server 與 Linux／macOS、Hub（Docker）、把主機加進 Hub、從 0.1.x／0.2.0 升級的步驟，每條都附「怎麼確認裝好了」。`docs/install*.md`、`docs/desktop*.md` 同步加上下載表與桌面版安裝。
+- README 加上桌面版截圖、「架構」（mermaid 流程圖）與「資料夾結構」兩節，docs/desktop 加上各頁截圖；新增 `scripts/capture-desktop-screenshots.mjs`（注入示範資料的假 Tauri 回應擷取桌面版畫面）；桌面版設定頁的舊名「asa」改成 ai-security-monitor。
 
 ## v0.2.0 — 2026-10-17
 
