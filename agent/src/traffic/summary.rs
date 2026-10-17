@@ -479,7 +479,8 @@ pub fn from_flows(table: &FlowTable, source: &str, intel: Option<&IntelDb>) -> T
             .push(format!("flow table full: {} flows not tracked", table.dropped_flows));
     }
     if intel.is_none() {
-        s.notes.push("threat intel not loaded (run `asa intel update`)".into());
+        s.notes
+            .push("threat intel not loaded (run `ai-security-monitor intel update`)".into());
     }
     s
 }

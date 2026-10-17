@@ -123,7 +123,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "基準線已更新：{l} 個 listener、{p} 個網路行程、{d} 個目的地、{f} 筆 finding" => {
             "Baseline updated: {l} listeners, {p} network processes, {d} destinations, {f} findings"
         }
-        "尚無基準線；先執行 asa baseline save --yes" => "No baseline yet; run asa baseline save --yes first",
+        "尚無基準線；先執行 ai-security-monitor baseline save --yes" => "No baseline yet; run ai-security-monitor baseline save --yes first",
         "與基準線無差異" => "No differences from the baseline",
         "新 listener：{proto} {port}（{bind}）{exe}" => "New listener: {proto} {port} ({bind}) {exe}",
         "新的網路行程：{exe}" => "New process with network activity: {exe}",
@@ -144,7 +144,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
             "No (some scan results are limited; firewall actions will request elevation on demand)"
         }
         "hub 註冊" => "Hub enrollment",
-        "未註冊（asa enroll <HUB_URL> --key …）" => "Not enrolled (asa enroll <HUB_URL> --key …)",
+        "未註冊（ai-security-monitor enroll <HUB_URL> --key …）" => "Not enrolled (ai-security-monitor enroll <HUB_URL> --key …)",
         "密鑰後端：{b}" => "secrets backend: {b}",
         "檢查" => "Check",
         "結果" => "Result",
@@ -170,15 +170,15 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "每 socket 流量（flow-lite）" => "per-socket traffic (flow-lite)",
 
         // ---- cli/args.rs：about / help ----
-        "AI Security Agent：防禦型資安掃描 agent（連線判定、威脅情資、防火牆、漏洞、硬化、流量、事件、MCP）" => {
-            "AI Security Agent: defensive security scanner (connection verdicts, threat intel, firewall, vulnerabilities, hardening, traffic, events, MCP)"
+        "AI Security Monitor：防禦型資安監控工具（連線判定、威脅情資、防火牆、漏洞、硬化、流量、事件、MCP）" => {
+            "AI Security Monitor: defensive security monitor (connection verdicts, threat intel, firewall, vulnerabilities, hardening, traffic, events, MCP)"
         }
         "介面語言（zh-TW / en）" => "UI language (zh-TW / en)",
         "確認執行會改變系統的動作（否則只預演）" => "Confirm actions that change the system (otherwise dry-run only)",
         "高破壞動作的二次確認" => "Second confirmation for destructive actions",
         "以 JSON 輸出" => "Output as JSON",
-        "設定目錄（預設 ASA_CONFIG_DIR 或使用者設定目錄下的 ai-security-agent）" => {
-            "Config directory (default: ASA_CONFIG_DIR or ai-security-agent under the user config directory)"
+        "設定目錄（預設 AI_SECURITY_MONITOR_CONFIG_DIR 或使用者設定目錄下的 ai-security-monitor）" => {
+            "Config directory (default: AI_SECURITY_MONITOR_CONFIG_DIR or ai-security-monitor under the user config directory)"
         }
         "安靜模式（不印進度）" => "Quiet mode (no progress output)",
         "顯示版本；--check 查 GitHub 是否有新版" => "Show version; --check looks for a newer GitHub release",
@@ -250,8 +250,8 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "{process} 開始監聽 {proto} {port}，基準線中沒有這個 port" => {
             "{process} started listening on {proto} {port}, which is not in the baseline"
         }
-        "確認是否為預期服務；是則執行 asa baseline save --yes 納入基準線" => {
-            "Confirm it is an expected service; if so, run asa baseline save --yes to add it to the baseline"
+        "確認是否為預期服務；是則執行 ai-security-monitor baseline save --yes 納入基準線" => {
+            "Confirm it is an expected service; if so, run ai-security-monitor baseline save --yes to add it to the baseline"
         }
         "以防火牆封鎖 {ip}（雙向）" => "Block {ip} with the firewall (both directions)",
 
@@ -275,7 +275,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "包含本機對本機與 loopback listener" => "Include local-to-local connections and loopback listeners",
         "持續刷新" => "Keep refreshing",
         "刷新間隔（--watch）" => "Refresh interval (--watch)",
-        "比對威脅情資（需先 asa intel update）" => "Match against threat intel (run asa intel update first)",
+        "比對威脅情資（需先 ai-security-monitor intel update）" => "Match against threat intel (run ai-security-monitor intel update first)",
 
         // ---- intel ----
         "內建情資登錄格式錯誤：{e}" => "The built-in feed registry is malformed: {e}",
@@ -309,7 +309,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
             "Block this IP and inspect the related process; add it to the allowlist if it is a false positive"
         }
         "情資 {id} 更新失敗：{e}" => "Feed {id} failed to update: {e}",
-        "尚未下載任何威脅情資；執行 asa intel update" => "No threat-intel feeds downloaded yet; run asa intel update",
+        "尚未下載任何威脅情資；執行 ai-security-monitor intel update" => "No threat-intel feeds downloaded yet; run ai-security-monitor intel update",
         "有 {n} 個已啟用的情資來源尚未下載：{ids}" => "{n} enabled feeds have not been downloaded yet: {ids}",
 
         // ---- cli/intel_cmd.rs ----
@@ -343,16 +343,16 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "線上名譽：{provider} = {score}（{detail}）" => "Online reputation: {provider} = {score} ({detail})",
         "已知良性清單：{list}" => "Known-good list: {list}",
         "白名單條目：{id}" => "Allowlist entry: {id}",
-        "沒有設定任何線上名譽服務的 API key（asa intel key set abuseipdb -）" => {
-            "No online reputation API key configured (asa intel key set abuseipdb -)"
+        "沒有設定任何線上名譽服務的 API key（ai-security-monitor intel key set abuseipdb -）" => {
+            "No online reputation API key configured (ai-security-monitor intel key set abuseipdb -)"
         }
-        "已啟用 {id}；執行 asa intel update 下載" => "Enabled {id}; run asa intel update to download it",
+        "已啟用 {id}；執行 ai-security-monitor intel update 下載" => "Enabled {id}; run ai-security-monitor intel update to download it",
         "已停用 {id}" => "Disabled {id}",
         "不支援的名譽服務：{id}；可用：{ids}" => "Unsupported reputation service: {id}; available: {ids}",
         "API key 不可為空" => "The API key cannot be empty",
         "已儲存 {id} 的 API key（{backend}）" => "Saved the API key for {id} ({backend})",
-        "要讓掃描自動查詢，執行 asa config set intel.online_lookups true" => {
-            "To let scans query it automatically, run asa config set intel.online_lookups true"
+        "要讓掃描自動查詢，執行 ai-security-monitor config set intel.online_lookups true" => {
+            "To let scans query it automatically, run ai-security-monitor config set intel.online_lookups true"
         }
         "已刪除 {id} 的 API key" => "Deleted the API key for {id}",
         "威脅情資" => "Threat intel",
@@ -448,7 +448,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "讀取隱形模式" => "Read stealth mode",
         "讀取「阻擋所有連入」" => "Read \"block all incoming\"",
         "讀取 pf 狀態" => "Read pf status",
-        "讀取 asa 封鎖表" => "Read the asa block table",
+        "讀取 ai-security-monitor 封鎖表" => "Read the ai-security-monitor block table",
         "讀取 firewalld 狀態" => "Read firewalld state",
         "讀取 firewalld 預設 zone" => "Read the firewalld default zone",
         "讀取 ufw 狀態" => "Read ufw status",
@@ -474,7 +474,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "{process} 綁在 {bind}；讀不到防火牆規則（以系統管理員身分重跑可確認）：{rationale}" => {
             "{process} is bound to {bind}; firewall rules are unreadable (re-run as administrator to confirm): {rationale}"
         }
-        "以系統管理員身分執行 asa fw audit 確認是否可連入" => "Run asa fw audit as administrator to confirm reachability",
+        "以系統管理員身分執行 ai-security-monitor fw audit 確認是否可連入" => "Run ai-security-monitor fw audit as administrator to confirm reachability",
         "port 範圍格式錯誤：{part}" => "Invalid port range: {part}",
         "一次最多探測 {n} 個 port" => "At most {n} ports per probe",
         "{ip} 是公網位址；只掃描你擁有或已獲授權的主機，確認後加 --allow-public" => {
@@ -488,14 +488,14 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         // ---- cli/fw_cmd.rs, ports_cmd.rs ----
         "啟用" => "on",
         "關閉" => "off",
-        "後端：{backend} · 狀態：{state} · 預設連入：{din} · 允許連入規則：{n} · asa 規則：{ours}" => {
-            "Backend: {backend} · state: {state} · default inbound: {din} · inbound allow rules: {n} · asa rules: {ours}"
+        "後端：{backend} · 狀態：{state} · 預設連入：{din} · 允許連入規則：{n} · ai-security-monitor 規則：{ours}" => {
+            "Backend: {backend} · state: {state} · default inbound: {din} · inbound allow rules: {n} · ai-security-monitor rules: {ours}"
         }
         "作用中" => "Active",
         "防火牆設定檔" => "Profile",
         "預設連入" => "Default in",
         "預設連出" => "Default out",
-        "部分規則需要系統管理員權限才能讀取（sudo asa fw status）" => "Some rules need administrator privileges to read (sudo asa fw status)",
+        "部分規則需要系統管理員權限才能讀取（sudo ai-security-monitor fw status）" => "Some rules need administrator privileges to read (sudo ai-security-monitor fw status)",
         "規則" => "Rule",
         "程式" => "Program",
         "來源位址" => "Remote",
@@ -538,11 +538,11 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         // ---- firewall/plan.rs ----
         "封鎖 {n} 個位址（{dir}）：{list}" => "block {n} addresses ({dir}): {list}",
         "解除封鎖 {n} 個位址：{list}" => "unblock {n} addresses: {list}",
-        "移除 asa 建立的所有防火牆規則" => "remove every firewall rule created by asa",
+        "移除 ai-security-monitor 建立的所有防火牆規則" => "remove every firewall rule created by ai-security-monitor",
         "關閉對內 {proto} {port}" => "close inbound {proto} {port}",
         "取消關閉 {proto} {port}" => "reopen {proto} {port}",
         "同步威脅情資黑名單到防火牆（{n} 個網段）" => "sync the threat-intel blocklist into the firewall ({n} networks)",
-        "依期望狀態重新套用 asa 規則" => "re-apply asa rules from the desired state",
+        "依期望狀態重新套用 ai-security-monitor 規則" => "re-apply ai-security-monitor rules from the desired state",
         "寫入" => "write",
         "附加到" => "append to",
         "從檔案移除" => "remove from",
@@ -587,14 +587,14 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
 
         // ---- cli/args.rs：fw write ----
         "防火牆：狀態、稽核、規則、封鎖與情資同步" => "Firewall: status, audit, rules, blocking and threat-intel sync",
-        "只列 asa 建立的封鎖與期望狀態" => "Only list blocks and desired state created by asa",
+        "只列 ai-security-monitor 建立的封鎖與期望狀態" => "Only list blocks and desired state created by ai-security-monitor",
         "封鎖 IP / 網段（預設雙向；需要系統管理員權限）" => "Block IPs / networks (both directions by default; needs administrator privileges)",
         "IP 或 CIDR" => "IP or CIDR",
         "原因（寫進規則說明）" => "Reason (stored in the rule description)",
         "只顯示會執行的步驟，不執行" => "Only show the steps that would run; do not execute",
-        "解除 asa 建立的封鎖" => "Remove blocks created by asa",
+        "解除 ai-security-monitor 建立的封鎖" => "Remove blocks created by ai-security-monitor",
         "IP 或 CIDR（用 --all-asa 時可省略）" => "IP or CIDR (optional with --all-asa)",
-        "移除 asa 建立的全部規則" => "Remove every rule created by asa",
+        "移除 ai-security-monitor 建立的全部規則" => "Remove every rule created by ai-security-monitor",
         "用防火牆關閉對內 port（例：tcp/6379）" => "Close an inbound port with the firewall (e.g. tcp/6379)",
         "協定/port，例：tcp/6379" => "Protocol/port, e.g. tcp/6379",
         "取消 close-port" => "Undo close-port",
@@ -605,7 +605,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         }
         "最低信心（0–100）" => "Minimum confidence (0–100)",
         "最多幾個網段（預設依後端上限）" => "Maximum networks (default: backend limit)",
-        "依期望狀態重新套用 asa 規則（pf / nftables 開機後需要）" => "Re-apply asa rules from the desired state (needed after boot for pf / nftables)",
+        "依期望狀態重新套用 ai-security-monitor 規則（pf / nftables 開機後需要）" => "Re-apply ai-security-monitor rules from the desired state (needed after boot for pf / nftables)",
 
         // ---- hub client ----
         "Hub 網址必須是 https（http 只允許本機或私網；確定要用請加 --insecure-http）：{url}" => {
@@ -617,11 +617,11 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "hub 要求稍後再傳（{s} 秒後）" => "The hub asked to retry later (in {s} s)",
         "hub 回應 HTTP {status}：{detail}" => "The hub responded HTTP {status}: {detail}",
         "hub 健康檢查失敗（HTTP {status}）" => "Hub health check failed (HTTP {status})",
-        "已註冊 hub 但找不到 client 金鑰；重新執行 asa enroll" => "Enrolled in a hub but the client key is missing; run asa enroll again",
+        "已註冊 hub 但找不到 client 金鑰；重新執行 ai-security-monitor enroll" => "Enrolled in a hub but the client key is missing; run ai-security-monitor enroll again",
         "client 金鑰不可為空" => "The client key cannot be empty",
         "已註冊到 {url}（{hub} {version}）；agent id {id}" => "Enrolled in {url} ({hub} {version}); agent id {id}",
-        "下一步：執行 asa watch 開始定期回報（或 asa watch --once 先試一輪）" => {
-            "Next: run asa watch to start reporting (or asa watch --once for a single round)"
+        "下一步：執行 ai-security-monitor watch 開始定期回報（或 ai-security-monitor watch --once 先試一輪）" => {
+            "Next: run ai-security-monitor watch to start reporting (or ai-security-monitor watch --once for a single round)"
         }
         "已取消註冊：{url}" => "Unenrolled from {url}",
         "原本就沒有註冊任何 hub" => "Not enrolled in any hub",
@@ -647,7 +647,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "最新報告裡的發現（沒有報告會先掃描）：嚴重度、規則、標題、說明、建議與情資來源。" => "Findings from the latest report (scans first if there is none): severity, rule, title, details, recommendation and intel sources.",
         "最新完整報告（JSON；太大時省略證據細節）。" => "The latest full report (JSON; evidence omitted when too large).",
         "監聽中的 port 與實際可達性（只有本機／可從網路連入／已被防火牆擋），附行程與高風險服務說明。" => "Listening ports with real reachability (local only / reachable from the network / blocked by the firewall), with the process and notes for risky services.",
-        "防火牆狀態：後端、各設定檔是否開啟、預設連入動作、允許連入的規則與 asa 建立的封鎖規則數。" => "Firewall status: backend, whether each profile is on, default inbound action, inbound allow rules and the number of block rules created by asa.",
+        "防火牆狀態：後端、各設定檔是否開啟、預設連入動作、允許連入的規則與 ai-security-monitor 建立的封鎖規則數。" => "Firewall status: backend, whether each profile is on, default inbound action, inbound allow rules and the number of block rules created by ai-security-monitor.",
         "與基準線比較：新出現的監聽 port、新的連網程式、新的目的地與新發現。" => "Compare with the baseline: new listening ports, new networked programs, new destinations and new findings.",
         "環境檢查：權限、hub 註冊、情資新鮮度、封包擷取工具與外部工具。" => "Environment check: privileges, hub enrollment, intel freshness, capture tools and external tools.",
         "觀察即時流量 N 秒（不抓封包）：各行程連到哪些遠端、新連線、介面流量、高風險 port、週期性連線與情資命中。" => "Watch live traffic for N seconds (no packet capture): which process talks to which remote, new connections, interface traffic, risky ports, beaconing and intel hits.",
@@ -656,10 +656,10 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "當機紀錄（預設 30 天）：藍屏、非預期關機、程式當掉、服務失敗、磁碟與硬體錯誤，附可能原因與處置。" => "Crash history (30 days by default): blue screens, unexpected shutdowns, app crashes, service failures, disk and hardware errors, with likely causes and fixes.",
         "解釋藍屏代碼（例 0x7E）或 Windows 事件 ID（例 41、4625）。" => "Explain a bugcheck code (e.g. 0x7E) or a Windows event ID (e.g. 41, 4625).",
         "預覽防禦動作（block_ip、unblock_ip、close_port、open_port）：回傳確切會執行的指令與審查代碼，不會改任何東西。執行前一定要先給使用者看預覽並取得同意。" => "Preview a defensive action (block_ip, unblock_ip, close_port, open_port): returns the exact commands and a review token without changing anything. Always show the preview to the user and get consent before executing.",
-        "以 preview_action 回傳的審查代碼執行動作（單次有效、15 分鐘內）。asa mcp 需以系統管理員身分執行才能套用。" => "Execute an action with the review token from preview_action (single use, within 15 minutes). asa mcp must run as administrator to apply it.",
+        "以 preview_action 回傳的審查代碼執行動作（單次有效、15 分鐘內）。ai-security-monitor mcp 需以系統管理員身分執行才能套用。" => "Execute an action with the review token from preview_action (single use, within 15 minutes). ai-security-monitor mcp must run as administrator to apply it.",
         "缺少 indicator" => "Missing indicator",
         "還沒有報告；先呼叫 scan" => "No report yet; call scan first",
-        "尚無基準線；請使用者先執行 asa baseline save --yes" => "No baseline yet; ask the user to run asa baseline save --yes",
+        "尚無基準線；請使用者先執行 ai-security-monitor baseline save --yes" => "No baseline yet; ask the user to run ai-security-monitor baseline save --yes",
         "缺少 path" => "Missing path",
         "缺少 code" => "Missing code",
         "查無 {code}" => "Nothing found for {code}",
@@ -669,21 +669,21 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "這個 MCP 伺服器不允許破壞性動作（啟動時要加 --allow-destructive）" => "This MCP server does not allow destructive actions (start it with --allow-destructive)",
         "把上面的計畫給使用者看，取得同意後再以 review_token 呼叫 execute_action（15 分鐘內、單次有效）" => "Show the plan above to the user; after they agree, call execute_action with review_token (within 15 minutes, single use)",
         "審查代碼無效或已過期；請重新 preview_action" => "The review token is invalid or expired; call preview_action again",
-        "asa mcp 不是以系統管理員身分執行，無法套用防火牆變更；請使用者以系統管理員身分重新啟動 MCP 伺服器，或在終端機執行 asa fw …" => "asa mcp is not running as administrator and cannot change the firewall; ask the user to restart the MCP server as administrator, or run asa fw … in a terminal",
-        "沒有設定 token 時 MCP HTTP 只能綁 127.0.0.1／::1（用 --token 或 ASA_MCP_TOKEN）" => "Without a token, MCP HTTP may only bind 127.0.0.1 / ::1 (use --token or ASA_MCP_TOKEN)",
+        "ai-security-monitor mcp 不是以系統管理員身分執行，無法套用防火牆變更；請使用者以系統管理員身分重新啟動 MCP 伺服器，或在終端機執行 ai-security-monitor fw …" => "ai-security-monitor mcp is not running as administrator and cannot change the firewall; ask the user to restart the MCP server as administrator, or run ai-security-monitor fw … in a terminal",
+        "沒有設定 token 時 MCP HTTP 只能綁 127.0.0.1／::1（用 --token 或 AI_SECURITY_MONITOR_MCP_TOKEN）" => "Without a token, MCP HTTP may only bind 127.0.0.1 / ::1 (use --token or AI_SECURITY_MONITOR_MCP_TOKEN)",
         "MCP HTTP 已啟動：http://{addr}/mcp" => "MCP HTTP listening at http://{addr}/mcp",
         "VS Code 請用 --project <資料夾>（寫進 .vscode/mcp.json）" => "For VS Code use --project <folder> (writes .vscode/mcp.json)",
         "設定檔不是合法的 JSON：{e}" => "The config file is not valid JSON: {e}",
         "設定檔最外層必須是 JSON 物件" => "The config file must be a JSON object at the top level",
         "{key} 必須是 JSON 物件" => "{key} must be a JSON object",
         "或" => "or",
-        "找不到 {cli}；請先安裝並登入（asa ai status 看詳情）" => "{cli} not found; install it and sign in first (see asa ai status)",
-        "找不到 Claude Code 或 Codex CLI；請先安裝其中一個並登入（asa ai status 看詳情）" => "Neither Claude Code nor Codex CLI was found; install one and sign in (see asa ai status)",
+        "找不到 {cli}；請先安裝並登入（ai-security-monitor ai status 看詳情）" => "{cli} not found; install it and sign in first (see ai-security-monitor ai status)",
+        "找不到 Claude Code 或 Codex CLI；請先安裝其中一個並登入（ai-security-monitor ai status 看詳情）" => "Neither Claude Code nor Codex CLI was found; install one and sign in (see ai-security-monitor ai status)",
         "無法啟動 {cli}：{e}" => "Could not start {cli}: {e}",
         "{cli} 執行失敗：{detail}" => "{cli} failed: {detail}",
         "觀察流量 {d}…" => "Observing traffic for {d}…",
         "還沒有報告，先掃描一次…" => "No report yet; scanning first…",
-        "送給 AI 的資料：{n} bytes（可在 asa 設定目錄以外的地方檢查內容）" => "Data sent to the AI: {n} bytes",
+        "送給 AI 的資料：{n} bytes（可在 ai-security-monitor 設定目錄以外的地方檢查內容）" => "Data sent to the AI: {n} bytes",
         "使用 {cli}（{path}）…" => "Using {cli} ({path})…",
         "AI 回報錯誤（見上方輸出）" => "The AI reported an error (see the output above)",
         "未安裝" => "Not installed",
@@ -692,10 +692,10 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "登入" => "Signed in",
         "安裝：npm i -g @anthropic-ai/claude-code（登入：claude）或 npm i -g @openai/codex（登入：codex login）" => "Install: npm i -g @anthropic-ai/claude-code (sign in: claude) or npm i -g @openai/codex (sign in: codex login)",
         "找不到使用者家目錄" => "Home directory not found",
-        "把 asa MCP 伺服器寫進 {client} 設定（{path}）" => "Add the asa MCP server to the {client} config ({path})",
+        "把 ai-security-monitor MCP 伺服器寫進 {client} 設定（{path}）" => "Add the ai-security-monitor MCP server to the {client} config ({path})",
         "已寫入 {path}（原檔備份為 .bak）；重新啟動 {client} 後生效" => "Wrote {path} (previous file backed up as .bak); restart {client} to apply",
-        "從 {client} 設定移除 asa（{path}）" => "Remove asa from the {client} config ({path})",
-        "已從 {path} 移除 asa" => "Removed asa from {path}",
+        "從 {client} 設定移除 ai-security-monitor（{path}）" => "Remove ai-security-monitor from the {client} config ({path})",
+        "已從 {path} 移除 ai-security-monitor" => "Removed ai-security-monitor from {path}",
         "位址格式錯誤：{addr}（例 127.0.0.1:7870）" => "Invalid address: {addr} (e.g. 127.0.0.1:7870)",
         "MCP 伺服器：讓 Claude Code／Codex／Cursor／VS Code 查這台電腦的資安狀態" => "MCP server: let Claude Code / Codex / Cursor / VS Code inspect this computer's security state",
         "用 Claude Code 或 Codex CLI 分析：問問題、解讀報告、流量與當機" => "Analyze with Claude Code or Codex CLI: ask questions, interpret reports, traffic and crashes",
@@ -709,9 +709,9 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "設定裡加上 --allow-actions" => "Add --allow-actions to the config",
         "寫入 AI 用戶端設定（需要 --yes；原檔備份為 .bak）" => "Write the AI client config (needs --yes; previous file backed up as .bak)",
         "寫進專案設定（.mcp.json、.vscode/mcp.json…）而不是使用者設定" => "Write the project config (.mcp.json, .vscode/mcp.json…) instead of the user config",
-        "從 AI 用戶端設定移除 asa（需要 --yes）" => "Remove asa from an AI client config (needs --yes)",
+        "從 AI 用戶端設定移除 ai-security-monitor（需要 --yes）" => "Remove ai-security-monitor from an AI client config (needs --yes)",
         "專案資料夾" => "Project folder",
-        "問 AI 一個資安問題（它會透過 asa 的 MCP 工具自己查這台電腦）" => "Ask the AI a security question (it inspects this computer itself through asa's MCP tools)",
+        "問 AI 一個資安問題（它會透過 ai-security-monitor 的 MCP 工具自己查這台電腦）" => "Ask the AI a security question (it inspects this computer itself through ai-security-monitor's MCP tools)",
         "問題" => "Question",
         "請 AI 解讀最新報告；--traffic／--events 改看流量或事件" => "Have the AI interpret the latest report; --traffic / --events look at traffic or events instead",
         "報告檔（預設最新一份）" => "Report file (latest by default)",
@@ -752,16 +752,16 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "近 {days} 天 kernel oops {n} 次" => "{n} kernel oops in the last {days} days",
         "近 {days} 天記憶體不足強制結束行程 {n} 次" => "{n} out-of-memory kill(s) in the last {days} days",
         "近 {days} 天 {kind} {n} 次" => "{n} × {kind} in the last {days} days",
-        "查無這個代碼的說明；用 asa ai analyze --events 請 AI 協助判讀" => "No description for this code; use asa ai analyze --events to have the AI interpret it",
+        "查無這個代碼的說明；用 ai-security-monitor ai analyze --events 請 AI 協助判讀" => "No description for this code; use ai-security-monitor ai analyze --events to have the AI interpret it",
         "立即備份；檢查磁碟 SMART 狀態與連接線，必要時更換磁碟" => "Back up now; check the disk’s SMART status and cables, and replace the disk if needed",
         "恢復 BIOS 預設、取消超頻，檢查溫度、記憶體與電源" => "Restore BIOS defaults, remove overclocks, check temperatures, RAM and the PSU",
         "確認是否斷電或長按電源鍵；若伴隨藍屏請看藍屏項目" => "Check for power loss or a held power button; if blue screens accompany it, see the blue-screen finding",
         "找出吃記憶體的行程（見事件），調整服務記憶體上限或增加記憶體" => "Find the memory-hungry process (see the events), cap service memory or add RAM",
-        "查看事件詳細內容；可用 asa ai analyze --events 請 AI 協助判讀" => "Review the event details; asa ai analyze --events can help interpret them",
+        "查看事件詳細內容；可用 ai-security-monitor ai analyze --events 請 AI 協助判讀" => "Review the event details; ai-security-monitor ai analyze --events can help interpret them",
         "{name} 近 {days} 天當掉 {n} 次" => "{name} crashed {n} times in the last {days} days",
         "服務 {name} 近 {days} 天失敗 {n} 次" => "Service {name} failed {n} times in the last {days} days",
         "出錯模組：{m}" => "Faulting module: {m}",
-        "更新或重新安裝該程式；持續發生可用 asa ai analyze --events 請 AI 協助判讀" => "Update or reinstall the program; if it keeps happening, asa ai analyze --events can help",
+        "更新或重新安裝該程式；持續發生可用 ai-security-monitor ai analyze --events 請 AI 協助判讀" => "Update or reinstall the program; if it keeps happening, ai-security-monitor ai analyze --events can help",
         "{ip} 嘗試登入失敗 {n} 次（疑似暴力破解）" => "{ip} failed to log on {n} times (likely brute force)",
         "封鎖來源 IP；關閉不需要對外的 RDP／SSH，改用 VPN 或限制來源；啟用帳號鎖定原則" => "Block the source IP; close RDP/SSH to the internet unless needed, use a VPN or source restrictions; enable an account lockout policy",
         "從公網 {ip} 遠端登入成功（{user}）" => "Successful remote logon from public IP {ip} ({user})",
@@ -820,14 +820,14 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "最常出現的錯誤" => "Most frequent errors",
         "訊息" => "Message",
         "查無 {code}：可用藍屏代碼（例 0x7E、0x124）或事件 ID（例 41、4625）" => "Nothing found for {code}: use a bugcheck code (e.g. 0x7E, 0x124) or an event ID (e.g. 41, 4625)",
-        "內建封包擷取（轉成 pcapng 給 asa traffic analyze）" => "Built-in packet capture (convert to pcapng for asa traffic analyze)",
+        "內建封包擷取（轉成 pcapng 給 ai-security-monitor traffic analyze）" => "Built-in packet capture (convert to pcapng for ai-security-monitor traffic analyze)",
         "Wireshark 命令列擷取（選用）" => "Wireshark command-line capture (optional)",
-        "封包擷取（存成 pcap 給 asa traffic analyze）" => "Packet capture (save a pcap for asa traffic analyze)",
-        "Npcap 已安裝：可用 Wireshark 擷取後 asa traffic analyze <檔案>" => "Npcap is installed: capture with Wireshark, then asa traffic analyze <file>",
+        "封包擷取（存成 pcap 給 ai-security-monitor traffic analyze）" => "Packet capture (save a pcap for ai-security-monitor traffic analyze)",
+        "Npcap 已安裝：可用 Wireshark 擷取後 ai-security-monitor traffic analyze <檔案>" => "Npcap is installed: capture with Wireshark, then ai-security-monitor traffic analyze <file>",
         "可用內建 pktmon：pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl（需系統管理員）" => "Built-in pktmon available: pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl (administrator)",
-        "沒有擷取工具；即時模式（asa traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com" => "No capture tool; live mode (asa traffic) still works. For packet-level analysis install Npcap / Wireshark: https://npcap.com",
-        "可用 tcpdump：sudo tcpdump -w cap.pcap → asa traffic analyze cap.pcap" => "tcpdump available: sudo tcpdump -w cap.pcap → asa traffic analyze cap.pcap",
-        "沒有 tcpdump；即時模式（asa traffic）仍可用" => "No tcpdump; live mode (asa traffic) still works",
+        "沒有擷取工具；即時模式（ai-security-monitor traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com" => "No capture tool; live mode (ai-security-monitor traffic) still works. For packet-level analysis install Npcap / Wireshark: https://npcap.com",
+        "可用 tcpdump：sudo tcpdump -w cap.pcap → ai-security-monitor traffic analyze cap.pcap" => "tcpdump available: sudo tcpdump -w cap.pcap → ai-security-monitor traffic analyze cap.pcap",
+        "沒有 tcpdump；即時模式（ai-security-monitor traffic）仍可用" => "No tcpdump; live mode (ai-security-monitor traffic) still works",
         "封包擷取" => "Packet capture",
         "流量：即時觀察連線（免抓包）或分析 pcap／pcapng 檔" => "Traffic: watch live connections (no capture) or analyze a pcap/pcapng file",
         "觀察多久（即時模式）" => "How long to observe (live mode)",
@@ -881,16 +881,16 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "port 參數錯誤" => "Invalid port parameter",
         "不支援的動作：{kind}" => "Unsupported action: {kind}",
         "注意：hub 沒有提供遠端動作金鑰（hub 版本太舊，或這台 agent 的身分未能釘選），遠端動作不會執行" => "Note: the hub did not provide a remote-action key (old hub, or this agent identity could not be pinned); remote actions will not run",
-        "已啟用遠端動作：hub 核准的封鎖會在這台機器執行（需以系統管理員／服務模式執行 asa watch）" => "Remote actions enabled: blocks approved on the hub will run on this machine (asa watch must run as administrator or as a service)",
+        "已啟用遠端動作：hub 核准的封鎖會在這台機器執行（需以系統管理員／服務模式執行 ai-security-monitor watch）" => "Remote actions enabled: blocks approved on the hub will run on this machine (ai-security-monitor watch must run as administrator or as a service)",
         "遠端動作：已啟用" => "Remote actions: enabled",
         "遠端動作：hub 沒有提供驗章金鑰，暫不執行" => "Remote actions: the hub did not provide a verification key; not running them",
         "領取遠端動作失敗：{e}" => "Failed to fetch remote actions: {e}",
         "遠端動作 {id}（{kind}）：{result}" => "Remote action {id} ({kind}): {result}",
         "回報遠端動作結果失敗：{e}" => "Failed to report the remote action result: {e}",
         "拒絕執行：{why}" => "Refused: {why}",
-        "需要系統管理員權限：請以服務模式（asa service install）或系統管理員身分執行 asa watch" => "Administrator rights required: run asa watch as a service (asa service install) or as administrator",
-        "尚未註冊 hub：只在本機掃描（asa enroll <HUB_URL> --key … 後才會上傳）" => {
-            "Not enrolled in a hub: scanning locally only (run asa enroll <HUB_URL> --key … to upload)"
+        "需要系統管理員權限：請以服務模式（ai-security-monitor service install）或系統管理員身分執行 ai-security-monitor watch" => "Administrator rights required: run ai-security-monitor watch as a service (ai-security-monitor service install) or as administrator",
+        "尚未註冊 hub：只在本機掃描（ai-security-monitor enroll <HUB_URL> --key … 後才會上傳）" => {
+            "Not enrolled in a hub: scanning locally only (run ai-security-monitor enroll <HUB_URL> --key … to upload)"
         }
         "已連上 {url}（{hub} {version}）" => "Connected to {url} ({hub} {version})",
         "註冊失敗，稍後重試：{e}" => "Registration failed; will retry: {e}",
@@ -920,7 +920,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "不上傳，只在本機掃描" => "Do not upload; scan locally only",
 
         // vuln
-        "尚未下載 CISA KEV（執行 asa intel update），無法標示「已被用於攻擊」的漏洞" => "CISA KEV not downloaded yet (run asa intel update); actively exploited vulnerabilities cannot be flagged",
+        "尚未下載 CISA KEV（執行 ai-security-monitor intel update），無法標示「已被用於攻擊」的漏洞" => "CISA KEV not downloaded yet (run ai-security-monitor intel update); actively exploited vulnerabilities cannot be flagged",
         "作業系統已停止支援：{product}（{eol}）" => "Operating system is out of support: {product} ({eol})",
         "作業系統即將停止支援：{product}（{eol}，剩 {days} 天）" => "Operating system support ends soon: {product} ({eol}, {days} days left)",
         "停止支援後就不再有安全性更新，新發現的漏洞都不會被修補。" => "After end of support there are no more security updates; newly found vulnerabilities will not be patched.",
@@ -989,33 +989,45 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         // service
         "寫入 {path}" => "Write {path}",
         "刪除 {path}" => "Delete {path}",
-        "結束使用 {dir} 的常駐 asa watch" => "Stop resident asa watch using {dir}",
+        "結束使用 {dir} 的常駐 ai-security-monitor watch" => "Stop resident ai-security-monitor watch using {dir}",
+        // ---- 改名 asa → ai-security-monitor 的遷移 ----
+        "無法把 {from} 搬到 {to}：{e}" => "Could not move {from} to {to}: {e}",
+        "結束舊版（asa）的常駐 watch" => "Stop the resident watch of the old version (asa)",
+        "搬移舊版設定目錄 {from} → {to}" => "Move the old config directory {from} → {to}",
+        "已移除舊版（asa）的開機自動啟動；之後只用 ai-security-monitor" => {
+            "Removed the start-at-boot entry of the old version (asa); only ai-security-monitor is used from now on"
+        }
+        "這是舊版（asa）的開機自動啟動；執行 ai-security-monitor service install 換成新名" => {
+            "This is the old version's (asa) start-at-boot entry; run ai-security-monitor service install to switch to the new name"
+        }
+        "✓ 已結束 {n} 個舊版（asa）常駐 watch" => "✓ Stopped {n} resident watch process(es) of the old version (asa)",
+        "舊版 asa（service install 會換成新名）" => "Old asa (service install switches it to the new name)",
         "複製註冊資料 {from} → {to}" => "Copy enrollment {from} → {to}",
         "沒有登入時也要執行（例如伺服器開機後）：sudo loginctl enable-linger $USER，或改用 --system" => "To run without a login session (e.g. right after a server boots): sudo loginctl enable-linger $USER, or use --system",
         "XDG autostart 只在登入桌面時啟動；伺服器請用 --system" => "XDG autostart only starts with a desktop login; use --system on servers",
         "✓ 已在背景啟動（PID {pid}）" => "✓ Started in the background (PID {pid})",
-        "✓ 已結束 {n} 個常駐 asa watch" => "✓ Stopped {n} resident asa watch process(es)",
-        "· 目前使用者還沒註冊 hub：服務先只在本機掃描（之後以系統管理員執行 asa --config-dir <系統目錄> enroll …）" => "· This user is not enrolled with a hub yet: the service scans locally for now (later run, as admin, asa --config-dir <system dir> enroll …)",
+        "✓ 已結束 {n} 個常駐 ai-security-monitor watch" => "✓ Stopped {n} resident ai-security-monitor watch process(es)",
+        "· 目前使用者還沒註冊 hub：服務先只在本機掃描（之後以系統管理員執行 ai-security-monitor --config-dir <系統目錄> enroll …）" => "· This user is not enrolled with a hub yet: the service scans locally for now (later run, as admin, ai-security-monitor --config-dir <system dir> enroll …)",
         "無法連上服務控制管理員（這個命令只能由 Windows 服務啟動）：{e}" => "Cannot connect to the Service Control Manager (this command is only started by the Windows service): {e}",
         "安裝開機自動啟動（{how}）：" => "Install start-at-boot ({how}):",
         "移除開機自動啟動（{how}）：" => "Remove start-at-boot ({how}):",
         "安裝開機自動啟動" => "install start-at-boot",
         "移除開機自動啟動" => "remove start-at-boot",
-        "完成。log：{dir}（asa service logs{sys}）" => "Done. Logs: {dir} (asa service logs{sys})",
+        "完成。log：{dir}（ai-security-monitor service logs{sys}）" => "Done. Logs: {dir} (ai-security-monitor service logs{sys})",
         "系統" => "System",
         "使用者" => "User",
         "是" => "Yes",
         "否" => "No",
         "範圍" => "Scope",
         "方式" => "Method",
-        "目前沒有常駐中的 asa watch。" => "No resident asa watch is running.",
+        "目前沒有常駐中的 ai-security-monitor watch。" => "No resident ai-security-monitor watch is running.",
         "執行中：PID {pid} {cmd}" => "Running: PID {pid} {cmd}",
-        "{dir} 還沒有 log（服務模式的 asa watch 才會寫 log 檔）" => "No logs in {dir} yet (only asa watch in service mode writes log files)",
-        "service run 只用於 Windows 服務；其他平台由 systemd／launchd 執行 asa watch --service" => "service run is only for the Windows service; on other platforms systemd/launchd run asa watch --service",
+        "{dir} 還沒有 log（服務模式的 ai-security-monitor watch 才會寫 log 檔）" => "No logs in {dir} yet (only ai-security-monitor watch in service mode writes log files)",
+        "service run 只用於 Windows 服務；其他平台由 systemd／launchd 執行 ai-security-monitor watch --service" => "service run is only for the Windows service; on other platforms systemd/launchd run ai-security-monitor watch --service",
         "設定目錄" => "Config directory",
-        "同一個設定目錄已經有常駐的 asa watch，這個不再啟動" => "Another resident asa watch already uses this config directory; not starting a second one",
+        "同一個設定目錄已經有常駐的 ai-security-monitor watch，這個不再啟動" => "Another resident ai-security-monitor watch already uses this config directory; not starting a second one",
         "無法建立單一實例鎖：{e}" => "Could not create the single-instance lock: {e}",
-        "服務模式啟動（asa {v}，設定目錄 {dir}）" => "Service mode started (asa {v}, config directory {dir})",
+        "服務模式啟動（ai-security-monitor {v}，設定目錄 {dir}）" => "Service mode started (ai-security-monitor {v}, config directory {dir})",
         "收到停止訊號，結束" => "Stop signal received, exiting",
         "密鑰存放方式（keychain／file；服務模式用 file）" => "Secret storage (keychain / file; services use file)",
         "開機自動啟動：裝成系統服務（伺服器）或登入時啟動（個人電腦）" => "Start at boot: install as a system service (servers) or start at login (PCs)",
@@ -1034,7 +1046,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "完整掃描間隔" => "Full scan interval",
 
         // service
-        "命令列 {n} 字元，超過 Windows「執行」機碼的 260 字元上限，登入時可能不會啟動；請把 asa 放到較短的路徑" => "The command line is {n} characters, over the 260-character limit of the Windows Run key, so it may not start at login; move asa to a shorter path",
+        "命令列 {n} 字元，超過 Windows「執行」機碼的 260 字元上限，登入時可能不會啟動；請把 ai-security-monitor 放到較短的路徑" => "The command line is {n} characters, over the 260-character limit of the Windows Run key, so it may not start at login; move ai-security-monitor to a shorter path",
 
         // self-update
         "{url} 超過大小上限" => "{url} exceeds the size limit",
@@ -1042,32 +1054,32 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "Release {tag} 沒有 SHA256SUMS，拒絕更新" => "Release {tag} has no SHA256SUMS; refusing to update",
         "SHA256SUMS 裡沒有 {name}" => "{name} is not listed in SHA256SUMS",
         "{name} 的 SHA256 不符（預期 {expected}，實際 {actual}），已放棄" => "SHA256 mismatch for {name} (expected {expected}, got {actual}); aborted",
-        "無法寫入 {dir}（{e}）；請用有權限的身分執行（例如 sudo asa self-update）" => "Cannot write to {dir} ({e}); run with sufficient rights (e.g. sudo asa self-update)",
-        "有新版：{latest}（目前 {current}）→ asa self-update --yes；說明：{url}" => "New version available: {latest} (current {current}) → asa self-update --yes; notes: {url}",
+        "無法寫入 {dir}（{e}）；請用有權限的身分執行（例如 sudo ai-security-monitor self-update）" => "Cannot write to {dir} ({e}); run with sufficient rights (e.g. sudo ai-security-monitor self-update)",
+        "有新版：{latest}（目前 {current}）→ ai-security-monitor self-update --yes；說明：{url}" => "New version available: {latest} (current {current}) → ai-security-monitor self-update --yes; notes: {url}",
         "已是最新版（{current}）" => "Already up to date ({current})",
         "Release {tag} 沒有這個平台（{os}/{arch}）的執行檔" => "Release {tag} has no executable for this platform ({os}/{arch})",
         "將下載 {name}（{size}）並比對 SHA256SUMS，取代 {exe}" => "Will download {name} ({size}), verify it against SHA256SUMS and replace {exe}",
         "更新到 {v}" => "update to {v}",
         "已更新 {from} → {to}（SHA256 {sha}）" => "Updated {from} → {to} (SHA256 {sha})",
-        "常駐中的 asa watch 還是舊版：執行 asa service restart --yes（系統服務加 --system）換成新版" => "The resident asa watch still runs the old version: run asa service restart --yes (add --system for the system service)",
-        "還沒安裝開機自動啟動（asa service install）" => "Start-at-boot is not installed (asa service install)",
+        "常駐中的 ai-security-monitor watch 還是舊版：執行 ai-security-monitor service restart --yes（系統服務加 --system）換成新版" => "The resident ai-security-monitor watch still runs the old version: run ai-security-monitor service restart --yes (add --system for the system service)",
+        "還沒安裝開機自動啟動（ai-security-monitor service install）" => "Start-at-boot is not installed (ai-security-monitor service install)",
         "重新啟動常駐行程" => "restart the resident process",
         "重新啟動失敗" => "Restart failed",
-        "更新 asa：下載 GitHub Release 的執行檔，比對 SHA256 後替換" => "Update asa: download the GitHub release executable, verify its SHA256 and replace this one",
+        "更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換" => "Update ai-security-monitor: download the GitHub release executable, verify its SHA256 and replace this one",
         "只檢查有沒有新版" => "Only check whether a new version exists",
         "更新（或退回）到指定版本，例：0.2.0" => "Update (or roll back) to this version, e.g. 0.2.0",
-        "重新啟動常駐行程（例如更新 asa 之後）" => "Restart the resident process (e.g. after updating asa)",
+        "重新啟動常駐行程（例如更新 ai-security-monitor 之後）" => "Restart the resident process (e.g. after updating ai-security-monitor)",
         "重新啟動系統服務" => "Restart the system service",
         "常駐與開機自動啟動" => "Resident process and start at boot",
-        "沒有常駐的 asa watch（asa service install 可設定開機自動啟動）" => "No resident asa watch (asa service install sets up start at boot)",
-        "{n} 個常駐中（asa service status 看詳細）" => "{n} running (see asa service status)",
+        "沒有常駐的 ai-security-monitor watch（ai-security-monitor service install 可設定開機自動啟動）" => "No resident ai-security-monitor watch (ai-security-monitor service install sets up start at boot)",
+        "{n} 個常駐中（ai-security-monitor service status 看詳細）" => "{n} running (see ai-security-monitor service status)",
 
         // self-update
         "找不到版本 {v}（{url}）" => "Version {v} not found ({url})",
         "還沒有發佈任何版本（{url}）" => "No version has been released yet ({url})",
 
         // service firewall
-        "有 asa 防火牆規則要重新套用，但沒有系統管理員權限（請用 asa service install --system）" => "asa firewall rules need to be re-applied but there are no administrator rights (use asa service install --system)",
+        "有 ai-security-monitor 防火牆規則要重新套用，但沒有系統管理員權限（請用 ai-security-monitor service install --system）" => "ai-security-monitor firewall rules need to be re-applied but there are no administrator rights (use ai-security-monitor service install --system)",
         "已重新套用防火牆規則：封鎖 {b} 筆、關閉 {p} 個 port、情資網段 {n} 個" => "Re-applied firewall rules: {b} blocked, {p} ports closed, {n} intel networks",
         "重新套用防火牆規則失敗：{e}" => "Re-applying firewall rules failed: {e}",
 

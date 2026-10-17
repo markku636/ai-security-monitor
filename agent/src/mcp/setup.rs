@@ -1,12 +1,15 @@
-//! 把 `asa mcp` 寫進各 AI 用戶端的設定（照 db-kit mcp_setup）：保留其他設定、先備份 `.bak`、原子寫入。
+//! 把 `ai-security-monitor mcp` 寫進各 AI 用戶端的設定（照 db-kit mcp_setup）：保留其他設定、先備份 `.bak`、原子寫入。
 //! Claude Code（~/.claude.json 或專案 .mcp.json）、Codex（~/.codex/config.toml 區塊取代，不用 toml crate）、
 //! Cursor、VS Code（專案 .vscode/mcp.json，key 是 `servers`）、Claude Desktop、Windsurf。
+//!
+//! 改名相容：伺服器名從 `asa` 改成 `ai-security-monitor`；寫入或移除時都會一併刪掉舊的 `asa` 項目，
+//! 免得 AI 用戶端同時掛兩份。
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 
-use super::SERVER_NAME;
+use super::{LEGACY_SERVER_NAME, SERVER_NAME};
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -100,9 +103,15 @@ pub fn codex_block(exe: &str, args: &[String]) -> String {
     )
 }
 
-/// 在 TOML 文字裡取代（或附加）`[mcp_servers.asa]` 區塊；`block` 為 None 時刪除。
+/// 在 TOML 文字裡取代（或附加）`[mcp_servers.ai-security-monitor]` 區塊；`block` 為 None 時刪除。
+/// 舊的 `[mcp_servers.asa]` 區塊一律刪除。
 pub fn replace_toml_block(text: &str, block: Option<&str>) -> String {
-    let header = format!("[mcp_servers.{SERVER_NAME}]");
+    let without_legacy = replace_named_toml_block(text, LEGACY_SERVER_NAME, None);
+    replace_named_toml_block(&without_legacy, SERVER_NAME, block)
+}
+
+fn replace_named_toml_block(text: &str, name: &str, block: Option<&str>) -> String {
+    let header = format!("[mcp_servers.{name}]");
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.iter().position(|l| l.trim() == header);
     let mut out: Vec<String> = Vec::new();
@@ -142,7 +151,7 @@ pub fn replace_toml_block(text: &str, block: Option<&str>) -> String {
     s
 }
 
-/// 在 JSON 設定裡設定（或刪除）`<servers_key>.asa`，其他內容原樣保留。
+/// 在 JSON 設定裡設定（或刪除）`<servers_key>.ai-security-monitor`，其他內容原樣保留；舊的 `asa` 項目一律刪除。
 pub fn merge_json(text: &str, key: &str, entry: Option<Value>) -> AppResult<String> {
     let mut root: Value = if text.trim().is_empty() {
         json!({})
@@ -156,6 +165,7 @@ pub fn merge_json(text: &str, key: &str, entry: Option<Value>) -> AppResult<Stri
     let servers = servers
         .as_object_mut()
         .ok_or_else(|| AppError::Config(tf!("{key} 必須是 JSON 物件", key = key)))?;
+    servers.remove(LEGACY_SERVER_NAME);
     match entry {
         Some(e) => {
             servers.insert(SERVER_NAME.into(), e);
@@ -243,66 +253,125 @@ mod tests {
         let new = merge_json(
             old,
             "mcpServers",
-            Some(server_entry(Client::ClaudeCode, "C:\\asa.exe", &["mcp".into()])),
+            Some(server_entry(
+                Client::ClaudeCode,
+                "C:\\ai-security-monitor.exe",
+                &["mcp".into()],
+            )),
         )
         .unwrap();
         let v: Value = serde_json::from_str(&new).unwrap();
         assert_eq!(v["theme"], "dark");
         assert_eq!(v["mcpServers"]["other"]["command"], "x");
-        assert_eq!(v["mcpServers"]["asa"]["args"][0], "mcp");
+        assert_eq!(v["mcpServers"]["ai-security-monitor"]["args"][0], "mcp");
         let removed: Value = serde_json::from_str(&merge_json(&new, "mcpServers", None).unwrap()).unwrap();
-        assert!(removed["mcpServers"].get("asa").is_none());
+        assert!(removed["mcpServers"].get("ai-security-monitor").is_none());
         assert!(merge_json("[1]", "mcpServers", None).is_err());
         assert!(merge_json("{not json", "mcpServers", None).is_err());
-        let vs: Value =
-            serde_json::from_str(&merge_json("", "servers", Some(server_entry(Client::Vscode, "asa", &[]))).unwrap())
-                .unwrap();
-        assert_eq!(vs["servers"]["asa"]["type"], "stdio");
+        let vs: Value = serde_json::from_str(
+            &merge_json(
+                "",
+                "servers",
+                Some(server_entry(Client::Vscode, "ai-security-monitor", &[])),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vs["servers"]["ai-security-monitor"]["type"], "stdio");
+    }
+
+    #[test]
+    fn install_and_uninstall_drop_the_legacy_asa_entry() {
+        let old = r#"{"mcpServers":{"asa":{"command":"C:\\asa.exe","args":["mcp"]},"other":{"command":"x"}}}"#;
+        let new: Value = serde_json::from_str(
+            &merge_json(
+                old,
+                "mcpServers",
+                Some(server_entry(
+                    Client::ClaudeCode,
+                    "C:\\ai-security-monitor.exe",
+                    &["mcp".into()],
+                )),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(new["mcpServers"].get("asa").is_none());
+        assert_eq!(new["mcpServers"]["ai-security-monitor"]["args"][0], "mcp");
+        assert_eq!(new["mcpServers"]["other"]["command"], "x");
+        let un: Value = serde_json::from_str(&merge_json(old, "mcpServers", None).unwrap()).unwrap();
+        assert!(un["mcpServers"].get("asa").is_none() && un["mcpServers"].get("other").is_some());
+
+        let toml = "model = 'o4'\n\n[mcp_servers.asa]\ncommand = 'asa'\nargs = ['mcp']\n\n[profiles.x]\nmodel = 'y'\n";
+        let added = replace_toml_block(toml, Some(&codex_block("ai-security-monitor", &["mcp".into()])));
+        assert!(!added.contains("[mcp_servers.asa]"), "{added}");
+        assert!(added.contains("[mcp_servers.ai-security-monitor]") && added.contains("[profiles.x]"));
+        let gone = replace_toml_block(toml, None);
+        assert!(!gone.contains("mcp_servers") && gone.contains("[profiles.x]") && gone.contains("model = 'o4'"));
     }
 
     #[test]
     fn toml_block_replace_append_and_remove() {
         let block = codex_block(
-            "C:\\Program Files\\asa\\asa.exe",
+            "C:\\Program Files\\ai-security-monitor\\ai-security-monitor.exe",
             &["mcp".into(), "--allow-actions".into()],
         );
-        assert!(block.contains("command = 'C:\\Program Files\\asa\\asa.exe'"));
+        assert!(block.contains("command = 'C:\\Program Files\\ai-security-monitor\\ai-security-monitor.exe'"));
         let base = "model = \"o4\"\n\n[mcp_servers.other]\ncommand = 'x'\n";
         let added = replace_toml_block(base, Some(&block));
-        assert!(added.contains("[mcp_servers.other]") && added.contains("[mcp_servers.asa]"));
-        let again = replace_toml_block(&added, Some(&codex_block("asa", &["mcp".into()])));
-        assert_eq!(again.matches("[mcp_servers.asa]").count(), 1);
-        assert!(again.contains("command = 'asa'"));
+        assert!(added.contains("[mcp_servers.other]") && added.contains("[mcp_servers.ai-security-monitor]"));
+        let again = replace_toml_block(&added, Some(&codex_block("ai-security-monitor", &["mcp".into()])));
+        assert_eq!(again.matches("[mcp_servers.ai-security-monitor]").count(), 1);
+        assert!(again.contains("command = 'ai-security-monitor'"));
         // 區塊在中間：取代後後面的表格還在
         let middle = format!("{}\n[profiles.x]\nmodel = 'y'\n", block);
         let replaced = replace_toml_block(&middle, Some(&codex_block("new", &[])));
         assert!(replaced.contains("[profiles.x]") && replaced.contains("command = 'new'"));
         let gone = replace_toml_block(&replaced, None);
-        assert!(!gone.contains("mcp_servers.asa") && gone.contains("[profiles.x]"));
+        assert!(!gone.contains("mcp_servers.ai-security-monitor") && gone.contains("[profiles.x]"));
         assert_eq!(toml_string("it's"), "\"it's\"");
     }
 
     #[test]
     fn apply_writes_backup_and_paths() {
         let home = tempfile::tempdir().unwrap();
-        let p = apply(Client::Codex, home.path(), None, "asa", &["mcp".into()], false).unwrap();
+        let p = apply(
+            Client::Codex,
+            home.path(),
+            None,
+            "ai-security-monitor",
+            &["mcp".into()],
+            false,
+        )
+        .unwrap();
         assert!(p.ends_with(".codex/config.toml") || p.ends_with(".codex\\config.toml"));
         std::fs::write(&p, "model = 'x'\n").unwrap();
-        apply(Client::Codex, home.path(), None, "asa", &["mcp".into()], false).unwrap();
-        assert!(std::fs::read_to_string(&p).unwrap().contains("[mcp_servers.asa]"));
+        apply(
+            Client::Codex,
+            home.path(),
+            None,
+            "ai-security-monitor",
+            &["mcp".into()],
+            false,
+        )
+        .unwrap();
+        assert!(std::fs::read_to_string(&p)
+            .unwrap()
+            .contains("[mcp_servers.ai-security-monitor]"));
         assert!(p.with_extension("toml.bak").exists());
         let proj = tempfile::tempdir().unwrap();
         let mp = apply(
             Client::ClaudeCode,
             home.path(),
             Some(proj.path()),
-            "asa",
+            "ai-security-monitor",
             &["mcp".into()],
             false,
         )
         .unwrap();
         assert_eq!(mp, proj.path().join(".mcp.json"));
         assert!(config_path(Client::Vscode, home.path(), None).is_err());
-        assert!(snippet(Client::ClaudeCode, "asa", &["mcp".into()]).contains("claude mcp add asa -- asa mcp"));
+        assert!(snippet(Client::ClaudeCode, "ai-security-monitor", &["mcp".into()])
+            .contains("claude mcp add ai-security-monitor -- ai-security-monitor mcp"));
     }
 }

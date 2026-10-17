@@ -248,21 +248,21 @@ mod tests {
 
     #[test]
     fn child_args_append_protocol_flags() {
-        let orig: Vec<String> = ["asa", "fw", "block", "1.2.3.4", "--yes"]
+        let orig: Vec<String> = ["ai-security-monitor", "fw", "block", "1.2.3.4", "--yes"]
             .iter()
             .map(|s| s.to_string())
             .collect();
         let a = child_args(
             &orig,
             Path::new("/tmp/r.json"),
-            Path::new("/home/u/.config/ai-security-agent"),
+            Path::new("/home/u/.config/ai-security-monitor"),
         );
         assert_eq!(&a[..4], &["fw", "block", "1.2.3.4", "--yes"]);
         assert!(a.contains(&"--elevated".to_string()));
         assert!(a
             .windows(2)
-            .any(|w| w[0] == "--config-dir" && w[1].ends_with("ai-security-agent")));
-        let orig2: Vec<String> = ["asa", "--config-dir", "/x", "fw", "ensure"]
+            .any(|w| w[0] == "--config-dir" && w[1].ends_with("ai-security-monitor")));
+        let orig2: Vec<String> = ["ai-security-monitor", "--config-dir", "/x", "fw", "ensure"]
             .iter()
             .map(|s| s.to_string())
             .collect();

@@ -1,4 +1,4 @@
-//! `asa events`：事件與當機分析；`crashes` 只看當機；`explain` 解釋藍屏代碼或事件 ID；`analyze` 分析檔案。
+//! `ai-security-monitor events`：事件與當機分析；`crashes` 只看當機；`explain` 解釋藍屏代碼或事件 ID；`analyze` 分析檔案。
 
 use std::path::Path;
 

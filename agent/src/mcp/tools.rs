@@ -113,7 +113,7 @@ pub fn read_only_defs() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "firewall_status",
-            description: t!("防火牆狀態：後端、各設定檔是否開啟、預設連入動作、允許連入的規則與 asa 建立的封鎖規則數。").into(),
+            description: t!("防火牆狀態：後端、各設定檔是否開啟、預設連入動作、允許連入的規則與 ai-security-monitor 建立的封鎖規則數。").into(),
             input_schema: obj(json!({}), &[]),
         },
         ToolDef {
@@ -186,7 +186,7 @@ pub fn action_defs() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "execute_action",
-            description: t!("以 preview_action 回傳的審查代碼執行動作（單次有效、15 分鐘內）。asa mcp 需以系統管理員身分執行才能套用。").into(),
+            description: t!("以 preview_action 回傳的審查代碼執行動作（單次有效、15 分鐘內）。ai-security-monitor mcp 需以系統管理員身分執行才能套用。").into(),
             input_schema: obj(json!({ "review_token": { "type": "string" } }), &["review_token"]),
         },
     ]
@@ -489,7 +489,7 @@ pub async fn call(ctx: &ToolCtx, name: &str, args: &Value) -> Result<String, Str
         "baseline_diff" => {
             let base = crate::model::baseline::Baseline::load(&ctx.config_dir)
                 .map_err(|e| e.message())?
-                .ok_or_else(|| t!("尚無基準線；請使用者先執行 asa baseline save --yes").to_string())?;
+                .ok_or_else(|| t!("尚無基準線；請使用者先執行 ai-security-monitor baseline save --yes").to_string())?;
             let (_, snap) = crate::cli::scan_cmd::scan_for_baseline(&ctx.env())
                 .await
                 .map_err(|e| e.message())?;
@@ -696,7 +696,7 @@ async fn execute_action(ctx: &ToolCtx, args: &Value) -> Result<String, String> {
         .take(token)
         .ok_or_else(|| t!("審查代碼無效或已過期；請重新 preview_action").to_string())?;
     if !crate::elevate::is_elevated() {
-        return Err(t!("asa mcp 不是以系統管理員身分執行，無法套用防火牆變更；請使用者以系統管理員身分重新啟動 MCP 伺服器，或在終端機執行 asa fw …").to_string());
+        return Err(t!("ai-security-monitor mcp 不是以系統管理員身分執行，無法套用防火牆變更；請使用者以系統管理員身分重新啟動 MCP 伺服器，或在終端機執行 ai-security-monitor fw …").to_string());
     }
     let rep = crate::actions::execute(
         &ctx.config_dir,

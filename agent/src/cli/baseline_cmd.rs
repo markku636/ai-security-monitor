@@ -38,8 +38,9 @@ pub async fn run(env: &Env, cmd: BaselineCmd) -> AppResult<()> {
             Ok(())
         }
         BaselineCmd::Diff => {
-            let base = Baseline::load(&env.config_dir)?
-                .ok_or_else(|| AppError::Storage(t!("尚無基準線；先執行 asa baseline save --yes").into()))?;
+            let base = Baseline::load(&env.config_dir)?.ok_or_else(|| {
+                AppError::Storage(t!("尚無基準線；先執行 ai-security-monitor baseline save --yes").into())
+            })?;
             let (_report, snapshot) = super::scan_cmd::scan_for_baseline(env).await?;
             let diff = base.diff(&snapshot);
             if env.global.json {
@@ -77,7 +78,7 @@ pub async fn run(env: &Env, cmd: BaselineCmd) -> AppResult<()> {
         BaselineCmd::Show => {
             match Baseline::load(&env.config_dir)? {
                 Some(b) => print_json(&b),
-                None => println!("{}", t!("尚無基準線；先執行 asa baseline save --yes")),
+                None => println!("{}", t!("尚無基準線；先執行 ai-security-monitor baseline save --yes")),
             }
             Ok(())
         }

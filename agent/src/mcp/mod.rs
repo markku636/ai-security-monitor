@@ -1,4 +1,4 @@
-//! `asa mcp`：把這台機器的資安狀態以 MCP 工具提供給 Claude Code／Codex／Cursor／VS Code 等 AI 用戶端。
+//! `ai-security-monitor mcp`：把這台機器的資安狀態以 MCP 工具提供給 Claude Code／Codex／Cursor／VS Code 等 AI 用戶端。
 //! 協定照 db-kit 手刻（JSON-RPC 2.0；initialize／ping／tools/list／tools/call），stdio 與 Streamable HTTP 兩種傳輸。
 //!
 //! 行為：
@@ -20,7 +20,9 @@ use tools::ToolCtx;
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 const SUPPORTED_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
-pub const SERVER_NAME: &str = "asa";
+pub const SERVER_NAME: &str = "ai-security-monitor";
+/// 改名前的 MCP 伺服器名（`mcp install`／`uninstall` 會順手移除這個舊項目）。
+pub const LEGACY_SERVER_NAME: &str = "asa";
 
 pub struct ServeOpts {
     pub tools: Vec<String>,
@@ -231,7 +233,7 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
-        assert_eq!(init["result"]["serverInfo"]["name"], "asa");
+        assert_eq!(init["result"]["serverInfo"]["name"], "ai-security-monitor");
         assert!(rt
             .block_on(s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#))
             .is_none());

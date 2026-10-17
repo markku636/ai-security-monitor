@@ -125,7 +125,7 @@ pub fn assess(listeners: &mut [Listener], fw: Option<&FwSnapshot>, risky: &Risky
                     bind = bind_label(l),
                     rationale = rp.rationale
                 ),
-                t!("以系統管理員身分執行 asa fw audit 確認是否可連入"),
+                t!("以系統管理員身分執行 ai-security-monitor fw audit 確認是否可連入"),
             ),
         };
         let mut f = Finding::new(

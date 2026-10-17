@@ -21,8 +21,10 @@ const pkg = /\[package\][\s\S]*?^version\s*=\s*"([^"]+)"/m.exec(cargo)?.[1];
 if (pkg !== version) errors.push(`agent/Cargo.toml is ${pkg}`);
 
 const lock = read('agent/Cargo.lock');
-const locked = /\[\[package\]\]\r?\nname = "asa"\r?\nversion = "([^"]+)"/.exec(lock)?.[1];
-if (locked !== version) errors.push(`agent/Cargo.lock has asa ${locked} (run cargo update -p asa)`);
+const locked = /\[\[package\]\]\r?\nname = "ai-security-monitor"\r?\nversion = "([^"]+)"/.exec(lock)?.[1];
+if (locked !== version) {
+  errors.push(`agent/Cargo.lock has ai-security-monitor ${locked} (run cargo update -p ai-security-monitor)`);
+}
 
 if (!flags.includes('--no-changelog') && !new RegExp(`^## v${version.replace(/\./g, '\\.')}\\b`, 'm').test(read('CHANGELOG.md'))) {
   errors.push(`CHANGELOG.md has no "## v${version}" section`);

@@ -2,9 +2,38 @@
 
 use std::path::Path;
 
-pub const LABEL: &str = "dev.asa.agent";
-pub const SERVICE_NAME: &str = "asa";
-pub const DISPLAY_NAME: &str = "ai-security-agent";
+/// 服務在各平台的名稱。改名前（0.1.x）的安裝用 [`LEGACY_NAMES`]，安裝新版時會先偵測並移除。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Names {
+    /// Windows 服務名（SCM），也是 HKCU\…\Run 的值名稱。
+    pub service: &'static str,
+    /// systemd unit 檔名（系統與 --user 相同）。
+    pub systemd_unit: &'static str,
+    /// XDG autostart 的 .desktop 檔名。
+    pub desktop_file: &'static str,
+    /// launchd Label（plist 檔名為 `<label>.plist`）。
+    pub label: &'static str,
+}
+
+pub const NAMES: Names = Names {
+    service: "ai-security-monitor",
+    systemd_unit: "ai-security-monitor.service",
+    desktop_file: "ai-security-monitor.desktop",
+    label: "dev.ai-security-monitor.agent",
+};
+
+/// 改名前（`asa`）的服務名稱。
+pub const LEGACY_NAMES: Names = Names {
+    service: "asa",
+    systemd_unit: "asa.service",
+    desktop_file: "asa.desktop",
+    label: "dev.asa.agent",
+};
+
+pub const LABEL: &str = NAMES.label;
+pub const SERVICE_NAME: &str = NAMES.service;
+pub const UNIT_NAME: &str = NAMES.systemd_unit;
+pub const DISPLAY_NAME: &str = "AI Security Monitor";
 
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -39,7 +68,7 @@ pub fn systemd_unit(exe: &Path, args: &[String], system: bool, config_dir: &Path
         .collect::<Vec<_>>()
         .join(" ");
     let mut s = String::from(
-        "[Unit]\nDescription=ai-security-agent (asa watch)\nDocumentation=https://github.com/markku636/ai-security-agent\n\
+        "[Unit]\nDescription=AI Security Monitor (ai-security-monitor watch)\nDocumentation=https://github.com/markku636/ai-security-monitor\n\
          Wants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=simple\n",
     );
     s.push_str(&format!("ExecStart={exec}\n"));
@@ -47,7 +76,7 @@ pub fn systemd_unit(exe: &Path, args: &[String], system: bool, config_dir: &Path
     if system {
         // 讀所有行程的 socket 與防火牆需要 root；檔案系統只開設定目錄可寫
         s.push_str(&format!(
-            "Environment=ASA_SECRETS_BACKEND=file\nProtectSystem=full\nProtectHome=read-only\nPrivateTmp=true\nReadWritePaths={}\nNoNewPrivileges=false\n",
+            "Environment=AI_SECURITY_MONITOR_SECRETS_BACKEND=file\nProtectSystem=full\nProtectHome=read-only\nPrivateTmp=true\nReadWritePaths={}\nNoNewPrivileges=false\n",
             systemd_quote(&config_dir.display().to_string())
         ));
     }
@@ -64,7 +93,7 @@ pub fn launchd_plist(exe: &Path, args: &[String], log_dir: &Path, system: bool) 
         prog.push_str(&format!("    <string>{}</string>\n", xml_escape(a)));
     }
     let env = if system {
-        "  <key>EnvironmentVariables</key>\n  <dict>\n    <key>ASA_SECRETS_BACKEND</key>\n    <string>file</string>\n  </dict>\n"
+        "  <key>EnvironmentVariables</key>\n  <dict>\n    <key>AI_SECURITY_MONITOR_SECRETS_BACKEND</key>\n    <string>file</string>\n  </dict>\n"
     } else {
         ""
     };
@@ -87,7 +116,7 @@ pub fn xdg_desktop(exe: &Path, args: &[String]) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     format!(
-        "[Desktop Entry]\nType=Application\nName=ai-security-agent\nComment=asa watch (background security monitoring)\nExec={exec}\n\
+        "[Desktop Entry]\nType=Application\nName=AI Security Monitor\nComment=ai-security-monitor watch (background security monitoring)\nExec={exec}\n\
          Terminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n"
     )
 }
@@ -100,7 +129,7 @@ mod tests {
     fn args() -> Vec<String> {
         [
             "--config-dir",
-            "/var/lib/asa",
+            "/var/lib/ai-security-monitor",
             "--secrets-backend",
             "file",
             "watch",
@@ -114,24 +143,25 @@ mod tests {
     #[test]
     fn systemd_system_unit() {
         let u = systemd_unit(
-            &PathBuf::from("/usr/local/bin/asa"),
+            &PathBuf::from("/usr/local/bin/ai-security-monitor"),
             &args(),
             true,
-            &PathBuf::from("/var/lib/asa"),
+            &PathBuf::from("/var/lib/ai-security-monitor"),
         );
         assert!(u.contains(
-            "ExecStart=/usr/local/bin/asa --config-dir /var/lib/asa --secrets-backend file watch --service\n"
+            "ExecStart=/usr/local/bin/ai-security-monitor --config-dir /var/lib/ai-security-monitor --secrets-backend file watch --service\n"
         ));
         assert!(u.contains("WantedBy=multi-user.target"));
-        assert!(u.contains("Environment=ASA_SECRETS_BACKEND=file"));
-        assert!(u.contains("ReadWritePaths=/var/lib/asa"));
+        assert!(u.contains("Environment=AI_SECURITY_MONITOR_SECRETS_BACKEND=file"));
+        assert!(u.contains("ReadWritePaths=/var/lib/ai-security-monitor"));
+        assert!(u.contains("Documentation=https://github.com/markku636/ai-security-monitor\n"));
         let user = systemd_unit(
-            &PathBuf::from("/home/me/my bin/asa"),
+            &PathBuf::from("/home/me/my bin/ai-security-monitor"),
             &["watch".into()],
             false,
             &PathBuf::from("/x"),
         );
-        assert!(user.contains("ExecStart=\"/home/me/my bin/asa\" watch\n"));
+        assert!(user.contains("ExecStart=\"/home/me/my bin/ai-security-monitor\" watch\n"));
         assert!(user.contains("WantedBy=default.target"));
         assert!(!user.contains("ProtectSystem"));
     }
@@ -139,41 +169,47 @@ mod tests {
     #[test]
     fn launchd_and_xdg() {
         let p = launchd_plist(
-            &PathBuf::from("/usr/local/bin/asa"),
+            &PathBuf::from("/usr/local/bin/ai-security-monitor"),
             &args(),
-            &PathBuf::from("/Library/Logs/asa"),
+            &PathBuf::from("/Library/Logs/ai-security-monitor"),
             true,
         );
-        assert!(p.contains("<string>dev.asa.agent</string>"));
-        assert!(p.contains("    <string>/usr/local/bin/asa</string>\n    <string>--config-dir</string>"));
-        assert!(p.contains("<key>ASA_SECRETS_BACKEND</key>"));
+        assert!(p.contains("<string>dev.ai-security-monitor.agent</string>"));
+        assert!(
+            p.contains("    <string>/usr/local/bin/ai-security-monitor</string>\n    <string>--config-dir</string>")
+        );
+        assert!(p.contains("<key>AI_SECURITY_MONITOR_SECRETS_BACKEND</key>"));
         assert!(p.contains("<key>RunAtLoad</key>\n  <true/>"));
         let u = launchd_plist(
-            &PathBuf::from("/Applications/A & B/asa"),
+            &PathBuf::from("/Applications/A & B/ai-security-monitor"),
             &[],
             &PathBuf::from("/tmp"),
             false,
         );
         assert!(u.contains("A &amp; B"));
         assert!(!u.contains("EnvironmentVariables"));
-        let d = xdg_desktop(&PathBuf::from("/opt/asa/asa"), &["watch".into(), "--service".into()]);
-        assert!(d.contains("Exec=/opt/asa/asa watch --service\n"));
+        let d = xdg_desktop(
+            &PathBuf::from("/opt/ai-security-monitor/ai-security-monitor"),
+            &["watch".into(), "--service".into()],
+        );
+        assert!(d.contains("Exec=/opt/ai-security-monitor/ai-security-monitor watch --service\n"));
+        assert!(d.contains("Name=AI Security Monitor\n"));
     }
 
     #[test]
     fn windows_command_line() {
         let c = windows_cmdline(
-            &PathBuf::from(r"C:\Program Files\asa\asa.exe"),
+            &PathBuf::from(r"C:\Program Files\ai-security-monitor\ai-security-monitor.exe"),
             &[
                 "--config-dir".into(),
-                r"C:\ProgramData\ai-security-agent".into(),
+                r"C:\ProgramData\ai-security-monitor".into(),
                 "service".into(),
                 "run".into(),
             ],
         );
         assert_eq!(
             c,
-            r#""C:\Program Files\asa\asa.exe" --config-dir C:\ProgramData\ai-security-agent service run"#
+            r#""C:\Program Files\ai-security-monitor\ai-security-monitor.exe" --config-dir C:\ProgramData\ai-security-monitor service run"#
         );
     }
 }

@@ -11,6 +11,10 @@ use tokio::sync::Notify;
 
 pub const LOG_KEEP_DAYS: i64 = 14;
 pub const LOCK_FILE: &str = "watch.lock";
+/// log 檔名前綴：`ai-security-monitor-YYYY-MM-DD.log`。
+pub const LOG_PREFIX: &str = "ai-security-monitor-";
+/// 改名前的 log 檔名前綴（保留期內的舊檔照樣清理、照樣讀）。
+pub const LEGACY_LOG_PREFIX: &str = "asa-";
 
 static STOP: Notify = Notify::const_new();
 static STOPPING: AtomicBool = AtomicBool::new(false);
@@ -124,19 +128,23 @@ pub fn log_dir(config_dir: &Path) -> PathBuf {
 }
 
 pub fn log_path(dir: &Path, day: NaiveDate) -> PathBuf {
-    dir.join(format!("asa-{}.log", day.format("%Y-%m-%d")))
+    dir.join(format!("{LOG_PREFIX}{}.log", day.format("%Y-%m-%d")))
 }
 
-/// 刪掉超過保留天數的 asa-YYYY-MM-DD.log。
+/// `ai-security-monitor-YYYY-MM-DD.log`（或舊的 `asa-YYYY-MM-DD.log`）的日期。
+fn log_day(name: &str) -> Option<NaiveDate> {
+    name.strip_prefix(LOG_PREFIX)
+        .or_else(|| name.strip_prefix(LEGACY_LOG_PREFIX))
+        .and_then(|s| s.strip_suffix(".log"))
+        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+}
+
+/// 刪掉超過保留天數的 log 檔（新舊檔名都算）。
 pub fn prune_logs(dir: &Path, today: NaiveDate) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
-        let Some(d) = name
-            .strip_prefix("asa-")
-            .and_then(|s| s.strip_suffix(".log"))
-            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-        else {
+        let Some(d) = log_day(&name) else {
             continue;
         };
         if (today - d).num_days() > LOG_KEEP_DAYS {
@@ -174,18 +182,16 @@ pub fn write_log(line: &str) {
 /// 最新 log 檔的最後 n 行。
 pub fn tail_latest(config_dir: &Path, n: usize) -> Option<(PathBuf, Vec<String>)> {
     let dir = log_dir(config_dir);
-    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+    // 依日期挑最新的（新舊檔名混在一起時不能用檔名排序）；同一天新檔名優先
+    let last = std::fs::read_dir(&dir)
         .ok()?
         .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .map(|f| f.to_string_lossy().starts_with("asa-"))
-                .unwrap_or(false)
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            log_day(&name).map(|d| ((d, name.starts_with(LOG_PREFIX)), e.path()))
         })
-        .collect();
-    files.sort();
-    let last = files.pop()?;
+        .max_by(|a, b| a.0.cmp(&b.0))?
+        .1;
     let text = std::fs::read_to_string(&last).ok()?;
     let lines: Vec<String> = text.lines().map(str::to_string).collect();
     let start = lines.len().saturating_sub(n);
@@ -237,9 +243,36 @@ mod tests {
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
         names.sort();
-        assert_eq!(names, vec!["asa-2026-10-10.log", "asa-2026-10-17.log", "notes.txt"]);
+        assert_eq!(
+            names,
+            vec![
+                "ai-security-monitor-2026-10-10.log",
+                "ai-security-monitor-2026-10-17.log",
+                "notes.txt"
+            ]
+        );
         let (p, lines) = tail_latest(d.path(), 2).unwrap();
-        assert!(p.ends_with("asa-2026-10-17.log"));
+        assert!(p.ends_with("ai-security-monitor-2026-10-17.log"));
         assert_eq!(lines, vec!["2", "3"]);
+    }
+
+    #[test]
+    fn legacy_log_names_are_pruned_and_read() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = log_dir(d.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 10, 17).unwrap();
+        std::fs::write(dir.join("asa-2026-09-01.log"), "old\n").unwrap();
+        std::fs::write(dir.join("asa-2026-10-16.log"), "legacy\n").unwrap();
+        prune_logs(&dir, today);
+        assert!(!dir.join("asa-2026-09-01.log").exists());
+        // 只有舊檔：讀舊檔
+        let (p, lines) = tail_latest(d.path(), 5).unwrap();
+        assert!(p.ends_with("asa-2026-10-16.log"));
+        assert_eq!(lines, vec!["legacy"]);
+        // 新檔日期較新：讀新檔（檔名排序會挑錯）
+        std::fs::write(log_path(&dir, today), "new\n").unwrap();
+        let (p, _) = tail_latest(d.path(), 5).unwrap();
+        assert!(p.ends_with("ai-security-monitor-2026-10-17.log"));
     }
 }

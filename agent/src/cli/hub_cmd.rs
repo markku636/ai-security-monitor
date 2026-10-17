@@ -1,4 +1,4 @@
-//! `asa enroll` / `unenroll` / `status` / `watch`：註冊到 Security Hub 與常駐回報。
+//! `ai-security-monitor enroll` / `unenroll` / `status` / `watch`：註冊到 Security Hub 與常駐回報。
 
 use std::io::BufRead;
 use std::time::Duration;
@@ -25,7 +25,7 @@ fn log(env: &Env, msg: &str) {
     }
 }
 
-/// 服務啟動時依期望狀態重新套用 asa 的防火牆規則（pf／nftables 重開機不保留）；只在有權限且真的有東西要套時做。
+/// 服務啟動時依期望狀態重新套用 ai-security-monitor 的防火牆規則（pf／nftables 重開機不保留）；只在有權限且真的有東西要套時做。
 async fn reapply_firewall(env: &Env) {
     let Ok(d) = crate::firewall::desired::DesiredState::load(&env.config_dir) else {
         return;
@@ -36,7 +36,7 @@ async fn reapply_firewall(env: &Env) {
     if !crate::elevate::is_elevated() {
         log(
             env,
-            t!("有 asa 防火牆規則要重新套用，但沒有系統管理員權限（請用 asa service install --system）"),
+            t!("有 ai-security-monitor 防火牆規則要重新套用，但沒有系統管理員權限（請用 ai-security-monitor service install --system）"),
         );
         return;
     }
@@ -137,12 +137,12 @@ pub async fn enroll(
         } else if has_action_key {
             println!(
                 "{}",
-                t!("已啟用遠端動作：hub 核准的封鎖會在這台機器執行（需以系統管理員／服務模式執行 asa watch）")
+                t!("已啟用遠端動作：hub 核准的封鎖會在這台機器執行（需以系統管理員／服務模式執行 ai-security-monitor watch）")
             );
         }
         println!(
             "{}",
-            t!("下一步：執行 asa watch 開始定期回報（或 asa watch --once 先試一輪）")
+            t!("下一步：執行 ai-security-monitor watch 開始定期回報（或 ai-security-monitor watch --once 先試一輪）")
         );
     }
     Ok(())
@@ -294,7 +294,7 @@ async fn execute_remote(
     if !crate::elevate::is_elevated() {
         return (
             false,
-            t!("需要系統管理員權限：請以服務模式（asa service install）或系統管理員身分執行 asa watch").to_string(),
+            t!("需要系統管理員權限：請以服務模式（ai-security-monitor service install）或系統管理員身分執行 ai-security-monitor watch").to_string(),
         );
     }
     let backend = crate::firewall::plan::write_backend();
@@ -421,7 +421,10 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         match crate::service::instance::InstanceLock::acquire(&env.config_dir) {
             Ok(Some(l)) => Some(l),
             Ok(None) => {
-                log(env, t!("同一個設定目錄已經有常駐的 asa watch，這個不再啟動"));
+                log(
+                    env,
+                    t!("同一個設定目錄已經有常駐的 ai-security-monitor watch，這個不再啟動"),
+                );
                 return Ok(());
             }
             Err(e) => {
@@ -436,7 +439,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         log(
             env,
             &tf!(
-                "服務模式啟動（asa {v}，設定目錄 {dir}）",
+                "服務模式啟動（ai-security-monitor {v}，設定目錄 {dir}）",
                 v = crate::VERSION,
                 dir = env.config_dir.display()
             ),
@@ -452,7 +455,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     if client.is_none() && !a.no_upload {
         log(
             env,
-            t!("尚未註冊 hub：只在本機掃描（asa enroll <HUB_URL> --key … 後才會上傳）"),
+            t!("尚未註冊 hub：只在本機掃描（ai-security-monitor enroll <HUB_URL> --key … 後才會上傳）"),
         );
     }
     let mut interval = crate::util::time::parse_duration(a.interval.as_deref().unwrap_or(&cfg.scan.interval))?;

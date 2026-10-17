@@ -1,5 +1,9 @@
-//! 自動更新：查 GitHub Release（或 `ASA_UPDATE_URL` 指定的鏡像），下載這個平台的執行檔，
-//! 比對 `SHA256SUMS` 後原地替換。Windows 正在執行的 exe 不能覆寫，但可以改名：舊檔改成 `asa.exe.old-<時間>`，下次更新時清掉。
+//! 自動更新：查 GitHub Release（或 `AI_SECURITY_MONITOR_UPDATE_URL`／舊名 `ASA_UPDATE_URL` 指定的鏡像），
+//! 下載這個平台的執行檔，比對 `SHA256SUMS` 後原地替換。Windows 正在執行的 exe 不能覆寫，但可以改名：
+//! 舊檔改成 `<exe>.old-<時間>`，下次更新時清掉。
+//!
+//! 改名相容：資產名是 `ai-security-monitor-<ver>-<平台>`；release 另外附同內容的 `asa-<ver>-<平台>` 給 0.1.x 自我更新用。
+//! 一律替換「目前執行中的那個檔案」，所以從 0.1.x 更新上來、檔名仍是 `asa.exe` 的安裝照樣能用。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,8 +15,13 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, AppResult};
 
-pub const RELEASES_API: &str = "https://api.github.com/repos/markku636/ai-security-agent/releases";
-pub const ENV_UPDATE_URL: &str = "ASA_UPDATE_URL";
+pub const RELEASES_API: &str = "https://api.github.com/repos/markku636/ai-security-monitor/releases";
+/// 不含前綴的環境變數名：`AI_SECURITY_MONITOR_UPDATE_URL`，舊名 `ASA_UPDATE_URL`。
+pub const ENV_UPDATE_URL: &str = "UPDATE_URL";
+/// 資產名前綴。
+pub const ASSET_PREFIX: &str = "ai-security-monitor";
+/// 改名前的資產名前綴（release 仍附這個別名）。
+pub const LEGACY_ASSET_PREFIX: &str = "asa";
 pub const SUMS_FILE: &str = "SHA256SUMS";
 /// 執行檔大小上限（防止鏡像給錯檔）。
 pub const MAX_BINARY: usize = 200 * 1024 * 1024;
@@ -34,8 +43,7 @@ pub struct Release {
 }
 
 pub fn base_url() -> String {
-    std::env::var(ENV_UPDATE_URL)
-        .ok()
+    crate::util::env::var(ENV_UPDATE_URL)
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.trim_end_matches('/').to_string())
         .unwrap_or_else(|| RELEASES_API.to_string())
@@ -55,7 +63,12 @@ pub fn target_suffix(os: &str, arch: &str) -> Option<&'static str> {
 }
 
 pub fn asset_name(version: &str, os: &str, arch: &str) -> Option<String> {
-    target_suffix(os, arch).map(|s| format!("asa-{version}-{s}"))
+    target_suffix(os, arch).map(|s| format!("{ASSET_PREFIX}-{version}-{s}"))
+}
+
+/// 改名前的資產名（`asa-<ver>-<平台>`）：鏡像只放舊名時的退路。
+pub fn legacy_asset_name(version: &str, os: &str, arch: &str) -> Option<String> {
+    target_suffix(os, arch).map(|s| format!("{LEGACY_ASSET_PREFIX}-{version}-{s}"))
 }
 
 pub fn parse_release(v: &Value) -> Option<Release> {
@@ -168,12 +181,13 @@ pub struct UpdateCheck {
 }
 
 pub fn check_release(r: &Release, current: &str) -> UpdateCheck {
-    let name = asset_name(&r.version, std::env::consts::OS, std::env::consts::ARCH);
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+    let find = |n: Option<String>| n.and_then(|n| r.assets.iter().find(|a| a.name == n).cloned());
     UpdateCheck {
         current: current.to_string(),
         latest: r.version.clone(),
         newer: is_newer(&r.version, current),
-        asset: name.and_then(|n| r.assets.iter().find(|a| a.name == n).cloned()),
+        asset: find(asset_name(&r.version, os, arch)).or_else(|| find(legacy_asset_name(&r.version, os, arch))),
         release_url: r.html_url.clone(),
     }
 }
@@ -211,11 +225,11 @@ pub fn replace_exe(exe: &Path, bytes: &[u8]) -> AppResult<Option<PathBuf>> {
     let name = exe
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "asa".into());
+        .unwrap_or_else(|| "ai-security-monitor".into());
     let tmp = dir.join(format!(".{name}.update-{}", uuid::Uuid::new_v4().simple()));
     std::fs::write(&tmp, bytes).map_err(|e| {
         AppError::Update(tf!(
-            "無法寫入 {dir}（{e}）；請用有權限的身分執行（例如 sudo asa self-update）",
+            "無法寫入 {dir}（{e}）；請用有權限的身分執行（例如 sudo ai-security-monitor self-update）",
             dir = dir.display(),
             e = e
         ))
@@ -277,10 +291,10 @@ mod tests {
     use super::*;
 
     fn release_json(base: &str) -> String {
-        let name =
-            asset_name("0.9.0", std::env::consts::OS, std::env::consts::ARCH).unwrap_or_else(|| "asa-0.9.0-x".into());
+        let name = asset_name("0.9.0", std::env::consts::OS, std::env::consts::ARCH)
+            .unwrap_or_else(|| "ai-security-monitor-0.9.0-x".into());
         format!(
-            r#"{{"tag_name":"v0.9.0","html_url":"https://github.com/markku636/ai-security-agent/releases/tag/v0.9.0","published_at":"2026-10-20T00:00:00Z",
+            r#"{{"tag_name":"v0.9.0","html_url":"https://github.com/markku636/ai-security-monitor/releases/tag/v0.9.0","published_at":"2026-10-20T00:00:00Z",
                "assets":[{{"name":"{name}","browser_download_url":"{base}/dl/{name}","size":11}},{{"name":"SHA256SUMS","browser_download_url":"{base}/dl/SHA256SUMS","size":100}}]}}"#
         )
     }
@@ -289,11 +303,15 @@ mod tests {
     fn names_versions_and_sums() {
         assert_eq!(
             asset_name("0.2.0", "windows", "x86_64").as_deref(),
+            Some("ai-security-monitor-0.2.0-windows-x64.exe")
+        );
+        assert_eq!(
+            legacy_asset_name("0.2.0", "windows", "x86_64").as_deref(),
             Some("asa-0.2.0-windows-x64.exe")
         );
         assert_eq!(
             asset_name("0.2.0", "linux", "aarch64").as_deref(),
-            Some("asa-0.2.0-linux-arm64")
+            Some("ai-security-monitor-0.2.0-linux-arm64")
         );
         assert!(asset_name("0.2.0", "freebsd", "x86_64").is_none());
         assert!(is_newer("0.2.0", "0.1.0"));
@@ -310,8 +328,32 @@ mod tests {
     }
 
     #[test]
+    fn check_prefers_new_asset_name_and_falls_back_to_legacy() {
+        let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+        let (Some(new), Some(old)) = (asset_name("0.9.0", os, arch), legacy_asset_name("0.9.0", os, arch)) else {
+            return;
+        };
+        let asset = |n: &str| Asset {
+            name: n.to_string(),
+            url: format!("https://x/{n}"),
+            size: 1,
+        };
+        let mut r = Release {
+            tag: "v0.9.0".into(),
+            version: "0.9.0".into(),
+            html_url: String::new(),
+            published_at: None,
+            assets: vec![asset(&old), asset(&new)],
+        };
+        assert_eq!(check_release(&r, "0.1.0").asset.unwrap().name, new);
+        r.assets.retain(|a| a.name == old);
+        assert_eq!(check_release(&r, "0.1.0").asset.unwrap().name, old);
+    }
+
+    #[test]
     fn replace_and_cleanup() {
         let d = tempfile::tempdir().unwrap();
+        // 從 0.1.x 更新上來的安裝檔名仍是 asa(.exe)：原地替換、不改名
         let exe = d.path().join(if cfg!(windows) { "asa.exe" } else { "asa" });
         std::fs::write(&exe, b"old").unwrap();
         let old = replace_exe(&exe, b"new binary").unwrap();
@@ -338,7 +380,7 @@ mod tests {
             // 測試伺服器不看路徑、依序回應：Release JSON → SHA256SUMS → 執行檔
             let body = "new binary!";
             let name = asset_name("0.9.0", std::env::consts::OS, std::env::consts::ARCH)
-                .unwrap_or_else(|| "asa-0.9.0-x".into());
+                .unwrap_or_else(|| "ai-security-monitor-0.9.0-x".into());
             let sums = format!("{}  {name}\n", sha256_hex(body.as_bytes()));
             let (url, cap) = crate::hub::test_server::serve(vec![
                 (200, release_json("BASE")),

@@ -1,5 +1,5 @@
-//! Windows 服務（SCM）入口：`asa service run`。服務控制管理員啟動這個命令後，
-//! 由 service_main 回報 Running、執行 `asa watch --service`，收到 Stop／Shutdown 時要求常駐迴圈結束。
+//! Windows 服務（SCM）入口：`ai-security-monitor service run`。服務控制管理員啟動這個命令後，
+//! 由 service_main 回報 Running、執行 `ai-security-monitor watch --service`，收到 Stop／Shutdown 時要求常駐迴圈結束。
 
 use std::ffi::OsString;
 use std::path::PathBuf;

@@ -1,4 +1,4 @@
-//! `asa watch` 用的零件：連線快照（含情資判定）、最新報告存檔、hub 連線建立。
+//! `ai-security-monitor watch` 用的零件：連線快照（含情資判定）、最新報告存檔、hub 連線建立。
 
 use std::path::Path;
 use std::sync::Arc;
@@ -25,9 +25,9 @@ pub fn client_from_config(config_dir: &Path, cfg: &AgentConfig) -> AppResult<Opt
     let Some(h) = &cfg.hub else {
         return Ok(None);
     };
-    let key = SecretStore::open(config_dir)
-        .get(KEY_HUB_CLIENT)?
-        .ok_or_else(|| AppError::Hub(t!("已註冊 hub 但找不到 client 金鑰；重新執行 asa enroll").into()))?;
+    let key = SecretStore::open(config_dir).get(KEY_HUB_CLIENT)?.ok_or_else(|| {
+        AppError::Hub(t!("已註冊 hub 但找不到 client 金鑰；重新執行 ai-security-monitor enroll").into())
+    })?;
     let token = agent_token(config_dir)?;
     Ok(Some(
         HubClient::new(&h.url, &key, &cfg.agent_id)?.with_agent_token(Some(token)),

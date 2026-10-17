@@ -1,4 +1,4 @@
-//! `asa connections`：列出連線（方向／判定／行程／原因），可 `--watch` 持續刷新。
+//! `ai-security-monitor connections`：列出連線（方向／判定／行程／原因），可 `--watch` 持續刷新。
 
 use std::time::Duration;
 

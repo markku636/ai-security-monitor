@@ -1,4 +1,4 @@
-//! `asa harden`：系統硬化檢查（策略在 feeds/policies/<os>.yml，可用 <設定目錄>/policies/*.yml 增修）。
+//! `ai-security-monitor harden`：系統硬化檢查（策略在 feeds/policies/<os>.yml，可用 <設定目錄>/policies/*.yml 增修）。
 
 use super::args::HardenArgs;
 use super::render::{print_json, table};

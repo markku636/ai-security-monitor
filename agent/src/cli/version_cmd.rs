@@ -13,7 +13,7 @@ pub async fn run(env: &Env, check: bool) -> AppResult<()> {
         }));
     } else {
         println!(
-            "asa {} ({}) {}/{}",
+            "ai-security-monitor {} ({}) {}/{}",
             crate::VERSION,
             crate::GIT_SHA,
             std::env::consts::OS,

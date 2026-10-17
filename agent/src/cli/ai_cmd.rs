@@ -1,4 +1,4 @@
-//! `asa ai ask|analyze|status`：交給 Claude Code／Codex CLI，掛上 asa 的唯讀 MCP 工具。
+//! `ai-security-monitor ai ask|analyze|status`：交給 Claude Code／Codex CLI，掛上 ai-security-monitor 的唯讀 MCP 工具。
 
 use std::io::Write;
 use std::time::Duration;
@@ -81,7 +81,7 @@ pub async fn run(env: &Env, cmd: AiCmd) -> AppResult<()> {
                 eprintln!(
                     "{}",
                     tf!(
-                        "送給 AI 的資料：{n} bytes（可在 asa 設定目錄以外的地方檢查內容）",
+                        "送給 AI 的資料：{n} bytes（可在 ai-security-monitor 設定目錄以外的地方檢查內容）",
                         n = json.len()
                     )
                 );

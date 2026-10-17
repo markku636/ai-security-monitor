@@ -1,5 +1,5 @@
-//! 期望狀態（`<config>/firewall/desired.json` ＋ `feed-nets.txt`）：asa 封鎖了什麼、關了哪些 port、同步了哪些情資網段。
-//! pf / nftables 規則重開機不會保留，服務啟動時 `asa fw ensure` 依此重套；也用來安全地解除封鎖。
+//! 期望狀態（`<config>/firewall/desired.json` ＋ `feed-nets.txt`）：ai-security-monitor 封鎖了什麼、關了哪些 port、同步了哪些情資網段。
+//! pf / nftables 規則重開機不會保留，服務啟動時 `ai-security-monitor fw ensure` 依此重套；也用來安全地解除封鎖。
 
 use std::path::{Path, PathBuf};
 

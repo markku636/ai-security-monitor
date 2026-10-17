@@ -96,7 +96,7 @@ pub fn expand_urls(tpl: &str, now: DateTime<Utc>) -> Vec<String> {
 pub fn http_client() -> AppResult<reqwest::Client> {
     reqwest::Client::builder()
         .user_agent(format!(
-            "asa/{} (+https://github.com/markku636/ai-security-agent)",
+            "ai-security-monitor/{} (+https://github.com/markku636/ai-security-monitor)",
             crate::VERSION
         ))
         .connect_timeout(Duration::from_secs(15))

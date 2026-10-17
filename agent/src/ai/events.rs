@@ -41,7 +41,7 @@ fn preview(s: &str) -> String {
     crate::util::text::clip(&s.split_whitespace().collect::<Vec<_>>().join(" "), 200)
 }
 
-/// `mcp__asa__lookup_ip` → `lookup_ip`
+/// `mcp__ai-security-monitor__lookup_ip` → `lookup_ip`（伺服器名含連字號，以第一個 `__` 切開）
 pub fn strip_mcp_prefix(name: &str) -> String {
     name.strip_prefix("mcp__")
         .and_then(|r| r.split_once("__").map(|(_, t)| t))
@@ -232,7 +232,7 @@ mod tests {
         );
         assert_eq!(d, vec![AiEvent::Text { text: "你好".into() }]);
         let a = claude_events(
-            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"你好"},{"type":"tool_use","id":"t1","name":"mcp__asa__lookup_ip","input":{"indicator":"1.2.3.4"}}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"你好"},{"type":"tool_use","id":"t1","name":"mcp__ai-security-monitor__lookup_ip","input":{"indicator":"1.2.3.4"}}]}}"#,
             &mut streamed,
         );
         assert_eq!(
@@ -286,7 +286,7 @@ mod tests {
             vec![AiEvent::Init { model: None }]
         );
         let t = codex_events(
-            r#"{"type":"item.started","item":{"id":"1","type":"mcp_tool_call","server":"asa","tool":"list_connections","arguments":{"verdict":["dangerous"]},"status":"in_progress"}}"#,
+            r#"{"type":"item.started","item":{"id":"1","type":"mcp_tool_call","server":"ai-security-monitor","tool":"list_connections","arguments":{"verdict":["dangerous"]},"status":"in_progress"}}"#,
             &mut st,
             0,
         );

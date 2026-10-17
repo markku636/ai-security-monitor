@@ -1,4 +1,4 @@
-//! `asa ai`：交給 Claude Code（`claude -p`）或 Codex（`codex exec`）分析，並把 `asa mcp` 掛成它們的工具，
+//! `ai-security-monitor ai`：交給 Claude Code（`claude -p`）或 Codex（`codex exec`）分析，並把 `ai-security-monitor mcp` 掛成它們的工具，
 //! 讓 AI 自己查連線、情資、防火牆、流量、事件。只給唯讀工具；不會讓 AI 改系統。
 //! 參數與事件對應照 db-kit agent.rs；子行程用 Job Object／process group 管，逾時整棵收掉。
 
@@ -30,10 +30,11 @@ impl Provider {
         }
     }
 
+    /// 覆寫 CLI 路徑的環境變數（不含前綴）：`AI_SECURITY_MONITOR_CLAUDE_BIN`，舊名 `ASA_CLAUDE_BIN`。
     pub fn env_override(self) -> &'static str {
         match self {
-            Provider::Claude => "ASA_CLAUDE_BIN",
-            Provider::Codex => "ASA_CODEX_BIN",
+            Provider::Claude => "CLAUDE_BIN",
+            Provider::Codex => "CODEX_BIN",
         }
     }
 
@@ -65,7 +66,7 @@ fn classify(path: PathBuf) -> Bin {
 
 /// 找 CLI：環境變數覆寫 → PATH → 常見安裝位置。
 pub fn resolve_bin(p: Provider) -> Option<Bin> {
-    if let Some(v) = std::env::var_os(p.env_override())
+    if let Some(v) = crate::util::env::var_os(p.env_override())
         .map(PathBuf::from)
         .filter(|v| v.is_file())
     {
@@ -117,8 +118,12 @@ pub fn pick_provider(wanted: Option<Provider>) -> AppResult<(Provider, Bin)> {
         }
     }
     Err(AppError::Ai(match wanted {
-        Some(p) => tf!("找不到 {cli}；請先安裝並登入（asa ai status 看詳情）", cli = p.label()),
-        None => t!("找不到 Claude Code 或 Codex CLI；請先安裝其中一個並登入（asa ai status 看詳情）").to_string(),
+        Some(p) => tf!(
+            "找不到 {cli}；請先安裝並登入（ai-security-monitor ai status 看詳情）",
+            cli = p.label()
+        ),
+        None => t!("找不到 Claude Code 或 Codex CLI；請先安裝其中一個並登入（ai-security-monitor ai status 看詳情）")
+            .to_string(),
     }))
 }
 
@@ -126,16 +131,16 @@ pub struct RunSpec {
     pub provider: Provider,
     pub prompt: String,
     pub system: String,
-    /// 掛給 AI 的 asa MCP 工具（唯讀）
+    /// 掛給 AI 的 ai-security-monitor MCP 工具（唯讀）
     pub tools: Vec<String>,
     pub model: Option<String>,
     pub max_turns: u32,
     pub timeout: Duration,
 }
 
-pub const MCP_NAME: &str = "asa";
+pub const MCP_NAME: &str = crate::mcp::SERVER_NAME;
 
-/// `asa --config-dir <dir> --lang <lang> mcp --tools …`
+/// `ai-security-monitor --config-dir <dir> --lang <lang> mcp --tools …`
 pub fn mcp_args(config_dir: &Path, tools: &[String]) -> Vec<String> {
     vec![
         "--config-dir".into(),
@@ -231,7 +236,7 @@ pub async fn run(
 ) -> AppResult<RunOutcome> {
     let exe = std::env::current_exe()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "asa".into());
+        .unwrap_or_else(|_| "ai-security-monitor".into());
     let margs = mcp_args(config_dir, &spec.tools);
     let tmp = config_dir.join("tmp");
     std::fs::create_dir_all(&tmp)?;
@@ -391,7 +396,9 @@ mod tests {
         let a = claude_args(&spec(Provider::Claude), Path::new("/tmp/mcp.json"), true);
         let s = a.join(" ");
         assert!(s.contains("--permission-mode dontAsk"));
-        assert!(s.contains("--allowedTools mcp__asa__lookup_ip,mcp__asa__list_connections"));
+        assert!(
+            s.contains("--allowedTools mcp__ai-security-monitor__lookup_ip,mcp__ai-security-monitor__list_connections")
+        );
         assert!(s.contains("--strict-mcp-config") && s.contains("--max-turns 6") && s.contains("--model m1"));
         assert_eq!(a.last().unwrap(), "be careful");
         assert!(!claude_args(&spec(Provider::Claude), Path::new("x"), false)
@@ -403,11 +410,16 @@ mod tests {
     fn codex_args_inline_mcp_and_read_only_sandbox() {
         let m = mcp_args(Path::new("C:\\cfg"), &["lookup_ip".into()]);
         assert_eq!(&m[4..], &["mcp".to_string(), "--tools".into(), "lookup_ip".into()]);
-        let a = codex_args(&spec(Provider::Codex), Path::new("C:\\ws"), "C:\\asa.exe", &m);
+        let a = codex_args(
+            &spec(Provider::Codex),
+            Path::new("C:\\ws"),
+            "C:\\ai-security-monitor.exe",
+            &m,
+        );
         let s = a.join(" ");
         assert!(s.contains("--sandbox read-only"));
-        assert!(s.contains("mcp_servers.asa.command='C:\\asa.exe'"));
-        assert!(s.contains("mcp_servers.asa.args=['--config-dir', 'C:\\cfg'"));
+        assert!(s.contains("mcp_servers.ai-security-monitor.command='C:\\ai-security-monitor.exe'"));
+        assert!(s.contains("mcp_servers.ai-security-monitor.args=['--config-dir', 'C:\\cfg'"));
         assert_eq!(a.last().unwrap(), "-");
         assert_eq!(mcp_args(Path::new("x"), &[]).last().unwrap(), "none");
     }

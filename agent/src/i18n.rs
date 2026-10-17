@@ -2,7 +2,7 @@
 //!
 //! - **繁中原文即 translation key**：查無譯文時回傳原字面值（identity fallback）。
 //! - 插值佔位符 `{name}`：`tf!("已封鎖 {n} 個位址", n = count)`。
-//! - 語言為進程層級全域狀態（`AtomicU8`）；CLI 啟動時依 `--lang` / `ASA_LANG` / config 決定。
+//! - 語言為進程層級全域狀態（`AtomicU8`）；CLI 啟動時依 `--lang` / `AI_SECURITY_MONITOR_LANG`（舊名 `ASA_LANG`）/ config 決定。
 
 use std::sync::atomic::{AtomicU8, Ordering};
 

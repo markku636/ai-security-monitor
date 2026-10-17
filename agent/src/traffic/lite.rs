@@ -1,6 +1,6 @@
 //! flow-lite：不抓封包，只在一段時間內反覆讀 socket 表＋介面計數器。
 //! 不需要 Npcap／libpcap 或系統管理員權限；看得到「誰連誰、哪個行程、新出現的連線、介面總流量」，
-//! 看不到逐連線位元組、DNS、SNI（那些要 pcap 模式：`asa traffic analyze <file.pcap>`）。
+//! 看不到逐連線位元組、DNS、SNI（那些要 pcap 模式：`ai-security-monitor traffic analyze <file.pcap>`）。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::IpAddr;
@@ -237,7 +237,7 @@ pub async fn sample(
     procs.truncate(TOP_N);
     s.per_process = procs;
 
-    // 週期性連線：用 asa 累積的 24 小時連線歷史
+    // 週期性連線：用 ai-security-monitor 累積的 24 小時連線歷史
     let now = Utc::now().timestamp() as u64;
     if let Ok(hist) = history::load(config_dir, now.saturating_sub(history::RETENTION_SECS)) {
         for b in beacon::detect(&hist, now) {
@@ -267,10 +267,11 @@ pub async fn sample(
     });
     s.alerts.truncate(100);
     s.notes.push(
-        "flow-lite: socket table sampling only; per-connection bytes, DNS and TLS SNI need packet capture (asa traffic analyze <file.pcap>)".into(),
+        "flow-lite: socket table sampling only; per-connection bytes, DNS and TLS SNI need packet capture (ai-security-monitor traffic analyze <file.pcap>)".into(),
     );
     if intel.is_none() {
-        s.notes.push("threat intel not loaded (run `asa intel update`)".into());
+        s.notes
+            .push("threat intel not loaded (run `ai-security-monitor intel update`)".into());
     }
     Ok(s)
 }

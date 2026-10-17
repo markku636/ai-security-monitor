@@ -1,4 +1,4 @@
-//! `asa intel`：更新、狀態、來源清單、查詢 IP／網域、啟停來源、設定線上名譽 API key。
+//! `ai-security-monitor intel`：更新、狀態、來源清單、查詢 IP／網域、啟停來源、設定線上名譽 API key。
 
 use std::io::BufRead;
 use std::net::IpAddr;
@@ -466,11 +466,11 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
     {
         println!(
             "{}",
-            t!("沒有設定任何線上名譽服務的 API key（asa intel key set abuseipdb -）")
+            t!("沒有設定任何線上名譽服務的 API key（ai-security-monitor intel key set abuseipdb -）")
         );
     }
     if *feeds_loaded == 0 {
-        println!("{}", t!("尚未下載任何威脅情資；執行 asa intel update"));
+        println!("{}", t!("尚未下載任何威脅情資；執行 ai-security-monitor intel update"));
     }
     if geo_info.is_some() {
         println!("{}", geo::ATTRIBUTION);
@@ -483,7 +483,10 @@ fn toggle(env: &Env, id: &str, on: bool) -> AppResult<()> {
     if env.global.json {
         print_json(&json!({ "id": id, "enabled": on }));
     } else if on {
-        println!("{}", tf!("已啟用 {id}；執行 asa intel update 下載", id = id));
+        println!(
+            "{}",
+            tf!("已啟用 {id}；執行 ai-security-monitor intel update 下載", id = id)
+        );
     } else {
         println!("{}", tf!("已停用 {id}", id = id));
     }
@@ -522,7 +525,7 @@ fn key(env: &Env, cmd: IntelKeyCmd) -> AppResult<()> {
             );
             println!(
                 "{}",
-                t!("要讓掃描自動查詢，執行 asa config set intel.online_lookups true")
+                t!("要讓掃描自動查詢，執行 ai-security-monitor config set intel.online_lookups true")
             );
         }
         IntelKeyCmd::Delete { id } => {

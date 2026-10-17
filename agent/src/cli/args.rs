@@ -9,11 +9,14 @@ use crate::model::connection::Direction;
 use crate::model::finding::ScannerId;
 use crate::model::verdict::VerdictLevel;
 
+/// clap `env = "AI_SECURITY_MONITOR_<X>"` 的 `<X>`；解析前由 `util::env::seed_from_legacy` 從舊名 `ASA_<X>` 補上。
+pub const CLAP_ENV: &[&str] = &["LANG", "CONFIG_DIR", "MCP_TOKEN"];
+
 #[derive(Parser, Debug)]
 #[command(
-    name = "asa",
+    name = "ai-security-monitor",
     version = crate::VERSION,
-    about = "AI Security Agent：防禦型資安掃描 agent（連線判定、威脅情資、防火牆、漏洞、硬化、流量、事件、MCP）",
+    about = "AI Security Monitor：防禦型資安監控工具（連線判定、威脅情資、防火牆、漏洞、硬化、流量、事件、MCP）",
     disable_help_subcommand = true,
     propagate_version = true
 )]
@@ -27,7 +30,7 @@ pub struct Cli {
 #[derive(Args, Debug, Clone, Default)]
 pub struct GlobalArgs {
     /// 介面語言（zh-TW / en）
-    #[arg(long, global = true, env = "ASA_LANG", value_name = "LANG")]
+    #[arg(long, global = true, env = "AI_SECURITY_MONITOR_LANG", value_name = "LANG")]
     pub lang: Option<String>,
     /// 確認執行會改變系統的動作（否則只預演）
     #[arg(short = 'y', long, global = true)]
@@ -38,8 +41,8 @@ pub struct GlobalArgs {
     /// 以 JSON 輸出
     #[arg(long, global = true)]
     pub json: bool,
-    /// 設定目錄（預設 ASA_CONFIG_DIR 或使用者設定目錄下的 ai-security-agent）
-    #[arg(long, global = true, env = "ASA_CONFIG_DIR", value_name = "DIR")]
+    /// 設定目錄（預設 AI_SECURITY_MONITOR_CONFIG_DIR 或使用者設定目錄下的 ai-security-monitor）
+    #[arg(long, global = true, env = "AI_SECURITY_MONITOR_CONFIG_DIR", value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
     /// 安靜模式（不印進度）
     #[arg(short = 'q', long, global = true)]
@@ -63,7 +66,7 @@ pub enum Command {
     },
     /// 檢查環境：權限、外部工具、情資新鮮度、hub 連線、AI 用戶端
     Doctor,
-    /// 更新 asa：下載 GitHub Release 的執行檔，比對 SHA256 後替換
+    /// 更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換
     SelfUpdate {
         /// 只檢查有沒有新版
         #[arg(long)]
@@ -222,7 +225,7 @@ pub struct McpArgs {
     #[arg(long, value_name = "ADDR")]
     pub http: Option<String>,
     /// HTTP 模式的 Bearer token（沒設時只能綁本機）
-    #[arg(long, env = "ASA_MCP_TOKEN", hide_env_values = true)]
+    #[arg(long, env = "AI_SECURITY_MONITOR_MCP_TOKEN", hide_env_values = true)]
     pub token: Option<String>,
     /// 只開放這些工具（逗號分隔）
     #[arg(long, value_delimiter = ',')]
@@ -258,7 +261,7 @@ pub enum McpCmd {
         #[arg(long)]
         allow_actions: bool,
     },
-    /// 從 AI 用戶端設定移除 asa（需要 --yes）
+    /// 從 AI 用戶端設定移除 ai-security-monitor（需要 --yes）
     Uninstall {
         /// AI 用戶端
         #[arg(long, value_enum)]
@@ -271,7 +274,7 @@ pub enum McpCmd {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum AiCmd {
-    /// 問 AI 一個資安問題（它會透過 asa 的 MCP 工具自己查這台電腦）
+    /// 問 AI 一個資安問題（它會透過 ai-security-monitor 的 MCP 工具自己查這台電腦）
     Ask {
         /// 問題
         question: String,
@@ -413,7 +416,7 @@ pub struct ConnectionsArgs {
     /// 刷新間隔（--watch）
     #[arg(long, default_value = "2s", value_name = "DUR")]
     pub interval: String,
-    /// 比對威脅情資（需先 asa intel update）
+    /// 比對威脅情資（需先 ai-security-monitor intel update）
     #[arg(long)]
     pub intel: bool,
 }
@@ -488,7 +491,7 @@ pub enum FwCmd {
         /// 包含 UWP 應用程式（每使用者）規則
         #[arg(long)]
         all: bool,
-        /// 只列 asa 建立的封鎖與期望狀態
+        /// 只列 ai-security-monitor 建立的封鎖與期望狀態
         #[arg(long)]
         ours: bool,
     },
@@ -507,11 +510,11 @@ pub enum FwCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// 解除 asa 建立的封鎖
+    /// 解除 ai-security-monitor 建立的封鎖
     Unblock {
         /// IP 或 CIDR（用 --all-asa 時可省略）
         targets: Vec<String>,
-        /// 移除 asa 建立的全部規則
+        /// 移除 ai-security-monitor 建立的全部規則
         #[arg(long)]
         all_asa: bool,
         /// 只顯示會執行的步驟，不執行
@@ -558,7 +561,7 @@ pub enum FwCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// 依期望狀態重新套用 asa 規則（pf / nftables 開機後需要）
+    /// 依期望狀態重新套用 ai-security-monitor 規則（pf / nftables 開機後需要）
     Ensure {
         /// 只顯示會執行的步驟，不執行
         #[arg(long)]
@@ -613,7 +616,7 @@ pub enum ServiceCmd {
     },
     /// 系統服務與使用者層的安裝與執行狀態
     Status,
-    /// 重新啟動常駐行程（例如更新 asa 之後）
+    /// 重新啟動常駐行程（例如更新 ai-security-monitor 之後）
     Restart {
         /// 重新啟動系統服務
         #[arg(long)]

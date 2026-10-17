@@ -1,4 +1,4 @@
-//! `asa traffic`：即時 flow-lite 取樣；`asa traffic analyze <file>`：離線分析 pcap／pcapng。
+//! `ai-security-monitor traffic`：即時 flow-lite 取樣；`ai-security-monitor traffic analyze <file>`：離線分析 pcap／pcapng。
 
 use std::path::Path;
 

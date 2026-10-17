@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # 同一份 asa 程式庫：GUI 直接呼叫掃描、連線、情資、AI；帶命令列參數啟動時就當 asa CLI 用（AI 的 MCP server 走這條）
-asa = { path = "../../agent", default-features = false, features = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"] }
+ai-security-monitor = { path = "../../agent", default-features = false, features = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }

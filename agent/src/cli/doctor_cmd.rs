@@ -1,4 +1,4 @@
-//! `asa doctor`：環境檢查。各輪次陸續補上情資新鮮度、hub 連線、AI 用戶端偵測。
+//! `ai-security-monitor doctor`：環境檢查。各輪次陸續補上情資新鮮度、hub 連線、AI 用戶端偵測。
 
 use serde::Serialize;
 
@@ -48,7 +48,10 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
         v.extend([
             ("powershell", t!("防火牆 / 事件 / 清單查詢")),
             ("wevtutil", t!("Windows 事件日誌")),
-            ("pktmon", t!("內建封包擷取（轉成 pcapng 給 asa traffic analyze）")),
+            (
+                "pktmon",
+                t!("內建封包擷取（轉成 pcapng 給 ai-security-monitor traffic analyze）"),
+            ),
             ("tshark", t!("Wireshark 命令列擷取（選用）")),
         ]);
     } else if cfg!(target_os = "macos") {
@@ -57,7 +60,10 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
             ("log", t!("統一日誌")),
             ("nettop", t!("每行程流量（flow-lite）")),
             ("lynis", t!("硬化稽核（選用）")),
-            ("tcpdump", t!("封包擷取（存成 pcap 給 asa traffic analyze）")),
+            (
+                "tcpdump",
+                t!("封包擷取（存成 pcap 給 ai-security-monitor traffic analyze）"),
+            ),
         ]);
     } else {
         v.extend([
@@ -67,14 +73,17 @@ pub fn external_tools() -> Vec<(&'static str, &'static str)> {
             ("firewall-cmd", t!("firewalld 防火牆")),
             ("journalctl", t!("systemd 日誌")),
             ("ss", t!("每 socket 流量（flow-lite）")),
-            ("tcpdump", t!("封包擷取（存成 pcap 給 asa traffic analyze）")),
+            (
+                "tcpdump",
+                t!("封包擷取（存成 pcap 給 ai-security-monitor traffic analyze）"),
+            ),
             ("lynis", t!("硬化稽核（選用）")),
         ]);
     }
     v
 }
 
-/// 封包擷取能力：asa 本身不抓包（不需要驅動），但能分析其他工具存下的 pcap／pcapng。
+/// 封包擷取能力：ai-security-monitor 本身不抓包（不需要驅動），但能分析其他工具存下的 pcap／pcapng。
 fn capture_check() -> Check {
     let npcap = cfg!(windows)
         && std::env::var_os("SystemRoot")
@@ -90,7 +99,7 @@ fn capture_check() -> Check {
         if npcap {
             (
                 true,
-                t!("Npcap 已安裝：可用 Wireshark 擷取後 asa traffic analyze <檔案>").to_string(),
+                t!("Npcap 已安裝：可用 Wireshark 擷取後 ai-security-monitor traffic analyze <檔案>").to_string(),
             )
         } else if find_in_path("pktmon").is_some() {
             (
@@ -98,15 +107,18 @@ fn capture_check() -> Check {
                 t!("可用內建 pktmon：pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl（需系統管理員）").to_string(),
             )
         } else {
-            (false, t!("沒有擷取工具；即時模式（asa traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com").to_string())
+            (false, t!("沒有擷取工具；即時模式（ai-security-monitor traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com").to_string())
         }
     } else if find_in_path("tcpdump").is_some() {
         (
             true,
-            t!("可用 tcpdump：sudo tcpdump -w cap.pcap → asa traffic analyze cap.pcap").to_string(),
+            t!("可用 tcpdump：sudo tcpdump -w cap.pcap → ai-security-monitor traffic analyze cap.pcap").to_string(),
         )
     } else {
-        (false, t!("沒有 tcpdump；即時模式（asa traffic）仍可用").to_string())
+        (
+            false,
+            t!("沒有 tcpdump；即時模式（ai-security-monitor traffic）仍可用").to_string(),
+        )
     };
     Check {
         name: t!("封包擷取").into(),
@@ -167,7 +179,7 @@ pub fn collect(env: &Env) -> AppResult<DoctorReport> {
         ok: true,
         detail: match &cfg.hub {
             Some(h) => h.url.clone(),
-            None => t!("未註冊（asa enroll <HUB_URL> --key …）").into(),
+            None => t!("未註冊（ai-security-monitor enroll <HUB_URL> --key …）").into(),
         },
     });
 
@@ -192,9 +204,12 @@ pub fn collect(env: &Env) -> AppResult<DoctorReport> {
         name: t!("常駐與開機自動啟動").into(),
         ok: true,
         detail: if watchers.is_empty() {
-            t!("沒有常駐的 asa watch（asa service install 可設定開機自動啟動）").into()
+            t!("沒有常駐的 ai-security-monitor watch（ai-security-monitor service install 可設定開機自動啟動）").into()
         } else {
-            tf!("{n} 個常駐中（asa service status 看詳細）", n = watchers.len())
+            tf!(
+                "{n} 個常駐中（ai-security-monitor service status 看詳細）",
+                n = watchers.len()
+            )
         },
     });
 
@@ -230,7 +245,7 @@ pub async fn run(env: &Env) -> AppResult<()> {
         return Ok(());
     }
     println!(
-        "asa {} · {}/{} · {}",
+        "ai-security-monitor {} · {}/{} · {}",
         r.version,
         r.os,
         r.arch,

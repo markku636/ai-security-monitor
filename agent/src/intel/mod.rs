@@ -321,7 +321,7 @@ impl Scanner for IntelScanner {
             .map_err(|e| AppError::Intel(e.to_string()))?;
         warnings.extend(db.warnings.iter().cloned());
         if db.feeds.is_empty() {
-            warnings.push(t!("尚未下載任何威脅情資；執行 asa intel update").into());
+            warnings.push(t!("尚未下載任何威脅情資；執行 ai-security-monitor intel update").into());
         } else if !db.missing.is_empty() {
             warnings.push(tf!(
                 "有 {n} 個已啟用的情資來源尚未下載：{ids}",
@@ -376,7 +376,7 @@ mod tests {
     use super::*;
     use crate::model::connection::ProcessRef;
 
-    /// 以 fixtures 建一個假的設定目錄（像是 `asa intel update` 跑過）。
+    /// 以 fixtures 建一個假的設定目錄（像是 `ai-security-monitor intel update` 跑過）。
     pub fn fixture_config_dir() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let fx = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/feeds");

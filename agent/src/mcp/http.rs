@@ -1,4 +1,4 @@
-//! `asa mcp --http ADDR`：MCP Streamable HTTP 傳輸（手寫 HTTP/1.1，一個請求一條連線）。
+//! `ai-security-monitor mcp --http ADDR`：MCP Streamable HTTP 傳輸（手寫 HTTP/1.1，一個請求一條連線）。
 //! - 只收 POST `/mcp`；`initialize` 回 `Mcp-Session-Id`；純通知回 202；`Accept` 只要 SSE 時包成單一事件。
 //! - 沒有設 token：只能綁 loopback，且 Host／Origin 都必須是本機（擋 DNS rebinding）。
 //! - 有 token：`Authorization: Bearer <token>`（常數時間比對）；瀏覽器跨站送不出這個標頭（會先 preflight，我們不回 CORS）。
@@ -268,7 +268,8 @@ async fn write_response(sock: &mut TcpStream, r: Response) {
 pub async fn serve(state: Arc<HttpState>, addr: SocketAddr) -> AppResult<()> {
     if state.token.is_none() && !addr.ip().is_loopback() {
         return Err(AppError::InvalidArg(
-            t!("沒有設定 token 時 MCP HTTP 只能綁 127.0.0.1／::1（用 --token 或 ASA_MCP_TOKEN）").into(),
+            t!("沒有設定 token 時 MCP HTTP 只能綁 127.0.0.1／::1（用 --token 或 AI_SECURITY_MONITOR_MCP_TOKEN）")
+                .into(),
         ));
     }
     let listener = TcpListener::bind(addr).await?;

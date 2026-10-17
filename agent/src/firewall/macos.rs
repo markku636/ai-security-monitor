@@ -34,7 +34,7 @@ impl FirewallBackend for MacOs {
                 .describe(t!("讀取 pf 狀態")),
             CmdSpec::new("pfctl", &["-a", "com.asa", "-t", "asa_block", "-T", "show"])
                 .elevated()
-                .describe(t!("讀取 asa 封鎖表")),
+                .describe(t!("讀取 ai-security-monitor 封鎖表")),
         ]
     }
 

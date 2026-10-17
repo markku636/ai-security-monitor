@@ -1,5 +1,5 @@
 //! Linux 套件查 OSV（https://osv.dev，Google 維護，涵蓋 Debian／Ubuntu／Alpine／Rocky／Alma 公告）。
-//! querybatch 只回漏洞 id，再取 id 的細節（CVE 別名、嚴重度）；結果快取 24 小時，`asa watch` 不會每 10 分鐘打一次。
+//! querybatch 只回漏洞 id，再取 id 的細節（CVE 別名、嚴重度）；結果快取 24 小時，`ai-security-monitor watch` 不會每 10 分鐘打一次。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
@@ -193,7 +193,7 @@ pub async fn scan(
         }
     }
     let http = reqwest::Client::builder()
-        .user_agent(format!("asa/{}", crate::VERSION))
+        .user_agent(format!("ai-security-monitor/{}", crate::VERSION))
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::External(e.to_string()))?;

@@ -1,4 +1,4 @@
-//! `asa service install|uninstall|status|logs`：開機自動啟動（系統服務或使用者登入時）。
+//! `ai-security-monitor service install|uninstall|status|logs`：開機自動啟動（系統服務或使用者登入時）。
 
 use super::args::ServiceCmd;
 use super::guard::ensure_confirmed;
@@ -96,7 +96,7 @@ async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool
             lines.extend(plan.notes.iter().map(|n| format!("· {n}")));
             if install {
                 lines.push(tf!(
-                    "完成。log：{dir}（asa service logs{sys}）",
+                    "完成。log：{dir}（ai-security-monitor service logs{sys}）",
                     dir = instance::log_dir(&target.config_dir).display(),
                     sys = if scope == Scope::System { " --system" } else { "" }
                 ));
@@ -131,15 +131,18 @@ async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool
 
 async fn restart(env: &Env, scope: Scope) -> AppResult<()> {
     let target = service::current_target(scope, &env.config_dir, None, &RealRunner).await?;
-    if !target.existing {
+    if !target.existing && !target.legacy {
         return Err(AppError::Service(
-            t!("還沒安裝開機自動啟動（asa service install）").to_string(),
+            t!("還沒安裝開機自動啟動（ai-security-monitor service install）").to_string(),
         ));
     }
     let plan = service::plan_restart(&target);
     if !env.global.yes {
         for s in &plan.steps {
             println!("  · {}", s.describe());
+        }
+        for n in &plan.notes {
+            println!("· {n}");
         }
         return ensure_confirmed(false, false, false, t!("重新啟動常駐行程"));
     }
@@ -191,7 +194,13 @@ async fn status(env: &Env) -> AppResult<()> {
                     Scope::User => t!("使用者").to_string(),
                 },
                 s.manager.label().to_string(),
-                if s.installed { t!("是") } else { t!("否") }.to_string(),
+                if s.installed {
+                    t!("是").to_string()
+                } else if s.legacy {
+                    t!("舊版 asa（service install 會換成新名）").to_string()
+                } else {
+                    t!("否").to_string()
+                },
                 s.state.clone().unwrap_or_else(|| "—".into()),
                 s.unit.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
             ]
@@ -205,7 +214,7 @@ async fn status(env: &Env) -> AppResult<()> {
         )
     );
     if watchers.is_empty() {
-        println!("{}", t!("目前沒有常駐中的 asa watch。"));
+        println!("{}", t!("目前沒有常駐中的 ai-security-monitor watch。"));
     } else {
         for w in &watchers {
             println!("{}", tf!("執行中：PID {pid} {cmd}", pid = w.pid, cmd = w.cmd));
@@ -216,7 +225,8 @@ async fn status(env: &Env) -> AppResult<()> {
 
 fn logs(env: &Env, system: bool, tail: usize) -> AppResult<()> {
     let dir = if system {
-        service::system_config_dir(Os::current())
+        // 舊版系統服務還沒換掉時讀舊目錄的 log
+        service::effective_system_config_dir(Os::current())
     } else {
         env.config_dir.clone()
     };
@@ -233,7 +243,7 @@ fn logs(env: &Env, system: bool, tail: usize) -> AppResult<()> {
             Ok(())
         }
         None => Err(AppError::Service(tf!(
-            "{dir} 還沒有 log（服務模式的 asa watch 才會寫 log 檔）",
+            "{dir} 還沒有 log（服務模式的 ai-security-monitor watch 才會寫 log 檔）",
             dir = instance::log_dir(&dir).display()
         ))),
     }
@@ -248,7 +258,8 @@ async fn run_service(env: &Env, interval: Option<String>) -> AppResult<()> {
     {
         let _ = (env, interval);
         Err(AppError::Unsupported(
-            t!("service run 只用於 Windows 服務；其他平台由 systemd／launchd 執行 asa watch --service").to_string(),
+            t!("service run 只用於 Windows 服務；其他平台由 systemd／launchd 執行 ai-security-monitor watch --service")
+                .to_string(),
         ))
     }
 }

@@ -1,4 +1,4 @@
-//! `asa_lib`：AI Security Agent 的核心程式庫。
+//! `asa_lib`：AI Security Monitor（`ai-security-monitor`）的核心程式庫。
 //!
 //! 分層原則（沿用 db-kit）：核心模組不依賴任何介面殼；CLI / MCP / hub client 都是薄轉接。
 //! - `model`：Finding / Report / Verdict 等資料契約（hub 以同一份 JSON 接收）。

@@ -1,4 +1,4 @@
-//! `asa scan`：組 Pipeline（各引擎在後續輪次掛入）、執行、輸出。
+//! `ai-security-monitor scan`：組 Pipeline（各引擎在後續輪次掛入）、執行、輸出。
 
 use std::sync::Arc;
 

@@ -542,7 +542,7 @@ fn new_listener_finding(l: &Listener) -> Finding {
             process: l.process.as_ref().map(|p| p.name.clone()),
             reachability: "unknown".into(),
         },
-        t!("確認是否為預期服務；是則執行 asa baseline save --yes 納入基準線"),
+        t!("確認是否為預期服務；是則執行 ai-security-monitor baseline save --yes 納入基準線"),
     )
     .with_tag("new")
 }

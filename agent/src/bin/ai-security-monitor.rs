@@ -1,4 +1,4 @@
-//! `asa` 命令列入口：建 tokio runtime 後交給 `asa_lib::cli::run()`。
+//! `ai-security-monitor` 命令列入口：建 tokio runtime 後交給 `asa_lib::cli::run()`。
 //! 刻意不設 `windows_subsystem`——CLI 要保留主控台；服務模式本來就沒有主控台。
 
 fn main() {

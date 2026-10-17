@@ -1,4 +1,4 @@
-//! `asa fw`：防火牆狀態、稽核、規則清單，以及寫入動作（封鎖 / 解封 / 關 port / 啟用 / 同步情資 / 重套）。
+//! `ai-security-monitor fw`：防火牆狀態、稽核、規則清單，以及寫入動作（封鎖 / 解封 / 關 port / 啟用 / 同步情資 / 重套）。
 //! 寫入一律：`--dry-run` 預覽 → `--yes` 確認 → 未提權就以管理員身分重跑自己（子行程寫結果檔回報）。
 
 use std::net::IpAddr;
@@ -37,7 +37,7 @@ pub fn print_status(fw: &FwSnapshot) {
     println!(
         "{}",
         tf!(
-            "後端：{backend} · 狀態：{state} · 預設連入：{din} · 允許連入規則：{n} · asa 規則：{ours}",
+            "後端：{backend} · 狀態：{state} · 預設連入：{din} · 允許連入規則：{n} · ai-security-monitor 規則：{ours}",
             backend = fw.backend,
             state = on_off(fw.enabled),
             din = fw.default_inbound.clone().unwrap_or_else(|| "-".into()),
@@ -77,7 +77,10 @@ pub fn print_status(fw: &FwSnapshot) {
         println!("  · {n}");
     }
     if fw.needs_elevation {
-        println!("{}", t!("部分規則需要系統管理員權限才能讀取（sudo asa fw status）"));
+        println!(
+            "{}",
+            t!("部分規則需要系統管理員權限才能讀取（sudo ai-security-monitor fw status）")
+        );
     }
 }
 
@@ -440,7 +443,7 @@ pub async fn run(env: &Env, cmd: FwCmd) -> AppResult<()> {
                 .map_err(|e| AppError::Intel(e.to_string()))?;
             if db.feeds.is_empty() {
                 return Err(AppError::Intel(
-                    t!("尚未下載任何威脅情資；執行 asa intel update").into(),
+                    t!("尚未下載任何威脅情資；執行 ai-security-monitor intel update").into(),
                 ));
             }
             let allowlist = Allowlist::load(&env.config_dir)?;

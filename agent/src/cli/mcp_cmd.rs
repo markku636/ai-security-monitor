@@ -1,4 +1,4 @@
-//! `asa mcp`：啟動 MCP 伺服器（stdio 或 --http）；`config` 印設定、`install`／`uninstall` 寫入或移除 AI 用戶端設定。
+//! `ai-security-monitor mcp`：啟動 MCP 伺服器（stdio 或 --http）；`config` 印設定、`install`／`uninstall` 寫入或移除 AI 用戶端設定。
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use crate::mcp::{self, http, setup, McpServer, ServeOpts};
 fn exe() -> String {
     std::env::current_exe()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "asa".into())
+        .unwrap_or_else(|_| "ai-security-monitor".into())
 }
 
 fn server_args(allow_actions: bool) -> Vec<String> {
@@ -40,7 +40,7 @@ pub async fn run(env: &Env, a: McpArgs) -> AppResult<()> {
                 false,
                 false,
                 &tf!(
-                    "把 asa MCP 伺服器寫進 {client} 設定（{path}）",
+                    "把 ai-security-monitor MCP 伺服器寫進 {client} 設定（{path}）",
                     client = client.label(),
                     path = path.display()
                 ),
@@ -71,13 +71,13 @@ pub async fn run(env: &Env, a: McpArgs) -> AppResult<()> {
                 false,
                 false,
                 &tf!(
-                    "從 {client} 設定移除 asa（{path}）",
+                    "從 {client} 設定移除 ai-security-monitor（{path}）",
                     client = client.label(),
                     path = path.display()
                 ),
             )?;
             setup::apply(client, &home, project.as_deref(), "", &[], true)?;
-            println!("{}", tf!("已從 {path} 移除 asa", path = path.display()));
+            println!("{}", tf!("已從 {path} 移除 ai-security-monitor", path = path.display()));
             Ok(())
         }
         None => {

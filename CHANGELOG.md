@@ -2,6 +2,16 @@
 
 ## 未發佈
 
+**改名：ai-security-agent（`asa`）→ AI Security Monitor（`ai-security-monitor`）。** 從 0.1.x 升級不用重新註冊，舊設定自動沿用：
+- 執行檔與命令：`asa` → `ai-security-monitor`（`ai-security-monitor scan`、`ai-security-monitor watch`…）。GitHub repo 改成 `markku636/ai-security-monitor`（舊網址會自動轉址）。
+- 環境變數：新前綴 `AI_SECURITY_MONITOR_*`（例 `AI_SECURITY_MONITOR_LANG`、`AI_SECURITY_MONITOR_CONFIG_DIR`、`AI_SECURITY_MONITOR_SECRETS_BACKEND`、`AI_SECURITY_MONITOR_SECRET_<KEY>`、`AI_SECURITY_MONITOR_MCP_TOKEN`、`AI_SECURITY_MONITOR_UPDATE_URL`、`AI_SECURITY_MONITOR_CLAUDE_BIN`／`_CODEX_BIN`）；舊的 `ASA_*` 照樣讀，兩個都設時新名優先。
+- 設定目錄：使用者層 `…/ai-security-agent` → `…/ai-security-monitor`（Windows `%APPDATA%`、macOS `~/Library/Application Support`、Linux `~/.config`）。第一次執行新版時，若新目錄還不存在而舊目錄存在，就整個搬過去（改名；舊版常駐行程還開著檔案時改成複製、舊目錄保留），`agent_id`、hub 註冊與金鑰檔、允許清單、基準線、情資、防火牆期望狀態都沿用。用 `--config-dir`／環境變數明確指定的目錄照用、不搬。系統層 `%ProgramData%\ai-security-agent`、`/var/lib/asa`、`/Library/Application Support/ai-security-agent` → `…\ai-security-monitor`、`/var/lib/ai-security-monitor`，在 `service install --system` 時搬過去。log 檔名 `asa-YYYY-MM-DD.log` → `ai-security-monitor-YYYY-MM-DD.log`（舊檔照樣讀、照樣過期清掉）。
+- 密鑰：OS keychain（Windows 認證管理員／macOS 鑰匙圈）的服務名 `asa` → `ai-security-monitor`；新名讀不到時讀舊的 `asa` 項目並複製一份到新名（舊項目保留），刪除時兩個都刪。
+- 開機自動啟動：Windows 服務 `ai-security-monitor`（顯示名稱 AI Security Monitor）、HKCU Run 值 `ai-security-monitor`、`ai-security-monitor.service`（系統／--user）、`ai-security-monitor.desktop`、launchd `dev.ai-security-monitor.agent`。`service install` 會先偵測並移除舊的 `asa` 服務／Run 值／unit／plist（並結束舊的常駐行程），`service status` 會標出「舊版 asa」，`uninstall`／`restart` 也處理舊安裝；常駐行程偵測同時認 `asa(.exe)` 與 `ai-security-monitor(.exe)`。
+- MCP：伺服器名 `asa` → `ai-security-monitor`（工具變成 `mcp__ai-security-monitor__*`）；`mcp install` 寫入新項目並刪掉舊的 `asa` 項目，`mcp uninstall` 兩個都刪。
+- 自我更新：查 `markku636/ai-security-monitor` 的 Release，資產名 `ai-security-monitor-<版本>-<平台>`（找不到時退回舊名 `asa-…`）；一律原地替換正在執行的檔案，所以從 0.1.x 更新上來、檔名還是 `asa.exe` 的安裝照樣能用（之後執行 `service install` 換成新的服務名）。
+- 不變（相容與安全考量）：通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、防火牆物件名（Windows 群組 `ASA`、`ASA: …` 規則、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`）、`fw unblock --all-asa`。
+
 改進：
 - Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。

@@ -1,4 +1,4 @@
-//! `asa self-update [--check] [--to VER]`、`asa version --check`。
+//! `ai-security-monitor self-update [--check] [--to VER]`、`ai-security-monitor version --check`。
 
 use super::guard::ensure_confirmed;
 use super::render::print_json;
@@ -24,7 +24,7 @@ pub async fn run(env: &Env, check: bool, to: Option<String>) -> AppResult<()> {
             println!(
                 "{}",
                 tf!(
-                    "有新版：{latest}（目前 {current}）→ asa self-update --yes；說明：{url}",
+                    "有新版：{latest}（目前 {current}）→ ai-security-monitor self-update --yes；說明：{url}",
                     latest = c.latest,
                     current = c.current,
                     url = c.release_url
@@ -84,7 +84,7 @@ pub async fn run(env: &Env, check: bool, to: Option<String>) -> AppResult<()> {
     if !crate::service::running_watchers(None).is_empty() {
         eprintln!(
             "{}",
-            t!("常駐中的 asa watch 還是舊版：執行 asa service restart --yes（系統服務加 --system）換成新版")
+            t!("常駐中的 ai-security-monitor watch 還是舊版：執行 ai-security-monitor service restart --yes（系統服務加 --system）換成新版")
         );
     }
     Ok(())

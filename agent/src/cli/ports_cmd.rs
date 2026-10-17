@@ -1,4 +1,4 @@
-//! `asa ports`：列出本機 listener 與可達性；`--probe HOST` 做受限的 TCP 探測。
+//! `ai-security-monitor ports`：列出本機 listener 與可達性；`--probe HOST` 做受限的 TCP 探測。
 
 use std::time::Duration;
 

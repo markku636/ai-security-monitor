@@ -1,4 +1,4 @@
-//! `asa vuln`：作業系統支援期限、Windows 更新多久沒裝、已安裝軟體的已知漏洞（Linux 套件查 OSV）。
+//! `ai-security-monitor vuln`：作業系統支援期限、Windows 更新多久沒裝、已安裝軟體的已知漏洞（Linux 套件查 OSV）。
 
 use super::args::VulnArgs;
 use super::render::{print_json, table};

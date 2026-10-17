@@ -75,7 +75,7 @@ impl FwAction {
                 n = nets.len(),
                 list = crate::util::text::clip(&nets.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "), 80)
             ),
-            FwAction::UnblockAll => t!("移除 asa 建立的所有防火牆規則").to_string(),
+            FwAction::UnblockAll => t!("移除 ai-security-monitor 建立的所有防火牆規則").to_string(),
             FwAction::ClosePort { proto, port } => tf!("關閉對內 {proto} {port}", proto = proto, port = port),
             FwAction::OpenPort { proto, port } => tf!("取消關閉 {proto} {port}", proto = proto, port = port),
             FwAction::Enable { profile } => match profile {
@@ -83,7 +83,7 @@ impl FwAction {
                 None => t!("啟用主機防火牆").to_string(),
             },
             FwAction::SyncFeeds { nets, .. } => tf!("同步威脅情資黑名單到防火牆（{n} 個網段）", n = nets.len()),
-            FwAction::Ensure => t!("依期望狀態重新套用 asa 規則").to_string(),
+            FwAction::Ensure => t!("依期望狀態重新套用 ai-security-monitor 規則").to_string(),
         }
     }
 }
@@ -341,7 +341,7 @@ pub const PF_CONF_BLOCK: &str =
 /// anchor 內容依期望狀態產生（關閉的 port 寫在這裡）。
 pub fn pf_anchor(closed: &[(String, u16)]) -> String {
     let mut s = String::from(
-        "# managed by asa (ai-security-agent) — do not edit\n\
+        "# managed by ai-security-monitor — do not edit\n\
          table <asa_block> persist file \"/etc/pf.anchors/asa_block.txt\"\n\
          table <asa_in> persist file \"/etc/pf.anchors/asa_in.txt\"\n\
          table <asa_out> persist file \"/etc/pf.anchors/asa_out.txt\"\n\

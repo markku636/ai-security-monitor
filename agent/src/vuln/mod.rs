@@ -52,7 +52,7 @@ pub struct Pending {
     pub security: u32,
 }
 
-/// CISA KEV（已被用於攻擊的漏洞）清單；由 `asa intel update` 下載的 cisa-kev 來源讀出。
+/// CISA KEV（已被用於攻擊的漏洞）清單；由 `ai-security-monitor intel update` 下載的 cisa-kev 來源讀出。
 #[derive(Debug, Clone, Default)]
 pub struct KevSet(HashSet<String>);
 
@@ -102,8 +102,10 @@ pub async fn analyze(inv: Inventory, config_dir: &Path, online: bool, kev: &KevS
         ..Default::default()
     };
     if kev.is_empty() {
-        s.notes
-            .push(t!("尚未下載 CISA KEV（執行 asa intel update），無法標示「已被用於攻擊」的漏洞").to_string());
+        s.notes.push(
+            t!("尚未下載 CISA KEV（執行 ai-security-monitor intel update），無法標示「已被用於攻擊」的漏洞")
+                .to_string(),
+        );
     }
     if let (Some((d, id)), Some(days)) = (&inv.last_patch, rules::patch_age_days(&inv, today)) {
         s.last_patch = Some(LastPatch {

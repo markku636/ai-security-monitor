@@ -1,20 +1,20 @@
 [package]
-name = "asa"
+name = "ai-security-monitor"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
-description = "AI Security Agent (asa): defensive endpoint scanner with threat-intel verdicts, firewall actions, traffic/event analysis and MCP"
-repository = "https://github.com/markku636/ai-security-agent"
-default-run = "asa"
+description = "AI Security Monitor (ai-security-monitor): defensive endpoint monitor with threat-intel verdicts, firewall actions, traffic/event analysis and MCP"
+repository = "https://github.com/markku636/ai-security-monitor"
+default-run = "ai-security-monitor"
 
 [lib]
 name = "asa_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "asa"
-path = "src/bin/asa.rs"
+name = "ai-security-monitor"
+path = "src/bin/ai-security-monitor.rs"
 
 [features]
 default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"]

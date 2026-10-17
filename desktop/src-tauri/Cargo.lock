@@ -18,6 +18,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai-security-monitor"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "comfy-table",
+ "dirs 6.0.0",
+ "etherparse",
+ "flate2",
+ "globset",
+ "hex",
+ "hmac",
+ "hostname",
+ "humantime",
+ "include_dir",
+ "ipnet",
+ "keyring",
+ "libc",
+ "maxminddb",
+ "netstat2",
+ "pcap-parser",
+ "plist",
+ "quick-xml",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "sysinfo",
+ "thiserror 2.0.21",
+ "tokio",
+ "uuid",
+ "windows-service",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,50 +144,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
-name = "asa"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "clap",
- "comfy-table",
- "dirs 6.0.0",
- "etherparse",
- "flate2",
- "globset",
- "hex",
- "hmac",
- "hostname",
- "humantime",
- "include_dir",
- "ipnet",
- "keyring",
- "libc",
- "maxminddb",
- "netstat2",
- "pcap-parser",
- "plist",
- "quick-xml",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "sha2",
- "sysinfo",
- "thiserror 2.0.21",
- "tokio",
- "uuid",
- "windows-service",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "asa-desktop"
 version = "0.1.0"
 dependencies = [
- "asa",
+ "ai-security-monitor",
  "chrono",
  "serde",
  "serde_json",

@@ -275,7 +275,7 @@ pub fn findings_from(s: &EventsSummary) -> Vec<Finding> {
                     crash_title("bugcheck", list.len() as u32, s.days)
                 ),
                 if latest.likely_causes.is_empty() {
-                    t!("查無這個代碼的說明；用 asa ai analyze --events 請 AI 協助判讀").to_string()
+                    t!("查無這個代碼的說明；用 ai-security-monitor ai analyze --events 請 AI 協助判讀").to_string()
                 } else {
                     latest.likely_causes.join("；")
                 },
@@ -306,7 +306,7 @@ pub fn findings_from(s: &EventsSummary) -> Vec<Finding> {
             "unexpected_shutdown" => t!("確認是否斷電或長按電源鍵；若伴隨藍屏請看藍屏項目"),
             "oom" | "low_memory" => t!("找出吃記憶體的行程（見事件），調整服務記憶體上限或增加記憶體"),
             "gpu_reset" => t!("更新或乾淨重灌顯示卡驅動，檢查顯示卡溫度與電源"),
-            _ => t!("查看事件詳細內容；可用 asa ai analyze --events 請 AI 協助判讀"),
+            _ => t!("查看事件詳細內容；可用 ai-security-monitor ai analyze --events 請 AI 協助判讀"),
         };
         out.push(
             Finding::new(
@@ -359,7 +359,7 @@ pub fn findings_from(s: &EventsSummary) -> Vec<Finding> {
                         .map(|m| tf!("出錯模組：{m}", m = m))
                         .unwrap_or_default(),
                     crash_evidence(list[0]),
-                    t!("更新或重新安裝該程式；持續發生可用 asa ai analyze --events 請 AI 協助判讀"),
+                    t!("更新或重新安裝該程式；持續發生可用 ai-security-monitor ai analyze --events 請 AI 協助判讀"),
                 )
                 .with_tag("crash"),
             );

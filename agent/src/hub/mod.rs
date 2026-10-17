@@ -69,7 +69,7 @@ fn gzip(bytes: &[u8]) -> AppResult<Vec<u8>> {
 impl HubClient {
     pub fn new(base: &str, key: &str, agent_id: &str) -> AppResult<Self> {
         let http = reqwest::Client::builder()
-            .user_agent(format!("asa/{}", crate::VERSION))
+            .user_agent(format!("ai-security-monitor/{}", crate::VERSION))
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(60))
             .build()

@@ -44,6 +44,8 @@ pub struct Env {
 
 pub async fn run() -> i32 {
     let argv: Vec<String> = std::env::args().collect();
+    // clap 的 env = "AI_SECURITY_MONITOR_…" 只認新名：只設了舊名 ASA_* 時先複製過去
+    crate::util::env::seed_from_legacy(args::CLAP_ENV);
     let lang = resolve_lang(&argv);
     i18n::set_lang(lang);
 
@@ -91,7 +93,7 @@ fn report_error(e: &AppError, json: bool) {
     eprintln!("{}", e.message());
 }
 
-/// 語言：`--lang` ＞ `ASA_LANG` ＞ config.json 的 `lang` ＞ zh-TW。
+/// 語言：`--lang` ＞ `AI_SECURITY_MONITOR_LANG`（舊名 `ASA_LANG`）＞ config.json 的 `lang` ＞ zh-TW。
 fn resolve_lang(argv: &[String]) -> Lang {
     let mut i = 0;
     let mut config_dir: Option<std::path::PathBuf> = None;
@@ -112,7 +114,7 @@ fn resolve_lang(argv: &[String]) -> Lang {
         }
         i += 1;
     }
-    if let Ok(v) = std::env::var("ASA_LANG") {
+    if let Some(v) = crate::util::env::var("LANG") {
         if let Some(l) = Lang::from_code(&v) {
             return l;
         }
@@ -197,7 +199,13 @@ mod help_tests {
 
     #[test]
     fn resolve_lang_prefers_flag() {
-        assert_eq!(resolve_lang(&["asa".into(), "--lang".into(), "en".into()]), Lang::En);
-        assert_eq!(resolve_lang(&["asa".into(), "--lang=zh-TW".into()]), Lang::ZhTw);
+        assert_eq!(
+            resolve_lang(&["ai-security-monitor".into(), "--lang".into(), "en".into()]),
+            Lang::En
+        );
+        assert_eq!(
+            resolve_lang(&["ai-security-monitor".into(), "--lang=zh-TW".into()]),
+            Lang::ZhTw
+        );
     }
 }
