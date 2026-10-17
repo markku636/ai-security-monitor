@@ -77,7 +77,7 @@ describe('dns packets', () => {
   });
 
   it('decodes compressed names and rejects malformed packets', () => {
-    // 問題：_ai-security-monitor._tcp.local；答案的名稱用指標 0xc00c 指回問題
+    // 問題：_aisecmon._tcp.local；答案的名稱用指標 0xc00c 指回問題
     const q = encodePacket({ questions: [{ name: SERVICE_TYPE, type: TYPE.PTR, unicast: false }] });
     const header = Buffer.from(q);
     header.writeUInt16BE(1, 6); // ancount = 1
@@ -154,7 +154,7 @@ describe('DNS SRV record', () => {
   it('derives name, target, port and TXT from the public URL', () => {
     const s = srvInfo('https://hub.corp.acme.com', FP)!;
     expect(s).toEqual({
-      name: '_ai-security-monitor._tcp.corp.acme.com',
+      name: '_aisecmon._tcp.corp.acme.com',
       domain: 'corp.acme.com',
       target: 'hub.corp.acme.com',
       port: 443,
@@ -162,12 +162,12 @@ describe('DNS SRV record', () => {
       placeholder: false,
     });
     const cmd = srvCommands(s);
-    expect(cmd.windows).toContain('Add-DnsServerResourceRecord -ZoneName corp.acme.com -Name _ai-security-monitor._tcp -Srv -DomainName hub.corp.acme.com -Port 443 -Priority 0 -Weight 0');
+    expect(cmd.windows).toContain('Add-DnsServerResourceRecord -ZoneName corp.acme.com -Name _aisecmon._tcp -Srv -DomainName hub.corp.acme.com -Port 443 -Priority 0 -Weight 0');
     expect(cmd.windows).toContain(`-Txt -DescriptiveText 'fp=${FP}'`);
-    expect(cmd.bind).toContain('_ai-security-monitor._tcp.corp.acme.com. 3600 IN SRV 0 0 443 hub.corp.acme.com.');
-    expect(cmd.bind).toContain(`_ai-security-monitor._tcp.corp.acme.com. 3600 IN TXT "url=https://hub.corp.acme.com" "fp=${FP}"`);
+    expect(cmd.bind).toContain('_aisecmon._tcp.corp.acme.com. 3600 IN SRV 0 0 443 hub.corp.acme.com.');
+    expect(cmd.bind).toContain(`_aisecmon._tcp.corp.acme.com. 3600 IN TXT "url=https://hub.corp.acme.com" "fp=${FP}"`);
     const ip = srvInfo('http://192.168.1.5:3000', FP)!;
-    expect(ip).toMatchObject({ name: '_ai-security-monitor._tcp.corp.example', target: 'hub.corp.example', port: 3000, placeholder: true });
+    expect(ip).toMatchObject({ name: '_aisecmon._tcp.corp.example', target: 'hub.corp.example', port: 3000, placeholder: true });
     expect(srvInfo('http://hub.example:8080', FP)).toMatchObject({ domain: 'corp.example', target: 'hub.example', port: 8080, placeholder: true });
     expect(srvInfo(null, FP)).toBeNull();
   });

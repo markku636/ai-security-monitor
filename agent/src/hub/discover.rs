@@ -1,7 +1,7 @@
 //! 尋找公司的 Security Hub：依序
 //! 1. 明確給的網址（`--hub`／參數）、環境變數 `AI_SECURITY_MONITOR_HUB_URL`、設定檔裡已註冊的 Hub
-//! 2. 公司 DNS 的 SRV 紀錄 `_ai-security-monitor._tcp.<搜尋網域>`（同名 TXT 可帶 `url=`、`fp=`、`path=`、`proto=`）
-//! 3. 區網 mDNS／DNS-SD 廣播 `_ai-security-monitor._tcp.local`（TXT 同上）
+//! 2. 公司 DNS 的 SRV 紀錄 `_aisecmon._tcp.<搜尋網域>`（同名 TXT 可帶 `url=`、`fp=`、`path=`、`proto=`）
+//! 3. 區網 mDNS／DNS-SD 廣播 `_aisecmon._tcp.local`（TXT 同上）
 //!
 //! 每個候選都打 `/api/v1/hub/identity` 驗章，拿到名稱與指紋給使用者確認；前一層找到可用的 Hub 就不再往下找
 //! （`discover` 指令列出全部）。
@@ -17,9 +17,11 @@ use super::identity::{self, HubIdentity};
 use super::validate_url;
 use crate::error::{AppError, AppResult};
 
-/// DNS-SD 服務類型（不含網域）。
-pub const SERVICE: &str = "_ai-security-monitor._tcp";
-pub const MDNS_SERVICE: &str = "_ai-security-monitor._tcp.local.";
+/// DNS-SD 服務類型（不含網域）。服務名稱 `aisecmon` 9 字，符合 RFC 6335／6763 的 15 字上限。
+pub const SERVICE: &str = "_aisecmon._tcp";
+pub const MDNS_SERVICE: &str = "_aisecmon._tcp.local.";
+/// 0.3.0 發佈前用過的長名稱（20 字，不合規）；DNS SRV 找不到新名稱時才查它，給已經照舊說明建好紀錄的人。
+pub const LEGACY_SERVICE: &str = "_ai-security-monitor._tcp";
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
@@ -242,7 +244,7 @@ pub fn mdns_candidate(hit: &MdnsHit) -> Option<Candidate> {
     })
 }
 
-/// 在區網上找 `_ai-security-monitor._tcp.local`（等 `timeout`）。只送出查詢與接收回應，不對外宣告任何東西。
+/// 在區網上找 `_aisecmon._tcp.local`（等 `timeout`）。只送出查詢與接收回應，不對外宣告任何東西。
 pub async fn browse_mdns(timeout: Duration) -> AppResult<Vec<MdnsHit>> {
     tokio::task::spawn_blocking(move || -> AppResult<Vec<MdnsHit>> {
         let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| AppError::Hub(format!("mDNS: {e}")))?;
@@ -283,21 +285,32 @@ pub async fn browse_mdns(timeout: Duration) -> AppResult<Vec<MdnsHit>> {
     .map_err(|e| AppError::Hub(e.to_string()))?
 }
 
+/// 查一個 SRV 名稱（含同名 TXT）。DNS 沒回應時回 `None`。
+async fn srv_lookup(cfg: &dns::DnsConfig, domain: &str, service: &str, timeout: Duration) -> Option<Vec<Candidate>> {
+    let name = format!("{service}.{domain}");
+    let mut recs = dns::resolve(cfg, &name, dns::TYPE_SRV, timeout).await.ok()?;
+    if recs.iter().any(|r| matches!(r, Record::Srv { .. })) || recs.is_empty() {
+        // TXT 另外查（多數 DNS 伺服器不會把 TXT 放進 SRV 回應的 additional）
+        if let Ok(t) = dns::resolve(cfg, &name, dns::TYPE_TXT, timeout).await {
+            recs.extend(t.into_iter().filter(|r| matches!(r, Record::Txt { .. })));
+        }
+    }
+    Some(srv_candidates(domain, &recs))
+}
+
 /// 從 DNS SRV 找。
 pub async fn find_srv(cfg: &dns::DnsConfig, timeout: Duration) -> Vec<Candidate> {
     let mut out = Vec::new();
     for domain in &cfg.search {
-        let name = format!("{SERVICE}.{domain}");
-        let Ok(mut recs) = dns::resolve(cfg, &name, dns::TYPE_SRV, timeout).await else {
-            continue;
-        };
-        if recs.iter().any(|r| matches!(r, Record::Srv { .. })) || recs.is_empty() {
-            // TXT 另外查（多數 DNS 伺服器不會把 TXT 放進 SRV 回應的 additional）
-            if let Ok(t) = dns::resolve(cfg, &name, dns::TYPE_TXT, timeout).await {
-                recs.extend(t.into_iter().filter(|r| matches!(r, Record::Txt { .. })));
+        // 先查新名稱；DNS 有回答但沒有紀錄才查舊的長名稱（沒回應就不再多等一次）
+        for service in [SERVICE, LEGACY_SERVICE] {
+            match srv_lookup(cfg, domain, service, timeout).await {
+                Some(found) if found.is_empty() => continue,
+                Some(found) => out.extend(found),
+                None => {}
             }
+            break;
         }
-        out.extend(srv_candidates(domain, &recs));
     }
     out
 }
@@ -594,6 +607,17 @@ mod tests {
     }
 
     #[test]
+    fn service_names_follow_rfc6335() {
+        // 服務名稱 1–15 字、英數與連字號、不以連字號開頭結尾（RFC 6335 §5.1）；mDNS 名稱同一個
+        let name = SERVICE.strip_prefix('_').unwrap().strip_suffix("._tcp").unwrap();
+        assert!((1..=15).contains(&name.len()), "{name}");
+        assert!(name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
+        assert!(!name.starts_with('-') && !name.ends_with('-'));
+        assert_eq!(MDNS_SERVICE, format!("{SERVICE}.local."));
+        assert_ne!(LEGACY_SERVICE, SERVICE);
+    }
+
+    #[test]
     fn srv_records_become_ordered_urls_and_txt_url_wins() {
         let r = vec![
             srv(10, 0, 8088, "hub2.corp.example."),
@@ -653,7 +677,7 @@ mod tests {
         let mut txt = BTreeMap::new();
         txt.insert("fp".to_string(), "72AS-YEXT-VNGO-NLC5-W2NM".to_string());
         let hit = MdnsHit {
-            fullname: "Security\\032Hub\\032(srv1)._ai-security-monitor._tcp.local.".into(),
+            fullname: "Security\\032Hub\\032(srv1)._aisecmon._tcp.local.".into(),
             port: 3000,
             addrs: vec![
                 "fe80::1".parse().unwrap(),

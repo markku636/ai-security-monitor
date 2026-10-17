@@ -1,5 +1,5 @@
 //! `ai-security-monitor hub advertise --url <Hub 網址>`：在這台電腦上用 mDNS 幫 Hub 廣播
-//! `_ai-security-monitor._tcp.local`，讓區網的電腦自動找到它。
+//! `_aisecmon._tcp.local`，讓區網的電腦自動找到它。
 //!
 //! Hub 跑在 Docker Desktop（Windows／macOS）或預設 bridge 網路時，容器裡的 mDNS 廣播出不了區網；
 //! 這時在區網上任一台（通常就是跑 Docker 的那台）執行這個指令即可。TXT 帶 `url=`，agent 直接用那個網址，
@@ -70,11 +70,6 @@ pub fn start(url: &str, id: &HubIdentity, instance: &str) -> AppResult<(mdns_sd:
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
     let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| AppError::Hub(format!("mDNS: {e}")))?;
-    // 服務名稱 `_ai-security-monitor` 有 20 字，超過 RFC 6763 建議的 15 字（mdns-sd 預設會拒絕登記）；
-    // 瀏覽端（mdns-sd、Bonjour、Avahi）都接受較長的名稱，DNS SRV 也一樣
-    daemon
-        .set_service_name_len_max(30)
-        .map_err(|e| AppError::Hub(format!("mDNS: {e}")))?;
     // 先給目前的 IPv4 位址（沒給的話要等 daemon 下一次檢查介面才會開始宣告）；之後介面變了由 addr_auto 更新
     let addrs: Vec<std::net::IpAddr> = crate::cli::fw_cmd::local_ips()
         .into_iter()
@@ -127,7 +122,7 @@ mod tests {
         assert_eq!(t["proto"], "https");
         // agent 端用同一份 TXT 產生候選：網址要一字不差
         let hit = super::super::discover::MdnsHit {
-            fullname: "Security Hub._ai-security-monitor._tcp.local.".into(),
+            fullname: "Security Hub._aisecmon._tcp.local.".into(),
             port: 443,
             addrs: vec![],
             txt: t.into_iter().collect(),

@@ -1,6 +1,6 @@
-// 區網自動尋找（mDNS／DNS-SD）：Hub 在區網廣播 `_ai-security-monitor._tcp.local`，電腦端不用輸入網址就找得到。
+// 區網自動尋找（mDNS／DNS-SD）：Hub 在區網廣播 `_aisecmon._tcp.local`，電腦端不用輸入網址就找得到。
 // 只用 node:dgram 實作最小的 responder（IPv4、UDP 5353、群組 224.0.0.251）：
-//   PTR _ai-security-monitor._tcp.local、_services._dns-sd._udp.local；實例的 SRV／TXT；主機的 A。
+//   PTR _aisecmon._tcp.local、_services._dns-sd._udp.local；實例的 SRV／TXT；主機的 A。
 // 任何錯誤（port 被占用等）只記一次 log、反映在狀態，不讓 Hub 掛掉。
 // 注意：Docker Desktop／bridge 網路不會把 multicast 轉到區網（Linux 用 network_mode: host，
 // 或在區網的一台電腦上跑 `ai-security-monitor hub advertise --url <對外網址>`）。
@@ -12,7 +12,7 @@ import { decodePacket, encodePacket, TYPE, type Labels, type Packet, type Questi
 
 export { decodePacket, encodePacket, TYPE } from './dns';
 
-export const SERVICE_TYPE = ['_ai-security-monitor', '_tcp', 'local'];
+export const SERVICE_TYPE = ['_aisecmon', '_tcp', 'local'];
 export const SERVICES_META = ['_services', '_dns-sd', '_udp', 'local'];
 export const MDNS_ADDR = '224.0.0.251';
 export const MDNS_PORT = 5353;

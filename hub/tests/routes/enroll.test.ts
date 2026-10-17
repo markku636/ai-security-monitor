@@ -349,7 +349,7 @@ describe('auto-approve networks', () => {
     process.env.ASA_HUB_PUBLIC_URL = 'https://hub.corp.acme.com';
     const s = await (await settingsGet(admin('/api/v1/admin/enroll-settings'))).json();
     expect(s.hub).toMatchObject({ fingerprint: IDENTITY.fingerprint, public_url: 'https://hub.corp.acme.com' });
-    expect(s.srv).toMatchObject({ name: '_ai-security-monitor._tcp.corp.acme.com', target: 'hub.corp.acme.com', port: 443, txt: ['url=https://hub.corp.acme.com', `fp=${IDENTITY.fingerprint}`] });
+    expect(s.srv).toMatchObject({ name: '_aisecmon._tcp.corp.acme.com', target: 'hub.corp.acme.com', port: 443, txt: ['url=https://hub.corp.acme.com', `fp=${IDENTITY.fingerprint}`] });
     expect(s.mdns).toMatchObject({ enabled: false, running: false });
     expect(s.enroll_requests_enabled).toBe(true);
     expect(s.peer_ip_available).toBe(false);

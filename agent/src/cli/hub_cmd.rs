@@ -222,7 +222,7 @@ fn found_table(found: &[Found], pinned: Option<&str>) -> String {
     )
 }
 
-const NOT_FOUND_HINT: &str = "沒有找到 Security Hub。請管理員在公司 DNS 加 _ai-security-monitor._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>";
+const NOT_FOUND_HINT: &str = "沒有找到 Security Hub。請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>";
 
 /// `discover`：列出找到的 Hub（每一種方式都試）。
 pub async fn discover(env: &Env, a: DiscoverArgs) -> AppResult<()> {

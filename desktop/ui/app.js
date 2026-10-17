@@ -671,7 +671,7 @@ async function searchHubs(url) {
   try {
     const r = await invoke('discover_hubs', { url: url || null });
     if (!r.hubs.length) {
-      box.innerHTML = '<p class="small">沒有找到 Security Hub。請管理員在公司 DNS 加 <span class="mono">_ai-security-monitor._tcp</span> 的 SRV 紀錄、或在區網開啟 Hub 廣播；也可以在下面直接輸入管理員給的 Hub 網址。</p>';
+      box.innerHTML = '<p class="small">沒有找到 Security Hub。請管理員在公司 DNS 加 <span class="mono">_aisecmon._tcp</span> 的 SRV 紀錄、或在區網開啟 Hub 廣播；也可以在下面直接輸入管理員給的 Hub 網址。</p>';
       return;
     }
     box.innerHTML = `<table><thead><tr><th>Hub</th><th>找到的方式</th><th title="${esc(FP_HINT)}">指紋 (?)</th><th></th></tr></thead><tbody>${hubRows(r.hubs, r.pinned_fingerprint)}</tbody></table>

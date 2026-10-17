@@ -10,8 +10,8 @@ The key-based flow (`enroll <url> --key …`) keeps working unchanged.
 
 1. **Find the Hub** (in order; stops at the first source that yields a usable Hub)
    1. An explicit URL: `enroll --hub <url>`, the install command downloaded from the Hub (it has that Hub's URL prefilled), or `AI_SECURITY_MONITOR_HUB_URL`
-   2. The company DNS SRV record `_ai-security-monitor._tcp.<company domain>`, using the computer's own DNS search domains (Windows DNS suffixes, Linux `/etc/resolv.conf`, macOS `scutil --dns`)
-   3. Local network broadcast (mDNS / DNS-SD) `_ai-security-monitor._tcp.local`, waiting 3 seconds
+   2. The company DNS SRV record `_aisecmon._tcp.<company domain>`, using the computer's own DNS search domains (Windows DNS suffixes, Linux `/etc/resolv.conf`, macOS `scutil --dns`)
+   3. Local network broadcast (mDNS / DNS-SD) `_aisecmon._tcp.local`, waiting 3 seconds
 2. **Make sure it is your company's Hub**: every Hub found must sign a fresh random challenge with its own Ed25519 key. Only verified Hubs are
    listed, together with the Hub **fingerprint** (e.g. `72AS-YEXT-VNGO-NLC5-W2NM`).
 3. **Send an enrollment request** with the host name, OS, IPs, version and a random secret that only this computer knows (the Hub stores only its hash).
@@ -80,30 +80,32 @@ Requests that nobody handles expire after 7 days.
 
 ## DNS SRV record
 
-Name `_ai-security-monitor._tcp.<domain>`, pointing at the Hub's host and port. A TXT record with the same name may carry `url=` (the full URL;
+Name `_aisecmon._tcp.<domain>`, pointing at the Hub's host and port. A TXT record with the same name may carry `url=` (the full URL;
 computers prefer it) and `fp=` (the Hub fingerprint; mismatches are skipped). Without `url=`: port 443/8443 means https, anything else http
 (`proto=https` overrides), and `path=/sub` sets a sub-path.
+The service name `aisecmon` fits the 15-character limit of RFC 6335/6763. Pre-0.3.0 instructions used `_ai-security-monitor._tcp`; computers still
+look it up when the new name has no records, but please switch to the new name.
 
 Windows DNS Server (PowerShell):
 
 ```powershell
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Srv -DomainName hub.corp.example -Port 443 -Priority 0 -Weight 0
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Txt -DescriptiveText "url=https://hub.corp.example"
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Txt -DescriptiveText "fp=72AS-YEXT-VNGO-NLC5-W2NM"
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Srv -DomainName hub.corp.example -Port 443 -Priority 0 -Weight 0
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Txt -DescriptiveText "url=https://hub.corp.example"
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Txt -DescriptiveText "fp=72AS-YEXT-VNGO-NLC5-W2NM"
 ```
 
 BIND:
 
 ```
-_ai-security-monitor._tcp.corp.example. 3600 IN SRV 0 0 443 hub.corp.example.
-_ai-security-monitor._tcp.corp.example. 3600 IN TXT "url=https://hub.corp.example" "fp=72AS-YEXT-VNGO-NLC5-W2NM"
+_aisecmon._tcp.corp.example. 3600 IN SRV 0 0 443 hub.corp.example.
+_aisecmon._tcp.corp.example. 3600 IN TXT "url=https://hub.corp.example" "fp=72AS-YEXT-VNGO-NLC5-W2NM"
 ```
 
 The Hub's *Add hosts → Automatic discovery* card generates ready-to-copy commands for its own URL and fingerprint. Check with `ai-security-monitor discover --no-mdns`.
 
 ## mDNS advertising
 
-- The server edition of the Hub advertises `_ai-security-monitor._tcp` on UDP 5353 by default (`AI_SECURITY_MONITOR_HUB_MDNS=0` turns it off; the
+- The server edition of the Hub advertises `_aisecmon._tcp` on UDP 5353 by default (`AI_SECURITY_MONITOR_HUB_MDNS=0` turns it off; the
   standalone edition binds 127.0.0.1 and has it off). TXT carries `fp=`, `v=`, `path=`, `proto=`, plus `url=` when
   `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` is set (recommended; computers use it directly).
 - **Docker caveat**: Docker Desktop (Windows/macOS) and the default bridge network **do not pass multicast to the LAN**, so advertising from inside

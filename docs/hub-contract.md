@@ -96,7 +96,7 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
   待核准 7 天過期；核准後一直沒領取也會過期（金鑰一併撤銷）。
 - **管理**（session＋CSRF，或管理員 Bearer）：`GET /api/v1/admin/enroll-requests?status=pending|all`（不回密語與金鑰）、
   `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`、
-  `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }`（IPv4 前綴至少 /8、IPv6 至少 /16；GET 另外回 mDNS 狀態與要加的 SRV／TXT 紀錄）。
+  `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }`（IPv4 前綴至少 /8、IPv6 至少 /16；GET 另外回 mDNS 狀態與要加的 SRV／TXT 紀錄，名稱 `_aisecmon._tcp.<網域>`）。
   稽核：`enroll_request.created|approved|rejected|auto_approved`、`enroll_settings.updated`。
 - **agent 端**：Hub 指紋釘選在 `config.json`（`hub.fingerprint`、`hub.public_key`）。`watch` 啟動時查 `/api/v1/hub/identity`，不符就停止上傳；
   等候中的申請存在 `<設定目錄>/hub-enroll-request.json`（密語在系統金鑰圈／密鑰檔），`watch` 會接著輪詢。

@@ -1193,8 +1193,8 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "尚未註冊 hub：只在本機掃描（ai-security-monitor enroll --auto 自動尋找公司的 Hub，或 enroll <HUB_URL> --key …）" =>
             "Not enrolled with a hub: scanning locally only (ai-security-monitor enroll --auto finds your company's Hub, or enroll <HUB_URL> --key …)",
         "管理員已核准：已加入 {url}（{hub} {version}），開始回報" => "Approved: joined {url} ({hub} {version}); reporting starts now",
-        "沒有找到 Security Hub。請管理員在公司 DNS 加 _ai-security-monitor._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>" =>
-            "No Security Hub found. Ask your administrator to add an _ai-security-monitor._tcp SRV record to the company DNS or turn on Hub advertising on the local network, or use ai-security-monitor enroll --hub <url>",
+        "沒有找到 Security Hub。請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>" =>
+            "No Security Hub found. Ask your administrator to add an _aisecmon._tcp SRV record to the company DNS or turn on Hub advertising on the local network, or use ai-security-monitor enroll --hub <url>",
         "Hub 身分驗證失敗：{detail}" => "Hub identity check failed: {detail}",
         // clap help
         "註冊到 Security Hub：給 --key 用金鑰；不給金鑰就自動尋找 Hub、送出加入申請等管理員核准" =>

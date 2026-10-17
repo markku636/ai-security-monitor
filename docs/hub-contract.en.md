@@ -101,7 +101,7 @@ All binary values are base64url without padding; fingerprints/codes are RFC 4648
 - **Admin** (session + CSRF, or admin Bearer): `GET /api/v1/admin/enroll-requests?status=pending|all` (never returns secrets or keys),
   `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`,
   `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }` (IPv4 prefix ≥ /8, IPv6 ≥ /16; the GET also reports mDNS status and the
-  SRV/TXT records to add). Audit: `enroll_request.created|approved|rejected|auto_approved`, `enroll_settings.updated`.
+  SRV/TXT records to add, named `_aisecmon._tcp.<domain>`). Audit: `enroll_request.created|approved|rejected|auto_approved`, `enroll_settings.updated`.
 - **Agent side**: the Hub fingerprint is pinned in `config.json` (`hub.fingerprint`, `hub.public_key`). `watch` checks
   `/api/v1/hub/identity` at start and stops uploading if it differs; a pending request lives in `<config>/hub-enroll-request.json` (secret in the
   keychain / secrets file) and `watch` keeps polling it.

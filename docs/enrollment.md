@@ -9,8 +9,8 @@
 
 1. **找 Hub**（依序，前一種找到能用的就不再往下找）
    1. 明確給的網址：`enroll --hub <網址>`、從 Hub 下載的安裝指令（已預填這個 Hub 的網址）、環境變數 `AI_SECURITY_MONITOR_HUB_URL`
-   2. 公司 DNS 的 SRV 紀錄 `_ai-security-monitor._tcp.<公司網域>`（用電腦本身的 DNS 搜尋網域：Windows 的 DNS 尾碼、Linux 的 `/etc/resolv.conf`、macOS 的 `scutil --dns`）
-   3. 區網廣播（mDNS／DNS-SD）`_ai-security-monitor._tcp.local`，等 3 秒
+   2. 公司 DNS 的 SRV 紀錄 `_aisecmon._tcp.<公司網域>`（用電腦本身的 DNS 搜尋網域：Windows 的 DNS 尾碼、Linux 的 `/etc/resolv.conf`、macOS 的 `scutil --dns`）
+   3. 區網廣播（mDNS／DNS-SD）`_aisecmon._tcp.local`，等 3 秒
 2. **確認是公司的 Hub**：每個找到的 Hub 都要用自己的金鑰（Ed25519）對這次的隨機挑戰簽章，電腦端驗過才列出，
    並顯示 Hub 的**指紋**（例：`72AS-YEXT-VNGO-NLC5-W2NM`）。
 3. **送出加入申請**：帶上主機名稱、作業系統、IP、版本，以及一組只有這台電腦知道的隨機密語（Hub 只存它的雜湊）。
@@ -71,29 +71,30 @@
 
 ## DNS SRV 紀錄
 
-名稱 `_ai-security-monitor._tcp.<網域>`，指向 Hub 的主機與 port；同名的 TXT 可以帶 `url=`（完整網址，電腦端優先用它）與 `fp=`（Hub 指紋，不符就略過）。
+名稱 `_aisecmon._tcp.<網域>`，指向 Hub 的主機與 port；同名的 TXT 可以帶 `url=`（完整網址，電腦端優先用它）與 `fp=`（Hub 指紋，不符就略過）。
 沒有 `url=` 時：port 443／8443 用 https，其他用 http（`proto=https` 可指定），`path=/sub` 可指定子路徑。
+服務名稱 `aisecmon` 符合 RFC 6335／6763 的 15 字上限；0.3.0 之前的說明用過 `_ai-security-monitor._tcp`，電腦端在新名稱查不到紀錄時仍會查它，但請改用新名稱。
 
 Windows DNS Server（PowerShell）：
 
 ```powershell
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Srv -DomainName hub.corp.example -Port 443 -Priority 0 -Weight 0
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Txt -DescriptiveText "url=https://hub.corp.example"
-Add-DnsServerResourceRecord -ZoneName corp.example -Name _ai-security-monitor._tcp -Txt -DescriptiveText "fp=72AS-YEXT-VNGO-NLC5-W2NM"
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Srv -DomainName hub.corp.example -Port 443 -Priority 0 -Weight 0
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Txt -DescriptiveText "url=https://hub.corp.example"
+Add-DnsServerResourceRecord -ZoneName corp.example -Name _aisecmon._tcp -Txt -DescriptiveText "fp=72AS-YEXT-VNGO-NLC5-W2NM"
 ```
 
 BIND：
 
 ```
-_ai-security-monitor._tcp.corp.example. 3600 IN SRV 0 0 443 hub.corp.example.
-_ai-security-monitor._tcp.corp.example. 3600 IN TXT "url=https://hub.corp.example" "fp=72AS-YEXT-VNGO-NLC5-W2NM"
+_aisecmon._tcp.corp.example. 3600 IN SRV 0 0 443 hub.corp.example.
+_aisecmon._tcp.corp.example. 3600 IN TXT "url=https://hub.corp.example" "fp=72AS-YEXT-VNGO-NLC5-W2NM"
 ```
 
 Hub「新增主機 → 自動尋找」卡片會依這個 Hub 的網址與指紋產生可直接複製的指令。驗證：`ai-security-monitor discover --no-mdns`。
 
 ## mDNS 廣播
 
-- Hub 伺服器版預設在 UDP 5353 廣播 `_ai-security-monitor._tcp`（`AI_SECURITY_MONITOR_HUB_MDNS=0` 關閉；單機版只綁 127.0.0.1，預設關）。
+- Hub 伺服器版預設在 UDP 5353 廣播 `_aisecmon._tcp`（`AI_SECURITY_MONITOR_HUB_MDNS=0` 關閉；單機版只綁 127.0.0.1，預設關）。
   TXT 帶 `fp=`、`v=`、`path=`、`proto=`，設了 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` 時另帶 `url=`（建議設，電腦端直接用它）。
 - **Docker 注意**：Docker Desktop（Windows／macOS）與預設的 bridge 網路**不會把 multicast 送到區網**，容器裡的廣播出不去。做法擇一：
   - Linux 主機：Hub 容器用 `network_mode: host`（compose 的 `ports:` 要拿掉，改用 `PORT` 環境變數決定 port）。

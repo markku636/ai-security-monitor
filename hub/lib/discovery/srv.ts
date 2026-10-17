@@ -1,7 +1,7 @@
-// 公司 DNS 要加的 SRV＋TXT 紀錄（電腦端會查 `_ai-security-monitor._tcp.<搜尋網域>`）：從對外網址推出主機／port。
+// 公司 DNS 要加的 SRV＋TXT 紀錄（電腦端會查 `_aisecmon._tcp.<搜尋網域>`）：從對外網址推出主機／port。
 import net from 'node:net';
 
-export const SRV_SERVICE = '_ai-security-monitor._tcp';
+export const SRV_SERVICE = '_aisecmon._tcp';
 export const PLACEHOLDER_DOMAIN = 'corp.example';
 
 export interface SrvInfo {

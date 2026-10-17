@@ -3,7 +3,8 @@
 ## 未發佈
 
 - **自動尋找 Hub、免金鑰加入**（[docs/enrollment.md](docs/enrollment.md)）：辦公室電腦不用金鑰、不用手動設定就能加入公司的 Security Hub。
-  - **尋找**：依序用明確給的網址（`enroll --hub`、Hub 預填的安裝指令、`AI_SECURITY_MONITOR_HUB_URL`）→ 公司 DNS 的 SRV 紀錄 `_ai-security-monitor._tcp.<搜尋網域>`（TXT 可帶 `url=`、`fp=`；Windows 讀 DNS 尾碼、Linux `/etc/resolv.conf`、macOS `scutil --dns`）→ 區網 mDNS／DNS-SD `_ai-security-monitor._tcp.local`。新增 `ai-security-monitor discover`（只列出）與 `enroll --auto [--hub URL] [--wait 15m] [--repin]`；`enroll` 沒給 `--key` 就走免金鑰。
+  - **尋找**：依序用明確給的網址（`enroll --hub`、Hub 預填的安裝指令、`AI_SECURITY_MONITOR_HUB_URL`）→ 公司 DNS 的 SRV 紀錄 `_aisecmon._tcp.<搜尋網域>`（TXT 可帶 `url=`、`fp=`；Windows 讀 DNS 尾碼、Linux `/etc/resolv.conf`、macOS `scutil --dns`）→ 區網 mDNS／DNS-SD `_aisecmon._tcp.local`。新增 `ai-security-monitor discover`（只列出）與 `enroll --auto [--hub URL] [--wait 15m] [--repin]`；`enroll` 沒給 `--key` 就走免金鑰。
+  - **服務名稱**：DNS-SD 服務類型是 `_aisecmon._tcp`（服務名稱 9 字，符合 RFC 6335／6763 的 15 字上限，mDNS 用預設限制就能登記）。開發期間用過的 `_ai-security-monitor._tcp`（20 字）mDNS 不再使用；DNS SRV 在新名稱查不到紀錄時仍會查舊名稱。
   - **Hub 身分（TOFU）**：Hub 第一次啟動產生 Ed25519 身分金鑰（存在 `settings`），`GET /api/v1/hub/identity?nonce=` 回名稱、版本、公鑰、指紋（`XXXX-XXXX-XXXX-XXXX-XXXX`）與對 nonce 的簽章。電腦端驗章後才列出，加入時釘選指紋；之後同網址或自動找到的 Hub 指紋不同就拒絕上傳（`watch` 啟動時檢查），要明確 `enroll --auto --repin` 才換。用金鑰註冊的電腦也會釘選（舊電腦升級後第一次連上時補記）。「新增主機」與「設定與金鑰」頁顯示 Hub 指紋。
   - **加入申請**：`POST /api/v1/agents/enroll-request`（不帶金鑰，帶主機資訊與一組隨機密語，Hub 只存雜湊）→ 管理員在「新增主機 → 待核准的主機」核准／拒絕（可多選，側欄有待核准數字），或來源 IP 在「自動核准的網段」（CIDR，預設空白）內就直接核准 → 電腦以密語輪詢 `GET …/enroll-request/{id}`，核准後拿到**綁定這台 agent id** 的註冊金鑰（Hub 簽章，電腦用釘選的公鑰驗），照一般流程註冊。電腦端與管理頁顯示同一組核對碼。自動核准只看 TCP 真正的來源位址（Hub 在 HTTP 伺服器掛勾取得；開了 `TRUST_PROXY` 才看 X-Forwarded-For）。限流、待核准上限 500、7 天過期、領取後停止發金鑰；核准／拒絕／自動核准／修改網段都寫稽核。新表 `enrollment_requests`（migration 0009），`enroll_keys` 多 `bound_agent_id`：綁定的金鑰拿去用別的 agent id 一律 403 `key_bound_to_other_agent`。`AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0` 可關閉。
   - **等候可續**：待核准的申請存在設定目錄（密語在金鑰圈／密鑰檔），再執行 `enroll --auto` 或背景服務（`watch`）都會接著等，核准後自動開始回報。

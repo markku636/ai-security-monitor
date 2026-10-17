@@ -1,4 +1,4 @@
-//! 迷你 DNS 用戶端（只查 SRV／TXT，UDP）：找公司 DNS 上的 `_ai-security-monitor._tcp.<網域>`。
+//! 迷你 DNS 用戶端（只查 SRV／TXT，UDP）：找公司 DNS 上的 `_aisecmon._tcp.<網域>`。
 //!
 //! 不用系統解析器的 API（各平台都不一樣、也查不到 SRV）：自己讀 DNS 伺服器與搜尋網域，
 //! - Linux／macOS：`/etc/resolv.conf` 的 `nameserver`、`search`／`domain`；macOS 另外看 `scutil --dns`
@@ -384,16 +384,16 @@ pub(crate) mod tests {
 
     #[test]
     fn query_encoding() {
-        let q = encode_query(0x1234, "_ai-security-monitor._tcp.corp.example", TYPE_SRV).unwrap();
+        let q = encode_query(0x1234, "_aisecmon._tcp.corp.example", TYPE_SRV).unwrap();
         assert_eq!(&q[..4], &[0x12, 0x34, 0x01, 0x00]);
-        assert_eq!(q[12] as usize, "_ai-security-monitor".len());
+        assert_eq!(q[12] as usize, "_aisecmon".len());
         assert_eq!(&q[q.len() - 4..], &[0, 33, 0, 1]);
         assert!(encode_query(1, "a..b", TYPE_SRV).is_err());
     }
 
     #[test]
     fn parses_srv_and_txt_with_compression() {
-        let name = "_ai-security-monitor._tcp.corp.example";
+        let name = "_aisecmon._tcp.corp.example";
         let b = srv_response(
             7,
             name,
