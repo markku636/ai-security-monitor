@@ -215,6 +215,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | ![Windows Server](docs/images/agent-server.png) Windows Server：網域控制站 dc-01（Server Core） | ![漏洞](docs/images/vulns.png) 漏洞與更新：作業系統支援期限、已被利用的漏洞、有漏洞的軟體 |
 | ![安全設定](docs/images/hardening.png) 安全設定：最常沒通過的檢查與各主機分數 | ![事件](docs/images/events.png) 當機與事件：藍屏代碼與可能原因、暴力破解來源 |
 | ![情資](docs/images/intel.png) 威脅情資：每台主機的名單新舊、授權、命中 | ![新增主機](docs/images/install.png) 新增主機：建立註冊金鑰並產生一行安裝指令 |
+| ![流量](docs/images/traffic.png) 流量：所有主機的頻寬圖、哪台與哪個程式用最多、各網卡 | ![效能](docs/images/agent-perf.png) 主機「效能」分頁（可選開啟）：CPU、記憶體、磁碟、電池、最吃資源的程式 |
 
 > 截圖全部是示範資料（虛構主機、文件專用的保留 IP、example.com），Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 產生。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
 
@@ -227,6 +228,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 - **漏洞與更新**：已安裝軟體、作業系統支援期限（含 Windows Server 2008 到 2025）、Windows 多久沒更新、Linux 待裝的安全性更新、常見軟體的已知漏洞版本（WinRAR、7-Zip、Chrome…），Linux 套件查 OSV，已被實際利用的（CISA KEV）升為嚴重。
 - **系統安全設定（硬化）**：60 條跨平台檢查（UAC、Defender、BitLocker、SMBv1、遠端桌面 NLA、SSH、核心參數、AppArmor／SELinux、FileVault、Gatekeeper…），自動分辨 Windows 用戶端、Server、Server Core 與網域控制站，可用 YAML 自訂。
 - **流量**：不抓封包也能看各程式連到哪裡；也能分析 Wireshark／tcpdump 存的 pcap／pcapng（DNS、TLS SNI、明文協定、大量上傳、定時連線）。
+- **流量統計與效能**：每分鐘記錄各網卡、各程式的上傳／下載量，Hub 畫出頻寬圖、哪台與哪個程式用最多；CPU、記憶體、磁碟、電池是**選用**的，預設關，要在那台電腦上自己開（桌面版設定或 `config set metrics.performance true`，Hub 無法從遠端開），磁碟快滿、CPU 長時間滿載會列成待處理問題。
 - **事件與當機**：Windows 事件記錄、藍屏 minidump、Linux journal、macOS 當機報告，整理出可能原因與處理方式；也抓暴力破解、帳號鎖定、從公網登入遠端桌面、新帳號、新服務、清除稽核記錄等資安事件。
 - **AI 與 MCP**：`ai ask`、`ai analyze` 交給 Claude Code 或 Codex CLI 解讀（只給唯讀工具）；`mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有全部主機層級的 MCP 和網頁上的 AI 助手。
 - **Hub**：總覽、主機、連線、待處理問題、漏洞、安全設定、流量、事件、情資、封鎖審核（簽章、主機身分綁定）、免金鑰加入申請與核准（DNS SRV、區網 mDNS 自動尋找）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
@@ -355,6 +357,7 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 | `fw` | 防火牆狀態、稽核、封鎖／解除、情資同步 |
 | `vuln`、`harden` | 漏洞與更新、系統安全設定 |
 | `traffic`、`events` | 流量觀察與 pcap 分析、事件與當機原因 |
+| `metrics` | 現在的上傳／下載速率（各網卡、各程式），開啟效能蒐集時另有 CPU、記憶體、磁碟 |
 | `ai`、`mcp` | Claude Code／Codex 分析、MCP server 與一鍵設定 |
 | `enroll`、`discover`、`unenroll`、`status`、`watch`、`service` | 找 Hub、加入 Hub、常駐回報、開機自動啟動 |
 | `self-update`、`version`、`doctor` | 更新與環境檢查 |
@@ -377,7 +380,7 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 
 ## 文件
 
-[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
+[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [流量統計與效能](docs/metrics.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
 ## 緣起

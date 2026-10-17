@@ -2,6 +2,15 @@
 
 ## 未發佈
 
+- **網路流量統計與效能（效能可選開啟）**（[docs/metrics.md](docs/metrics.md)）：每台電腦每分鐘記錄用了多少網路，Hub 畫出頻寬圖、哪台與哪個程式用最多；CPU、記憶體、磁碟要在那台電腦上自己開啟（預設關，Hub 無法從遠端開）。Windows（含 Server Core）、macOS、Linux 都支援。
+  - **網路（一律開啟）**：各網卡收發位元組（計數器相減，處理歸零與 32 位元溢位），只把實體網卡加總；VPN、Docker、WSL、Hyper-V 等虛擬網卡照列但標「虛擬」、不算進總量，Windows 網卡上疊的篩選層（`…Filter Driver-0000`）不列。各程式用量：Windows 以系統管理員執行時用 TCP 延伸統計、macOS 用 `nettop`，Linux 沒有（Hub 改看各行程的連線數）。
+  - **效能（`metrics.performance`，預設關）**：CPU 與核心數、記憶體、置換空間、各磁碟區用量與讀寫、開機時間、負載（Linux／macOS）、最吃 CPU／記憶體的前 5 個程式（同名合併）、電池（筆電）。開啟：桌面版「設定 → 蒐集這台電腦的效能（CPU、記憶體、磁碟）」或 `ai-security-monitor config set metrics.performance true`；背景服務每輪重讀設定，不用重新啟動。
+  - **agent**：`watch` 每 `metrics.interval`（預設 1 分鐘、最短 30 秒）取樣，在背景執行緒做、有逾時，不會卡住掃描與快照；有 Hub 時排進 `metrics/queue.jsonl`（離線最多一天）分批送出，Hub 太舊（404）就留著、升級後補送；本機保留最近 1 小時。新指令 `ai-security-monitor metrics`（`--json`、`--duration`、`--perf` 只在本機量一次），新設定 `metrics.performance`、`metrics.interval`、`metrics.process_network`，MCP 唯讀工具 `get_metrics`。
+  - **Hub**：`POST /api/v1/ingest/metrics`（一批最多 240 個樣本，同一樣本重送不重複計算；`contract/metrics.v1.json`）；新表 `host_metrics`、`host_metrics_hourly`（migration 0011），每 10 分鐘彙總成每小時資料（冪等、advisory lock）；原始樣本保留 `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS`（7 天）、每小時彙總 `AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS`（90 天）。
+  - **Hub 畫面**：流量頁多了期間（1 小時／24 小時／7 天／30 天）、所有主機的頻寬圖（下載／上傳，滑過看數值）、流量最多的主機（24 小時與 7 天）、各網卡、各程式的流量；主機頁新增「效能」分頁（CPU、記憶體、磁碟用量與讀寫、網路速率、電池、最吃資源的程式、各磁碟區；沒開啟時說明怎麼開），「流量」分頁加上這台的頻寬；總覽多了 24 小時流量與「資源吃緊的主機」。圖表是純 SVG（不加套件，深淺色、滑過提示、螢幕閱讀器表格）。
+  - **待處理問題**：開啟效能蒐集的主機，磁碟 ≥ 90% 或 CPU 連續 15 分鐘 ≥ 90% 會列成「低」（`metrics.disk_full`、`metrics.cpu_sustained`），恢復或關閉蒐集時自動解決。Hub MCP 新增 `fleet_traffic`、`host_performance`，「請 AI 解讀流量」也會看上傳／下載量。
+  - **桌面版**：總覽多一排卡片（網路速率與最近 1 小時小圖；開啟效能時另有 CPU、記憶體、磁碟），設定頁新增效能蒐集開關。
+  - **CI**：三個平台檢查 `metrics --json` 讀得到介面計數器、效能預設關、開啟後數值合理（Windows 檢查 TCP 延伸統計）；Hub smoke 送契約範例、e2e 確認 `watch --once` 有送樣本。`scripts/demo-seed.mjs` 多了 7 天的流量樣本（三台開啟效能、兩台沒開），README 與文件加上流量頁與主機「效能」分頁截圖。
 - **可疑 IP 排名可以選時間範圍（最近 7 天／30 天／全部，預設 30 天）**：依「最後一次被判可疑」的時間篩選，之後判定變好的 IP（例如修正前的 beacon 誤報）過了這段時間就不再列出。目的地表新增 `last_risky_at`（migration 0010，既有的可疑目的地先用最後看到的時間回填）。
 - **減少「週期性連線（疑似 beacon）」誤報**：瀏覽器、VS Code、Claude 等一般用戶端反覆開關 keep-alive 連到 Cloudflare、Microsoft、Google 這類服務，以前會被判可疑而佔滿「可疑 IP 排名」。現在週期至少要是快照間隔的 3 倍才算數（間隔只有一兩個快照時，規律其實是取樣造成的），連到已知良好服務或來自一般用戶端（瀏覽器、編輯器、AI 工具、通訊與同步軟體）的週期性不再判可疑；node、python、PowerShell 等通用執行環境與不明程式照樣偵測。
 - **圖示改成滿版圓角方塊（參考 db-kit）**：桌面版的應用程式圖示（標題列、工作列、系統匣、安裝檔）與 Hub 的瀏覽器分頁圖示改成深藍圓角方塊、海豹放大到帽子與臉撐滿，小尺寸（16／32px）也看得清楚；側欄的透明背景 logo 不變。

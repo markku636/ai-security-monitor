@@ -1,5 +1,5 @@
 // README 截圖：用無頭 Chrome／Edge（CDP，帶 Authorization 標頭）擷取 Security Hub 各頁。
-//   node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <secret> [--out docs/images] [--browser <path>]
+//   node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <secret> [--out docs/images] [--browser <path>] [--only traffic,agent-perf]
 // 建議先用 scripts/demo-seed.mjs 灌示範資料，別把真實主機資料放進公開的截圖。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -33,7 +33,7 @@ function findBrowser() {
   return candidates.find((p) => p && fs.existsSync(p));
 }
 
-// 名稱｜路徑｜寬度｜深色
+// 名稱｜路徑｜寬度｜深色｜高度（預設 900；長頁面拍高一點）
 const PAGES = [
   ['overview', '/', 1440],
   ['agent', '/agents/AGENT_FIN', 1440],
@@ -43,6 +43,9 @@ const PAGES = [
   ['vulns', '/vulns', 1440],
   ['hardening', '/hardening', 1440],
   ['events', '/events', 1440],
+  ['traffic', '/traffic', 1440, false, 1500],
+  ['agent-perf', '/agents/AGENT_FIN?tab=perf', 1440, false, 1700],
+  ['agent-perf-off', '/agents/AGENT_DC?tab=perf', 1440],
   ['intel', '/intel', 1440],
   ['install', '/install', 1440],
   ['overview-dark', '/', 1440, true],
@@ -107,15 +110,18 @@ const once = (name) =>
 await send('Page.enable');
 await send('Network.enable');
 await send('Network.setExtraHTTPHeaders', { headers: { authorization: `Bearer ${ADMIN}` } });
-for (const [name, p, width, dark] of PAGES) {
+const only = args.only ? new Set(args.only.split(',')) : null;
+for (const [name, p, width, dark, tall] of PAGES) {
+  if (only && !only.has(name)) continue;
   const url = HUB + p.replace('AGENT_FIN', encodeURIComponent(fin?.id ?? '')).replace('AGENT_DC', encodeURIComponent(dc?.id ?? ''));
   const mobile = width < 600;
-  await send('Emulation.setDeviceMetricsOverride', { width, height: mobile ? 844 : 900, deviceScaleFactor: 1, mobile });
+  await send('Emulation.setDeviceMetricsOverride', { width, height: mobile ? 844 : (tall ?? 900), deviceScaleFactor: 1, mobile });
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' }] });
   const loaded = once('Page.loadEventFired');
   await send('Page.navigate', { url });
   await loaded;
-  await sleep(500);
+  // 圖表是 client component：等量完寬度、重畫
+  await sleep(900);
   const shot = await send('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(shot.result.data, 'base64'));
   console.log(`${name}.png`);

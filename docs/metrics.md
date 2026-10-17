@@ -1,0 +1,105 @@
+# 網路流量統計與效能
+
+[English](metrics.en.md) | 繁體中文
+
+`ai-security-monitor` 每分鐘記錄這台電腦**用了多少網路**（各網卡、各程式的上傳／下載量），有加入 Security Hub 時一起回報，
+Hub 畫出頻寬圖、哪台與哪個程式用最多。**效能**（CPU、記憶體、磁碟、最吃資源的程式、電池）是**選用**的，預設關閉，
+要在那台電腦上自己開啟；Hub 無法從遠端開。
+
+| | 網路流量 | 效能 |
+|---|---|---|
+| 預設 | 開啟（很便宜：讀網卡計數器） | **關閉** |
+| 開啟方式 | — | 桌面版「設定 → 蒐集這台電腦的效能（CPU、記憶體、磁碟）」，或 `ai-security-monitor config set metrics.performance true` |
+| 送到哪裡 | 這台電腦加入的 Hub（沒加入就只留在本機最近 1 小時） | 同左 |
+| 頻率 | `metrics.interval`（預設 `1m`，最短 `30s`） | 同左 |
+
+背景服務（`watch --service`）每一輪都會重讀設定，桌面版或命令列切換開關後**不用重新啟動**。
+開了「開機／登入後在背景自動回報」，就算沒開桌面版視窗也會在背景持續蒐集。
+
+![Hub 流量頁：所有主機的頻寬圖、流量最多的主機、各網卡與各程式的流量](images/traffic.png)
+
+| | |
+|---|---|
+| ![主機「效能」分頁](images/agent-perf.png) 主機「效能」分頁：CPU、記憶體、磁碟、網路速率、電池、最吃資源的程式 | ![效能未開啟](images/agent-perf-off.png) 沒開啟效能蒐集的主機：說明怎麼開，仍顯示網路速率 |
+
+## 蒐集什麼（依作業系統）
+
+| 項目 | Windows（含 Server、Server Core） | macOS | Linux |
+|---|---|---|---|
+| 各網卡收發位元組 | ✓（`GetIfTable2`；網卡上疊的篩選層不列） | ✓ | ✓（`/sys/class/net`） |
+| 虛擬網卡判斷 | 名稱（vEthernet／Hyper-V、WSL、VPN、VirtualBox、VMware…） | 名稱（utun、awdl、llw、bridge…） | `/sys/class/net/<名稱>` 在 `devices/virtual` 底下，或名稱（docker、veth、br-、tun、wg…） |
+| 各程式收發量 | ✓ 需要**系統管理員**（TCP 延伸統計 `GetPerTcpConnectionEStats`；背景系統服務就是） | ✓（系統內建 `nettop`） | ✗（需要 eBPF；Hub 改顯示各程式的連線數） |
+| CPU（整體、核心數） | ✓ | ✓ | ✓ |
+| 記憶體、置換空間 | ✓ | ✓ | ✓ |
+| 各磁碟區用量 | ✓ | ✓（只看 `/`，APFS 的 `/System/Volumes/*` 共用同一個容器） | ✓（略過 squashfs、overlay、tmpfs、`/snap`、`/boot/efi`） |
+| 磁碟讀寫量 | ✓（`IOCTL_DISK_PERFORMANCE`；`diskperf` 關掉時沒有） | ✓ | ✓ |
+| 開機時間 | ✓ | ✓ | ✓ |
+| 負載（1／5／15 分鐘） | ✗ | ✓ | ✓ |
+| 最吃 CPU／記憶體的前 5 個程式 | ✓（同名合併，例如 chrome.exe ×31） | ✓ | ✓ |
+| 電池 | ✓（`GetSystemPowerStatus`；桌機／伺服器沒有就不送） | ✓（`pmset -g batt`） | ✓（`/sys/class/power_supply`，略過滑鼠等周邊） |
+
+- **總量只算實體網卡**：VPN、Docker、WSL、Hyper-V 的流量其實也會經過實體網卡，加進去會重複計算；虛擬網卡照樣列出、標「虛擬」。
+  只有虛擬網卡的環境（例如跑在容器裡）才改算虛擬網卡。迴路介面（`lo`）完全不列。
+- **計數器歸零與溢位**：兩次讀數相減；變小時，如果上一次已接近 32 位元上限（> 3 GiB）而這次很小，當成 32 位元計數器繞一圈，
+  否則當成歸零（重開機、網卡重設、休眠喚醒）只算歸零後的量；換算超過 100 Gbps 的差值一律夾到上限。
+- **各程式（Windows）**：每次取樣對所有已建立的 TCP 連線開啟延伸統計再讀累計資料位元組，兩次相減。沒有系統管理員權限時不讀
+  （沒開統計的連線回來的是沒意義的殘值）。只算 TCP 的資料位元組（不含標頭、不含 UDP），連線在兩次取樣之間就關掉時，最後那段量會漏掉。
+- 取樣在背景執行緒做、整體 25 秒逾時，`nettop`／`pmset` 各有 5–8 秒逾時，永遠不會卡住 `watch` 的掃描、快照與心跳。
+
+## 命令列
+
+```bash
+ai-security-monitor metrics                    # 現在的上傳／下載速率、各網卡、各程式；有開啟效能就一起顯示
+ai-security-monitor metrics --perf             # 沒開啟也量一次 CPU、記憶體、磁碟（只在本機顯示，不會上傳）
+ai-security-monitor --json metrics --duration 5s
+ai-security-monitor config set metrics.performance true    # 開啟效能蒐集（false 關閉）
+ai-security-monitor config set metrics.interval 2m          # 取樣間隔（最短 30s）
+ai-security-monitor config set metrics.process_network false  # 不估算各程式的網路用量
+```
+
+`metrics` 只在本機量一次（預設 2 秒），不碰背景服務的待送佇列。`--json` 另外列出每個網卡開機後的累計計數器、
+這台是不是系統管理員、待送樣本數與本機保留的最近樣本數。MCP 工具 `get_metrics` 回傳同樣的資料加上最近 1 小時的摘要（尖峰速率、平均／最高 CPU、最常用網路的程式）。
+
+## 傳到 Hub
+
+- 每個樣本是「`ts` 往前 `interval_s` 秒內」的量（`contract/metrics.v1.json`）：`net`（實體網卡總量、各網卡、各程式）、`perf`（只有開啟時才有）。
+  批次外層的 `performance` 告訴 Hub 這台有沒有開啟效能蒐集。一個含效能的樣本約 1–2 KB。
+- `POST /api/v1/ingest/metrics`，一批最多 240 個樣本（agent 每批送 120 個，超過 16 KB 就 gzip）。
+- **離線**：樣本先排進 `<設定目錄>/metrics/queue.jsonl`（最多 1440 個，約一天；滿了丟最舊的），Hub 恢復後每輪最多補送 3 批。
+  Hub 太舊沒有這個端點（404）時樣本留著、30 分鐘後再試，Hub 升級後自動補送。被拒收（400／413／422）的那批直接丟掉。
+- 重送不會重複計算：Hub 以 (主機, 樣本時間) 為唯一鍵。
+- 本機另外保留最近 60 個樣本（`metrics/recent.json`），給桌面版的小圖與 `get_metrics`。
+
+## Hub
+
+- **資料表**：`host_metrics`（每個樣本一列）、`host_metrics_hourly`（每小時彙總：總量、各網卡、前 10 個程式、CPU 平均／最高、記憶體、磁碟最滿、讀寫量、電池）。
+  `agents.metrics_at`、`agents.perf_enabled`（`null`＝還沒送過樣本）。
+- **保留期限**：原始樣本 `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS`（預設 7 天，1–90）、每小時彙總 `AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS`（預設 90 天）；舊名 `ASA_HUB_*` 也可以。
+  超過原始資料保留天數的樣本收到時直接略過。
+- **彙總**：Hub 每 10 分鐘（收到樣本後 1 分鐘內也會）重算「有新樣本進來的那幾個小時」，可重跑、結果相同；用 PostgreSQL advisory lock，多個 Hub 行程只有一個在做；同一輪清掉過期資料。
+- **畫面**：
+  - 流量頁：期間 1 小時／24 小時／7 天／30 天（1 小時與 24 小時用每分鐘資料，7 天與 30 天用每小時彙總）；所有主機的頻寬圖（下載／上傳，滑過看每個時段的值）、
+    流量最多的主機（24 小時與 7 天）、各網卡（虛擬網卡標出）、各程式的流量（量不到的主機會註明）。依裝置篩選時只看那台。
+  - 主機頁「效能」分頁：CPU、記憶體、最滿的磁碟區、電池或開機時間的現值；CPU（平均與最高）、記憶體、磁碟用量、磁碟讀寫、網路速率、電池的圖；
+    最吃 CPU／記憶體的程式；各磁碟區。沒開啟時顯示「未開啟」與開啟方式，下面仍有網路速率。「流量」分頁也加上這台的頻寬與各網卡。
+  - 總覽：24 小時流量（所有主機）、「資源吃緊的主機」（最新一分鐘 CPU、記憶體或任一磁碟 ≥ 90%）。
+- **待處理問題**（只對開啟效能蒐集的主機，嚴重度「低」，規則 `metrics.*`）：
+  - `metrics.disk_full`：任一磁碟區 ≥ 90%；
+  - `metrics.cpu_sustained`：最近 15 分鐘的每個樣本 CPU 都 ≥ 90%（至少 3 個樣本）；最近 5 分鐘平均降到 80% 以下才解除。
+  條件不成立、或主機關掉效能蒐集時自動標為已解決。
+- **MCP**（唯讀）：`fleet_traffic`（總量與尖峰、主機排行、各網卡、各程式）、`host_performance`（單台主機的效能摘要與最新值；不給主機時列出 ≥ 90% 的主機）。
+  「請 AI 解讀流量」也會看上傳／下載量。
+
+## 隱私
+
+- 只送到這台電腦加入的 Hub；沒加入 Hub 時只留在本機（最近 1 小時）。
+- 不送封包內容、網址或檔名：網路只有位元組數、網卡名稱與程式名稱；效能只有數字與程式名稱、pid、記憶體。
+- 效能預設關閉，由電腦本身決定，Hub 沒有任何遠端開啟的方法；關閉後 Hub 會自動解決已開的效能問題。
+
+## 限制
+
+- Linux 沒有各程式的網路用量（不裝 eBPF 拿不到）；Hub 的流量頁改看「各行程目前的連線」。
+- Windows 的各程式用量需要系統管理員，只算 TCP 資料位元組；以一般使用者執行的登入啟動版本沒有這一項。
+- macOS 的 `nettop` 在部分受管環境（MDM 限制、CI 機器）可能讀不到，這時只是少了各程式的用量。
+- 磁碟讀寫量依平台：Windows 關掉磁碟效能計數器（`diskperf -n`）時沒有；網路磁碟與 tmpfs 不列。
+- 取樣間隔內關機或休眠，那段時間的量會算進喚醒後的第一個樣本（速率以實際經過時間計算）。

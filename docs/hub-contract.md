@@ -54,6 +54,14 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 內容：`contract/snapshot.v1.json`（目前連線與 listener，每條連線帶方向與判定）。整批替換該 agent 的最新連線，並彙總目的地（保留最嚴重的判定）。
 最短間隔 `AI_SECURITY_MONITOR_HUB_SNAPSHOT_MIN_INTERVAL_MS`（預設 10 秒）。未註冊的 agent 回 409。
 
+### `POST /api/v1/ingest/metrics`
+
+內容：`contract/metrics.v1.json` `{ agent_id, performance, samples: [{ ts, interval_s, net: { rx_bytes, tx_bytes, interfaces[], processes?, process_source? }, perf? }] }`，一批 1–240 個樣本、壓縮後 ≤ 1 MB。`performance` 是這台有沒有開啟效能蒐集（Hub 無法從遠端開）；`perf` 只有開啟時才有。
+- (agent, `ts`) 唯一：重送（agent 的離線佇列）不重複計算；未來時間夾到現在；比 `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS`（預設 7 天）舊的樣本略過。
+- 限流依這批最新樣本的時間（最短間隔同快照），補送的舊批次不會被擋。未註冊的 agent 回 409。
+- 回應：`{ ok, stored, duplicate, stale, performance, server_time }`。舊版 Hub 沒有這個端點（404）時，agent 保留樣本、30 分鐘後再試。
+- 細節與保留期限見 [metrics.md](metrics.md)。
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated }`。未知 agent 回 404。
@@ -105,6 +113,7 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 
 1. 讀設定與金鑰 → `register`（每次啟動都更新身分與版本）。
 2. 每 `snapshot_interval`（預設 1 分鐘）：拍連線快照（含情資判定）→ `ingest/snapshot`，接著 `heartbeat`；有待執行的遠端動作就領取、驗章、執行並回報。
+   每 `metrics.interval`（預設 1 分鐘）：取一個流量（＋效能）樣本 → 排進 `metrics/queue.jsonl` → `ingest/metrics`（每輪最多 3 批、每批 120 個）。
 3. 每 `interval`（預設 10 分鐘）：先送 outbox 裡的舊報告（遇到可重試錯誤就停）→ 掃描 → `ingest/report`；失敗就放進 outbox。
 4. 最新報告存在 `<config>/reports/latest.json`，`ai-security-monitor status` 顯示 hub 狀態、待重送數與最後一次掃描。
 

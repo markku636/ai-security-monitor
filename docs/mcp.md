@@ -34,6 +34,7 @@ ai-security-monitor mcp uninstall --client cursor --yes
 | `events_summary`／`crash_history`／`explain_code` | 事件與當機、藍屏代碼與事件 ID 說明 |
 | `vuln_summary` | 作業系統支援期限、最近更新、已知漏洞版本的軟體（CVE、NVD 連結）、Linux 套件 OSV、KEV |
 | `hardening_status` | 系統硬化檢查每條結果、目前值、修正方式與加權分數（`only_failed`、`category`） |
+| `get_metrics` | 網路流量（各網卡、各程式的上傳／下載）與效能（使用者有開啟才有）：現在的值與最近 1 小時摘要，見 [metrics.md](metrics.md) |
 | `preview_action`／`execute_action` | 防禦動作（只在 `--allow-actions` 時出現） |
 
 預設全部唯讀。要讓 AI 能封鎖 IP，伺服器啟動時加 `--allow-actions`（關閉 port 另需 `--allow-destructive`）；
@@ -77,7 +78,7 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 ```
 
 工具（全部唯讀）：`fleet_summary`、`list_agents`、`list_findings`、`list_connections`、`inbound_attackers`、`lookup_indicator`、`top_destinations`、
-`crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`、`vuln_overview`、`hardening_overview`。資料與 Hub 頁面同一份查詢。
+`crash_history`、`security_events`、`brute_force_sources`、`explain_bugcheck`、`list_actions`、`intel_feeds`、`vuln_overview`、`hardening_overview`、`fleet_traffic`（流量總量、主機排行、各網卡、各程式）、`host_performance`（單台主機的效能，或 ≥ 90% 的主機）。資料與 Hub 頁面同一份查詢。
 認證建議用 Hub「設定與金鑰 → API token」建立、勾選 MCP 權限的唯讀 token（可設期限、可撤銷）；也接受 `AI_SECURITY_MONITOR_HUB_MCP_TOKEN` 或管理員金鑰；開放模式（沒設管理員金鑰）只接受本機的 Host／Origin。
 
 ## Hub 的 AI 分析頁（/ai）

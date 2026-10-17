@@ -215,6 +215,7 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 | ![Windows Server](docs/images/agent-server.png) Windows Server: domain controller dc-01 (Server Core) | ![Vulnerabilities](docs/images/vulns.png) Vulnerabilities & updates: OS support dates, exploited vulnerabilities, vulnerable software |
 | ![Hardening](docs/images/hardening.png) Hardening: the most commonly failed checks and per-host scores | ![Events](docs/images/events.png) Crashes & events: bugcheck codes and likely causes, brute-force sources |
 | ![Intel](docs/images/intel.png) Threat intel: list freshness per host, licenses, hits | ![Add a host](docs/images/install.png) Add a host: create an enroll key and get a one-line install command |
+| ![Traffic](docs/images/traffic.png) Traffic: fleet bandwidth chart, which hosts and programs use the most, per network card | ![Performance](docs/images/agent-perf.png) Host "Performance" tab (opt-in): CPU, memory, disk, battery, top programs |
 
 > All screenshots use demo data (fictional hosts, documentation-only IP ranges, example.com): the Hub is seeded by `scripts/demo-seed.mjs` and the desktop shots come from `scripts/capture-desktop-screenshots.mjs`. The UI is shown in Traditional Chinese; the Hub also has English. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md).
 
@@ -227,6 +228,7 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 - **Vulnerabilities and updates**: installed software, OS support dates (including Windows Server 2008 to 2025), how long Windows has gone without updates, pending Linux security updates, known vulnerable versions of common software (WinRAR, 7-Zip, Chrome, …), OSV lookups for Linux packages; anything in CISA KEV (actively exploited) is raised to critical.
 - **Security settings (hardening)**: 60 cross-platform checks (UAC, Defender, BitLocker, SMBv1, Remote Desktop NLA, SSH, kernel parameters, AppArmor / SELinux, FileVault, Gatekeeper, …), aware of Windows client, Server, Server Core and domain controllers, customisable in YAML.
 - **Traffic**: see where each program connects without capturing packets; analyze pcap / pcapng files from Wireshark / tcpdump (DNS, TLS SNI, cleartext protocols, large uploads, periodic connections).
+- **Traffic statistics and performance**: upload/download per network card and per program every minute, charted on the Hub (bandwidth, which hosts and programs use the most); CPU, memory, disk and battery are **opt-in**, off by default and turned on on the computer itself (desktop Settings or `config set metrics.performance true`; the Hub cannot turn it on); a nearly full disk or a long-maxed-out CPU becomes a finding.
 - **Events and crashes**: Windows event logs, bugcheck minidumps, Linux journal and macOS crash reports, summarised into likely causes and what to do; also brute-force attempts, account lockouts, Remote Desktop logons from the internet, new accounts, new services and cleared audit logs.
 - **AI and MCP**: `ai ask` / `ai analyze` hand things to Claude Code or Codex CLI (read-only tools only); `mcp` lets Claude Code / Codex / Cursor / VS Code query this computer directly; the Hub has a fleet-wide MCP and an AI assistant in the web UI.
 - **Hub**: overview, hosts, connections, findings, vulnerabilities, hardening, traffic, events, intel, block approvals (signed, pinned host identity), keyless join requests with approval (found via DNS SRV or LAN mDNS), enroll keys, read-only API tokens, audit log, CSV export, Chinese and English, dark mode, mobile layout.
@@ -355,6 +357,7 @@ ai-security-monitor service install --yes        # report automatically after lo
 | `fw` | Firewall status, audit, block / unblock, intel sync |
 | `vuln`, `harden` | Vulnerabilities and updates, security settings |
 | `traffic`, `events` | Traffic watching and pcap analysis, events and crash causes |
+| `metrics` | Current upload/download rate (per card, per program); with performance collection on also CPU, memory and disk |
 | `ai`, `mcp` | Claude Code / Codex analysis, MCP server and one-step client setup |
 | `enroll`, `discover`, `unenroll`, `status`, `watch`, `service` | Find a Hub, join it, keep reporting, start at boot |
 | `self-update`, `version`, `doctor` | Updates and environment check |
@@ -377,7 +380,7 @@ See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/servi
 
 ## Docs
 
-[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
+[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Traffic statistics & performance](docs/metrics.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
 ## Why this exists

@@ -34,6 +34,7 @@ Supported clients: `claude-code` (user or `--project` `.mcp.json`), `codex`, `cu
 | `events_summary` / `crash_history` / `explain_code` | events and crashes, bugcheck codes and event IDs |
 | `vuln_summary` | OS support lifetime, last update, software on known-vulnerable versions (CVE, NVD link), Linux OSV results, KEV |
 | `hardening_status` | every hardening check with current value, fix and weighted score (`only_failed`, `category`) |
+| `get_metrics` | network traffic (upload/download per card and per program) and performance (only when the user turned it on): current values and a summary of the last hour, see [metrics.en.md](metrics.en.md) |
 | `preview_action` / `execute_action` | defensive actions (listed only with `--allow-actions`) |
 
 Everything is read-only by default. To let the AI block IPs, start the server with `--allow-actions` (closing ports also needs `--allow-destructive`);
@@ -77,7 +78,7 @@ claude mcp add --transport http asahub https://<hub>/api/mcp --header "Authoriza
 ```
 
 Tools (all read-only): `fleet_summary`, `list_agents`, `list_findings`, `list_connections`, `inbound_attackers`, `lookup_indicator`, `top_destinations`,
-`crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`, `vuln_overview`, `hardening_overview`. They use the same queries as the hub pages.
+`crash_history`, `security_events`, `brute_force_sources`, `explain_bugcheck`, `list_actions`, `intel_feeds`, `vuln_overview`, `hardening_overview`, `fleet_traffic` (traffic totals, host ranking, per card, per program), `host_performance` (one host's performance, or hosts at ≥ 90%). They use the same queries as the hub pages.
 Authenticate with a read-only API token created under "Settings & keys → API token" with the MCP scope (expiry and revocation supported); `AI_SECURITY_MONITOR_HUB_MCP_TOKEN` or the admin key also work; open mode (no admin key) only accepts loopback Host/Origin.
 
 ## The hub's AI page (/ai)

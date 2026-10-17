@@ -10,6 +10,10 @@ There are two modes; both produce the same summary (`TrafficSummary`), which is 
 | Live (flow-lite) | `ai-security-monitor traffic [--duration 30s]` | nothing to install, no administrator rights | which process talks to which remote, newly opened connections, interface totals, intel hits, risky ports, beaconing (from the 24-hour connection history) |
 | Offline (pcap) | `ai-security-monitor traffic analyze <file>` | a `.pcap` / `.pcapng` from any tool | all of the above plus per-connection bytes, DNS queries and answers, TLS SNI, HTTP Host, large uploads, plain-text protocols |
 
+In addition, `watch` (the background service) records upload/download per network card and per program every minute and reports it to the Hub (bandwidth charts, which hosts and programs use the most); on the command line `ai-security-monitor metrics` shows the current rates. See [metrics.en.md](metrics.en.md).
+
+![Hub traffic page](images/traffic.png)
+
 `ai-security-monitor` does not install a capture driver. For packet-level analysis, save a capture with a built-in or trusted tool and hand it to `ai-security-monitor traffic analyze`:
 
 ```powershell
@@ -47,5 +51,5 @@ Every list in the summary is capped (15 top destinations, 50 DNS names, 30 SNI/H
 
 - Offline mode decides client/server by who sent the SYN; UDP conversations already in progress when the capture started are guessed from ports and are occasionally reversed.
 - SNI is read from the first TCP segment of the ClientHello only; it is missed when the hello is split (rare) or with TLS 1.3 ECH.
-- Live mode cannot see per-connection bytes on Windows (needs ETW; planned).
+- Live mode (`traffic`) cannot see per-connection bytes on Windows; per-program bytes come from the traffic statistics instead (Windows needs administrator rights, see [metrics.en.md](metrics.en.md)).
 - At most 2 million packets and 20,000 flows are processed; anything beyond is noted in `notes`.

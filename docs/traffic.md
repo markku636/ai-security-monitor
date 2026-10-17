@@ -10,6 +10,10 @@
 | 即時（flow-lite） | `ai-security-monitor traffic [--duration 30s]` | 什麼都不用裝、不需要系統管理員 | 每個行程連到哪些遠端、新出現的連線、介面總流量、情資命中、高風險 port、週期性連線（用 24 小時連線歷史） |
 | 離線（pcap） | `ai-security-monitor traffic analyze <檔案>` | 一個 `.pcap`／`.pcapng`（任何工具存的都行） | 以上全部，再加上逐連線位元組、DNS 查詢與回應、TLS SNI、HTTP Host、大量上傳、明文協定 |
 
+另外，`watch`（背景服務）每分鐘記錄各網卡、各程式的上傳／下載量並回報 Hub（頻寬圖、哪台與哪個程式用最多），命令列用 `ai-security-monitor metrics` 看現在的速率；見 [metrics.md](metrics.md)。
+
+![Hub 流量頁](images/traffic.png)
+
 `ai-security-monitor` 本身不安裝抓包驅動。要逐封包分析時，用系統內建或你信任的工具存檔，再交給 `ai-security-monitor traffic analyze`：
 
 ```powershell
@@ -47,5 +51,5 @@ ai-security-monitor traffic analyze cap.pcap
 
 - 離線模式用「誰先送 SYN」判斷 client／server；擷取開始時已在進行的 UDP 會話用 port 猜，偶爾會反過來。
 - SNI 只看 ClientHello 的第一個 TCP 區段；被切成多段（少見）或 TLS 1.3 ECH 時抓不到。
-- 即時模式在 Windows 看不到逐連線位元組（需要 ETW，之後的版本再補）。
+- 即時模式（`traffic`）在 Windows 看不到逐連線位元組；各程式的收發量改由流量統計提供（Windows 需要系統管理員，見 [metrics.md](metrics.md)）。
 - 一次最多處理 200 萬個封包、追蹤 2 萬條流；超過的會在 `notes` 註明。

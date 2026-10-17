@@ -1,6 +1,7 @@
 // 示範資料：五台虛構主機（文件保留網段 IP，RFC 5737；含一台 Windows Server 網域控制站），經由正式的 ingest API 送進 Security Hub，供截圖與試玩。
 //   node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <AI_SECURITY_MONITOR_HUB_ADMIN_SECRET>
-// Hub 要能收到過去時間的報告：會用網頁 API 建一把註冊金鑰，每台送 6 份報告（每小時一份）＋連線快照。
+// Hub 要能收到過去時間的報告：會用網頁 API 建一把註冊金鑰，每台送 6 份報告（每小時一份）＋連線快照，
+// 以及 7 天的流量樣本（其中三台含效能）。
 import crypto from 'node:crypto';
 
 const args = Object.fromEntries(
@@ -549,6 +550,137 @@ const HOSTS = [
   },
 ];
 
+// ---------------- 流量與效能（POST /api/v1/ingest/metrics） ----------------
+// 最近 24 小時每分鐘一個樣本，再往前 6 天每 10 分鐘一個（7 天的圖與排行）。web-01、db-02、fin-laptop-07 開啟效能蒐集，
+// dc-01、design-mac-03 沒開（主機頁「效能」分頁顯示「未開啟」）。
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const METRICS = {
+  'web-01': {
+    performance: true,
+    ifaces: [['eth0', false, 1], ['docker0', true, 0.15]],
+    rx: 0.5 * MB, tx: 1.4 * MB, office: 0.4,
+    cores: 8, mem: [9.8 * GB, 16 * GB], swap: [0.2 * GB, 2 * GB], cpu: [18, 42], load: true,
+    disks: [{ mount: '/', fs: 'ext4', used: 54 * GB, total: 98 * GB }, { mount: '/var/lib/docker', fs: 'xfs', used: 120 * GB, total: 250 * GB }],
+    top: [['nginx', 6, 0.22, 380 * MB], ['node', 2, 0.35, 1.4 * GB], ['dockerd', 1, 0.04, 310 * MB], ['sshd', 3, 0.01, 22 * MB], ['ai-security-monitor', 1, 0.01, 48 * MB]],
+  },
+  'db-02': {
+    performance: true,
+    ifaces: [['eth0', false, 1]],
+    rx: 1.1 * MB, tx: 0.7 * MB, office: 0.6,
+    cores: 16, mem: [27.5 * GB, 32 * GB], swap: [1.1 * GB, 4 * GB], cpu: [25, 58], load: true,
+    // 資料庫磁碟 93%：會變成「低」的待處理問題，總覽的「資源吃緊的主機」也會列出
+    disks: [{ mount: '/', fs: 'xfs', used: 21 * GB, total: 60 * GB }, { mount: '/var/lib/pgsql', fs: 'xfs', used: 465 * GB, total: 500 * GB }],
+    top: [['postgres', 42, 0.8, 22 * GB], ['pgbackrest', 1, 0.08, 120 * MB], ['ai-security-monitor', 1, 0.01, 44 * MB]],
+  },
+  'fin-laptop-07': {
+    performance: true,
+    ifaces: [['Wi-Fi', false, 1], ['vEthernet (WSL (Hyper-V firewall))', true, 0.02]],
+    rx: 0.9 * MB, tx: 0.15 * MB, office: 0.95,
+    cores: 12, mem: [11.2 * GB, 16 * GB], swap: [1.6 * GB, 5 * GB], cpu: [8, 26],
+    disks: [{ mount: 'C:\\', fs: 'NTFS', used: 338 * GB, total: 476 * GB }],
+    battery: true,
+    // 以一般使用者執行：量不到各程式的流量（Windows 的 TCP 延伸統計需要系統管理員）
+    top: [['chrome.exe', 31, 0.35, 3.1 * GB], ['Teams.exe', 9, 0.2, 1.3 * GB], ['OUTLOOK.EXE', 1, 0.12, 640 * MB], ['updater.exe', 1, 0.05, 96 * MB], ['MsMpEng.exe', 1, 0.08, 410 * MB]],
+    // 兩小時前 updater.exe 往外傳了一大批資料；最近 16 分鐘 CPU 滿載
+    spike: { minsAgo: 120, len: 18, tx: 6.5 * MB },
+    hot: { minsAgo: 16, cpu: 96, proc: 'updater.exe' },
+  },
+  'dc-01': {
+    performance: false,
+    ifaces: [['Ethernet', false, 1]],
+    rx: 0.35 * MB, tx: 0.42 * MB, office: 0.5,
+    procs: [['lsass.exe', 0.4, 0.5], ['svchost.exe', 0.25, 0.2], ['dfsrs.exe', 0.2, 0.25], ['dns.exe', 0.1, 0.05]],
+    source: 'estats',
+  },
+  'design-mac-03': {
+    performance: false,
+    ifaces: [['en0', false, 1], ['utun3', true, 0.08], ['awdl0', true, 0.01]],
+    rx: 1.6 * MB, tx: 0.5 * MB, office: 1,
+    procs: [['Figma', 0.35, 0.3], ['Google Chrome He', 0.3, 0.1], ['zoom.us', 0.2, 0.55], ['Dropbox', 0.15, 0.05]],
+    source: 'nettop',
+  },
+};
+
+// 台灣上班時間（UTC 01:00–10:00）流量比較多
+function officeFactor(t, weight) {
+  const h = new Date(t).getUTCHours() + new Date(t).getUTCMinutes() / 60;
+  const day = h >= 1 && h <= 10 ? 0.5 + 0.5 * Math.sin(((h - 1) / 9) * Math.PI) : 0;
+  return 1 - weight + weight * (0.15 + 1.6 * day);
+}
+const wobble = (seed, t) => 0.75 + 0.5 * ((Math.sin(seed * 12.9898 + t / 97_000) * 43758.5453) % 1 + 1) % 1;
+
+function metricSample(host, m, t, interval) {
+  const seed = host.length;
+  const f = officeFactor(t, m.office) * wobble(seed, t);
+  let rxRate = m.rx * f;
+  let txRate = m.tx * f;
+  const ago = (now - t) / 60_000;
+  const inSpike = m.spike && ago <= m.spike.minsAgo && ago > m.spike.minsAgo - m.spike.len;
+  if (inSpike) txRate += m.spike.tx;
+  const rx = Math.round(rxRate * interval);
+  const tx = Math.round(txRate * interval);
+  const net = {
+    rx_bytes: rx,
+    tx_bytes: tx,
+    interfaces: m.ifaces.map(([name, virt, share]) => ({ name, virtual: virt, rx_bytes: Math.round(rx * share), tx_bytes: Math.round(tx * share) })),
+  };
+  if (m.procs) {
+    net.processes = m.procs.map(([name, rs, ts]) => ({ name, rx_bytes: Math.round(rx * rs), tx_bytes: Math.round(tx * ts) }));
+    net.process_source = m.source;
+  }
+  const s = { ts: new Date(t).toISOString(), interval_s: interval, net };
+  if (!m.performance) return s;
+  const hot = m.hot && ago <= m.hot.minsAgo;
+  const cpu = hot ? m.hot.cpu + 2 * wobble(seed + 1, t) : m.cpu[0] + (m.cpu[1] - m.cpu[0]) * officeFactor(t, m.office) * 0.8 * wobble(seed + 2, t);
+  const memUsed = Math.min(m.mem[1], m.mem[0] * (0.92 + 0.12 * wobble(seed + 3, t)));
+  const top = m.top.map(([name, count, share, rss]) => ({ name, count, cpu_pct: +(cpu * share).toFixed(1), rss: Math.round(rss), ...(count === 1 ? { pid: 1000 + ([...name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 8000) } : {}) }));
+  if (hot) {
+    const p = top.find((x) => x.name === m.hot.proc);
+    if (p) p.cpu_pct = 71.4;
+  }
+  const byCpu = [...top].sort((a, b) => b.cpu_pct - a.cpu_pct).slice(0, 5);
+  const byMem = [...top].sort((a, b) => b.rss - a.rss).slice(0, 5);
+  s.perf = {
+    cpu_pct: +Math.min(100, cpu).toFixed(1),
+    cpu_cores: m.cores,
+    mem_used: Math.round(memUsed),
+    mem_total: Math.round(m.mem[1]),
+    swap_used: Math.round(m.swap[0]),
+    swap_total: Math.round(m.swap[1]),
+    disks: m.disks.map((d) => ({ ...d, used: Math.round(d.used), total: Math.round(d.total) })),
+    disk_read_bytes: Math.round(interval * 2.5 * MB * f),
+    disk_write_bytes: Math.round(interval * 0.9 * MB * f),
+    ...(m.load ? { load: [+(cpu / 25).toFixed(2), +(cpu / 28).toFixed(2), +(cpu / 30).toFixed(2)] } : {}),
+    uptime_s: 86_400 * 3,
+    boot_time: new Date(now - 86_400_000 * 3).toISOString(),
+    top_cpu: byCpu,
+    top_mem: byMem,
+    ...(m.battery
+      ? (() => {
+          // 白天用電池、晚上充電
+          const h = new Date(t).getUTCHours();
+          const charging = h < 1 || h >= 10;
+          const pct = charging ? Math.min(100, 40 + (((h + 14) % 24) - 0) * 6) : Math.max(18, 100 - (h - 1) * 9);
+          return { battery: { percent: Math.round(pct), charging, plugged: charging } };
+        })()
+      : {}),
+  };
+  return s;
+}
+
+async function seedMetrics(h, agentId, agentToken, key) {
+  const m = METRICS[h.hostname];
+  if (!m) return 0;
+  const list = [];
+  for (let t = now - 7 * 86_400_000 + 600_000; t < now - 86_400_000; t += 600_000) list.push(metricSample(h.hostname, m, t, 600));
+  for (let t = now - 86_400_000 + 60_000; t <= now; t += 60_000) list.push(metricSample(h.hostname, m, t, 60));
+  for (let i = 0; i < list.length; i += 240) {
+    await call('/api/v1/ingest/metrics', { token: key, agentId, agentToken, body: { agent_id: agentId, performance: m.performance, samples: list.slice(i, i + 240) } });
+  }
+  return list.length;
+}
+
 // ---------------- 送出 ----------------
 async function call(path, { token, body, agentId, agentToken, method = 'POST' } = {}) {
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
@@ -620,6 +752,7 @@ for (const h of HOSTS) {
       intel_feeds: { ok: 16, total: 16, source: h.hostname === 'design-mac-03' ? 'vendor' : 'hub' },
     },
   });
-  console.log(`seeded ${h.hostname} (${agentId})`);
+  const samples = await seedMetrics(h, agentId, agentToken, key);
+  console.log(`seeded ${h.hostname} (${agentId}; ${samples} traffic samples)`);
 }
 console.log('done');

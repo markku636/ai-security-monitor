@@ -55,6 +55,14 @@ Body: `contract/report.v1.json` (a full scan report).
 Body: `contract/snapshot.v1.json` (current connections and listeners, each connection with direction and verdict). Replaces the agent's latest
 connections and aggregates destinations (keeping the worst verdict). Minimum interval `AI_SECURITY_MONITOR_HUB_SNAPSHOT_MIN_INTERVAL_MS` (default 10 s). Unregistered agents get 409.
 
+### `POST /api/v1/ingest/metrics`
+
+Body: `contract/metrics.v1.json` `{ agent_id, performance, samples: [{ ts, interval_s, net: { rx_bytes, tx_bytes, interfaces[], processes?, process_source? }, perf? }] }`, 1–240 samples per batch, ≤ 1 MB compressed. `performance` says whether this computer turned performance collection on (the Hub cannot turn it on); `perf` is present only then.
+- (agent, `ts`) is unique: re-sending (the agent's offline queue) never double counts; future timestamps are clamped to now; samples older than `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS` (default 7 days) are ignored.
+- Throttling uses the newest sample time of the batch (same minimum interval as snapshots), so queued older batches are not blocked. Unregistered agents get 409.
+- Response: `{ ok, stored, duplicate, stale, performance, server_time }`. When an older Hub does not have the endpoint (404), the agent keeps the samples and retries after 30 minutes.
+- Details and retention: [metrics.en.md](metrics.en.md).
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated }`. Unknown agents get 404.
@@ -110,6 +118,7 @@ All binary values are base64url without padding; fingerprints/codes are RFC 4648
 
 1. Load config and key → `register` (identity and version are refreshed on every start).
 2. Every `snapshot_interval` (default 1 min): take a connection snapshot (with intel verdicts) → `ingest/snapshot`, then `heartbeat`; pending remote actions are fetched, verified, executed and reported.
+   Every `metrics.interval` (default 1 min): take a traffic (+ performance) sample → queue it in `metrics/queue.jsonl` → `ingest/metrics` (up to 3 batches of 120 per round).
 3. Every `interval` (default 10 min): flush queued reports first (stop at the first retryable error) → scan → `ingest/report`; queue it on failure.
 4. The latest report is saved to `<config>/reports/latest.json`; `ai-security-monitor status` shows hub health, queued reports and the last scan.
 

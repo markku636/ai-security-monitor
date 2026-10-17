@@ -24,9 +24,9 @@
 
 | | |
 |---|---|
-| ![總覽](images/desktop-overview.png) 總覽：分數、問題數、情資新舊、危險與可疑連線 | ![連線](images/desktop-connections.png) 連線：判定、方向篩選、理由與情資來源，右邊是 IP 分析 |
+| ![總覽](images/desktop-overview.png) 總覽：分數、問題數、情資新舊、網路速率與效能小圖、危險與可疑連線 | ![連線](images/desktop-connections.png) 連線：判定、方向篩選、理由與情資來源，右邊是 IP 分析 |
 | ![掃描結果](images/desktop-findings.png) 掃描結果：依嚴重度排序，展開看細節與建議 | ![威脅情資](images/desktop-intel.png) 威脅情資：每個來源的筆數、最後更新、是否從 Hub、授權 |
-| ![AI 分析](images/desktop-ai.png) AI 分析：工具呼叫與回答即時顯示 | ![設定](images/desktop-settings.png) 設定：agent id、設定目錄、Hub、背景服務 |
+| ![AI 分析](images/desktop-ai.png) AI 分析：工具呼叫與回答即時顯示 | ![設定](images/desktop-settings.png) 設定：Hub、開機自動啟動、效能蒐集開關、agent id、設定目錄 |
 | ![深色模式](images/desktop-overview-dark.png) 深色模式：跟著 Windows 的深色設定 | |
 
 加上 `--frame windows` 會改輸出套上 Windows 11 風格視窗外框的版本（`windows-desktop-*.png`），以及放在桌面上、下方有工作列與系統匣圖示的主視覺 `windows-desktop-hero.png`／`windows-desktop-hero-dark.png`。外框、桌布和工作列都是腳本自己畫的示意圖，不是真的螢幕截圖。
@@ -37,14 +37,14 @@
 
 | 頁面 | 內容 |
 |---|---|
-| 總覽 | 安全分數（連線／曝露／漏洞／安全設定）、嚴重＋高問題數、情資新舊、是否註冊 Hub、危險與可疑連線；「立即掃描」「更新情資」「開啟 Security Hub」 |
+| 總覽 | 安全分數（連線／曝露／漏洞／安全設定）、嚴重＋高問題數、情資新舊、是否註冊 Hub、危險與可疑連線；「立即掃描」「更新情資」「開啟 Security Hub」。網路（現在的下載／上傳速率＋最近 1 小時小圖）；開啟效能蒐集時另有 CPU、記憶體、最滿的磁碟區（≥ 90% 標紅），沒開時顯示「未開啟」並連到設定。背景服務在跑就用它每分鐘的樣本，沒有時桌面版開著視窗自己量（只在記憶體）。見 [metrics.md](metrics.md) |
 | 連線 | 目前所有連線，依判定、方向篩選與搜尋，同一程式連到同一遠端合併成一列；理由分「情資」（可點開原始清單）與「行為」（ai-security-monitor 自己的判斷）；可每 10 秒自動更新 |
 | IP 分析 | 點連線上的 IP：國家／ASN、哪些情資來源列名、本機哪些程式連它、VirusTotal／AbuseIPDB 連結、「請 AI 分析這個 IP」 |
 | 掃描結果 | 最新報告的問題，依嚴重度排序、展開看細節與建議 |
 | 威脅情資 | 每個來源的筆數、最後更新、是否從 Hub 下載；更新過期的或全部重抓 |
 | AI 分析 | 用本機已登入的 Claude Code 或 Codex CLI（你的訂閱）分析可疑連線、最新報告或自由提問；即時顯示回答與工具呼叫 |
 | 加入公司 Hub | 免金鑰加入：自動尋找公司的 Security Hub（公司 DNS、區網廣播）、顯示指紋、「申請加入」後等管理員核准（關掉視窗也會在背景繼續等）。第一次開啟、還沒加入 Hub 時會自動帶到這頁（按「先不要」就不再帶）。詳見 [enrollment.md](enrollment.md) |
-| 設定 | **公司的 Security Hub**：網址欄、「測試連線」（版本與指紋）、「尋找公司的 Hub」、「申請加入」、「我有註冊金鑰」、「離開這個 Hub」（只刪這台的設定與金鑰，Hub 上的主機紀錄要管理員刪）；要換到指紋不同的 Hub 會先清楚警告並要求確認。**開機自動啟動**：「開機／登入後在背景自動回報」（＝`ai-security-monitor service install --yes`，裝在目前使用者底下、不跳 UAC；會一併換掉舊版 asa 的登入啟動項目並搬設定）、「登入時開啟桌面版」（常駐系統匣、不跳視窗）。另有 agent id、設定目錄等 |
+| 設定 | **公司的 Security Hub**：網址欄、「測試連線」（版本與指紋）、「尋找公司的 Hub」、「申請加入」、「我有註冊金鑰」、「離開這個 Hub」（只刪這台的設定與金鑰，Hub 上的主機紀錄要管理員刪）；要換到指紋不同的 Hub 會先清楚警告並要求確認。**開機自動啟動**：「開機／登入後在背景自動回報」（＝`ai-security-monitor service install --yes`，裝在目前使用者底下、不跳 UAC；會一併換掉舊版 asa 的登入啟動項目並搬設定）、「登入時開啟桌面版」（常駐系統匣、不跳視窗）。**網路流量與效能**：「蒐集這台電腦的效能（CPU、記憶體、磁碟）」（＝`metrics.performance`，預設關；只送到這台加入的 Hub，Hub 無法從遠端開；開了背景自動回報就不用開著視窗，背景服務每分鐘重讀設定）。另有 agent id、設定目錄等 |
 
 關閉視窗只會縮到系統匣；系統匣選單有「開啟主視窗」「開啟 Security Hub」「結束」。同時只會開一個實例。
 
