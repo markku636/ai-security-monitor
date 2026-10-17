@@ -189,6 +189,39 @@ const TEMP_DIR_MARKERS: &[&str] = &[
     "/downloads/",
 ];
 
+/// 常駐、會反覆開關連線的一般用戶端（瀏覽器、編輯器、AI 工具、通訊與同步軟體）。
+/// 它們連外的「週期性」是 keep-alive／輪詢造成的，不當 beacon；
+/// 通用執行環境（node、python、powershell…）不在這裡，照樣偵測。
+const COMMON_CLIENTS: &[&str] = &[
+    "chrome",
+    "msedge",
+    "msedgewebview2",
+    "firefox",
+    "brave",
+    "opera",
+    "vivaldi",
+    "safari",
+    "code",
+    "cursor",
+    "windsurf",
+    "claude",
+    "codex",
+    "ms-teams",
+    "teams",
+    "slack",
+    "discord",
+    "zoom",
+    "onedrive",
+    "dropbox",
+    "googledrivefs",
+    "outlook",
+    "olk",
+    "spotify",
+    "telegram",
+    "whatsapp",
+    "line",
+];
+
 fn base_name_lower(exe_or_name: &str) -> String {
     let p = exe_or_name.replace('\\', "/");
     let base = p.rsplit('/').next().unwrap_or(&p).to_ascii_lowercase();
@@ -200,6 +233,11 @@ pub fn is_shell_host(name: &str) -> bool {
     // python3.12 → python3
     let b = b.split(['.', '-']).next().unwrap_or(&b).to_string();
     SHELL_HOSTS.contains(&b.as_str())
+}
+
+/// 一般用戶端（見 `COMMON_CLIENTS`）。
+pub fn is_common_client(name: &str) -> bool {
+    COMMON_CLIENTS.contains(&base_name_lower(name).as_str())
 }
 
 pub fn is_temp_dir(path: &str) -> bool {
@@ -293,7 +331,10 @@ impl Classifier {
                         }
                         if c.direction == Direction::Outbound && public {
                             let pair = format!("{}|{}:{}", exe.clone().unwrap_or_else(|| pname.clone()), ip, port);
-                            if let Some(b) = beacons.iter().find(|b| b.pair == pair) {
+                            // 連到已知良好的服務，或是瀏覽器等一般用戶端：週期性是 keep-alive／輪詢，不算 beacon
+                            let expected_periodic = reasons.iter().any(|r| matches!(r, Reason::KnownGood { .. }))
+                                || is_common_client(exe.as_deref().unwrap_or(&pname));
+                            if let Some(b) = beacons.iter().find(|b| b.pair == pair && !expected_periodic) {
                                 reasons.push(Reason::Anomaly {
                                     kind: AnomalyKind::Beaconing,
                                     detail: format!(
@@ -642,6 +683,62 @@ mod tests {
         assert!(rules.contains(&"connections.risky_port_outbound"));
         assert!(rules.contains(&"connections.temp_dir_process"));
         assert!(findings.iter().all(|f| !f.actions.is_empty()));
+    }
+
+    #[test]
+    fn beaconing_skips_common_clients_and_known_good_but_not_unknown_programs() {
+        use super::super::beacon::BeaconCandidate;
+        let cl = Classifier::load();
+        let chrome = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+        let updater = "C:\\Users\\x\\AppData\\Roaming\\upd\\updater.exe";
+        let mut snap = SnapshotResult {
+            connections: vec![
+                conn("104.18.8.226", 443, chrome, Direction::Outbound),
+                conn("45.155.205.233", 443, updater, Direction::Outbound),
+                conn("8.8.8.8", 443, updater, Direction::Outbound),
+            ],
+            ..Default::default()
+        };
+        let beacon = |pair: String| BeaconCandidate {
+            pair,
+            period_s: 300.0,
+            jitter: 0.05,
+            observations: 8,
+        };
+        let beacons = vec![
+            beacon(format!("{chrome}|104.18.8.226:443")),
+            beacon(format!("{updater}|45.155.205.233:443")),
+            beacon(format!("{updater}|8.8.8.8:443")),
+        ];
+        let findings = cl.annotate(&mut snap, &Allowlist::default(), None, &beacons);
+        let is_beacon = |c: &Connection| {
+            c.verdict.reasons.iter().any(|r| {
+                matches!(
+                    r,
+                    Reason::Anomaly {
+                        kind: AnomalyKind::Beaconing,
+                        ..
+                    }
+                )
+            })
+        };
+        // 瀏覽器連 CDN 的週期性是 keep-alive，不算 beacon
+        assert!(!is_beacon(&snap.connections[0]));
+        assert_ne!(
+            snap.connections[0].verdict.level,
+            crate::model::verdict::VerdictLevel::Suspicious
+        );
+        // 不明程式連公網、規律回連 → 照樣可疑
+        assert!(is_beacon(&snap.connections[1]));
+        assert_eq!(
+            snap.connections[1].verdict.level,
+            crate::model::verdict::VerdictLevel::Suspicious
+        );
+        // 連到已知良好的服務（公共 DNS）不算 beacon
+        assert!(!is_beacon(&snap.connections[2]));
+        assert_eq!(findings.iter().filter(|f| f.rule == "connections.beaconing").count(), 1);
+        assert!(is_common_client("/Applications/Cursor.app/Contents/MacOS/Cursor"));
+        assert!(!is_common_client("node.exe"));
     }
 
     #[test]

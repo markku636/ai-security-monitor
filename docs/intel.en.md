@@ -29,6 +29,7 @@ ai-security-monitor connections --direction inbound --verdict suspicious,dangero
 2. Any intel hit with confidence ≥ 80, or an online reputation score ≥ 75 → **dangerous**.
 3. Any intel hit with lower confidence, reputation ≥ 40, one strong anomaly, or two or more anomalies → **suspicious**.
    Strong anomalies: programs running from temp/download folders, shells or script hosts (PowerShell, cmd, bash, python, mshta, rundll32, …) with network connections, periodic beacons, brute-force sources.
+   A periodic connection (beacon) only counts when the period is measurable: at least 3 snapshot intervals (3 minutes with one-minute snapshots). Periodic connections to known-good services, or from everyday clients such as browsers, VS Code/Cursor, Claude/Codex, Teams, Slack and OneDrive, are keep-alive and polling, not suspicious. Generic runtimes such as node, python and PowerShell are still checked.
    Other anomalies: risky ports (4444, Tor 9001, mining 3333, Telnet, RDP, SMB, Redis, …), never-seen destinations, listeners exposed to the network, and so on.
 4. Known-good (public DNS, OS update CDNs and similar, each with a source), private networks or loopback with no anomaly → **safe**.
 5. Everything else → **unknown**. Talking to an unlisted IP is not evidence of a problem.

@@ -29,6 +29,7 @@ ai-security-monitor connections --direction inbound --verdict suspicious,dangero
 2. 任一情資命中信心 ≥ 80，或線上名譽分數 ≥ 75 → **危險**。
 3. 任一情資命中（較低信心）、名譽 ≥ 40、一個強異常、或兩個以上異常 → **可疑**。
    強異常：從暫存／下載目錄執行的程式、shell 或腳本程式（PowerShell、cmd、bash、python、mshta、rundll32…）連外、週期性 beacon、暴力破解來源。
+   週期性連線（beacon）只算「量得到」的週期：至少是快照間隔的 3 倍（每分鐘快照就是 3 分鐘以上）；連到已知良好服務，或是瀏覽器、VS Code／Cursor、Claude／Codex、Teams、Slack、OneDrive 等一般用戶端的週期性屬於 keep-alive 與輪詢，不判可疑。node、python、PowerShell 這類通用執行環境照樣偵測。
    其他異常：高風險 port（4444、Tor 9001、挖礦 3333、Telnet、RDP、SMB、Redis…）、沒看過的目的地、曝露在網路上的 listener 等。
 4. 已知良性（公共 DNS、作業系統更新 CDN 等，附來源）、私有網路、loopback 且沒有異常 → **安全**。
 5. 其餘 → **未知**。連到沒被列名的 IP 不代表有問題。
