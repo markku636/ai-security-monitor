@@ -22,7 +22,8 @@ type Stats = Awaited<ReturnType<typeof feedHitStats>>;
 
 function groupTitle(t: TFn, g: ReturnType<typeof feedGroup>): string {
   return {
-    threat: t('威脅指標（IP／網段／網域）'),
+    threat: t('威脅指標（IP／網段）'),
+    dns: t('惡意網域與加密 DNS 端點'),
     geo: t('地理位置與 ASN'),
     vuln: t('漏洞資料'),
     lookup: t('線上名譽查詢（需自備 API key，預設關閉）'),
@@ -133,7 +134,7 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
   const metas = mirrored.map((f) => readMeta(f.id));
   const okCount = metas.filter((m) => m?.sha256 && m.status === 'ok').length;
   const lastSync = metas.reduce<string | null>((a, m) => (m?.checked_at && (!a || m.checked_at > a) ? m.checked_at : a), null);
-  const groups = (['threat', 'geo', 'vuln', 'lookup'] as const)
+  const groups = (['threat', 'dns', 'geo', 'vuln', 'lookup'] as const)
     .map((g) => ({ g, feeds: feeds.filter((f) => feedGroup(f) === g) }))
     .filter((x) => x.feeds.length);
   return (

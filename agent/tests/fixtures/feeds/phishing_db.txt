@@ -1,0 +1,2 @@
+exact-only.example.test
+phish-bank.example.test

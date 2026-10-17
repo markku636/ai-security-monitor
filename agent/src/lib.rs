@@ -13,6 +13,7 @@ pub mod actions;
 pub mod ai;
 pub mod config;
 pub mod connections;
+pub mod dns;
 pub mod elevate;
 pub mod embedded;
 pub mod error;

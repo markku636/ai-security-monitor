@@ -43,8 +43,13 @@ The Hub and MCP answers cite `source_url`, and the AI is told never to invent so
 |---|---|---|---|---|---|
 | Spamhaus DROP v4/v6, ASN-DROP | network / ASN | both | 95 / 90 | on | commercial use, attribution |
 | abuse.ch Feodo Tracker | IP (C2) | outbound | 90 | on | CC0 |
-| abuse.ch URLhaus | domain | outbound | 80 | on | CC0 |
-| abuse.ch ThreatFox | IP:port | outbound | 85 | on | CC0 |
+| abuse.ch URLhaus | domain (domain-level hits 40) | outbound | 80 | on | **not-for-profit**: alert only, never auto-blocked |
+| abuse.ch ThreatFox | IP:port | outbound | 85 | on | **not-for-profit**: alert only, never auto-blocked |
+| CERT Polska warning list | domain (incl. subdomains) | outbound | 85 | on | commercial use OK |
+| HaGeZi Threat Intelligence Feeds mini (medium / full off by default) | domain (incl. subdomains) | outbound | 75 (65 / 55) | on | GPL-3.0, mirrored unmodified |
+| Phishing.Database | domain (exact match) | outbound | 60 | on | MIT |
+| Block List Project (phishing / ransomware), Phishing Army | domain | outbound | 40 / 65 | off | Unlicense / upstream terms apply |
+| HaGeZi encrypted DNS endpoints | DoH/DoT domains | — | — | on | GPL-3.0; **not a threat list**, only for DNS-bypass detection |
 | blocklist.de (all; ssh and bruteforcelogin off by default) | IP | inbound | 70–75 | on | free, attribution |
 | CINS Army | IP | inbound | 70 | on | free, attribution |
 | Proofpoint ET Open (compromised; block off by default) | IP / network | both | 75 | on | BSD / MIT |
@@ -57,6 +62,16 @@ The Hub and MCP answers cite `source_url`, and the AI is told never to invent so
 | AbuseIPDB, GreyNoise, CrowdSec CTI, OTX | online lookup | — | 70–85 | **off** (bring your own key) | community tiers, non-commercial |
 
 See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for full license details.
+
+Since 2025-11-04 the abuse.ch terms of use restrict free use to not-for-profit purposes (commercial use needs a Spamhaus subscription), so URLhaus and ThreatFox are now marked non-commercial (still alerting, never auto-blocked). Feodo Tracker's own page still says CC0, so it is unchanged.
+
+### Domains
+
+- Domain lists (hosts, one domain per line, `*.x` wildcards, adblock `||x^`) are stored as 64-bit hashes only: about 6 MB of memory for 500k entries.
+- Each feed states whether its entries cover subdomains: CERT.PL and HaGeZi do; Phishing.Database and Block List Project match exactly.
+- Domain score = the highest feed confidence, +10 for each additional distinct feed (max 100); popular domains (embedded Majestic Million top 10k, CC BY 3.0) lose 30 only when the best hit is below 70. ≥ 80 dangerous, 60–79 suspicious.
+- `intel lookup <domain>` also shows the registrable domain (Public Suffix List, MPL-2.0), whether it is popular, whether it looks machine-generated (DGA, character-bigram model), and whether it is an encrypted DNS endpoint.
+- Refresh the embedded data with `node scripts/update-dns-data.mjs`.
 
 - Downloads use ETag/Last-Modified and only fetch stale feeds; HTML error pages, empty lists or files over 96 MB never overwrite existing data.
 - Custom feeds: `<config dir>/feeds/custom.json` (https only); `ai-security-monitor intel enable|disable <id>` toggles feeds.

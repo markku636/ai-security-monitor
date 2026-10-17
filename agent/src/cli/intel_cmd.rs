@@ -10,6 +10,7 @@ use super::args::{IntelCmd, IntelKeyCmd};
 use super::render::{print_json, table};
 use super::Env;
 use crate::connections::KnownGood;
+use crate::dns::heuristics;
 use crate::error::{AppError, AppResult};
 use crate::intel::fetch::{self, FeedMeta, UpdateOpts};
 use crate::intel::registry::Registry;
@@ -270,6 +271,18 @@ pub struct LookupOut {
     pub reps: Vec<lookup::Reputation>,
     pub warnings: Vec<String>,
     pub feeds_loaded: usize,
+    /// 網域才有：可註冊網域、熱門、像不像 DGA、網域綜合分數。
+    pub domain: Option<DomainInfo>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DomainInfo {
+    pub registrable: Option<String>,
+    pub popular: bool,
+    pub looks_generated: bool,
+    pub score: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doh_endpoint: Option<String>,
 }
 
 impl LookupOut {
@@ -282,6 +295,7 @@ impl LookupOut {
             "hits": self.hits,
             "reputation": self.reps,
             "feeds_loaded": self.feeds_loaded,
+            "domain": self.domain,
             "warnings": self.warnings,
             "attribution": if self.geo.is_some() { Some(geo::ATTRIBUTION) } else { None },
         })
@@ -338,6 +352,19 @@ pub async fn compute_lookup(config_dir: &std::path::Path, indicator: &str, onlin
         }
         (db.match_domain(ind), "domain".to_string(), None)
     };
+    let domain = if class == "domain" {
+        let name = ind.trim_end_matches('.').to_ascii_lowercase();
+        let popular = heuristics::is_popular(&name);
+        Some(DomainInfo {
+            registrable: heuristics::registrable_domain(&name).map(str::to_string),
+            popular,
+            looks_generated: heuristics::looks_generated(&name),
+            score: crate::intel::domain_score(&hits, popular),
+            doh_endpoint: db.doh_endpoint(&name).map(|(id, _)| id),
+        })
+    } else {
+        None
+    };
     for h in &hits {
         if h.feed_id == TOR_FEED {
             reasons.push(Reason::Anomaly {
@@ -364,6 +391,7 @@ pub async fn compute_lookup(config_dir: &std::path::Path, indicator: &str, onlin
         reps,
         warnings,
         feeds_loaded: db.feeds.len(),
+        domain,
     })
 }
 
@@ -378,6 +406,7 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
         reps,
         warnings,
         feeds_loaded,
+        domain,
     } = &out;
     let ind = ind.as_str();
 
@@ -405,6 +434,22 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
                 org = g.org.clone().unwrap_or_default()
             )
         );
+    }
+    if let Some(d) = domain {
+        let yes_no = |b: bool| if b { t!("是") } else { t!("否") };
+        println!(
+            "{}",
+            tf!(
+                "可註冊網域：{reg} · 熱門網域：{popular} · 像亂數產生（DGA）：{dga} · 網域分數：{score}",
+                reg = d.registrable.clone().unwrap_or_else(|| "-".into()),
+                popular = yes_no(d.popular),
+                dga = yes_no(d.looks_generated),
+                score = d.score
+            )
+        );
+        if let Some(id) = &d.doh_endpoint {
+            println!("{}", tf!("這是加密 DNS（DoH）端點（{id}），本身不是惡意", id = id));
+        }
     }
     if hits.is_empty() {
         println!("{}", tf!("沒有命中任何已載入的情資（{n} 個來源）", n = feeds_loaded));

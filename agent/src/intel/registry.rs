@@ -17,6 +17,10 @@ fn yes() -> bool {
     true
 }
 
+fn is_true(b: &bool) -> bool {
+    *b
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct License {
     pub name: String,
@@ -40,6 +44,14 @@ pub enum FeedFormat {
     DshieldTab,
     IpsumTab,
     CisaKevJson,
+    /// `0.0.0.0 domain`（hosts 檔格式）。
+    Hosts,
+    /// 一行一個網域。
+    DomainPerLine,
+    /// 一行一個網域，含子網域（`*.x` 或 `x` 皆可）。
+    Wildcard,
+    /// adblock 語法 `||domain^`。
+    Adblock,
     MmdbGz,
     LookupApi,
     #[serde(other)]
@@ -68,6 +80,9 @@ pub enum FeedKind {
     Geo,
     #[serde(rename = "lookup")]
     Lookup,
+    /// 加密 DNS（DoH／DoT）端點網域：不是惡意，只用來偵測繞過公司 DNS。
+    #[serde(rename = "doh")]
+    Doh,
 }
 
 impl FeedKind {
@@ -83,6 +98,7 @@ impl FeedKind {
             FeedKind::Cve => "cve",
             FeedKind::Geo => "geo",
             FeedKind::Lookup => "lookup",
+            FeedKind::Doh => "doh",
         }
     }
 }
@@ -119,6 +135,9 @@ pub struct FeedEntry {
     pub tags: Vec<String>,
     #[serde(default)]
     pub notes: Option<String>,
+    /// 網域清單的條目是否涵蓋子網域（`evil.example` 也擋 `a.evil.example`）；false＝只比完全相同。
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub match_subdomains: bool,
     /// 使用者自訂（custom.json）來源。
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub custom: bool,

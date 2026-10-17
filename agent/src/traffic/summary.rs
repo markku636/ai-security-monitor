@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::flow::{Flow, FlowTable};
 use super::proto::qtype_name;
 use crate::connections::classify::RiskyTable;
+use crate::dns::heuristics::suspicious_domain;
 use crate::intel::IntelDb;
 use crate::model::finding::IntelHit;
 use crate::util::net::classify;
@@ -160,36 +161,6 @@ pub fn plaintext_protocol(proto: u8, port: u16) -> Option<&'static str> {
         (17, 161) => Some("SNMP"),
         _ => None,
     }
-}
-
-/// 網域名稱是否可疑：最長標籤很長且高熵（DGA／DNS 通道），或少見頂級網域。
-pub fn suspicious_domain(name: &str) -> Option<String> {
-    const RARE_TLDS: [&str; 12] = [
-        "zip", "mov", "top", "xyz", "tk", "gq", "ml", "cf", "ga", "click", "country", "kim",
-    ];
-    let labels: Vec<&str> = name.split('.').collect();
-    if let Some(tld) = labels.last() {
-        if RARE_TLDS.contains(tld) {
-            return Some(format!("rare-tld .{tld}"));
-        }
-    }
-    let longest = labels
-        .iter()
-        .take(labels.len().saturating_sub(2).max(1))
-        .max_by_key(|l| l.len())?;
-    if longest.len() >= 20 && shannon(longest) >= 3.6 {
-        return Some(format!("high-entropy label ({:.1} bits)", shannon(longest)));
-    }
-    None
-}
-
-fn shannon(s: &str) -> f64 {
-    let mut counts: HashMap<u8, f64> = HashMap::new();
-    for b in s.bytes() {
-        *counts.entry(b).or_default() += 1.0;
-    }
-    let n = s.len() as f64;
-    counts.values().map(|c| -(c / n) * (c / n).log2()).sum()
 }
 
 /// 週期性：同一組 client → server:port 的新連線開始時間間隔很規律。回傳 (週期秒, 變異係數)。
@@ -526,13 +497,5 @@ mod tests {
             periodicity(vec![0.0, 1.0, 2.0, 3.0, 4.0]).is_none(),
             "faster than 5 s is not a beacon"
         );
-    }
-
-    #[test]
-    fn suspicious_domains() {
-        assert!(suspicious_domain("x9q2kz7f1v8m3n4b6c0d2e5r.example.com").is_some());
-        assert!(suspicious_domain("login.microsoftonline.com").is_none());
-        assert!(suspicious_domain("free-gift.zip").is_some());
-        assert!(suspicious_domain("www.googleapis.com").is_none());
     }
 }

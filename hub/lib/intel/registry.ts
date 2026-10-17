@@ -26,6 +26,8 @@ export interface FeedEntry {
   enabled_default: boolean;
   tags: string[];
   notes?: string;
+  /** 網域清單的條目是否涵蓋子網域（預設 true）。 */
+  match_subdomains?: boolean;
 }
 
 /** feeds/ 目錄：`ASA_HUB_FEEDS_DIR` ＞ 開發時的 ../feeds ＞ 容器內的 ./feeds。 */
@@ -56,8 +58,9 @@ export function loadRegistry(): FeedEntry[] {
   return feeds;
 }
 
-/** 頁面分組：威脅指標、地理、漏洞、線上查詢（需 API key）。 */
-export function feedGroup(f: FeedEntry): 'threat' | 'geo' | 'vuln' | 'lookup' {
+/** 頁面分組：威脅指標（IP）、惡意網域與加密 DNS 端點、地理、漏洞、線上查詢（需 API key）。 */
+export function feedGroup(f: FeedEntry): 'threat' | 'dns' | 'geo' | 'vuln' | 'lookup' {
+  if (f.kind === 'domain' || f.kind === 'doh') return 'dns';
   if (f.kind === 'geo') return 'geo';
   if (f.kind === 'cve') return 'vuln';
   if (f.kind === 'lookup') return 'lookup';

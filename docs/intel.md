@@ -43,8 +43,13 @@ Hub 與 MCP 回答都會引用 `source_url`；AI 被要求不能自己編來源�
 |---|---|---|---|---|---|
 | Spamhaus DROP v4／v6、ASN-DROP | 網段／ASN | 雙向 | 95／90 | 開 | 可商用，需標註 |
 | abuse.ch Feodo Tracker | IP（C2） | 對外 | 90 | 開 | CC0 |
-| abuse.ch URLhaus | 網域 | 對外 | 80 | 開 | CC0 |
-| abuse.ch ThreatFox | IP:port | 對外 | 85 | 開 | CC0 |
+| abuse.ch URLhaus | 網域（網域級命中 40） | 對外 | 80 | 開 | **非營利**：只告警，預設不封鎖 |
+| abuse.ch ThreatFox | IP:port | 對外 | 85 | 開 | **非營利**：只告警，預設不封鎖 |
+| CERT Polska 警示清單 | 網域（含子網域） | 對外 | 85 | 開 | 可商用 |
+| HaGeZi Threat Intelligence Feeds mini（medium／full 預設關） | 網域（含子網域） | 對外 | 75（65／55） | 開 | GPL-3.0，原樣鏡像 |
+| Phishing.Database | 網域（完全相同才算） | 對外 | 60 | 開 | MIT |
+| Block List Project（phishing／ransomware）、Phishing Army | 網域 | 對外 | 40／65 | 關 | Unlicense／上游授權自負 |
+| HaGeZi 加密 DNS 端點 | DoH／DoT 網域 | — | — | 開 | GPL-3.0；**不是威脅**，只給 DNS 繞過偵測用 |
 | blocklist.de（all；ssh、bruteforcelogin 預設關） | IP | 對內 | 70–75 | 開 | 免費，需標註 |
 | CINS Army | IP | 對內 | 70 | 開 | 免費，需標註 |
 | Proofpoint ET Open（compromised；block 預設關） | IP／網段 | 雙向 | 75 | 開 | BSD／MIT |
@@ -57,6 +62,16 @@ Hub 與 MCP 回答都會引用 `source_url`；AI 被要求不能自己編來源�
 | AbuseIPDB、GreyNoise、CrowdSec CTI、OTX | 線上查詢 | — | 70–85 | **關**（自備 key） | 社群方案非商用 |
 
 完整授權見 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。
+
+abuse.ch 自 2025-11-04 起的使用條款改為「非營利使用、營利用途需向 Spamhaus 訂閱」，所以 URLhaus 與 ThreatFox 改標為非商用授權（照樣告警、不自動封鎖）；Feodo Tracker 頁面仍寫 CC0，維持原狀。
+
+### 網域
+
+- 網域清單（hosts、一行一個網域、`*.x` 萬用字元、adblock `||x^`）只存 64-bit 雜湊，50 萬筆約 6 MB 記憶體。
+- 每個來源標明條目是否涵蓋子網域：CERT.PL、HaGeZi 涵蓋；Phishing.Database、Block List Project 只比完全相同。
+- 網域分數＝最高來源信心，每多一個不同來源 +10（上限 100）；熱門網域（內嵌 Majestic Million 前 1 萬名，CC BY 3.0）只對信心 < 70 的命中扣 30。≥ 80 危險、60–79 可疑。
+- `intel lookup <網域>` 另外列出可註冊網域（依 Public Suffix List，MPL-2.0）、是否熱門、像不像亂數產生（DGA，字母二元組模型）、是否為加密 DNS 端點。
+- 內嵌資料用 `node scripts/update-dns-data.mjs` 更新。
 
 - 下載用 ETag／Last-Modified，只抓過期的；HTML 錯誤頁、空清單或超過 96 MB 不會覆蓋舊資料。
 - 自訂來源：`<設定目錄>/feeds/custom.json`（只接受 https）；`ai-security-monitor intel enable|disable <id>` 開關。

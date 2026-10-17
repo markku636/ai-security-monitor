@@ -337,6 +337,8 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "{ind}（{class}）判定：{verdict}" => "{ind} ({class}) verdict: {verdict}",
         "地理：{country} · AS{asn} {org}" => "Geo: {country} · AS{asn} {org}",
         "沒有命中任何已載入的情資（{n} 個來源）" => "No hits in the loaded threat intel ({n} feeds)",
+        "可註冊網域：{reg} · 熱門網域：{popular} · 像亂數產生（DGA）：{dga} · 網域分數：{score}" => "Registrable domain: {reg} · Popular: {popular} · Looks machine-generated (DGA): {dga} · Domain score: {score}",
+        "這是加密 DNS（DoH）端點（{id}），本身不是惡意" => "This is an encrypted DNS (DoH) endpoint ({id}); not malicious by itself",
         "命中" => "Matched",
         "信心" => "Confidence",
         "資料距今" => "Data age",

@@ -119,10 +119,10 @@
       "direction": "outbound",
       "confidence": 80,
       "license": {
-        "name": "CC0 1.0",
-        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "attribution_required": false,
-        "commercial_ok": true,
+        "name": "abuse.ch Terms of Use (not-for-profit; commercial use via Spamhaus)",
+        "url": "https://abuse.ch/terms-of-use/",
+        "attribution_required": true,
+        "commercial_ok": false,
         "keep_header": false
       },
       "refresh_interval": "30m",
@@ -131,7 +131,7 @@
       "tags": [
         "malware-distribution"
       ],
-      "notes": "從 URL 行擷取 host；host 可能是 IP 或網域。"
+      "notes": "從 URL 行擷取 host；host 可能是 IP 或網域。abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；預設只告警、不進防火牆自動封鎖。"
     },
     {
       "id": "abusech-threatfox-ipport",
@@ -145,8 +145,34 @@
       "direction": "outbound",
       "confidence": 85,
       "license": {
-        "name": "CC0 1.0",
-        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "name": "abuse.ch Terms of Use (not-for-profit; commercial use via Spamhaus)",
+        "url": "https://abuse.ch/terms-of-use/",
+        "attribution_required": true,
+        "commercial_ok": false,
+        "keep_header": false
+      },
+      "refresh_interval": "1h",
+      "requires_api_key": null,
+      "enabled_default": true,
+      "tags": [
+        "ioc"
+      ],
+      "notes": "abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；預設只告警、不進防火牆自動封鎖。"
+    },
+    {
+      "id": "certpl-domains",
+      "name": "CERT Polska warning list",
+      "vendor": "CERT Polska",
+      "urls": [
+        "https://hole.cert.pl/domains/v2/domains.txt"
+      ],
+      "format": "domain-per-line",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 85,
+      "license": {
+        "name": "CERT Polska warning list (free for any use incl. commercial; no implied partnership)",
+        "url": "https://cert.pl/en/warning-list/",
         "attribution_required": false,
         "commercial_ok": true,
         "keep_header": false
@@ -155,8 +181,230 @@
       "requires_api_key": null,
       "enabled_default": true,
       "tags": [
-        "ioc"
-      ]
+        "phishing",
+        "fraud"
+      ],
+      "notes": "條目涵蓋子網域、不涵蓋上層網域。"
+    },
+    {
+      "id": "hagezi-tif-mini",
+      "name": "HaGeZi Threat Intelligence Feeds (mini)",
+      "vendor": "HaGeZi",
+      "urls": [
+        "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.mini-onlydomains.txt"
+      ],
+      "format": "wildcard",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 75,
+      "license": {
+        "name": "GPL-3.0 (HaGeZi DNS Blocklists)",
+        "url": "https://github.com/hagezi/dns-blocklists/blob/main/LICENSE",
+        "attribution_required": true,
+        "commercial_ok": true,
+        "keep_header": true
+      },
+      "refresh_interval": "12h",
+      "requires_api_key": null,
+      "enabled_default": true,
+      "tags": [
+        "malware",
+        "phishing",
+        "c2",
+        "scam"
+      ],
+      "notes": "GPL-3.0：Hub 只原樣鏡像（含檔頭），不改寫、不合併。"
+    },
+    {
+      "id": "hagezi-tif-medium",
+      "name": "HaGeZi Threat Intelligence Feeds (medium)",
+      "vendor": "HaGeZi",
+      "urls": [
+        "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.medium-onlydomains.txt"
+      ],
+      "format": "wildcard",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 65,
+      "license": {
+        "name": "GPL-3.0 (HaGeZi DNS Blocklists)",
+        "url": "https://github.com/hagezi/dns-blocklists/blob/main/LICENSE",
+        "attribution_required": true,
+        "commercial_ok": true,
+        "keep_header": true
+      },
+      "refresh_interval": "12h",
+      "requires_api_key": null,
+      "enabled_default": false,
+      "tags": [
+        "malware",
+        "phishing",
+        "c2",
+        "scam"
+      ],
+      "notes": "約 90 萬筆；與 mini 二選一即可。"
+    },
+    {
+      "id": "hagezi-tif-full",
+      "name": "HaGeZi Threat Intelligence Feeds (full)",
+      "vendor": "HaGeZi",
+      "urls": [
+        "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif-onlydomains.txt"
+      ],
+      "format": "wildcard",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 55,
+      "license": {
+        "name": "GPL-3.0 (HaGeZi DNS Blocklists)",
+        "url": "https://github.com/hagezi/dns-blocklists/blob/main/LICENSE",
+        "attribution_required": true,
+        "commercial_ok": true,
+        "keep_header": true
+      },
+      "refresh_interval": "12h",
+      "requires_api_key": null,
+      "enabled_default": false,
+      "tags": [
+        "malware",
+        "phishing",
+        "c2",
+        "scam"
+      ],
+      "notes": "約 200 萬筆、35 MB，誤報較多。"
+    },
+    {
+      "id": "phishing-database-active",
+      "name": "Phishing.Database active domains",
+      "vendor": "Phishing.Database",
+      "urls": [
+        "https://raw.githubusercontent.com/Phishing-Database/Phishing.Database/master/phishing-domains-ACTIVE.txt"
+      ],
+      "format": "domain-per-line",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 60,
+      "license": {
+        "name": "MIT",
+        "url": "https://github.com/Phishing-Database/Phishing.Database/blob/master/LICENSE",
+        "attribution_required": true,
+        "commercial_ok": true,
+        "keep_header": false
+      },
+      "refresh_interval": "12h",
+      "requires_api_key": null,
+      "enabled_default": true,
+      "tags": [
+        "phishing"
+      ],
+      "notes": "約 50 萬筆完整主機名稱，只比完全相同；信心 60 只告警。",
+      "match_subdomains": false
+    },
+    {
+      "id": "blocklistproject-phishing",
+      "name": "Block List Project phishing",
+      "vendor": "The Block List Project",
+      "urls": [
+        "https://blocklistproject.github.io/Lists/alt-version/phishing-nl.txt"
+      ],
+      "format": "domain-per-line",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 40,
+      "license": {
+        "name": "Unlicense",
+        "url": "https://github.com/blocklistproject/Lists/blob/master/LICENSE",
+        "attribution_required": false,
+        "commercial_ok": true,
+        "keep_header": false
+      },
+      "refresh_interval": "24h",
+      "requires_api_key": null,
+      "enabled_default": false,
+      "tags": [
+        "phishing"
+      ],
+      "notes": "誤報偏高，只比完全相同。",
+      "match_subdomains": false
+    },
+    {
+      "id": "blocklistproject-ransomware",
+      "name": "Block List Project ransomware",
+      "vendor": "The Block List Project",
+      "urls": [
+        "https://blocklistproject.github.io/Lists/alt-version/ransomware-nl.txt"
+      ],
+      "format": "domain-per-line",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 40,
+      "license": {
+        "name": "Unlicense",
+        "url": "https://github.com/blocklistproject/Lists/blob/master/LICENSE",
+        "attribution_required": false,
+        "commercial_ok": true,
+        "keep_header": false
+      },
+      "refresh_interval": "24h",
+      "requires_api_key": null,
+      "enabled_default": false,
+      "tags": [
+        "ransomware"
+      ],
+      "match_subdomains": false
+    },
+    {
+      "id": "phishing-army",
+      "name": "Phishing Army",
+      "vendor": "Phishing Army",
+      "urls": [
+        "https://phishing.army/download/phishing-army-domains.txt"
+      ],
+      "format": "domain-per-line",
+      "kind": "domain",
+      "direction": "outbound",
+      "confidence": 65,
+      "license": {
+        "name": "Phishing Army license (upstream sources keep their own terms)",
+        "url": "https://phishing.army/license/",
+        "attribution_required": true,
+        "commercial_ok": false,
+        "keep_header": true
+      },
+      "refresh_interval": "12h",
+      "requires_api_key": null,
+      "enabled_default": false,
+      "tags": [
+        "phishing"
+      ],
+      "match_subdomains": false
+    },
+    {
+      "id": "hagezi-doh",
+      "name": "HaGeZi encrypted DNS (DoH/DoT) endpoints",
+      "vendor": "HaGeZi",
+      "urls": [
+        "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/doh-onlydomains.txt"
+      ],
+      "format": "wildcard",
+      "kind": "doh",
+      "direction": "outbound",
+      "confidence": 70,
+      "license": {
+        "name": "GPL-3.0 (HaGeZi DNS Blocklists)",
+        "url": "https://github.com/hagezi/dns-blocklists/blob/main/LICENSE",
+        "attribution_required": true,
+        "commercial_ok": true,
+        "keep_header": true
+      },
+      "refresh_interval": "24h",
+      "requires_api_key": null,
+      "enabled_default": true,
+      "tags": [
+        "doh",
+        "bypass"
+      ],
+      "notes": "不是惡意清單：只用來偵測程式繞過公司 DNS 改走加密 DNS。"
     },
     {
       "id": "blocklist-de-all",

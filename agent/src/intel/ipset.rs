@@ -1,5 +1,5 @@
 //! IpSet：單一來源的可查詢集合。IP / CIDR 存成排序區間（v4 u32、v6 u128）＋「前綴最大終點」陣列，
-//! 允許重疊（/16 內含 /24）仍能二分搜尋；另有 ip:port、網域（含上層網域）、ASN、CVE 雜湊表。
+//! 允許重疊（/16 內含 /24）仍能二分搜尋；另有 ip:port、ASN、CVE 雜湊表；網域存在精簡的 [`DomainSet`]（只存雜湊）。
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -7,6 +7,7 @@ use std::net::IpAddr;
 use ipnet::IpNet;
 use serde_json::Value;
 
+use super::domainset::{self, DomainSet, NO_META};
 use super::parse::{Indicator, Record};
 
 #[derive(Debug, Clone, Default)]
@@ -25,7 +26,9 @@ pub struct IpSet {
     v6_maxend: Vec<u128>,
     ip_ports: HashMap<(IpAddr, u16), u32>,
     port_ips: HashMap<IpAddr, u32>,
-    domains: HashMap<String, u32>,
+    domains: DomainSet,
+    /// 只有雜湊、沒有附加資訊的網域筆數（不佔 metas）。
+    plain_domains: usize,
     asns: HashMap<u32, u32>,
     cves: HashMap<String, u32>,
     metas: Vec<RecordMeta>,
@@ -61,7 +64,13 @@ fn find<T: Ord + Copy>(v: &[(T, T, u32)], maxend: &[T], x: T) -> Option<u32> {
 
 impl IpSet {
     pub fn build(records: Vec<Record>) -> IpSet {
+        Self::build_with_domains(records, Vec::new())
+    }
+
+    /// `domain_hashes`：大型網域清單直接給雜湊（見 `parse::Parsed::domain_hashes`），不建字串也不建 meta。
+    pub fn build_with_domains(records: Vec<Record>, domain_hashes: Vec<u64>) -> IpSet {
         let mut s = IpSet::default();
+        let mut domains: Vec<(u64, u32)> = Vec::with_capacity(domain_hashes.len());
         for r in records {
             let idx = s.metas.len() as u32;
             let display = match &r.ind {
@@ -85,7 +94,7 @@ impl IpSet {
                     s.port_ips.entry(ip).or_insert(idx);
                 }
                 Indicator::Domain(d) => {
-                    s.domains.insert(d.trim_end_matches('.').to_ascii_lowercase(), idx);
+                    domains.push((domainset::hash(&d), idx));
                 }
                 Indicator::Asn(a) => {
                     s.asns.insert(a, idx);
@@ -100,6 +109,10 @@ impl IpSet {
                 confidence: r.confidence,
             });
         }
+        s.plain_domains = domain_hashes.len();
+        // 有 meta 的條目排前面，雜湊重複時保留它（DomainSet::build 保留第一筆）。
+        domains.extend(domain_hashes.into_iter().map(|h| (h, NO_META)));
+        s.domains = DomainSet::build(domains);
         s.v4.sort_unstable_by_key(|e| (e.0, e.1));
         s.v6.sort_unstable_by_key(|e| (e.0, e.1));
         s.v4_maxend = maxend(&s.v4);
@@ -108,11 +121,11 @@ impl IpSet {
     }
 
     pub fn len(&self) -> usize {
-        self.metas.len()
+        self.metas.len() + self.plain_domains
     }
 
     pub fn is_empty(&self) -> bool {
-        self.metas.is_empty()
+        self.len() == 0
     }
 
     fn meta(&self, idx: u32) -> &RecordMeta {
@@ -142,19 +155,22 @@ impl IpSet {
         self.port_ips.get(&ip).map(|idx| (self.meta(*idx), false))
     }
 
-    /// 網域本身或其上層網域在清單中。
-    pub fn match_domain(&self, domain: &str) -> Option<&RecordMeta> {
+    /// 網域本身（`subdomains`＝true 時含其上層網域）在清單中。沒有附加資訊的條目以比中的那層網域當顯示值。
+    pub fn match_domain(&self, domain: &str, subdomains: bool) -> Option<RecordMeta> {
         let d = domain.trim_end_matches('.').to_ascii_lowercase();
-        let mut cur: &str = &d;
-        loop {
-            if let Some(idx) = self.domains.get(cur) {
-                return Some(self.meta(*idx));
-            }
-            match cur.split_once('.') {
-                Some((_, rest)) if rest.contains('.') => cur = rest,
-                _ => return None,
-            }
+        let hit = self.domains.lookup(&d, subdomains)?;
+        if hit.meta == NO_META {
+            return Some(RecordMeta {
+                display: hit.matched.to_string(),
+                extra: Value::Null,
+                confidence: None,
+            });
         }
+        Some(self.meta(hit.meta).clone())
+    }
+
+    pub fn domain_count(&self) -> usize {
+        self.domains.len()
     }
 
     pub fn match_asn(&self, asn: u32) -> Option<&RecordMeta> {
@@ -202,6 +218,26 @@ impl IpSet {
 mod tests {
     use super::*;
     use crate::intel::parse::parse_ip_or_net;
+
+    #[test]
+    fn plain_domain_hashes_without_metas() {
+        let rich = Record {
+            ind: Indicator::Domain("shared.example".into()),
+            extra: serde_json::json!({ "url": "http://shared.example/x" }),
+            confidence: Some(40),
+        };
+        let s = IpSet::build_with_domains(
+            vec![rich],
+            vec![domainset::hash("plain.example"), domainset::hash("shared.example")],
+        );
+        assert_eq!(s.len(), 3);
+        assert_eq!(s.domain_count(), 2);
+        let m = s.match_domain("a.plain.example", true).unwrap();
+        assert_eq!(m.display, "plain.example");
+        assert!(m.extra.is_null() && m.confidence.is_none());
+        // 同一網域同時有附加資訊與純雜湊時，保留附加資訊那筆。
+        assert_eq!(s.match_domain("shared.example", true).unwrap().confidence, Some(40));
+    }
 
     fn net(s: &str) -> Record {
         Record {
@@ -254,9 +290,13 @@ mod tests {
         let (m, exact) = s.match_ip_port("1.2.3.4".parse().unwrap(), Some(443)).unwrap();
         assert!(exact && m.confidence == Some(75));
         assert!(!s.match_ip_port("1.2.3.4".parse().unwrap(), Some(80)).unwrap().1);
-        assert!(s.match_domain("cdn.evil.example").is_some());
-        assert!(s.match_domain("evil.example.").is_some());
-        assert!(s.match_domain("example").is_none());
+        assert_eq!(
+            s.match_domain("cdn.evil.example", true).unwrap().display,
+            "evil.example"
+        );
+        assert!(s.match_domain("cdn.evil.example", false).is_none());
+        assert!(s.match_domain("evil.example.", false).is_some());
+        assert!(s.match_domain("example", true).is_none());
         assert!(s.match_asn(64500).is_some());
         assert_eq!(s.len(), 4);
     }

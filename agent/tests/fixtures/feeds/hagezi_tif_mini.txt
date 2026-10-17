@@ -1,0 +1,4 @@
+# Title: HaGeZi TIF mini (fixture)
+# License: GPL-3.0
+c2.example.test
+*.malware.example.test

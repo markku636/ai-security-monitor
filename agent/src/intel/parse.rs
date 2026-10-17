@@ -1,4 +1,5 @@
-//! 情資格式解析：純文字 IP / CIDR、Spamhaus NDJSON、URLhaus URL 清單、ThreatFox JSON、DShield tab、IPsum、CISA KEV。
+//! 情資格式解析：純文字 IP / CIDR、Spamhaus NDJSON、URLhaus URL 清單、ThreatFox JSON、DShield tab、IPsum、CISA KEV，
+//! 以及 DNS 封鎖清單常見的網域格式（hosts、一行一個網域、萬用字元、adblock `||x^`）。
 //! 解析結果保留每筆的附加資訊（SBL id、惡意程式家族、分數…）與檔頭（授權要求保留）。
 
 use std::net::IpAddr;
@@ -29,7 +30,19 @@ pub struct Record {
 #[derive(Debug, Default)]
 pub struct Parsed {
     pub records: Vec<Record>,
+    /// 大型網域清單只留雜湊（見 `domainset`），不建 Record。
+    pub domain_hashes: Vec<u64>,
     pub header_lines: Vec<String>,
+}
+
+impl Parsed {
+    pub fn len(&self) -> usize {
+        self.records.len() + self.domain_hashes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 const MAX_HEADER_LINES: usize = 12;
@@ -60,7 +73,7 @@ fn is_comment(l: &str) -> bool {
 }
 
 fn push_header(p: &mut Parsed, l: &str) {
-    if p.records.is_empty() && p.header_lines.len() < MAX_HEADER_LINES {
+    if p.is_empty() && p.header_lines.len() < MAX_HEADER_LINES {
         p.header_lines.push(l.to_string());
     }
 }
@@ -313,6 +326,66 @@ fn parse_kev(bytes: &[u8]) -> AppResult<Parsed> {
     Ok(p)
 }
 
+/// 網域清單一行 → 網域。認得 hosts（`0.0.0.0 x`、`127.0.0.1 x`）、萬用字元（`*.x`）、
+/// adblock（`||x^`，例外規則 `@@` 與外觀規則略過）與純網域；行內註解（`#`、`!`、`$` 修飾字）去掉。
+fn domain_of_line(l: &str) -> Option<String> {
+    // adblock 外觀規則（`##`、`#@#`、`#?#`）要在去掉 `#` 註解之前排除
+    if l.starts_with('!')
+        || l.starts_with("@@")
+        || l.starts_with('[')
+        || l.contains("##")
+        || l.contains("#@#")
+        || l.contains("#?#")
+    {
+        return None;
+    }
+    let l = l.split('#').next().unwrap_or("").trim();
+    if l.is_empty() {
+        return None;
+    }
+    let mut tok = l;
+    let mut parts = l.split_whitespace();
+    if let (Some(first), Some(second)) = (parts.next(), parts.next()) {
+        // hosts：第一欄是 IP（通常 0.0.0.0／127.0.0.1／::），第二欄是網域
+        if first.parse::<IpAddr>().is_ok() {
+            tok = second;
+        } else {
+            return None;
+        }
+    }
+    if let Some(rest) = tok.strip_prefix("||") {
+        tok = rest.split(['^', '$', '/']).next().unwrap_or("");
+    }
+    let tok = tok.trim_start_matches("*.").trim_start_matches('.');
+    let d = super::domainset::normalize(tok)?;
+    if matches!(
+        d.as_str(),
+        "localhost.localdomain" | "local.localdomain" | "broadcasthost.localdomain"
+    ) {
+        return None;
+    }
+    Some(d)
+}
+
+/// hosts／一行一個網域／萬用字元／adblock：只留雜湊，50 萬筆也只佔幾 MB。
+fn parse_domain_list(text: &str) -> Parsed {
+    let mut p = Parsed::default();
+    for raw in text.lines() {
+        let l = raw.trim();
+        if l.is_empty() {
+            continue;
+        }
+        if is_comment(l) || l.starts_with('!') || l.starts_with('[') {
+            push_header(&mut p, l);
+            continue;
+        }
+        if let Some(d) = domain_of_line(l) {
+            p.domain_hashes.push(super::domainset::hash(&d));
+        }
+    }
+    p
+}
+
 /// 下載到的是 HTML 錯誤頁 / 登入頁，而不是清單。
 pub fn looks_like_html(bytes: &[u8]) -> bool {
     let head: String = String::from_utf8_lossy(&bytes[..bytes.len().min(512)])
@@ -334,6 +407,9 @@ pub fn parse(format: FeedFormat, bytes: &[u8]) -> AppResult<Parsed> {
         FeedFormat::UrlhausText => parse_urlhaus(&text()),
         FeedFormat::ThreatfoxJson => parse_threatfox(bytes)?,
         FeedFormat::CisaKevJson => parse_kev(bytes)?,
+        FeedFormat::Hosts | FeedFormat::DomainPerLine | FeedFormat::Wildcard | FeedFormat::Adblock => {
+            parse_domain_list(&text())
+        }
         FeedFormat::MmdbGz | FeedFormat::LookupApi | FeedFormat::Unknown => {
             return Err(AppError::Unsupported(tf!(
                 "此格式不能當清單解析：{format}",
@@ -435,6 +511,48 @@ mod tests {
         assert_eq!(p.records[0].confidence, Some(95));
         assert_eq!(p.records[1].confidence, Some(60));
         assert_eq!(p.records[2].extra["score"], 4);
+    }
+
+    #[test]
+    fn domain_list_formats() {
+        use crate::intel::domainset::hash;
+        let hosts = "# Title: test
+0.0.0.0 evil.example
+127.0.0.1 localhost
+:: Bad.Example.
+0.0.0.0 localhost.localdomain
+";
+        let p = parse(FeedFormat::Hosts, hosts.as_bytes()).unwrap();
+        assert_eq!(p.domain_hashes, vec![hash("evil.example"), hash("bad.example")]);
+        assert_eq!(p.header_lines, vec!["# Title: test"]);
+        assert!(p.records.is_empty());
+
+        let wild = "*.c2.example
+plain.example # note
+not a domain
+";
+        let p = parse(FeedFormat::Wildcard, wild.as_bytes()).unwrap();
+        assert_eq!(p.domain_hashes, vec![hash("c2.example"), hash("plain.example")]);
+
+        let adb = "! Title: x
+[Adblock Plus]
+||ads.example^
+||track.example^$third-party
+@@||good.example^
+example.com##.banner
+";
+        let p = parse(FeedFormat::Adblock, adb.as_bytes()).unwrap();
+        assert_eq!(p.domain_hashes, vec![hash("ads.example"), hash("track.example")]);
+        assert_eq!(p.header_lines.len(), 2);
+
+        let p = parse(
+            FeedFormat::DomainPerLine,
+            b"a.example
+b.example
+",
+        )
+        .unwrap();
+        assert_eq!(p.len(), 2);
     }
 
     #[test]

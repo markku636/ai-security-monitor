@@ -1,6 +1,7 @@
 //! intel 引擎：載入已下載的威脅情資 → 比對連線的遠端 IP（含 ip:port、ASN）→ 附上來源與授權，
 //! 重算判定（安全／未知／可疑／危險），產生 finding。可選線上名譽查詢補強「未知」的公網 IP。
 
+pub mod domainset;
 pub mod fetch;
 pub mod geo;
 pub mod ipset;
@@ -40,6 +41,8 @@ pub struct LoadedFeed {
 #[derive(Default)]
 pub struct IntelDb {
     pub feeds: Vec<LoadedFeed>,
+    /// 加密 DNS 端點清單（`kind: doh`）：不算威脅，只給繞過偵測用。
+    pub doh: Vec<LoadedFeed>,
     pub geo: GeoDb,
     /// 已啟用但尚未下載的來源 id。
     pub missing: Vec<String>,
@@ -53,7 +56,10 @@ impl IntelDb {
             geo: GeoDb::load(config_dir),
             ..Default::default()
         };
-        for f in reg.enabled().filter(|f| f.is_blocklist() && fetch::downloadable(f)) {
+        for f in reg
+            .enabled()
+            .filter(|f| (f.is_blocklist() || f.kind == FeedKind::Doh) && fetch::downloadable(f))
+        {
             let Some(meta) = FeedMeta::load(config_dir, &f.id).filter(|m| m.has_data()) else {
                 db.missing.push(f.id.clone());
                 continue;
@@ -66,11 +72,18 @@ impl IntelDb {
                 }
             };
             match parse::parse(f.format, &bytes) {
-                Ok(p) => db.feeds.push(LoadedFeed {
-                    entry: f.clone(),
-                    meta,
-                    set: IpSet::build(p.records),
-                }),
+                Ok(p) => {
+                    let lf = LoadedFeed {
+                        entry: f.clone(),
+                        meta,
+                        set: IpSet::build_with_domains(p.records, p.domain_hashes),
+                    };
+                    if f.kind == FeedKind::Doh {
+                        db.doh.push(lf);
+                    } else {
+                        db.feeds.push(lf);
+                    }
+                }
                 Err(e) => db
                     .warnings
                     .push(tf!("解析情資 {id} 失敗：{e}", id = f.id, e = e.message())),
@@ -133,11 +146,41 @@ impl IntelDb {
             .feeds
             .iter()
             .filter(|lf| lf.entry.kind == FeedKind::Domain)
-            .filter_map(|lf| lf.set.match_domain(domain).map(|rm| Self::hit(lf, rm, 0)))
+            .filter_map(|lf| {
+                lf.set
+                    .match_domain(domain, lf.entry.match_subdomains)
+                    .map(|rm| Self::hit(lf, &rm, 0))
+            })
             .collect();
         hits.sort_by_key(|h| std::cmp::Reverse(h.confidence));
         hits
     }
+
+    /// 網域是不是已知的加密 DNS（DoH／DoT）端點；回傳比中的清單 id 與那層網域。
+    pub fn doh_endpoint(&self, domain: &str) -> Option<(String, String)> {
+        self.doh.iter().find_map(|lf| {
+            lf.set
+                .match_domain(domain, lf.entry.match_subdomains)
+                .map(|rm| (lf.entry.id.clone(), rm.display))
+        })
+    }
+}
+
+/// 網域綜合分數（0–100）：最高來源信心，每多一個不同來源 +10（上限 100）；
+/// 熱門網域只對最高信心 < 70 的命中扣 30（不能蓋掉高信心情資）。
+/// ≥ 80 危險、60–79 可疑、40–59 只當補充資訊。
+pub fn domain_score(hits: &[IntelHit], popular: bool) -> u8 {
+    let Some(max) = hits.iter().map(|h| h.confidence).max() else {
+        return 0;
+    };
+    let mut feeds: Vec<&str> = hits.iter().map(|h| h.feed_id.as_str()).collect();
+    feeds.sort_unstable();
+    feeds.dedup();
+    let mut score = u32::from(max) + 10 * (feeds.len() as u32).saturating_sub(1);
+    if popular && max < 70 {
+        score = score.saturating_sub(30);
+    }
+    score.min(100) as u8
 }
 
 fn severity_for(max_conf: u8) -> Severity {
@@ -387,6 +430,10 @@ mod tests {
             ("spamhaus-drop-v4", "drop_v4.json"),
             ("dshield-block", "dshield_block.txt"),
             ("abusech-urlhaus-hosts", "urlhaus_hosts.txt"),
+            ("certpl-domains", "certpl_domains.txt"),
+            ("hagezi-tif-mini", "hagezi_tif_mini.txt"),
+            ("phishing-database-active", "phishing_db.txt"),
+            ("hagezi-doh", "hagezi_doh.txt"),
         ];
         for (id, file) in pairs {
             let fdir = feed_dir(dir.path(), id);
@@ -433,7 +480,8 @@ mod tests {
         let dir = fixture_config_dir();
         let reg = Registry::load(dir.path()).unwrap();
         let db = IntelDb::load(dir.path(), &reg);
-        assert_eq!(db.feeds.len(), 6);
+        assert_eq!(db.feeds.len(), 9);
+        assert_eq!(db.doh.len(), 1);
         assert!(db.missing.contains(&"cins-army".to_string()));
 
         // 185.199.108.9 同時在 Feodo（/32）與 DShield（/24）。
@@ -474,6 +522,69 @@ mod tests {
             "abusech-urlhaus-hosts"
         );
         assert!(db.match_ip("8.8.8.8".parse().unwrap(), Some(53)).is_empty());
+    }
+
+    #[test]
+    fn domain_feeds_subdomain_semantics_doh_and_score() {
+        let dir = fixture_config_dir();
+        let reg = Registry::load(dir.path()).unwrap();
+        let db = IntelDb::load(dir.path(), &reg);
+
+        // CERT.PL＋Phishing.Database 都列了 phish-bank：兩個來源。
+        let hits = db.match_domain("phish-bank.example.test");
+        let ids: Vec<&str> = hits.iter().map(|h| h.feed_id.as_str()).collect();
+        assert_eq!(ids, vec!["certpl-domains", "phishing-database-active"]);
+        assert_eq!(hits[0].matched, "phish-bank.example.test");
+        assert_eq!(domain_score(&hits, false), 95);
+
+        // CERT.PL 涵蓋子網域；Phishing.Database 只比完全相同。
+        let ids: Vec<String> = db
+            .match_domain("www.phish-bank.example.test")
+            .into_iter()
+            .map(|h| h.feed_id)
+            .collect();
+        assert_eq!(ids, vec!["certpl-domains"]);
+        assert!(db.match_domain("x.exact-only.example.test").is_empty());
+        assert_eq!(db.match_domain("exact-only.example.test")[0].confidence, 60);
+
+        // 萬用字元清單（*.evil… 與 c2…）
+        let h = db.match_domain("a.b.c2.example.test");
+        assert_eq!(h[0].feed_id, "hagezi-tif-mini");
+        assert_eq!(h[0].matched, "c2.example.test");
+        assert_eq!(
+            db.match_domain("x.malware.example.test")[0].matched,
+            "malware.example.test"
+        );
+
+        // DoH 端點不算威脅
+        assert!(db.match_domain("dns.google").is_empty());
+        assert_eq!(db.doh_endpoint("dns.google").unwrap().0, "hagezi-doh");
+        assert!(db.doh_endpoint("example.test").is_none());
+    }
+
+    #[test]
+    fn domain_score_rules() {
+        let mk = |feed: &str, c: u8| IntelHit {
+            feed_id: feed.into(),
+            name: feed.into(),
+            vendor: "v".into(),
+            confidence: c,
+            license: "l".into(),
+            license_url: "u".into(),
+            attribution_required: false,
+            fetched_at: chrono::Utc::now(),
+            source_url: "https://x".into(),
+            matched: "m".into(),
+            extra: json!({}),
+        };
+        assert_eq!(domain_score(&[], false), 0);
+        assert_eq!(domain_score(&[mk("a", 60)], false), 60);
+        assert_eq!(domain_score(&[mk("a", 60), mk("b", 40)], false), 70);
+        assert_eq!(domain_score(&[mk("a", 60), mk("a", 50)], false), 60);
+        // 熱門網域只壓低信心 < 70 的命中
+        assert_eq!(domain_score(&[mk("a", 60)], true), 30);
+        assert_eq!(domain_score(&[mk("a", 85)], true), 85);
+        assert_eq!(domain_score(&[mk("a", 95), mk("b", 90), mk("c", 80)], false), 100);
     }
 
     #[test]

@@ -425,11 +425,11 @@ fn store_download(
         raw
     } else {
         let parsed = parse::parse(f.format, &bytes)?;
-        if parsed.records.is_empty() {
+        if parsed.is_empty() {
             return Err(AppError::Intel(t!("下載內容沒有任何條目（保留舊資料）").into()));
         }
         store::write_bytes_in(&fdir, DATA_FILE, &bytes)?;
-        meta.entries = parsed.records.len() as u64;
+        meta.entries = parsed.len() as u64;
         meta.header_lines = parsed.header_lines;
         bytes
     };

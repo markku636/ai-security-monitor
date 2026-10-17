@@ -1,0 +1,3 @@
+# Title: HaGeZi DoH (fixture)
+dns.google
+cloudflare-dns.com

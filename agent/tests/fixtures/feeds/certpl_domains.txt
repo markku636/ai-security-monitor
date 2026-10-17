@@ -1,0 +1,3 @@
+# CERT Polska test fixture
+phish-bank.example.test
+login-verify.example.test
