@@ -618,7 +618,7 @@ pub async fn metrics_view(config_dir: &std::path::Path) -> Value {
     let rx = recent.iter().fold(0u64, |a, s| a.saturating_add(s.net.rx_bytes));
     let tx = recent.iter().fold(0u64, |a, s| a.saturating_add(s.net.tx_bytes));
     let peak = |f: fn(&MetricsSample) -> f64| recent.iter().map(f).fold(0.0f64, f64::max);
-    let cpus: Vec<f32> = recent
+    let cpus: Vec<f64> = recent
         .iter()
         .filter_map(|s| s.perf.as_ref().map(|p| p.cpu_pct))
         .collect();
@@ -641,8 +641,8 @@ pub async fn metrics_view(config_dir: &std::path::Path) -> Value {
             "tx_bytes": tx,
             "peak_rx_bytes_per_s": peak(|s| s.rates().0),
             "peak_tx_bytes_per_s": peak(|s| s.rates().1),
-            "cpu_avg_pct": (!cpus.is_empty()).then(|| cpus.iter().sum::<f32>() / cpus.len() as f32),
-            "cpu_max_pct": cpus.iter().cloned().fold(None, |m: Option<f32>, v| Some(m.map_or(v, |m| m.max(v)))),
+            "cpu_avg_pct": (!cpus.is_empty()).then(|| cpus.iter().sum::<f64>() / cpus.len() as f64),
+            "cpu_max_pct": cpus.iter().cloned().fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v)))),
             "top_processes_by_network": top_net,
         },
     })

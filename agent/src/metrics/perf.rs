@@ -32,7 +32,7 @@ pub struct ProcPerf {
     #[serde(default = "one")]
     pub count: u32,
     /// 佔整台電腦 CPU 的百分比（0–100，已除以核心數）。
-    pub cpu_pct: f32,
+    pub cpu_pct: f64,
     /// 實體記憶體（RSS），bytes。
     pub rss: u64,
 }
@@ -44,7 +44,7 @@ fn one() -> u32 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PerfSample {
     /// 整體 CPU 使用率（0–100，這段時間的平均）。
-    pub cpu_pct: f32,
+    pub cpu_pct: f64,
     /// 邏輯核心數。
     pub cpu_cores: u32,
     pub mem_used: u64,
@@ -157,7 +157,7 @@ pub fn disk_io_totals(disks: &Disks) -> Option<(u64, u64)> {
 
 /// 依名稱合併行程，排出最吃 CPU 與最吃記憶體的前 N 名。`cores` 用來把 CPU 換成整台電腦的百分比。
 pub fn top_processes(sys: &System, cores: usize) -> (Vec<ProcPerf>, Vec<ProcPerf>) {
-    let cores = cores.max(1) as f32;
+    let cores = cores.max(1) as f64;
     let mut m: HashMap<String, ProcPerf> = HashMap::new();
     for (pid, p) in sys.processes() {
         if p.thread_kind().is_some() {
@@ -167,7 +167,7 @@ pub fn top_processes(sys: &System, cores: usize) -> (Vec<ProcPerf>, Vec<ProcPerf
         if name.is_empty() {
             continue;
         }
-        let cpu = p.cpu_usage() / cores;
+        let cpu = f64::from(p.cpu_usage()) / cores;
         let e = m.entry(name.clone()).or_insert(ProcPerf {
             name: crate::util::text::clip(&name, 80),
             pid: Some(pid.as_u32()),
@@ -198,7 +198,7 @@ pub fn top_processes(sys: &System, cores: usize) -> (Vec<ProcPerf>, Vec<ProcPerf
     (by_cpu, by_mem)
 }
 
-pub fn round1(v: f32) -> f32 {
+pub fn round1(v: f64) -> f64 {
     if v.is_finite() {
         (v * 10.0).round() / 10.0
     } else {
@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(mem_used(16, 0, 7), 7, "no available figure: fall back to used");
         assert_eq!(mem_used(16, 0, 99), 16);
         assert_eq!(round1(12.345), 12.3);
-        assert_eq!(round1(f32::NAN), 0.0);
+        assert_eq!(round1(f64::NAN), 0.0);
     }
 
     #[test]

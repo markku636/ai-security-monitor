@@ -275,7 +275,7 @@ impl Collector {
         let (top_cpu, top_mem) = perf::top_processes(&self.sys, cores);
         let total = self.sys.total_memory();
         PerfSample {
-            cpu_pct: perf::round1(self.sys.global_cpu_usage().clamp(0.0, 100.0)),
+            cpu_pct: perf::round1(f64::from(self.sys.global_cpu_usage()).clamp(0.0, 100.0)),
             cpu_cores: cores as u32,
             mem_used: perf::mem_used(total, self.sys.available_memory(), self.sys.used_memory()),
             mem_total: total,
