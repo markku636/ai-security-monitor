@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
+import { IpIntelSettings } from '@/components/admin/IpIntelSettings';
 import { EnrollKeyManager, TokenManager, type EnrollRow, type TokenRow } from '@/components/admin/KeyManagers';
 import { Card } from '@/components/ui/Card';
 import { requireAdmin } from '@/lib/auth/require';
@@ -8,12 +9,13 @@ import { env } from '@/lib/env';
 import { utc } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { hubPublicUrl } from '@/lib/install';
+import { configStatus } from '@/lib/ipintel/service';
 import { listAudit } from '@/lib/queries/admin';
 import { strParam } from '@/lib/queries/params';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['keys', 'tokens', 'audit', 'export'] as const;
+const TABS = ['keys', 'tokens', 'intel', 'audit', 'export'] as const;
 type Tab = (typeof TABS)[number];
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
@@ -24,7 +26,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const raw = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'keys';
-  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), audit: t('稽核紀錄'), export: t('匯出') };
+  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), intel: t('外部情資來源'), audit: t('稽核紀錄'), export: t('匯出') };
   return (
     <div className="space-y-4">
       <header>
@@ -45,6 +47,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </nav>
       {tab === 'keys' ? <KeysTab /> : null}
       {tab === 'tokens' ? <TokensTab /> : null}
+      {tab === 'intel' ? <IntelTab /> : null}
       {tab === 'audit' ? <AuditTab action={strParam(sp, 'action', 64)} /> : null}
       {tab === 'export' ? <ExportTab /> : null}
     </div>
@@ -68,6 +71,18 @@ async function KeysTab() {
           {t('→ 安裝頁：各平台一行安裝指令')}
         </Link>
       </p>
+    </div>
+  );
+}
+
+async function IntelTab() {
+  const { t } = await getT();
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-600 dark:text-slate-300">
+        {t('IP 分析頁的「外部威脅情資」用這些來源算風險分數。只有管理員按下查詢時才會把那個 IP 送出去，結果會快取。金鑰也可以用環境變數設定（優先於這裡）。')}
+      </p>
+      <IpIntelSettings status={await configStatus()} />
     </div>
   );
 }

@@ -46,6 +46,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 | `ASA_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址 |
 | `ASA_HUB_HOST_PORT`／`ASA_HUB_BIND` | 主機 port（8088）與綁定位址 |
 | `ASA_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.1.0`） |
+| `ASA_HUB_ABUSEIPDB_KEY`／`ASA_HUB_IPINFO_TOKEN`／`ASA_HUB_PROXYCHECK_KEY`／`ASA_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`ASA_HUB_IP_LOOKUPS=off` 完全不對外查詢 |
 | `ANTHROPIC_API_KEY`／`CLAUDE_CODE_OAUTH_TOKEN`／`OPENAI_API_KEY` | `/ai` 頁用；也可以 `docker compose exec hub claude` 登入，登入資料存在 `/data` volume |
 
 `ASA_HUB_ADMIN_SECRET`、`ASA_HUB_CLIENT_SECRETS`、`ASA_HUB_DATABASE_URL`、`ASA_HUB_ACTION_SIGNING_KEY` 也接受 `<名稱>_FILE`（Docker secrets）。

@@ -60,6 +60,7 @@ Hub 與 MCP 回答都會引用 `source_url`；AI 被要求不能自己編來源�
 - 下載用 ETag／Last-Modified，只抓過期的；HTML 錯誤頁、空清單或超過 96 MB 不會覆蓋舊資料。
 - 自訂來源：`<設定目錄>/feeds/custom.json`（只接受 https）；`asa intel enable|disable <id>` 開關。
 - 線上名譽查詢：`asa intel key set abuseipdb -`（從標準輸入讀 key，存在鑰匙圈），結果快取 24 小時並有每日額度上限。
+- Hub 的 IP 分析頁（`/ip/<ip>`）另有「外部威脅情資」：管理員按「查詢外部情資」時由 hub 查 AbuseIPDB、GreyNoise、IPinfo、proxycheck.io 與 DNS 反解，連同 agent 回報的黑名單命中算出 0–100 風險分數。分數＝各訊號加權（Spamhaus 30、IPsum 25、FireHOL 20、其他黑名單 20、AbuseIPDB 25×信心分、GreyNoise 惡意 15、Proxy／VPN 12、資料中心 8、Tor 10，GreyNoise 良性 −20）÷ 165，再套下限（Spamhaus DROP ≥ 85、AbuseIPDB ≥ 90 時 ≥ 75、Tor ≥ 40）；≥ 75 極高、≥ 50 高、≥ 25 中。私有／保留位址不送出，hub 不會自動查。
 
 ## 封鎖
 

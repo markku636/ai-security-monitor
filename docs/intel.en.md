@@ -60,6 +60,7 @@ See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for full license details
 - Downloads use ETag/Last-Modified and only fetch stale feeds; HTML error pages, empty lists or files over 96 MB never overwrite existing data.
 - Custom feeds: `<config dir>/feeds/custom.json` (https only); `asa intel enable|disable <id>` toggles feeds.
 - Online reputation: `asa intel key set abuseipdb -` (reads the key from stdin, stored in the keychain); results are cached for 24 hours with a daily quota.
+- The Hub IP page (`/ip/<ip>`) adds "External threat intel": when an admin clicks Look up, the hub queries AbuseIPDB, GreyNoise, IPinfo, proxycheck.io and reverse DNS, and combines them with the blocklist hits reported by agents into a 0–100 risk score. Score = weighted signals (Spamhaus 30, IPsum 25, FireHOL 20, other blocklists 20, AbuseIPDB 25×confidence, GreyNoise malicious 15, proxy/VPN 12, data center 8, Tor 10, GreyNoise benign −20) ÷ 165, then floors (Spamhaus DROP ≥ 85, AbuseIPDB ≥ 90 → ≥ 75, Tor ≥ 40); ≥ 75 critical, ≥ 50 high, ≥ 25 medium. Private/reserved addresses are never sent, and the hub never looks anything up on its own.
 
 ## Blocking
 

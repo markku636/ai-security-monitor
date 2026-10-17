@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation';
 import { isIP } from 'node:net';
 import { GeoAttribution } from '@/components/security/ConnectionsTable';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
+import { IpThreatIntel } from '@/components/security/IpThreatIntel';
 import { Card } from '@/components/ui/Card';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
+import { getIpIntelView } from '@/lib/ipintel/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +54,9 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
           </Link>
         </div>
       </header>
+      <Card title={t('外部威脅情資')}>
+        <IpThreatIntel view={await getIpIntelView(ip)} />
+      </Card>
       <IndicatorDetails t={t} q={ip} title={t('情資與連線紀錄')} />
       <Card title={t('外部查詢')}>
         <p className="mb-2 text-xs text-slate-500">{t('在新分頁開啟第三方網站查這個 IP；hub 不會自動把 IP 送給它們。')}</p>

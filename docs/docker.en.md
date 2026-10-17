@@ -46,6 +46,7 @@ See [.env.example](../.env.example) for the full list. The important ones:
 | `ASA_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` |
 | `ASA_HUB_HOST_PORT` / `ASA_HUB_BIND` | Host port (8088) and bind address |
 | `ASA_HUB_IMAGE_TAG` | Image tag (default `latest`; e.g. `slim`, `0.1.0`) |
+| `ASA_HUB_ABUSEIPDB_KEY` / `ASA_HUB_IPINFO_TOKEN` / `ASA_HUB_PROXYCHECK_KEY` / `ASA_HUB_GREYNOISE_KEY` | Keys for "External threat intel" on the IP page (optional; can also be set under Settings & keys → Threat intel sources); `ASA_HUB_IP_LOOKUPS=off` disables outbound lookups |
 | `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` | For the `/ai` page; or sign in with `docker compose exec hub claude` — the login is kept in the `/data` volume |
 
 `ASA_HUB_ADMIN_SECRET`, `ASA_HUB_CLIENT_SECRETS`, `ASA_HUB_DATABASE_URL` and `ASA_HUB_ACTION_SIGNING_KEY` also accept `<NAME>_FILE` (Docker secrets).
