@@ -41,7 +41,7 @@ function HubFooter({ t, db }: { t: TFn; db: DbHealth }) {
 
 function NoAgents({ t }: { t: TFn }) {
   return (
-    <EmptyState title={t('還沒有任何代理程式回報')}>
+    <EmptyState title={t('還沒有任何主機回報')}>
       {t('在要保護的電腦上安裝 ai-security-monitor，然後執行：')}
       <code className="mt-2 block rounded bg-slate-100 px-2 py-1 font-mono text-xs dark:bg-slate-800">
         ai-security-monitor enroll https://&lt;hub&gt; --key &lt;client key&gt;

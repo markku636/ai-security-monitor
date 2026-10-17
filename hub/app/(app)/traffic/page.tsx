@@ -43,7 +43,7 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
         </div>
       </header>
       <HostFilter t={t} action="/traffic" current={agentId} keep={{ days }} />
-      {!top.length ? <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState> : null}
+      {!top.length ? <EmptyState title={t('還沒有流量資料')}>{t('主機執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState> : null}
       {risky.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('危險與可疑目的地')}</h2>

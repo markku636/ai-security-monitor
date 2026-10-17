@@ -9,6 +9,7 @@ node_modules/
 hub/.next/
 hub/out/
 hub/.tmp/
+hub/.data/
 hub/test-results/
 hub/playwright-report/
 

@@ -50,7 +50,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       </header>
       <HostFilter t={t} action="/events" current={agentId} keep={{ days }} />
       {empty ? (
-        <EmptyState title={t('這段期間沒有當機或資安事件')}>{t('代理程式的掃描會帶上近 7 天的事件摘要；以系統管理員執行才讀得到 Security 記錄。')}</EmptyState>
+        <EmptyState title={t('這段期間沒有當機或資安事件')}>{t('主機的掃描會帶上近 7 天的事件摘要；以系統管理員執行才讀得到 Security 記錄。')}</EmptyState>
       ) : null}
       {shown.length ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

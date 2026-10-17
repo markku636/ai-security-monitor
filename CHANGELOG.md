@@ -2,6 +2,10 @@
 
 ## 未發佈
 
+## v0.2.0 — 2026-10-17
+
+**改名為 AI Security Monitor（`ai-security-monitor`），並支援 Windows Server、可疑 IP 排名、IP 人工備註與新 logo。** 從 0.1.x 升級：舊設定、hub 註冊、金鑰與 `ASA_*` 環境變數都自動沿用，`asa self-update` 照樣能升上來；細節見下方「改名」與 README「從 asa／ai-security-agent 升級」。桌面版識別碼改了，要先解除安裝舊版。
+
 **改名：ai-security-agent（`asa`）→ AI Security Monitor（`ai-security-monitor`）。** 從 0.1.x 升級不用重新註冊，舊設定自動沿用：
 - 執行檔與命令：`asa` → `ai-security-monitor`（`ai-security-monitor scan`、`ai-security-monitor watch`…）。GitHub repo 改成 `markku636/ai-security-monitor`（舊網址會自動轉址）。
 - 環境變數：新前綴 `AI_SECURITY_MONITOR_*`（例 `AI_SECURITY_MONITOR_LANG`、`AI_SECURITY_MONITOR_CONFIG_DIR`、`AI_SECURITY_MONITOR_SECRETS_BACKEND`、`AI_SECURITY_MONITOR_SECRET_<KEY>`、`AI_SECURITY_MONITOR_MCP_TOKEN`、`AI_SECURITY_MONITOR_UPDATE_URL`、`AI_SECURITY_MONITOR_CLAUDE_BIN`／`_CODEX_BIN`）；舊的 `ASA_*` 照樣讀，兩個都設時新名優先。
@@ -36,7 +40,7 @@
 - 截圖用示範資料重拍：側欄是新 logo 與 ai-security-monitor、主機版本 0.2.0，新增 Windows Server 網域控制站 dc-01 的主機頁（`docs/images/agent-server.png`）；`scripts/demo-seed.mjs` 多送一次心跳，讓威脅情資頁有每台主機的情資新舊；`scripts/capture-screenshots.mjs` 也讀 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`。
 
 改進：
-- Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
+- Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致（主機頁的返回連結「← 主機」、各頁空狀態說明也改稱主機）；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。
 - IP 分析頁 `/ip/<ip>`：連線表、總覽、主機頁、流量、事件、暴力破解來源上的 IP 都能點進去，看這個 IP 被哪些情資來源列名（附來源連結）、哪台主機的哪個程式連過、連線狀態、被判可疑的理由與歷史；附 VirusTotal／AbuseIPDB／GreyNoise／Shodan／IPinfo 外部查詢連結（只是連結，hub 不會自動送出 IP）。
 - AI 助手新增「分析可疑連線」與「分析單一 IP」範圍，每種範圍都能選特定裝置；連線頁與 IP 頁有「請 AI 分析」按鈕直接帶入。

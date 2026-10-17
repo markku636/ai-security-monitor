@@ -87,7 +87,7 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
       {r.items.length ? (
         <ConnectionsTable rows={r.items} t={t} showHost={showHost} notes={notes} />
       ) : (
-        <EmptyState title={t('沒有符合條件的連線')}>{t('換個篩選條件，或等代理程式下一次回報快照。')}</EmptyState>
+        <EmptyState title={t('沒有符合條件的連線')}>{t('換個篩選條件，或等主機下一次回報快照。')}</EmptyState>
       )}
       <Pager t={t} total={r.total} limit={f.limit} offset={f.offset} hrefFor={(o) => href(base, f, { offset: o })} />
       <GeoAttribution t={t} />

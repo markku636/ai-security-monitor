@@ -31,7 +31,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <header>
         <h1 className="text-xl font-semibold">{t('設定與金鑰')}</h1>
-        <p className="text-sm text-slate-500">{t('代理程式的註冊金鑰、唯讀 API token、稽核紀錄與 CSV 匯出。')}</p>
+        <p className="text-sm text-slate-500">{t('主機的註冊金鑰、唯讀 API token、稽核紀錄與 CSV 匯出。')}</p>
       </header>
       <nav className="flex flex-wrap gap-1 border-b border-slate-200 text-sm dark:border-slate-800" aria-label={t('分頁')}>
         {TABS.map((k) => (
@@ -62,7 +62,7 @@ async function KeysTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        {t('代理程式用註冊金鑰上傳報告。可以一個部門或一批機器一把；撤銷後用那把金鑰的主機會被拒絕。')}
+        {t('主機用註冊金鑰上傳報告。可以一個部門或一批機器一把；撤銷後用那把金鑰的主機會被拒絕。')}
         {envKeys ? ` ${t('另有 {n} 把來自環境變數 ASA_HUB_CLIENT_SECRETS 的金鑰（不在這裡管理）。', { n: envKeys })}` : ''}
       </p>
       <EnrollKeyManager items={items} hub={hubPublicUrl(h)} />

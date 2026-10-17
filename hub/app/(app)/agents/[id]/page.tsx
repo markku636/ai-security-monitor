@@ -180,7 +180,7 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
     processActivity(a.id, 20),
   ]);
   if (!top.length && !procs.length) {
-    return <EmptyState title={t('還沒有流量資料')}>{t('代理程式執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>;
+    return <EmptyState title={t('還沒有流量資料')}>{t('主機執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>;
   }
   return (
     <div className="space-y-4">
@@ -208,7 +208,7 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
 
 async function VulnsTab({ t, a }: { t: TFn; a: Agent }) {
   const v = await agentVuln(a.id);
-  if (!v) return <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報（需要 ai-security-monitor 0.1 以上）。')}</EmptyState>;
+  if (!v) return <EmptyState title={t('還沒有漏洞資料')}>{t('主機執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報（需要 ai-security-monitor 0.1 以上）。')}</EmptyState>;
   const s = v.summary;
   const eco = Object.entries(s.by_ecosystem)
     .map(([k, n]) => `${k} ${n}`)
@@ -289,7 +289,7 @@ const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 } as const;
 
 async function HardeningTab({ t, a, sp }: { t: TFn; a: Agent; sp: Record<string, string | string[] | undefined> }) {
   const h = await agentHardening(a.id);
-  if (!h) return <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報；本機可用 ai-security-monitor harden 先看結果。')}</EmptyState>;
+  if (!h) return <EmptyState title={t('還沒有硬化檢查資料')}>{t('主機執行 ai-security-monitor scan 或 ai-security-monitor watch 時會一併回報；本機可用 ai-security-monitor harden 先看結果。')}</EmptyState>;
   const s = h.summary;
   const all = (Array.isArray(sp.show) ? sp.show[0] : sp.show) === 'all';
   const rows = s.results
@@ -385,7 +385,7 @@ export default async function AgentPage({
     <div className="space-y-4">
       <header className="space-y-1">
         <Link href="/agents" className="text-sm text-slate-500 hover:underline">
-          {t('← 代理程式')}
+          {t('← 主機')}
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold">{a.hostname}</h1>

@@ -22,7 +22,7 @@ export default async function AgentsPage() {
         <p className="text-sm text-slate-500">{t('每台安裝 ai-security-monitor 並註冊到這個 Hub 的電腦或伺服器。')}</p>
       </header>
       {rows.length === 0 ? (
-        <EmptyState title={t('還沒有任何代理程式回報')}>{t('在要保護的電腦上安裝 ai-security-monitor，然後執行：')}</EmptyState>
+        <EmptyState title={t('還沒有任何主機回報')}>{t('在要保護的電腦上安裝 ai-security-monitor，然後執行：')}</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <table className="w-full text-left text-sm">
