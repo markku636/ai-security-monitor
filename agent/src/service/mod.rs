@@ -628,7 +628,10 @@ pub fn running_watchers(config_dir: Option<&Path>) -> Vec<Watcher> {
 /// 執行檔名是不是常駐行程（新名或舊名 asa，不分大小寫）。
 pub fn is_process_name(name: &str, names: &[&str]) -> bool {
     let name = name.to_ascii_lowercase();
-    names.iter().any(|n| *n == name)
+    // Linux comm 截成 15 字元（"ai-security-mon"）
+    names
+        .iter()
+        .any(|n| *n == name || (name.len() == 15 && n.len() > 15 && n.starts_with(&name)))
 }
 
 fn watchers_named(config_dir: Option<&Path>, names: &[&str]) -> Vec<Watcher> {
@@ -652,7 +655,19 @@ fn watchers_named(config_dir: Option<&Path>, names: &[&str]) -> Vec<Watcher> {
         .iter()
         .filter_map(|(pid, p)| {
             let args: Vec<String> = p.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
-            let is_ours = is_process_name(&p.name().to_string_lossy(), names);
+            // Linux 的行程名（/proc/<pid>/comm）只有 15 字元，ai-security-monitor 會被截斷：
+            // 也看執行檔路徑與 argv[0] 的檔名
+            let exe_name = p
+                .exe()
+                .and_then(|e| e.file_name())
+                .map(|f| f.to_string_lossy().to_string());
+            let argv0 = args
+                .first()
+                .and_then(|a| Path::new(a).file_name().map(|f| f.to_string_lossy().to_string()));
+            let is_ours = std::iter::once(p.name().to_string_lossy().to_string())
+                .chain(exe_name)
+                .chain(argv0)
+                .any(|n| is_process_name(&n, names));
             let daemon = (args.iter().any(|a| a == "watch") && args.iter().any(|a| a == "--service"))
                 || (args.iter().any(|a| a == "service") && args.iter().any(|a| a == "run"));
             let same_dir = dir.as_ref().is_none_or(|d| {
@@ -1152,6 +1167,9 @@ mod tests {
             assert!(is_process_name(n, PROCESS_NAMES), "{n}");
         }
         assert!(!is_process_name("asa-desktop.exe", PROCESS_NAMES));
+        // Linux /proc/<pid>/comm 只有 15 字元
+        assert!(is_process_name("ai-security-mon", PROCESS_NAMES));
+        assert!(!is_process_name("ai-security-mo", PROCESS_NAMES));
         assert!(!is_process_name("ai-security-monitor.exe", LEGACY_PROCESS_NAMES));
     }
 
