@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::json;
 
-use super::{rules, store};
+use super::{rules, store, tamper};
 use crate::connections::KnownGood;
 use crate::error::{AppError, AppResult};
 use crate::intel::registry::Registry;
@@ -67,7 +67,19 @@ impl Scanner for DnsScanner {
         let kg = KnownGood::load();
         let allow = &ctx.allowlist;
         let trusted = |d: &str| allow.match_domain(d).is_some() || kg.match_domain(d).is_some();
-        let findings = rules::detect(&recs, intel.as_deref(), &trusted);
+        let mut findings = rules::detect(&recs, intel.as_deref(), &trusted);
+        findings.extend(
+            tamper::check(
+                &ctx.config_dir,
+                tamper::Inputs {
+                    records: &recs,
+                    intel: intel.as_deref(),
+                    kg: &kg,
+                    verify_answers: ctx.config.dns.verify_answers,
+                },
+            )
+            .await,
+        );
         let mut summary = rules::summary(&recs);
         summary["window_s"] = json!(WINDOW.num_seconds());
         summary["collector"] = json!(status);

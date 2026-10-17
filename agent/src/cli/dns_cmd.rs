@@ -25,6 +25,7 @@ use crate::intel::IntelDb;
 pub async fn run(env: &Env, a: DnsArgs) -> AppResult<()> {
     match a.cmd {
         Some(DnsCmd::Status) => status(env).await,
+        Some(DnsCmd::Accept) => accept(env).await,
         None if a.follow => follow(env, &a).await,
         None => list(env, &a).await,
     }
@@ -201,6 +202,32 @@ fn empty_hint(st: Option<&DnsStatus>, suspicious: bool) -> String {
         Some(s) if !s.running => t!("背景 DNS 蒐集目前沒有在跑（ai-security-monitor dns status 看原因）").into(),
         Some(_) => t!("這段時間沒有 DNS 紀錄（每分鐘寫入一次，剛啟動請稍候）").into(),
     }
+}
+
+async fn accept(env: &Env) -> AppResult<()> {
+    let (dir, note) = data_dir(env);
+    if let Some(n) = note {
+        println!("{n}");
+    }
+    match crate::dns::tamper::accept(&dir).await? {
+        Some((net, servers)) => {
+            let list = servers.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
+            if env.global.json {
+                print_json(&json!({ "network": net, "servers": servers }));
+            } else {
+                println!(
+                    "{}",
+                    tf!(
+                        "已記下網路 {net} 的 DNS 伺服器：{servers}",
+                        net = net,
+                        servers = if list.is_empty() { "—".to_string() } else { list }
+                    )
+                );
+            }
+        }
+        None => println!("{}", t!("目前沒有連上網路，沒有可以記下的 DNS 伺服器")),
+    }
+    Ok(())
 }
 
 async fn status(env: &Env) -> AppResult<()> {

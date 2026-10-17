@@ -116,6 +116,8 @@ pub struct DnsConfig {
     pub enabled: bool,
     /// 上傳 Hub 的程度：all／alerts／off（只在加入 Hub 時有作用）。
     pub upload: DnsUpload,
+    /// 拿幾個常見網域的答案跟加密 DNS（Cloudflare）比對，抓 DNS 被竄改（預設關：會把這幾個網域送給 Cloudflare）。
+    pub verify_answers: bool,
 }
 
 impl Default for DnsConfig {
@@ -123,6 +125,7 @@ impl Default for DnsConfig {
         Self {
             enabled: true,
             upload: DnsUpload::All,
+            verify_answers: false,
         }
     }
 }
@@ -670,6 +673,7 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "metrics.process_network",
     "dns.enabled",
     "dns.upload",
+    "dns.verify_answers",
     "update.mode",
     "hub.advertise_url",
 ];
@@ -727,6 +731,7 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         }
         "metrics.process_network" => cfg.metrics.process_network = parse_bool(key, value)?,
         "dns.enabled" => cfg.dns.enabled = parse_bool(key, value)?,
+        "dns.verify_answers" => cfg.dns.verify_answers = parse_bool(key, value)?,
         "dns.upload" => {
             cfg.dns.upload = DnsUpload::parse(value)
                 .ok_or_else(|| AppError::InvalidArg(tf!("{key} 只能是 all、alerts 或 off", key = key)))?

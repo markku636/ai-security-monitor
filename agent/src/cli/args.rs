@@ -419,6 +419,8 @@ pub struct DnsArgs {
 pub enum DnsCmd {
     /// 背景 DNS 蒐集的狀態：資料來源、事件數、最後一筆、儲存位置
     Status,
+    /// 確認這個網路目前的 DNS 伺服器是正確的（之後被改才告警）
+    Accept,
 }
 
 #[derive(Args, Debug, Clone)]

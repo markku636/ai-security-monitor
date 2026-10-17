@@ -71,6 +71,12 @@ jobs:
           jq -e '.enabled == true and .upload == "all"' dns-status.json > /dev/null
           $B --json intel lookup kqfcpqbyqllgbr.net > lookup.json
           jq -e '.domain.looks_generated == true and .domain.registrable == "kqfcpqbyqllgbr.net"' lookup.json > /dev/null
+          # 竄改偵測：記下這個網路的 DNS 基準、跑一次 dns 掃描器（hosts、NXDOMAIN 測試）
+          $B --json dns accept > accept.json
+          cat accept.json
+          $B --json scan --scanners dns --no-online > scan-dns.json || true
+          jq '[.findings[]? // .report.findings[]? | select(.scanner == "dns") | {rule, severity, title}]' scan-dns.json || true
+          test -f "$AI_SECURITY_MONITOR_CONFIG_DIR/dns/tamper.json"
           if [ "$RUNNER_OS" = "Windows" ]; then
             # runner 有系統管理員權限：ETW 即時事件要抓到這個程式自己查的網域（含 PID）
             cargo test -q --locked --lib dns::collect::windows -- --ignored --nocapture
