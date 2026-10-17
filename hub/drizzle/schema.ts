@@ -688,3 +688,68 @@ export const dnsDomains = pgTable(
   },
   (t) => [index('dns_domains_first_idx').on(t.firstSeenAt), index('dns_domains_last_idx').on(t.lastSeenAt)],
 );
+
+/**
+ * 通知頻道：email／slack／discord／teams／webhook／syslog。config 裡的祕密欄位（SMTP 密碼、webhook 網址、HMAC 金鑰）
+ * 以 AES-256-GCM 加密存放（`enc:v1:…`），API 只回遮罩。
+ */
+export const notificationChannels = pgTable('notification_channels', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+  lastOkAt: ts('last_ok_at'),
+  lastError: text('last_error'),
+  lastErrorAt: ts('last_error_at'),
+});
+
+/** 通知規則：什麼事件（＋條件）送到哪些頻道。只通知規則建立之後發生的事。 */
+export const notificationRules = pgTable('notification_rules', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  event: text('event').notNull(),
+  /** 問題事件的最低嚴重度。 */
+  minSeverity: text('min_severity'),
+  /** 只看這台主機（null＝全部）。 */
+  agentId: text('agent_id'),
+  channelIds: jsonb('channel_ids').$type<string[]>().notNull().default([]),
+  /** 事件參數，例 host_offline 的 minutes、daily_digest 的 hour。 */
+  params: jsonb('params').$type<Record<string, unknown>>().notNull().default({}),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+});
+
+/** 已通知過的項目（同一規則同一件事只通知一次）。 */
+export const notificationSeen = pgTable(
+  'notification_seen',
+  {
+    ruleId: text('rule_id').notNull(),
+    key: text('key').notNull(),
+    at: ts('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ruleId, t.key] }), index('notification_seen_at_idx').on(t.at)],
+);
+
+/** 送出佇列與紀錄：pending → sent／failed（最多重試 3 次）。 */
+export const notificationLog = pgTable(
+  'notification_log',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    ruleId: text('rule_id'),
+    channelId: text('channel_id').notNull(),
+    event: text('event').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    link: text('link'),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    error: text('error'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    sentAt: ts('sent_at'),
+  },
+  (t) => [index('notification_log_status_idx').on(t.status, t.createdAt)],
+);

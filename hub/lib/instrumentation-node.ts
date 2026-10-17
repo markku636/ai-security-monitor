@@ -22,6 +22,9 @@ export async function registerNode(): Promise<void> {
   // 流量／效能：每小時彙總與保留期限（每 10 分鐘；advisory lock，多個 hub 行程只有一個在做）
   const { startMetricsScheduler } = await import('./metrics/rollup');
   startMetricsScheduler();
+  // 通知：每分鐘找新事件並送出（沒有啟用的規則時幾乎不做事）
+  const { startNotifyScheduler } = await import('./notify/service');
+  startNotifyScheduler();
   void startDiscovery();
 }
 
