@@ -498,7 +498,8 @@ jobs:
           mkdir -p dist/dns/amd64
           cp agent/target/x86_64-unknown-linux-musl/release/ai-security-monitor dist/dns/amd64/
           docker build -f docker/Dockerfile.dns -t ghcr.io/markku636/ai-security-monitor-dns:ci .
-          docker run --rm ghcr.io/markku636/ai-security-monitor-dns:ci --help | head -3
+          docker run --rm ghcr.io/markku636/ai-security-monitor-dns:ci --help > dns-help.txt
+          grep -q 'dns-server' dns-help.txt
           docker image ls ghcr.io/markku636/ai-security-monitor-dns:ci
       - name: Standalone compose smoke
         run: |
