@@ -28,7 +28,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('管理')}</h1>
+        <h1 className="text-xl font-semibold">{t('設定與金鑰')}</h1>
         <p className="text-sm text-slate-500">{t('代理程式的註冊金鑰、唯讀 API token、稽核紀錄與 CSV 匯出。')}</p>
       </header>
       <nav className="flex flex-wrap gap-1 border-b border-slate-200 text-sm dark:border-slate-800" aria-label={t('分頁')}>
@@ -149,9 +149,9 @@ async function AuditTab({ action }: { action?: string }) {
 async function ExportTab() {
   const { t } = await getT();
   const links: [string, string, string][] = [
-    ['findings', t('發現'), t('待處理的發現（可加 ?status=resolved 等同 /findings 的篩選）')],
-    ['agents', t('代理程式'), t('主機、版本、分數與最後回報時間')],
-    ['actions', t('動作'), t('遠端動作與審核結果')],
+    ['findings', t('待處理問題'), t('待處理的發現（可加 ?status=resolved 等同 /findings 的篩選）')],
+    ['agents', t('主機'), t('主機、版本、分數與最後回報時間')],
+    ['actions', t('封鎖審核'), t('遠端動作與審核結果')],
     ['audit', t('稽核紀錄'), t('最近 1000 筆')],
   ];
   return (

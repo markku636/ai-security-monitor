@@ -38,7 +38,7 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('動作')}</h1>
+        <h1 className="text-xl font-semibold">{t('封鎖審核')}</h1>
         <p className="text-sm text-slate-500">
           {t('封鎖 IP、關閉 port 等防禦動作：核准後由主機上的 asa 驗證簽章再執行，結果會回報到這裡。')}
         </p>

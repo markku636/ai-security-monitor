@@ -18,7 +18,7 @@ export default async function AgentsPage() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('代理程式')}</h1>
+        <h1 className="text-xl font-semibold">{t('主機')}</h1>
         <p className="text-sm text-slate-500">{t('每台安裝 asa 並註冊到這個 Hub 的電腦或伺服器。')}</p>
       </header>
       {rows.length === 0 ? (
@@ -32,7 +32,7 @@ export default async function AgentsPage() {
                 <th className="px-3 py-2">{t('狀態')}</th>
                 <th className="px-3 py-2">{t('系統')}</th>
                 <th className="px-3 py-2">{t('分數')}</th>
-                <th className="px-3 py-2">{t('未處理的發現')}</th>
+                <th className="px-3 py-2">{t('待處理問題')}</th>
                 <th className="px-3 py-2">{t('最後回報')}</th>
               </tr>
             </thead>

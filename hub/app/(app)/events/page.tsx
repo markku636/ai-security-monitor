@@ -32,7 +32,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">{t('事件與當機')}</h1>
+          <h1 className="text-xl font-semibold">{t('當機與事件')}</h1>
           <p className="text-sm text-slate-500">{t('各主機回報的藍屏、非預期關機、程式當掉、硬體錯誤，以及暴力破解、新帳號、新服務等資安事件。')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

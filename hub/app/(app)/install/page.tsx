@@ -15,7 +15,7 @@ export default async function InstallPage() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('安裝代理程式')}</h1>
+        <h1 className="text-xl font-semibold">{t('新增主機')}</h1>
         <p className="text-sm text-slate-500">{t('在要保護的電腦或伺服器上執行一行指令：下載 asa、比對 SHA256、註冊到這個 Hub，並設定開機自動啟動。')}</p>
       </header>
       {!hub ? (

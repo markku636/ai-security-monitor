@@ -31,10 +31,10 @@ function tabLabel(t: TFn, tab: Tab): string {
   return {
     overview: t('概況'),
     connections: t('連線'),
-    findings: t('發現'),
+    findings: t('問題'),
     vulns: t('漏洞與更新'),
-    hardening: t('系統硬化'),
-    events: t('事件與當機'),
+    hardening: t('安全設定'),
+    events: t('當機與事件'),
     traffic: t('流量'),
     history: t('報告紀錄'),
   }[tab];
@@ -330,7 +330,7 @@ async function HistoryTab({ t, a }: { t: TFn; a: Agent }) {
           <tr>
             <th className="px-3 py-2">{t('完成時間')}</th>
             <th className="px-3 py-2">{t('總分')}</th>
-            <th className="px-3 py-2">{t('發現')}</th>
+            <th className="px-3 py-2">{t('問題')}</th>
             <th className="px-3 py-2">{t('新增／解決')}</th>
             <th className="px-3 py-2">{t('掃描器')}</th>
             <th className="px-3 py-2">{t('大小')}</th>

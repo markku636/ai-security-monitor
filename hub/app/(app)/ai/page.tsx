@@ -25,7 +25,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('AI 分析')}</h1>
+        <h1 className="text-xl font-semibold">{t('AI 助手')}</h1>
         <p className="text-sm text-slate-500">
           {t('在 hub 主機上用 Claude Code 或 Codex 分析整個車隊；AI 透過唯讀的 hub 工具查資料，引用情資時會附來源，不會改動任何設定。')}
         </p>

@@ -11,7 +11,7 @@ export default async function FindingsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('發現')}</h1>
+        <h1 className="text-xl font-semibold">{t('待處理問題')}</h1>
         <p className="text-sm text-slate-500">{t('所有主機回報的問題。確認或暫停後不會再計入未處理數；問題消失時會自動標為已解決。')}</p>
       </header>
       <FindingsView base="/findings" params={params} />

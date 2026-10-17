@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Sidebar, type NavGroup } from '@/components/layout/Sidebar';
+import { listActions } from '@/lib/actions/store';
+import { getDb } from '@/lib/db';
+import { fleetSummary } from '@/lib/queries/agents';
 import { requireViewer } from '@/lib/auth/require';
 import { isOpenMode } from '@/lib/env';
 import { getT } from '@/lib/i18n/server';
@@ -10,29 +13,68 @@ export const dynamic = 'force-dynamic';
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
   const { t } = await getT();
-  const items = [
-    { href: '/', label: t('總覽') },
-    { href: '/agents', label: t('代理程式') },
-    ...(viewer.role === 'admin'
-      ? [
-          { href: '/connections', label: t('連線') },
-          { href: '/findings', label: t('發現') },
-          { href: '/vulns', label: t('漏洞與更新') },
-          { href: '/hardening', label: t('系統硬化') },
-          { href: '/traffic', label: t('流量') },
-          { href: '/events', label: t('事件與當機') },
-          { href: '/intel', label: t('威脅情資') },
-          { href: '/actions', label: t('動作') },
-          { href: '/ai', label: t('AI 分析') },
-          { href: '/install', label: t('安裝代理程式') },
-          { href: '/admin', label: t('管理') },
-        ]
+  const admin = viewer.role === 'admin';
+  // 待辦數字：嚴重＋高的未處理問題、待核准的封鎖；查不到不影響頁面
+  const [urgent, pending] = admin
+    ? await Promise.all([
+        fleetSummary()
+          .then((f) => f.severities.critical + f.severities.high)
+          .catch(() => 0),
+        listActions(getDb(), { status: ['pending'], limit: 1 })
+          .then((r) => r.counts.pending ?? 0)
+          .catch(() => 0),
+      ])
+    : [0, 0];
+  const groups: NavGroup[] = [
+    {
+      items: [
+        { href: '/', label: t('總覽'), hint: t('所有主機的安全狀況'), icon: 'home' },
+        { href: '/agents', label: t('主機'), hint: t('每台電腦的分數與狀態'), icon: 'hosts' },
+      ],
+    },
+    ...(admin
+      ? ([
+          {
+            title: t('要處理的事'),
+            items: [
+              { href: '/findings', label: t('待處理問題'), hint: t('掃描找到、需要你決定的項目'), icon: 'alert', badge: urgent, badgeTone: 'red' },
+              { href: '/actions', label: t('封鎖審核'), hint: t('核准或拒絕封鎖 IP、關閉 port'), icon: 'block', badge: pending, badgeTone: 'amber' },
+            ],
+          },
+          {
+            title: t('網路'),
+            items: [
+              { href: '/connections', label: t('連線'), hint: t('誰連到哪裡、安全還是危險'), icon: 'network' },
+              { href: '/traffic', label: t('流量'), hint: t('常連的目的地、新出現的網站'), icon: 'traffic' },
+              { href: '/intel', label: t('威脅情資'), hint: t('判斷危險用的黑名單來源'), icon: 'intel' },
+            ],
+          },
+          {
+            title: t('弱點'),
+            items: [
+              { href: '/vulns', label: t('漏洞與更新'), hint: t('過期系統、有漏洞的軟體'), icon: 'bug' },
+              { href: '/hardening', label: t('安全設定'), hint: t('UAC、磁碟加密、SSH 等檢查'), icon: 'settingsCheck' },
+            ],
+          },
+          {
+            title: t('事件'),
+            items: [{ href: '/events', label: t('當機與事件'), hint: t('藍屏、程式當掉、暴力破解'), icon: 'event' }],
+          },
+          {
+            title: t('工具'),
+            items: [
+              { href: '/ai', label: t('AI 助手'), hint: t('用白話請 AI 解讀狀況'), icon: 'ai' },
+              { href: '/install', label: t('新增主機'), hint: t('產生一行安裝指令'), icon: 'add' },
+              { href: '/admin', label: t('設定與金鑰'), hint: t('註冊金鑰、API token、稽核紀錄'), icon: 'key' },
+            ],
+          },
+        ] satisfies NavGroup[])
       : []),
   ];
-  const update = viewer.role === 'admin' ? await updateAvailable() : null;
+  const update = admin ? await updateAvailable() : null;
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <Sidebar t={t} items={items} viewer={viewer} openMode={isOpenMode()} />
+      <Sidebar t={t} groups={groups} viewer={viewer} openMode={isOpenMode()} />
       <main className="min-w-0 flex-1 p-4 md:p-6">
         {update ? (
           <p className="mb-4 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">

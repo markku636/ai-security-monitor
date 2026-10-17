@@ -22,7 +22,7 @@ export default async function HardeningPage() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold">{t('系統硬化')}</h1>
+        <h1 className="text-xl font-semibold">{t('安全設定')}</h1>
         <p className="text-sm text-slate-500">{t('各主機的安全設定檢查：UAC、防毒、磁碟加密、SSH、核心參數、自動更新等，分數依嚴重度加權。')}</p>
       </header>
       {!h.hosts.length ? (

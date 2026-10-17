@@ -135,7 +135,7 @@ export function FindingsTable({ rows, canWrite, showHost = true }: { rows: Findi
                 </th>
               ) : null}
               <th className="px-3 py-2">{t('嚴重度')}</th>
-              <th className="px-3 py-2">{t('發現')}</th>
+              <th className="px-3 py-2">{t('問題')}</th>
               {showHost ? <th className="px-3 py-2">{t('主機')}</th> : null}
               <th className="px-3 py-2">{t('狀態')}</th>
               <th className="px-3 py-2">{t('最後出現')}</th>

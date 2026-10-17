@@ -64,7 +64,7 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <ScoreCard t={t} score={averageScore(list)} />
         <div className="grid gap-4">
-          <Stat label={t('代理程式')} value={fleet.agents.total} hint={t('線上 {online}、延遲 {stale}、離線 {offline}', fleet.agents)} />
+          <Stat label={t('主機')} value={fleet.agents.total} hint={t('線上 {online}、延遲 {stale}、離線 {offline}', fleet.agents)} />
           <Stat
             label={t('危險連線')}
             value={<span className={fleet.connections.dangerous ? 'text-verdict-dangerous' : ''}>{fleet.connections.dangerous}</span>}
@@ -72,11 +72,11 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
           />
         </div>
       </div>
-      <Card title={t('未處理的發現')}>
+      <Card title={t('待處理問題')}>
         <SevCountsRow counts={fleet.severities} t={t} />
         {isAdmin ? (
           <Link href="/findings" className="mt-3 inline-block text-sm text-teal-700 hover:underline dark:text-teal-400">
-            {t('查看全部發現 →')}
+            {t('查看全部待處理問題 →')}
           </Link>
         ) : null}
       </Card>
