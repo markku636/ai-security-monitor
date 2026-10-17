@@ -271,3 +271,51 @@
   probe: { service: { names: [ auditd ], query: active } }
   expect: { op: eq, value: "active" }
   missing: fail
+
+- id: lin.resolved.llmnr
+  category: network
+  severity: low
+  title: { zh: "systemd-resolved 的 LLMNR 已關閉", en: "LLMNR is off in systemd-resolved" }
+  rationale: { zh: "同網段的攻擊者可以假冒 LLMNR 回應騙取帳密雜湊（Responder）。", en: "Attackers on the same network can spoof LLMNR replies to capture credential hashes (Responder)." }
+  remediation: { zh: "在 /etc/systemd/resolved.conf（或 resolved.conf.d/*.conf）設定 LLMNR=no，再 systemctl restart systemd-resolved。", en: "Set LLMNR=no in /etc/systemd/resolved.conf (or resolved.conf.d/*.conf), then systemctl restart systemd-resolved." }
+  references: [ "https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html" ]
+  only_if_exists: /run/systemd/resolve/stub-resolv.conf
+  probe: { command: [ resolvectl, status ], regex: 'Protocols:[^\n]*?([+-])LLMNR' }
+  expect: { op: eq, value: "-" }
+  missing: pass
+
+- id: lin.resolved.mdns
+  category: network
+  severity: info
+  title: { zh: "systemd-resolved 的 mDNS 已關閉", en: "mDNS is off in systemd-resolved" }
+  rationale: { zh: "mDNS 在區網廣播名稱查詢，可能被假冒；需要找印表機等區網裝置時才開。", en: "mDNS broadcasts name lookups on the LAN and can be spoofed; enable it only when you need LAN device discovery such as printers." }
+  remediation: { zh: "在 resolved.conf 設定 MulticastDNS=no，再重新啟動 systemd-resolved。", en: "Set MulticastDNS=no in resolved.conf, then restart systemd-resolved." }
+  references: [ "https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html" ]
+  only_if_exists: /run/systemd/resolve/stub-resolv.conf
+  probe: { command: [ resolvectl, status ], regex: 'Protocols:[^\n]*?([+-])mDNS' }
+  expect: { op: eq, value: "-" }
+  missing: pass
+
+- id: lin.resolved.dot
+  category: network
+  severity: info
+  title: { zh: "systemd-resolved 有開加密 DNS（DNS over TLS）", en: "systemd-resolved uses DNS over TLS" }
+  rationale: { zh: "加密 DNS 讓網域查詢不會被同網段或網路業者看到、竄改。", en: "Encrypted DNS keeps lookups from being seen or tampered with by the local network or ISP." }
+  remediation: { zh: "在 resolved.conf 設定 DNSOverTLS=opportunistic（或 yes，需上游 DNS 支援），再重新啟動 systemd-resolved。", en: "Set DNSOverTLS=opportunistic (or yes, if the upstream supports it) in resolved.conf, then restart systemd-resolved." }
+  references: [ "https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html" ]
+  only_if_exists: /run/systemd/resolve/stub-resolv.conf
+  probe: { command: [ resolvectl, status ], regex: 'Protocols:[^\n]*?(\+DNSOverTLS|DNSOverTLS=opportunistic)' }
+  expect: { op: not_empty }
+  missing: fail
+
+- id: lin.resolved.dnssec
+  category: network
+  severity: info
+  title: { zh: "systemd-resolved 有驗證 DNSSEC", en: "systemd-resolved validates DNSSEC" }
+  rationale: { zh: "DNSSEC 驗證可以擋掉被竄改的 DNS 答案（有簽章的網域）。", en: "DNSSEC validation rejects tampered DNS answers for signed domains." }
+  remediation: { zh: "在 resolved.conf 設定 DNSSEC=allow-downgrade（或 yes），再重新啟動 systemd-resolved。", en: "Set DNSSEC=allow-downgrade (or yes) in resolved.conf, then restart systemd-resolved." }
+  references: [ "https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html" ]
+  only_if_exists: /run/systemd/resolve/stub-resolv.conf
+  probe: { command: [ resolvectl, status ], regex: 'DNSSEC=([a-z-]+)' }
+  expect: { op: in, value: [ "yes", "allow-downgrade" ] }
+  missing: fail

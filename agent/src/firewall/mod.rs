@@ -3,6 +3,7 @@
 //! 本輪只讀；封鎖 / 同步黑名單在下一輪（需提權＋確認）。
 
 pub mod desired;
+pub mod dnslock;
 pub mod linux;
 pub mod macos;
 pub mod plan;

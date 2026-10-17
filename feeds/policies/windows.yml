@@ -264,6 +264,61 @@
   expect: { op: eq, value: 0 }
   missing: fail
 
+- id: win.netbios.disabled
+  category: network
+  severity: low
+  title: { zh: "NetBIOS 名稱解析已關閉", en: "NetBIOS name resolution is disabled" }
+  rationale: { zh: "同網段的攻擊者可以假冒 NetBIOS 名稱回應騙取 NTLM 雜湊（跟 LLMNR 一樣是 Responder 的目標）。", en: "Attackers on the same network can spoof NetBIOS name replies to capture NTLM hashes (a Responder target, like LLMNR)." }
+  remediation: { zh: "群組原則「設定 NetBIOS 設定」設為停用（EnableNetbios=0），或網卡內容 → IPv4 → 進階 → WINS → 停用 NetBIOS over TCP/IP。", en: "Group Policy \"Configure NetBIOS settings\" = Disable (EnableNetbios=0), or adapter properties → IPv4 → Advanced → WINS → Disable NetBIOS over TCP/IP." }
+  references: [ "https://attack.mitre.org/techniques/T1557/001/" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient', name: EnableNetbios } }
+  expect: { op: in, value: [0, 2] }
+  missing: fail
+
+- id: win.dns.smart_resolution_off
+  category: network
+  severity: low
+  title: { zh: "DNS 不會同時向所有網卡查詢（智慧型多重主目錄名稱解析已關閉）", en: "Smart multi-homed name resolution is off" }
+  rationale: { zh: "開著時 Windows 會同時向每張網卡的 DNS 查，連 VPN 時公司內部的網域查詢也會送給家用或公共 Wi-Fi 的 DNS（DNS 外洩）。", en: "When on, Windows queries every adapter's DNS at once, so while on VPN your internal lookups also go to the home or public Wi-Fi DNS (DNS leak)." }
+  remediation: { zh: "群組原則「關閉智慧型多重主目錄名稱解析」設為啟用（DisableSmartNameResolution=1）。", en: "Group Policy \"Turn off smart multi-homed name resolution\" = Enabled (DisableSmartNameResolution=1)." }
+  references: [ "https://learn.microsoft.com/windows/client-management/mdm/policy-csp-admx-dnsclient" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient', name: DisableSmartNameResolution } }
+  expect: { op: eq, value: 1 }
+  missing: fail
+
+- id: win.dns.doh_policy
+  category: network
+  severity: info
+  title: { zh: "已設定系統的加密 DNS（DoH）政策", en: "A system DNS-over-HTTPS (DoH) policy is set" }
+  rationale: { zh: "允許或要求加密 DNS，網域查詢就不會被同網段的人看到或竄改；網域成員電腦建議「允許」而不是「要求」，避免內部網域查不到。", en: "Allowing or requiring encrypted DNS keeps lookups from being seen or tampered with on the local network; domain-joined PCs should use \"allow\", not \"require\", so internal names still resolve." }
+  remediation: { zh: "群組原則「設定透過 HTTPS 的 DNS（DoH）名稱解析」設為允許 DoH（DoHPolicy=2），並在網卡設定 DNS 伺服器的 DoH 範本。", en: "Group Policy \"Configure DNS over HTTPS (DoH) name resolution\" = Allow DoH (DoHPolicy=2), and set a DoH template for the adapter's DNS servers." }
+  references: [ "https://learn.microsoft.com/windows-server/networking/dns/doh-client-support" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient', name: DoHPolicy } }
+  expect: { op: in, value: [2, 3] }
+  missing: fail
+
+- id: win.wpad.disabled
+  category: network
+  severity: low
+  title: { zh: "WinHTTP 不會自動找代理設定（WPAD 已關閉）", en: "WinHTTP proxy auto-discovery (WPAD) is off" }
+  rationale: { zh: "WPAD 會向區網查 wpad 這個名字下載代理設定，區網的攻擊者可以冒充它攔截所有網頁流量。", en: "WPAD looks up the name wpad on the local network to download proxy settings; an attacker on the LAN can impersonate it and intercept all web traffic." }
+  remediation: { zh: "登錄 HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\WinHttp 新增 DisableWpad=1（Windows 10 1809 起）。不要停用 WinHttpAutoProxySvc 服務，會影響 KDC proxy 等功能。公司有用 WPAD 就不要改。", en: "Add DisableWpad=1 under HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\WinHttp (Windows 10 1809+). Do not disable the WinHttpAutoProxySvc service; it breaks KDC proxy and more. Skip this if your company relies on WPAD." }
+  references: [ "https://learn.microsoft.com/troubleshoot/windows-server/networking/disable-http-proxy-auth-features" ]
+  probe: { registry: { path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp', name: DisableWpad } }
+  expect: { op: eq, value: 1 }
+  missing: fail
+
+- id: win.mdns.disabled
+  category: network
+  severity: info
+  title: { zh: "mDNS 名稱解析已關閉", en: "mDNS name resolution is off" }
+  rationale: { zh: "mDNS 跟 LLMNR 一樣在區網廣播名稱查詢，可能被假冒；不過印表機、Chromecast 等裝置探索也靠它，家用電腦可以不關。", en: "Like LLMNR, mDNS broadcasts name lookups on the LAN and can be spoofed; printers, Chromecast and similar discovery rely on it, so home PCs can leave it on." }
+  remediation: { zh: "登錄 HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters 新增 EnableMDNS=0（DWORD）。", en: "Add EnableMDNS=0 (DWORD) under HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters." }
+  references: [ "https://attack.mitre.org/techniques/T1557/001/" ]
+  probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters', name: EnableMDNS } }
+  expect: { op: eq, value: 0 }
+  missing: fail
+
 - id: win.powershell_v2.removed
   category: hardening
   severity: low

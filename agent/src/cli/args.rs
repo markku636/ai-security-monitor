@@ -635,6 +635,24 @@ pub enum FwCmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// 鎖定 DNS：程式只能連允許的 DNS 伺服器（擋直連外部 53／853，防止繞過公司 DNS）
+    DnsLock {
+        /// 允許的 DNS 伺服器（逗號分隔；省略＝目前在用的）
+        #[arg(long, value_delimiter = ',', value_name = "IP")]
+        allow: Vec<String>,
+        /// 另外擋常見加密 DNS（DoH）業者的 443，讓瀏覽器回到系統 DNS
+        #[arg(long)]
+        block_doh: bool,
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 解除 DNS 鎖定
+    DnsUnlock {
+        /// 只顯示會執行的步驟，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Args, Debug, Clone, Default)]

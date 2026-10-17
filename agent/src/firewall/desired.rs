@@ -39,6 +39,9 @@ pub struct DesiredState {
     pub feed_synced_at: Option<String>,
     /// 最後一次套用時使用的後端（換後端時要先清掉舊的）。
     pub backend: Option<String>,
+    /// DNS 鎖定（`fw dns-lock`）；沒有鎖定是 None。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns_lock: Option<super::dnslock::DnsLockState>,
 }
 
 pub fn feed_nets_path(dir: &Path) -> PathBuf {
@@ -99,8 +102,17 @@ impl DesiredState {
                 self.feed_nets = 0;
                 self.feed_ids.clear();
                 self.feed_synced_at = None;
+                self.dns_lock = None;
                 Self::save_feed_nets(dir, &[])?;
             }
+            FwAction::DnsLock { allow, block_doh } => {
+                self.dns_lock = Some(super::dnslock::DnsLockState {
+                    allow: super::dnslock::normalize_allow(allow),
+                    block_doh: *block_doh,
+                    added_at: now.clone(),
+                });
+            }
+            FwAction::DnsUnlock => self.dns_lock = None,
             FwAction::ClosePort { proto, port } => {
                 if !self.closed_ports.iter().any(|c| c.proto == *proto && c.port == *port) {
                     self.closed_ports.push(ClosedPort {

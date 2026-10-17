@@ -399,7 +399,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let runner = FakeRunner::new().on(
             "powershell",
-            CmdOutput::success(r#"{"win.uac.enabled":1,"win.uac.admin_prompt":5,"win.defender.realtime":"on","win.defender.signatures":1,"win.defender.tamper":"off","win.smartscreen":"on","win.smb1.client":4,"win.smb1.server":null,"win.rdp.nla":"rdp_off","win.bitlocker.system":"off","win.secureboot":1,"win.lsa.protection":null,"win.wdigest":null,"win.account.guest":"disabled","win.account.builtin_admin":"disabled","win.update.not_disabled":null,"win.autorun.disabled":"on","win.llmnr.disabled":null,"win.powershell_v2.removed":null,"win.remote_registry":"Disabled"}"#),
+            CmdOutput::success(r#"{"win.netbios.disabled":2,"win.dns.smart_resolution_off":1,"win.dns.doh_policy":2,"win.wpad.disabled":1,"win.mdns.disabled":0,"win.uac.enabled":1,"win.uac.admin_prompt":5,"win.defender.realtime":"on","win.defender.signatures":1,"win.defender.tamper":"off","win.smartscreen":"on","win.smb1.client":4,"win.smb1.server":null,"win.rdp.nla":"rdp_off","win.bitlocker.system":"off","win.secureboot":1,"win.lsa.protection":null,"win.wdigest":null,"win.account.guest":"disabled","win.account.builtin_admin":"disabled","win.update.not_disabled":null,"win.autorun.disabled":"on","win.llmnr.disabled":null,"win.powershell_v2.removed":null,"win.remote_registry":"Disabled"}"#),
         );
         let env = ProbeEnv {
             family: "windows".into(),
@@ -413,7 +413,7 @@ mod tests {
             .unwrap();
         let r = rt.block_on(run_checks(d.path(), &runner, &env, &[]));
         assert_eq!(runner.calls().len(), 1, "一次 PowerShell");
-        assert_eq!((r.pass, r.fail, r.na, r.error), (14, 5, 1, 0));
+        assert_eq!((r.pass, r.fail, r.na, r.error), (19, 5, 1, 0));
         let f = findings_from(&r);
         let ids: Vec<&str> = f.iter().map(|x| x.rule.as_str()).collect();
         assert_eq!(
@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(
             r.score,
             weighted_score(
-                14,
+                19,
                 [
                     Severity::Medium,
                     Severity::High,
@@ -450,7 +450,7 @@ mod tests {
         // Defender 功能已移除、BitLocker 沒裝；SmartScreen 與遠端登錄不會被查（版本篩選）
         let runner = FakeRunner::new().on(
             "powershell",
-            CmdOutput::success(r#"{"win.uac.enabled":1,"win.uac.admin_prompt":5,"win.defender.realtime":"no_defender","win.defender.signatures":"no_defender","win.defender.tamper":"no_defender","win.smb1.client":4,"win.smb1.server":0,"win.rdp.nla":1,"win.bitlocker.system":"not_installed","win.secureboot":1,"win.lsa.protection":1,"win.wdigest":null,"win.account.guest":"disabled","win.account.builtin_admin":"renamed","win.update.not_disabled":null,"win.autorun.disabled":"off","win.llmnr.disabled":0,"win.powershell_v2.removed":"5.1"}"#),
+            CmdOutput::success(r#"{"win.netbios.disabled":2,"win.dns.smart_resolution_off":1,"win.dns.doh_policy":2,"win.wpad.disabled":1,"win.mdns.disabled":0,"win.uac.enabled":1,"win.uac.admin_prompt":5,"win.defender.realtime":"no_defender","win.defender.signatures":"no_defender","win.defender.tamper":"no_defender","win.smb1.client":4,"win.smb1.server":0,"win.rdp.nla":1,"win.bitlocker.system":"not_installed","win.secureboot":1,"win.lsa.protection":1,"win.wdigest":null,"win.account.guest":"disabled","win.account.builtin_admin":"renamed","win.update.not_disabled":null,"win.autorun.disabled":"off","win.llmnr.disabled":0,"win.powershell_v2.removed":"5.1"}"#),
         );
         let env = ProbeEnv {
             family: "windows".into(),

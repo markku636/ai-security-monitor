@@ -427,6 +427,50 @@ pub async fn run(env: &Env, cmd: FwCmd) -> AppResult<()> {
             write_action(env, FwAction::Enable { profile }, dry_run, Vec::new()).await
         }
         FwCmd::Ensure { dry_run } => write_action(env, FwAction::Ensure, dry_run, Vec::new()).await,
+        FwCmd::DnsLock {
+            allow,
+            block_doh,
+            dry_run,
+        } => {
+            let current = crate::firewall::dnslock::current_upstreams().await;
+            let nets: Vec<IpNet> = if allow.is_empty() {
+                current.iter().map(|ip| IpNet::from(*ip)).collect()
+            } else {
+                allow
+                    .iter()
+                    .map(|t| {
+                        let t = t.trim();
+                        t.parse::<IpNet>()
+                            .map(|n| n.trunc())
+                            .or_else(|_| t.parse::<IpAddr>().map(IpNet::from))
+                            .map_err(|_| AppError::InvalidArg(tf!("不是合法的 IP 或 CIDR：{value}", value = t)))
+                    })
+                    .collect::<AppResult<Vec<IpNet>>>()?
+            };
+            if nets.is_empty() {
+                return Err(AppError::InvalidArg(
+                    t!("找不到目前在用的 DNS 伺服器；請用 --allow 指定").into(),
+                ));
+            }
+            let normalized = crate::firewall::dnslock::normalize_allow(&nets);
+            let missing = crate::firewall::dnslock::uncovered(&current, &normalized);
+            if !missing.is_empty() && !env.global.force {
+                return Err(AppError::InvalidArg(tf!(
+                    "目前在用的 DNS {list} 不在允許清單裡，鎖定後這台會查不到網域；確定要這樣就加 --force",
+                    list = missing.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+                )));
+            }
+            let preface = vec![tf!(
+                "目前在用的 DNS：{list}",
+                list = if current.is_empty() {
+                    "—".to_string()
+                } else {
+                    current.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+                }
+            )];
+            write_action(env, FwAction::DnsLock { allow: nets, block_doh }, dry_run, preface).await
+        }
+        FwCmd::DnsUnlock { dry_run } => write_action(env, FwAction::DnsUnlock, dry_run, Vec::new()).await,
         FwCmd::SyncBlocklist {
             feeds,
             min_confidence,

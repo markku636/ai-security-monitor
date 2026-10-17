@@ -95,6 +95,14 @@ jobs:
             jq -e '.status.source == "etw" and .status.has_process and .status.events >= 1' dns-status.json > /dev/null
             $B --json dns --since 10m --limit 500 > dns-list.json
             jq -e '[.records[] | select(.name | startswith("asm-ci-watch-")) | select(.process != null)] | length >= 1' dns-list.json > /dev/null
+            # DNS 鎖定：直連 8.8.8.8 要失敗、系統 DNS 照常；解除後恢復
+            $B fw dns-lock --dry-run
+            $B fw dns-lock --block-doh --yes
+            powershell -NoProfile -Command "Get-NetFirewallRule -DisplayName 'ASA: dns-lock*' | Select-Object DisplayName,Enabled,Action | Format-Table | Out-String"
+            if powershell -NoProfile -Command "Resolve-DnsName example.com -Server 8.8.8.8 -DnsOnly -QuickTimeout -ErrorAction Stop | Out-Null"; then echo "direct DNS to 8.8.8.8 should be blocked"; exit 1; fi
+            powershell -NoProfile -Command "Resolve-DnsName example.com -ErrorAction Stop | Out-Null"
+            $B fw dns-unlock --yes
+            powershell -NoProfile -Command "Resolve-DnsName example.com -Server 8.8.8.8 -DnsOnly -ErrorAction Stop | Out-Null"
           else
             # Linux AF_PACKET／macOS BPF：要 root；查一個網域，--follow 要看到回應封包
             if [ "$RUNNER_OS" = "Linux" ]; then
@@ -111,6 +119,18 @@ jobs:
             wait || true
             grep asm-ci-follow follow.jsonl | head -3 || true
             jq -se 'map(select(.name == "asm-ci-follow.example.com" and .source == "packet")) | length >= 1' follow.jsonl > /dev/null
+            if [ "$RUNNER_OS" = "Linux" ] && command -v dig > /dev/null; then
+              # DNS 鎖定（nftables）：直連 8.8.8.8 要失敗、系統 DNS（resolved 與它的上游）照常；解除後恢復
+              sudo -E $B fw dns-lock --dry-run
+              sudo -E $B fw dns-lock --block-doh --yes
+              sudo nft list chain inet asa dnslock
+              if dig +time=2 +tries=1 @8.8.8.8 example.com > /dev/null; then echo "direct DNS to 8.8.8.8 should be blocked"; exit 1; fi
+              getent hosts example.com
+              sudo -E $B fw dns-unlock --yes
+              dig +time=3 +tries=2 @8.8.8.8 example.com > /dev/null
+            else
+              sudo -E $B fw dns-lock --dry-run
+            fi
           fi
 
       - name: Metrics smoke (interface counters, opt-in performance)

@@ -59,6 +59,12 @@ pub enum FwAction {
         feed_ids: Vec<String>,
     },
     Ensure,
+    /// 只准連這些 DNS 伺服器（另含 loopback）；`block_doh` 另外擋常見加密 DNS 業者的 443。
+    DnsLock {
+        allow: Vec<IpNet>,
+        block_doh: bool,
+    },
+    DnsUnlock,
 }
 
 impl FwAction {
@@ -84,6 +90,16 @@ impl FwAction {
             },
             FwAction::SyncFeeds { nets, .. } => tf!("同步威脅情資黑名單到防火牆（{n} 個網段）", n = nets.len()),
             FwAction::Ensure => t!("依期望狀態重新套用 ai-security-monitor 規則").to_string(),
+            FwAction::DnsLock { allow, block_doh } => tf!(
+                "鎖定 DNS：只准連 {list}{doh}",
+                list = crate::util::text::clip(&allow.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "), 80),
+                doh = if *block_doh {
+                    t!("，並擋常見加密 DNS（DoH）")
+                } else {
+                    ""
+                }
+            ),
+            FwAction::DnsUnlock => t!("解除 DNS 鎖定").to_string(),
         }
     }
 }
@@ -296,6 +312,8 @@ fn windows(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
             format!("Set-NetFirewallProfile -Profile {prof} -Enabled True\n\"ok\"\n")
         }
         FwAction::SyncFeeds { nets, .. } => win_feed_script(nets),
+        FwAction::DnsLock { allow, block_doh } => super::dnslock::win_lock_script(&lock_state(allow, *block_doh)),
+        FwAction::DnsUnlock => super::dnslock::WIN_UNLOCK.to_string(),
         FwAction::Ensure => {
             let mut s = String::new();
             for b in &ctx.desired.blocked {
@@ -306,6 +324,9 @@ fn windows(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
             }
             if !ctx.feed_nets.is_empty() {
                 s.push_str(&win_feed_script(&ctx.feed_nets));
+            }
+            if let Some(l) = &ctx.desired.dns_lock {
+                s.push_str(&super::dnslock::win_lock_script(l));
             }
             if s.is_empty() {
                 return Ok(Plan {
@@ -339,7 +360,7 @@ pub const PF_CONF_BLOCK: &str =
     "# asa-begin\nanchor \"com.asa\"\nload anchor \"com.asa\" from \"/etc/pf.anchors/com.asa\"\n# asa-end\n";
 
 /// anchor 內容依期望狀態產生（關閉的 port 寫在這裡）。
-pub fn pf_anchor(closed: &[(String, u16)]) -> String {
+pub fn pf_anchor(closed: &[(String, u16)], lock: Option<&super::dnslock::DnsLockState>) -> String {
     let mut s = String::from(
         "# managed by ai-security-monitor — do not edit\n\
          table <asa_block> persist file \"/etc/pf.anchors/asa_block.txt\"\n\
@@ -354,6 +375,9 @@ pub fn pf_anchor(closed: &[(String, u16)]) -> String {
             "block drop in quick proto {proto} from any to any port {port}\n"
         ));
     }
+    if let Some(l) = lock {
+        s.push_str(&super::dnslock::pf_lines(l));
+    }
     s
 }
 
@@ -365,7 +389,7 @@ fn pf_table_file(dir: Dir) -> (&'static str, &'static str) {
     }
 }
 
-fn pf_scaffold(closed: &[(String, u16)]) -> Plan {
+fn pf_scaffold(closed: &[(String, u16)], lock: Option<&super::dnslock::DnsLockState>) -> Plan {
     let mut p = Plan::default();
     for f in [PF_BLOCK, PF_IN, PF_OUT, PF_FEED] {
         p.writes.push(FileWrite {
@@ -378,7 +402,7 @@ fn pf_scaffold(closed: &[(String, u16)]) -> Plan {
     }
     p.writes.push(FileWrite {
         path: PF_ANCHOR.into(),
-        content: pf_anchor(closed),
+        content: pf_anchor(closed, lock),
         mode: WriteMode::Replace,
         bom: false,
         temporary: false,
@@ -416,7 +440,33 @@ fn pf(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
         FwAction::UnblockAll => closed.clear(),
         _ => {}
     }
-    let mut p = pf_scaffold(&closed);
+    let lock = match action {
+        FwAction::DnsLock { allow, block_doh } => Some(lock_state(allow, *block_doh)),
+        FwAction::DnsUnlock | FwAction::UnblockAll => None,
+        _ => ctx.desired.dns_lock.clone(),
+    };
+    let mut p = pf_scaffold(&closed, lock.as_ref());
+    if let Some(l) = &lock {
+        for (file, nets) in [
+            (super::dnslock::PF_DNSALLOW, l.allow.clone()),
+            (
+                super::dnslock::PF_DOH,
+                if l.block_doh {
+                    super::dnslock::doh_nets()
+                } else {
+                    Vec::new()
+                },
+            ),
+        ] {
+            p.writes.push(FileWrite {
+                path: file.into(),
+                content: nets.iter().map(|n| format!("{n}\n")).collect(),
+                mode: WriteMode::Replace,
+                bom: false,
+                temporary: false,
+            });
+        }
+    }
     match action {
         FwAction::Block { nets, direction, .. } => {
             let (table, file) = pf_table_file(*direction);
@@ -480,7 +530,11 @@ fn pf(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
                 .elevated(),
             );
         }
-        FwAction::ClosePort { .. } | FwAction::OpenPort { .. } | FwAction::Ensure => {
+        FwAction::ClosePort { .. }
+        | FwAction::OpenPort { .. }
+        | FwAction::Ensure
+        | FwAction::DnsLock { .. }
+        | FwAction::DnsUnlock => {
             p.commands
                 .push(CmdSpec::new("pfctl", &["-a", "com.asa", "-f", PF_ANCHOR]).elevated());
         }
@@ -589,6 +643,13 @@ fn nft(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
                 .tolerate_failure(),
             );
         }
+        FwAction::DnsLock { allow, block_doh } => {
+            p.commands
+                .push(nft_cmd(super::dnslock::nft_lock_script(&lock_state(allow, *block_doh))));
+        }
+        FwAction::DnsUnlock => p
+            .commands
+            .push(nft_cmd(super::dnslock::NFT_UNLOCK.into()).tolerate_failure()),
         FwAction::SyncFeeds { nets, .. } => {
             let script = format!(
                 "{NFT_SCAFFOLD}flush set inet asa feed4\nflush set inet asa feed6\n{}{}",
@@ -614,6 +675,9 @@ fn nft(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
             script.push_str("flush set inet asa feed4\nflush set inet asa feed6\n");
             script.push_str(&nft_elements("add", "feed4", &v4(&ctx.feed_nets)));
             script.push_str(&nft_elements("add", "feed6", &v6(&ctx.feed_nets)));
+            if let Some(l) = &ctx.desired.dns_lock {
+                script.push_str(&super::dnslock::nft_lock_script(l));
+            }
             p.commands.push(nft_cmd(script));
         }
         FwAction::Enable { .. } => linux_enable(&mut p, ctx),
@@ -742,6 +806,7 @@ fn ipset(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
                 p.commands
                     .push(CmdSpec::new("ipset", &["destroy", set]).elevated().tolerate_failure());
             }
+            ipset_unlock(&mut p);
             for c in &ctx.desired.closed_ports {
                 p.commands.push(
                     sh(format!(
@@ -752,6 +817,8 @@ fn ipset(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
                 );
             }
         }
+        FwAction::DnsLock { allow, block_doh } => ipset_lock(&mut p, &lock_state(allow, *block_doh)),
+        FwAction::DnsUnlock => ipset_unlock(&mut p),
         FwAction::ClosePort { proto, port } => {
             let r = format!("INPUT -p {proto} --dport {port} -j DROP");
             p.commands
@@ -813,10 +880,44 @@ fn ipset(action: &FwAction, ctx: &PlanCtx) -> AppResult<Plan> {
                 p.commands
                     .push(sh(format!("iptables -C {r} 2>/dev/null || iptables -I {r}")));
             }
+            if let Some(l) = &ctx.desired.dns_lock {
+                ipset_lock(&mut p, l);
+            }
         }
         FwAction::Enable { .. } => linux_enable(&mut p, ctx),
     }
     Ok(p)
+}
+
+fn lock_state(allow: &[IpNet], block_doh: bool) -> super::dnslock::DnsLockState {
+    super::dnslock::DnsLockState {
+        allow: super::dnslock::normalize_allow(allow),
+        block_doh,
+        added_at: crate::util::time::now_iso(),
+    }
+}
+
+fn ipset_lock(p: &mut Plan, l: &super::dnslock::DnsLockState) {
+    let (restore, rules) = super::dnslock::ipset_lock(l);
+    p.commands.push(
+        CmdSpec::new("ipset", &["restore", "-exist"])
+            .with_stdin(restore)
+            .elevated(),
+    );
+    for (bin, r) in rules {
+        p.commands.push(sh(format!("{bin} -C {r} 2>/dev/null || {bin} -I {r}")));
+    }
+}
+
+fn ipset_unlock(p: &mut Plan) {
+    for (bin, r) in super::dnslock::ipset_rules(true) {
+        p.commands
+            .push(sh(format!("while {bin} -D {r} 2>/dev/null; do :; done")).tolerate_failure());
+    }
+    for set in ["asa_dnsallow4", "asa_dnsallow6", "asa_doh4", "asa_doh6"] {
+        p.commands
+            .push(CmdSpec::new("ipset", &["destroy", set]).elevated().tolerate_failure());
+    }
 }
 
 /// 在 Plan 的暫存目錄下產生路徑（測試用）。

@@ -1462,6 +1462,15 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "到「系統設定 → 一般 → 裝置管理」確認描述檔來源；不認得就移除" => "Check the profile's origin in System Settings → General → Device Management and remove it if you do not recognize it",
         "已記下網路 {net} 的 DNS 伺服器：{servers}" => "Recorded the DNS servers for network {net}: {servers}",
         "目前沒有連上網路，沒有可以記下的 DNS 伺服器" => "Not connected to a network; no DNS servers to record",
+        "鎖定 DNS：程式只能連允許的 DNS 伺服器（擋直連外部 53／853，防止繞過公司 DNS）" => "Lock DNS: programs may only use the allowed DNS servers (blocks direct outbound 53/853 so nothing bypasses the company DNS)",
+        "允許的 DNS 伺服器（逗號分隔；省略＝目前在用的）" => "Allowed DNS servers (comma-separated; default = the ones in use now)",
+        "另外擋常見加密 DNS（DoH）業者的 443，讓瀏覽器回到系統 DNS" => "Also block port 443 to well-known encrypted DNS (DoH) providers so browsers fall back to the system DNS",
+        "解除 DNS 鎖定" => "Remove the DNS lock",
+        "找不到目前在用的 DNS 伺服器；請用 --allow 指定" => "Could not find the DNS servers in use; specify them with --allow",
+        "目前在用的 DNS {list} 不在允許清單裡，鎖定後這台會查不到網域；確定要這樣就加 --force" => "The DNS servers in use ({list}) are not in the allow list, so this computer could not resolve names after locking; add --force if that is really what you want",
+        "目前在用的 DNS：{list}" => "DNS servers in use: {list}",
+        "鎖定 DNS：只准連 {list}{doh}" => "Lock DNS: allow only {list}{doh}",
+        "，並擋常見加密 DNS（DoH）" => ", and block well-known encrypted DNS (DoH)",
         _ => return None,
     })
 }
