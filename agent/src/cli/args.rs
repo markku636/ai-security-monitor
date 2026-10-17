@@ -428,6 +428,9 @@ pub enum IntelCmd {
         /// 忽略更新間隔，全部重抓
         #[arg(long)]
         force: bool,
+        /// 已註冊 Hub 也不用 Hub 的鏡像，直接找各廠商下載
+        #[arg(long)]
+        no_hub: bool,
     },
     /// 顯示各來源的筆數、更新時間與狀態
     Status,

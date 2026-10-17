@@ -31,6 +31,19 @@ pub struct HeartbeatPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_scan_at: Option<DateTime<Utc>>,
     pub elevated: bool,
+    /// 情資清單最舊的一次檢查時間（hub 用來判斷要不要叫這台更新）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intel_checked_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intel_feeds: Option<IntelFeedsInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntelFeedsInfo {
+    pub ok: usize,
+    pub total: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// hub 註冊回應裡的設定。

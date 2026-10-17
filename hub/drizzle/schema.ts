@@ -113,6 +113,10 @@ export const agents = pgTable(
     lastReportAt: ts('last_report_at'),
     lastReportId: text('last_report_id'),
     lastSnapshotAt: ts('last_snapshot_at'),
+    /** agent 心跳回報：情資清單最後一次檢查／下載的時間（看各主機情資新不新）。 */
+    intelCheckedAt: ts('intel_checked_at'),
+    /** 情資來源：有資料的數量／應有數量。 */
+    intelFeeds: jsonb('intel_feeds').$type<{ ok: number; total: number; source?: string }>(),
     score: jsonb('score').$type<Scores>(),
     sevCounts: jsonb('sev_counts').$type<SevCounts>().notNull().default({ critical: 0, high: 0, medium: 0, low: 0, info: 0 }),
     openFindings: integer('open_findings').notNull().default(0),

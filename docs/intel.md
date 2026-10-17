@@ -62,6 +62,14 @@ Hub 與 MCP 回答都會引用 `source_url`；AI 被要求不能自己編來源�
 - 線上名譽查詢：`asa intel key set abuseipdb -`（從標準輸入讀 key，存在鑰匙圈），結果快取 24 小時並有每日額度上限。
 - Hub 的 IP 分析頁（`/ip/<ip>`）另有「外部威脅情資」：管理員按「查詢外部情資」時由 hub 查 AbuseIPDB、GreyNoise、IPinfo、proxycheck.io 與 DNS 反解，連同 agent 回報的黑名單命中算出 0–100 風險分數。分數＝各訊號加權（Spamhaus 30、IPsum 25、FireHOL 20、其他黑名單 20、AbuseIPDB 25×信心分、GreyNoise 惡意 15、Proxy／VPN 12、資料中心 8、Tor 10，GreyNoise 良性 −20）÷ 165，再套下限（Spamhaus DROP ≥ 85、AbuseIPDB ≥ 90 時 ≥ 75、Tor ≥ 40）；≥ 75 極高、≥ 50 高、≥ 25 中。私有／保留位址不送出，hub 不會自動查。
 
+### 同步（Hub 鏡像）
+
+- Hub 依每個來源的更新間隔向廠商下載清單，原檔原樣存在 `/data/feeds/<id>/`（保留檔頭與授權標註；`ASA_HUB_FEED_CACHE_DIR` 可改位置，`ASA_HUB_FEED_MIRROR=0` 關閉背景同步）。只鏡像預設啟用、可整份下載的清單；即時查詢 API 不鏡像。
+- 已註冊的 agent 先從 Hub 拿（`GET /api/v1/feeds/manifest`、`/api/v1/feeds/<id>`，ETag＝sha256，沒變回 304），Hub 沒有或連不上才直接找廠商；`asa intel update --no-hub` 強制直接找廠商。
+- 常駐的 `asa watch` 每 30 分鐘檢查一次情資（各清單仍依自己的間隔才真的下載），心跳回報最舊的檢查時間與有資料的清單數；`--once` 不自動更新。
+- 威脅情資頁的「立即同步情資」：Hub 立刻重抓全部清單，並在 24 小時內叫還沒更新的主機於下次心跳更新（回應裡的 `commands: ["refresh_feeds"]`）。頁面列出 Hub 每個來源的最後同步時間，以及每台主機情資最後更新時間與來源。
+- 鏡像只給 agent（client 金鑰）、admin 與 read token；公開檢視拿不到原檔（各廠商授權內容不對外再散布）。
+
 ## 封鎖
 
 情資可以同步成防火牆封鎖規則：`asa fw sync-blocklist --dry-run` 先看會封哪些。只挑公網、夠窄的網段，信心預設 ≥ 80，

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { FeedSyncButton } from '@/components/security/FeedSyncButton';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
 import { DirectionBadge, VerdictChip, directionLabel } from '@/components/security/Verdict';
 import { Badge } from '@/components/ui/Badge';
@@ -9,7 +10,9 @@ import { requireAdmin } from '@/lib/auth/require';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import { getT } from '@/lib/i18n/server';
+import { mirrorable, readMeta, refreshMs, syncInBackground, type MirrorMeta } from '@/lib/intel/mirror';
 import { feedGroup, loadRegistry, type FeedEntry } from '@/lib/intel/registry';
+import { listAgents } from '@/lib/queries/agents';
 import { strParam } from '@/lib/queries/params';
 import { feedHitStats } from '@/lib/queries/intel';
 
@@ -26,6 +29,28 @@ function groupTitle(t: TFn, g: ReturnType<typeof feedGroup>): string {
   }[g];
 }
 
+/** 這份清單在 hub 鏡像的狀態（最後同步、大小、錯誤）。 */
+function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null }) {
+  if (!mirrorable(f)) return <span className="text-slate-400">{t('不鏡像')}</span>;
+  if (!m) return <span className="text-slate-400">{t('尚未同步')}</span>;
+  const stale = m.checked_at ? Date.now() - Date.parse(m.checked_at) > refreshMs(f.refresh_interval) * 3 : true;
+  return (
+    <>
+      <div>
+        {m.fetched_at ? since(new Date(m.fetched_at), t) : '—'}
+        {m.entries != null ? <span className="text-slate-500"> · {t('{n} 筆', { n: m.entries.toLocaleString() })}</span> : null}
+      </div>
+      {m.status === 'error' ? (
+        <Badge tone="warn">
+          <span title={m.error ?? ''}>{t('最近一次失敗')}</span>
+        </Badge>
+      ) : stale ? (
+        <Badge tone="warn">{t('過期')}</Badge>
+      ) : null}
+    </>
+  );
+}
+
 function FeedTable({ t, feeds, stats }: { t: TFn; feeds: FeedEntry[]; stats: Stats }) {
   return (
     <div className="overflow-x-auto">
@@ -36,7 +61,8 @@ function FeedTable({ t, feeds, stats }: { t: TFn; feeds: FeedEntry[]; stats: Sta
             <th className="py-1.5 pr-3">{t('類型')}</th>
             <th className="py-1.5 pr-3">{t('信心')}</th>
             <th className="py-1.5 pr-3">{t('授權')}</th>
-            <th className="py-1.5 pr-3">{t('更新')}</th>
+            <th className="py-1.5 pr-3">{t('更新間隔')}</th>
+            <th className="py-1.5 pr-3">{t('Hub 最後同步')}</th>
             <th className="py-1.5 pr-3">{t('7 天命中')}</th>
           </tr>
         </thead>
@@ -73,6 +99,9 @@ function FeedTable({ t, feeds, stats }: { t: TFn; feeds: FeedEntry[]; stats: Sta
                 </td>
                 <td className="py-2 pr-3 text-xs whitespace-nowrap">{f.refresh_interval}</td>
                 <td className="py-2 pr-3 text-xs whitespace-nowrap">
+                  <MirrorCell t={t} f={f} m={readMeta(f.id)} />
+                </td>
+                <td className="py-2 pr-3 text-xs whitespace-nowrap">
                   {s ? (
                     <>
                       <div className="tabular-nums">{t('{n} 個指標、{h} 台主機', { n: s.indicators, h: s.hosts })}</div>
@@ -98,6 +127,12 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
   const q = strParam(sp, 'q', 100);
   const feeds = loadRegistry();
   const stats = await feedHitStats(7);
+  syncInBackground();
+  const hosts = await listAgents();
+  const mirrored = feeds.filter(mirrorable);
+  const metas = mirrored.map((f) => readMeta(f.id));
+  const okCount = metas.filter((m) => m?.sha256 && m.status === 'ok').length;
+  const lastSync = metas.reduce<string | null>((a, m) => (m?.checked_at && (!a || m.checked_at > a) ? m.checked_at : a), null);
   const groups = (['threat', 'geo', 'vuln', 'lookup'] as const)
     .map((g) => ({ g, feeds: feeds.filter((f) => feedGroup(f) === g) }))
     .filter((x) => x.feeds.length);
@@ -109,6 +144,54 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
           {t('agent 用來判定連線的公開情資來源。每筆命中都附廠商、授權與原始清單網址；非商用授權的來源只告警，不會自動封鎖。')}
         </p>
       </header>
+      <Card title={t('同步情資資料庫')}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1 text-sm">
+            <p>
+              {t('Hub 鏡像：{ok}／{total} 個來源有最新資料，最後檢查 {at}。', { ok: okCount, total: mirrored.length, at: lastSync ? since(new Date(lastSync), t) : t('從未') })}
+            </p>
+            <p className="text-xs text-slate-500">
+              {t('Hub 依每個來源的更新間隔自動向廠商抓清單；主機的 asa 會改從 Hub 下載（Hub 連不到時才直接找廠商），每 30 分鐘檢查一次。')}
+            </p>
+          </div>
+          <FeedSyncButton />
+        </div>
+        {hosts.length ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-slate-500">
+                <tr>
+                  <th className="py-1.5 pr-3">{t('主機')}</th>
+                  <th className="py-1.5 pr-3">{t('情資最後更新')}</th>
+                  <th className="py-1.5 pr-3">{t('來源')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hosts.map((h) => {
+                  const old = !h.intelCheckedAt || Date.now() - h.intelCheckedAt.getTime() > 6 * 3_600_000;
+                  return (
+                    <tr key={h.id} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="py-1.5 pr-3">
+                        <Link href={`/agents/${encodeURIComponent(h.id)}`} className="hover:underline">
+                          {h.hostname}
+                        </Link>
+                      </td>
+                      <td className="py-1.5 pr-3 text-xs">
+                        {h.intelCheckedAt ? since(h.intelCheckedAt, t) : <span className="text-slate-400">{t('尚未回報（需要新版 asa）')}</span>}{' '}
+                        {h.intelCheckedAt && old ? <Badge tone="warn">{t('過期')}</Badge> : null}
+                      </td>
+                      <td className="py-1.5 pr-3 text-xs text-slate-500">
+                        {h.intelFeeds ? t('{ok}／{total} 個清單', { ok: h.intelFeeds.ok, total: h.intelFeeds.total }) : '—'}
+                        {h.intelFeeds?.source === 'hub' ? ` · ${t('從 Hub')}` : h.intelFeeds?.source === 'vendor' ? ` · ${t('直接找廠商')}` : ''}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
       <Card title={t('查 IP 或網域')}>
         <SearchBox t={t} action="/intel" q={q} keep={{}} placeholder={t('例：203.0.113.66')} />
       </Card>

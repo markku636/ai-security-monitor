@@ -354,7 +354,14 @@ export async function applyHeartbeat(db: DB, h: HeartbeatT): Promise<boolean> {
   const now = new Date();
   await db
     .update(agents)
-    .set({ lastHeartbeatAt: now, lastSeenAt: now, version: h.version, elevated: h.elevated })
+    .set({
+      lastHeartbeatAt: now,
+      lastSeenAt: now,
+      version: h.version,
+      elevated: h.elevated,
+      ...(h.intel_checked_at ? { intelCheckedAt: new Date(h.intel_checked_at) } : {}),
+      ...(h.intel_feeds ? { intelFeeds: h.intel_feeds } : {}),
+    })
     .where(eq(agents.id, h.agent_id));
   return true;
 }

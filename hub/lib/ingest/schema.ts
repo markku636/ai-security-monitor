@@ -181,6 +181,8 @@ export const Heartbeat = z
     uptime_s: z.number().int().nonnegative().nullish(),
     last_scan_at: isoDate.nullish(),
     elevated: z.boolean().default(false),
+    intel_checked_at: isoDate.nullish(),
+    intel_feeds: z.object({ ok: z.number().int().nonnegative().max(1000), total: z.number().int().nonnegative().max(1000), source: shortText(16).optional() }).nullish(),
   })
   .passthrough();
 

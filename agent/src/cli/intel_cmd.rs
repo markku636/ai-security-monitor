@@ -32,7 +32,7 @@ fn age(t: Option<chrono::DateTime<Utc>>) -> String {
 
 pub async fn run(env: &Env, cmd: IntelCmd) -> AppResult<()> {
     match cmd {
-        IntelCmd::Update { feeds, force } => update(env, feeds, force).await,
+        IntelCmd::Update { feeds, force, no_hub } => update(env, feeds, force, no_hub).await,
         IntelCmd::Status => status(env),
         IntelCmd::Sources => sources(env),
         IntelCmd::Lookup { indicator, online } => lookup_cmd(env, &indicator, online).await,
@@ -42,7 +42,30 @@ pub async fn run(env: &Env, cmd: IntelCmd) -> AppResult<()> {
     }
 }
 
-async fn update(env: &Env, feeds: Vec<String>, force: bool) -> AppResult<()> {
+/// 已註冊 hub 就拿它的鏡像清單；沒註冊、舊版 hub 或連不上就回 None（直接找廠商）。
+async fn hub_mirror(env: &Env) -> Option<fetch::Mirror> {
+    let cfg = crate::config::load_or_init(&env.config_dir).ok()?;
+    let client = crate::hub::watch::client_from_config(&env.config_dir, &cfg).ok()??;
+    match client.feed_mirror().await {
+        Ok(m) => {
+            if !env.global.quiet && !env.global.json {
+                eprintln!(
+                    "  · {}",
+                    tf!("從 Hub 鏡像下載（{n} 個清單）：{url}", n = m.ids.len(), url = m.base)
+                );
+            }
+            Some(m)
+        }
+        Err(e) => {
+            if !env.global.quiet && !env.global.json {
+                eprintln!("  ! {}", tf!("Hub 鏡像不可用，直接找廠商：{e}", e = e.message()));
+            }
+            None
+        }
+    }
+}
+
+async fn update(env: &Env, feeds: Vec<String>, force: bool, no_hub: bool) -> AppResult<()> {
     let reg = Registry::load(&env.config_dir)?;
     for w in &reg.warnings {
         eprintln!("  ! {w}");
@@ -53,7 +76,18 @@ async fn update(env: &Env, feeds: Vec<String>, force: bool) -> AppResult<()> {
             eprintln!("  · {m}");
         }
     };
-    let outs = fetch::update(&env.config_dir, &reg, &UpdateOpts { only: feeds, force }, &progress).await?;
+    let mirror = if no_hub { None } else { hub_mirror(env).await };
+    let outs = fetch::update(
+        &env.config_dir,
+        &reg,
+        &UpdateOpts {
+            only: feeds,
+            force,
+            mirror,
+        },
+        &progress,
+    )
+    .await?;
     if env.global.json {
         print_json(&outs);
         return Ok(());
@@ -72,6 +106,11 @@ async fn update(env: &Env, feeds: Vec<String>, force: bool) -> AppResult<()> {
                 o.entries.to_string(),
                 fmt_bytes(o.bytes),
                 format!("{} ms", o.ms),
+                match o.source.as_deref() {
+                    Some("hub") => "Hub".to_string(),
+                    Some(_) => t!("廠商").to_string(),
+                    None => "-".to_string(),
+                },
                 clip(&o.detail.clone().unwrap_or_default(), 60),
             ]
         })
@@ -79,7 +118,15 @@ async fn update(env: &Env, feeds: Vec<String>, force: bool) -> AppResult<()> {
     println!(
         "{}",
         table(
-            &[t!("來源"), t!("結果"), t!("筆數"), t!("大小"), t!("耗時"), t!("細節")],
+            &[
+                t!("來源"),
+                t!("結果"),
+                t!("筆數"),
+                t!("大小"),
+                t!("耗時"),
+                t!("下載自"),
+                t!("細節")
+            ],
             rows
         )
     );

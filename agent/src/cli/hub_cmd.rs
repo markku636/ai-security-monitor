@@ -10,7 +10,7 @@ use super::render::{print_json, table};
 use super::Env;
 use crate::config::{self, HubConfig};
 use crate::error::{AppError, AppResult};
-use crate::hub::contract::HeartbeatPayload;
+use crate::hub::contract::{HeartbeatPayload, IntelFeedsInfo};
 use crate::hub::{actions as remote, outbox, validate_url, watch, HubClient};
 use crate::model::report::AgentInfo;
 use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT};
@@ -314,6 +314,69 @@ async fn execute_remote(
 }
 
 /// 先把 outbox 裡的舊報告送掉（遇到錯誤就停，等下一輪）。
+/// 自動檢查情資的間隔（各清單仍依自己的更新間隔決定要不要真的下載）。
+const INTEL_EVERY: Duration = Duration::from_secs(30 * 60);
+
+/// 更新情資（有註冊就先從 hub 鏡像拿）；回傳有沒有任何清單換新（要重新載入）。
+async fn refresh_intel(env: &Env, client: Option<&HubClient>, force: bool) -> bool {
+    let reg = match crate::intel::registry::Registry::load(&env.config_dir) {
+        Ok(r) => r,
+        Err(e) => {
+            log(env, &tf!("情資更新失敗：{e}", e = e.message()));
+            return false;
+        }
+    };
+    let mirror = match client {
+        Some(c) => c.feed_mirror().await.ok(),
+        None => None,
+    };
+    let opts = crate::intel::fetch::UpdateOpts {
+        only: vec![],
+        force,
+        mirror,
+    };
+    match crate::intel::fetch::update(&env.config_dir, &reg, &opts, &|_| {}).await {
+        Ok(outs) => {
+            let updated = outs.iter().filter(|o| o.status == "updated").count();
+            let failed = outs.iter().filter(|o| o.status == "error").count();
+            let checked = outs.iter().filter(|o| o.status != "fresh").count();
+            if checked > 0 {
+                let from_hub = outs.iter().filter(|o| o.source.as_deref() == Some("hub")).count();
+                log(
+                    env,
+                    &tf!(
+                        "情資更新：檢查 {checked} 個、{updated} 個有新資料、{failed} 個失敗（{hub} 個從 Hub）",
+                        checked = checked,
+                        updated = updated,
+                        failed = failed,
+                        hub = from_hub
+                    ),
+                );
+            }
+            updated > 0
+        }
+        Err(e) => {
+            log(env, &tf!("情資更新失敗：{e}", e = e.message()));
+            false
+        }
+    }
+}
+
+fn intel_heartbeat(env: &Env, client: &HubClient) -> (Option<chrono::DateTime<Utc>>, Option<IntelFeedsInfo>) {
+    let Ok(reg) = crate::intel::registry::Registry::load(&env.config_dir) else {
+        return (None, None);
+    };
+    let s = crate::intel::fetch::intel_status(&env.config_dir, &reg, Some(client.base()));
+    (
+        s.checked_at,
+        Some(IntelFeedsInfo {
+            ok: s.ok,
+            total: s.total,
+            source: s.source.map(|x| x.to_string()),
+        }),
+    )
+}
+
 async fn flush_outbox(env: &Env, client: &HubClient) {
     for p in outbox::list(&env.config_dir) {
         let Some(r) = outbox::load(&p) else {
@@ -427,6 +490,13 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     let mut intel_loaded = std::time::Instant::now();
     let mut next_scan = tokio::time::Instant::now();
     let mut next_snap = tokio::time::Instant::now();
+    // --once（測試、排程）不自動更新情資，避免每次都去下載
+    let mut next_intel = if a.once {
+        tokio::time::Instant::now() + Duration::from_secs(365 * 86_400)
+    } else {
+        tokio::time::Instant::now()
+    };
+    let mut force_intel = false;
     let mut last_scan_at: Option<chrono::DateTime<Utc>> = None;
     // 停止訊號（Ctrl-C／SIGTERM／服務停止）：等待與掃描中都會被打斷，服務停止不必等完整掃描跑完
     let stop = crate::service::instance::stopped();
@@ -454,6 +524,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                             ),
                             Err(e) => log(env, &tf!("快照上傳失敗：{e}", e = e.message())),
                         }
+                        let (intel_checked_at, intel_feeds) = intel_heartbeat(env, c);
                         let hb = HeartbeatPayload {
                             agent_id: cfg.agent_id.clone(),
                             ts: Utc::now(),
@@ -461,12 +532,20 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                             uptime_s: agent.uptime_s,
                             last_scan_at,
                             elevated: crate::elevate::is_elevated(),
+                            intel_checked_at,
+                            intel_feeds,
                         };
                         match c.heartbeat(&hb).await {
-                            Ok(v) if v["pending_actions"].as_u64().unwrap_or(0) > 0 => {
-                                run_remote_actions(env, c, &cfg).await;
+                            Ok(v) => {
+                                let commands = v["commands"].as_array().cloned().unwrap_or_default();
+                                if commands.iter().any(|x| x == "refresh_feeds") && !force_intel {
+                                    log(env, t!("Hub 要求立即更新情資"));
+                                    force_intel = true;
+                                }
+                                if v["pending_actions"].as_u64().unwrap_or(0) > 0 {
+                                    run_remote_actions(env, c, &cfg).await;
+                                }
                             }
-                            Ok(_) => {}
                             Err(e) => log(env, &tf!("心跳失敗：{e}", e = e.message())),
                         }
                     } else {
@@ -483,6 +562,14 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                 Err(e) => log(env, &tf!("快照失敗：{e}", e = e.message())),
             }
             next_snap = now + snap_every;
+        }
+        if force_intel || tokio::time::Instant::now() >= next_intel {
+            let force = std::mem::take(&mut force_intel);
+            if refresh_intel(env, client.as_ref(), force).await {
+                intel = watch::load_intel(&env.config_dir).await;
+                intel_loaded = std::time::Instant::now();
+            }
+            next_intel = tokio::time::Instant::now() + INTEL_EVERY;
         }
         if now >= next_scan {
             if let Some(c) = &client {
@@ -537,7 +624,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         if a.once || crate::service::instance::stop_requested() {
             break;
         }
-        let wake = next_scan.min(next_snap);
+        let wake = next_scan.min(next_snap).min(next_intel);
         tokio::select! {
             _ = tokio::time::sleep_until(wake) => {}
             _ = &mut stop => {

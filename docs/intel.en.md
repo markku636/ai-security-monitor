@@ -62,6 +62,14 @@ See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for full license details
 - Online reputation: `asa intel key set abuseipdb -` (reads the key from stdin, stored in the keychain); results are cached for 24 hours with a daily quota.
 - The Hub IP page (`/ip/<ip>`) adds "External threat intel": when an admin clicks Look up, the hub queries AbuseIPDB, GreyNoise, IPinfo, proxycheck.io and reverse DNS, and combines them with the blocklist hits reported by agents into a 0–100 risk score. Score = weighted signals (Spamhaus 30, IPsum 25, FireHOL 20, other blocklists 20, AbuseIPDB 25×confidence, GreyNoise malicious 15, proxy/VPN 12, data center 8, Tor 10, GreyNoise benign −20) ÷ 165, then floors (Spamhaus DROP ≥ 85, AbuseIPDB ≥ 90 → ≥ 75, Tor ≥ 40); ≥ 75 critical, ≥ 50 high, ≥ 25 medium. Private/reserved addresses are never sent, and the hub never looks anything up on its own.
 
+### Sync (Hub mirror)
+
+- The Hub downloads each list from its vendor on that source's refresh interval and stores the original file unchanged in `/data/feeds/<id>/` (headers and attribution kept; `ASA_HUB_FEED_CACHE_DIR` moves it, `ASA_HUB_FEED_MIRROR=0` turns background sync off). Only default-enabled, downloadable lists are mirrored; lookup APIs are not.
+- Enrolled agents fetch from the Hub first (`GET /api/v1/feeds/manifest`, `/api/v1/feeds/<id>`, ETag = sha256, 304 when unchanged) and fall back to the vendor when the Hub lacks a list or is unreachable; `asa intel update --no-hub` always goes to the vendors.
+- The resident `asa watch` checks intel every 30 minutes (each list still downloads only when its own interval is due) and reports its oldest check time and list count in the heartbeat; `--once` does not auto-update.
+- "Sync threat intel now" on the Threat intel page makes the Hub refetch every list right away and, for 24 hours, tells hosts that have not updated yet to update on their next heartbeat (`commands: ["refresh_feeds"]` in the response). The page shows each source's last Hub sync and each host's last intel update and source.
+- The mirror is served only to agents (client keys), admins and read tokens; the public dashboard cannot download the raw files (vendor-licensed content is not redistributed).
+
 ## Blocking
 
 Intel can be synced into firewall block rules: `asa fw sync-blocklist --dry-run` shows what would be blocked. Only public, narrow-enough networks are picked, confidence ≥ 80 by default,

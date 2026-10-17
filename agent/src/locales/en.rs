@@ -1071,6 +1071,15 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "已重新套用防火牆規則：封鎖 {b} 筆、關閉 {p} 個 port、情資網段 {n} 個" => "Re-applied firewall rules: {b} blocked, {p} ports closed, {n} intel networks",
         "重新套用防火牆規則失敗：{e}" => "Re-applying firewall rules failed: {e}",
 
+        // intel sync via hub mirror
+        "已註冊 Hub 也不用 Hub 的鏡像，直接找各廠商下載" => "Download straight from each vendor even when enrolled with a Hub (skip the Hub mirror)",
+        "情資更新失敗：{e}" => "Threat intel update failed: {e}",
+        "情資更新：檢查 {checked} 個、{updated} 個有新資料、{failed} 個失敗（{hub} 個從 Hub）" => "Threat intel: checked {checked}, {updated} updated, {failed} failed ({hub} from the Hub)",
+        "Hub 要求立即更新情資" => "Hub asked for an immediate threat intel update",
+        "從 Hub 鏡像下載（{n} 個清單）：{url}" => "Downloading from the Hub mirror ({n} lists): {url}",
+        "Hub 鏡像不可用，直接找廠商：{e}" => "Hub mirror unavailable, downloading from vendors: {e}",
+        "下載自" => "From",
+
         _ => return None,
     })
 }

@@ -1,6 +1,8 @@
 //! 下載情資：ETag / Last-Modified 條件請求、大小上限、內容驗證（HTML 錯誤頁或空清單不覆蓋舊資料）。
 //! 檔案：`<config>/feeds/<id>/data`（或 `data.mmdb`）＋ `meta.json`。
+//! 已註冊 hub 時先從 hub 的鏡像拿（`/api/v1/feeds/<id>`，原檔原樣），hub 沒有或連不上才直接找廠商。
 
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -114,6 +116,27 @@ pub struct UpdateOpts {
     pub only: Vec<String>,
     /// 忽略更新間隔。
     pub force: bool,
+    /// hub 鏡像（已註冊且 hub 有提供時）。
+    pub mirror: Option<Mirror>,
+}
+
+/// hub 的情資鏡像：網址、client 金鑰與鏡像裡有的清單。
+#[derive(Debug, Clone, Default)]
+pub struct Mirror {
+    pub base: String,
+    pub key: String,
+    pub agent_id: String,
+    pub ids: HashSet<String>,
+}
+
+impl Mirror {
+    pub fn url_for(&self, id: &str) -> String {
+        format!("{}/api/v1/feeds/{id}", self.base)
+    }
+
+    pub fn owns(&self, url: &str) -> bool {
+        !self.base.is_empty() && url.starts_with(&format!("{}/api/v1/feeds/", self.base))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -126,6 +149,9 @@ pub struct UpdateOutcome {
     pub ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// `hub`（鏡像）或 `vendor`（直接找廠商）；沒下載的是 None。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 pub async fn update(
@@ -173,6 +199,7 @@ pub async fn update(
                             bytes: m.bytes,
                             ms: 0,
                             detail: None,
+                            source: None,
                         });
                         continue;
                     }
@@ -181,7 +208,8 @@ pub async fn update(
             progress(&tf!("下載情資：{id}", id = f.id));
             let client = client.clone();
             let dir = config_dir.to_path_buf();
-            set.spawn(async move { fetch_one(&client, &dir, &f, meta).await });
+            let mirror = opts.mirror.clone().filter(|m| m.ids.contains(&f.id));
+            set.spawn(async move { fetch_one(&client, &dir, &f, meta, mirror.as_ref()).await });
         }
         match set.join_next().await {
             Some(Ok(o)) => outcomes.push(o),
@@ -192,6 +220,7 @@ pub async fn update(
                 bytes: 0,
                 ms: 0,
                 detail: Some(e.to_string()),
+                source: None,
             }),
             None => break,
         }
@@ -201,7 +230,9 @@ pub async fn update(
 }
 
 enum Download {
-    NotModified,
+    NotModified {
+        url: String,
+    },
     Body {
         bytes: Vec<u8>,
         url: String,
@@ -210,16 +241,35 @@ enum Download {
     },
 }
 
-async fn fetch_one(client: &reqwest::Client, dir: &Path, f: &FeedEntry, prev: Option<FeedMeta>) -> UpdateOutcome {
+async fn fetch_one(
+    client: &reqwest::Client,
+    dir: &Path,
+    f: &FeedEntry,
+    prev: Option<FeedMeta>,
+    mirror: Option<&Mirror>,
+) -> UpdateOutcome {
     let started = Instant::now();
     let mut meta = prev.clone().unwrap_or_else(|| FeedMeta {
         feed_id: f.id.clone(),
         ..Default::default()
     });
     meta.feed_id = f.id.clone();
-    let result = download(client, f, prev.as_ref()).await;
+    let result = download(client, f, prev.as_ref(), mirror).await;
     let now = Utc::now();
     meta.checked_at = Some(now);
+    let via = match &result {
+        Ok(Download::Body { url, .. }) => Some(url.clone()),
+        Ok(Download::NotModified { url }) => Some(url.clone()),
+        Err(_) => None,
+    };
+    let source = via.map(|u| {
+        if mirror.is_some_and(|m| m.owns(&u)) {
+            "hub"
+        } else {
+            "vendor"
+        }
+        .to_string()
+    });
     let stored = result.and_then(|d| store_download(dir, f, &mut meta, d, now));
     let ms = started.elapsed().as_millis() as u64;
     match stored {
@@ -234,6 +284,7 @@ async fn fetch_one(client: &reqwest::Client, dir: &Path, f: &FeedEntry, prev: Op
                 bytes: meta.bytes,
                 ms,
                 detail: None,
+                source,
             }
         }
         Err(e) => {
@@ -247,6 +298,7 @@ async fn fetch_one(client: &reqwest::Client, dir: &Path, f: &FeedEntry, prev: Op
                 bytes: meta.bytes,
                 ms,
                 detail: Some(e.message()),
+                source: None,
             }
         }
     }
@@ -259,11 +311,23 @@ fn header_str(resp: &reqwest::Response, name: reqwest::header::HeaderName) -> Op
         .map(|s| s.to_string())
 }
 
-async fn download(client: &reqwest::Client, f: &FeedEntry, prev: Option<&FeedMeta>) -> AppResult<Download> {
-    let urls: Vec<String> = f.urls.iter().take(1).flat_map(|u| expand_urls(u, Utc::now())).collect();
+async fn download(
+    client: &reqwest::Client,
+    f: &FeedEntry,
+    prev: Option<&FeedMeta>,
+    mirror: Option<&Mirror>,
+) -> AppResult<Download> {
+    let mut urls: Vec<String> = mirror.map(|m| m.url_for(&f.id)).into_iter().collect();
+    urls.extend(f.urls.iter().take(1).flat_map(|u| expand_urls(u, Utc::now())));
     let mut last_err: Option<AppError> = None;
     for url in urls {
         let mut req = client.get(&url);
+        if let Some(m) = mirror.filter(|m| m.owns(&url)) {
+            req = req
+                .bearer_auth(&m.key)
+                .header("x-asa-agent-id", &m.agent_id)
+                .header("x-asa-agent-version", crate::VERSION);
+        }
         if let Some(p) = prev.filter(|p| p.url == url && p.has_data()) {
             if let Some(e) = &p.etag {
                 req = req.header(IF_NONE_MATCH, e);
@@ -281,7 +345,7 @@ async fn download(client: &reqwest::Client, f: &FeedEntry, prev: Option<&FeedMet
         };
         let status = resp.status();
         if status == reqwest::StatusCode::NOT_MODIFIED {
-            return Ok(Download::NotModified);
+            return Ok(Download::NotModified { url });
         }
         if !status.is_success() {
             last_err = Some(AppError::Intel(tf!(
@@ -340,14 +404,14 @@ fn store_download(
     d: Download,
     now: DateTime<Utc>,
 ) -> AppResult<String> {
-    let Download::Body {
-        bytes,
-        url,
-        etag,
-        last_modified,
-    } = d
-    else {
-        return Ok("not_modified".into());
+    let (bytes, url, etag, last_modified) = match d {
+        Download::Body {
+            bytes,
+            url,
+            etag,
+            last_modified,
+        } => (bytes, url, etag, last_modified),
+        Download::NotModified { .. } => return Ok("not_modified".into()),
     };
     let fdir = feed_dir(dir, &f.id);
     store::ensure_dir(&fdir)?;
@@ -376,6 +440,42 @@ fn store_download(
     meta.last_modified = last_modified;
     meta.fetched_at = Some(now);
     Ok("updated".into())
+}
+
+/// 給 hub 心跳的情資狀態：最舊的一次檢查時間（全部都檢查過才算更新完）、有資料的清單數、多數從哪裡來。
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntelStatus {
+    pub checked_at: Option<DateTime<Utc>>,
+    pub ok: usize,
+    pub total: usize,
+    pub source: Option<&'static str>,
+}
+
+pub fn intel_status(config_dir: &Path, reg: &Registry, hub_base: Option<&str>) -> IntelStatus {
+    let mirror_prefix = hub_base.map(|b| format!("{}/api/v1/feeds/", b.trim_end_matches('/')));
+    let (mut ok, mut total, mut from_hub) = (0, 0, 0);
+    let mut oldest: Option<DateTime<Utc>> = None;
+    for f in reg.enabled().filter(|f| downloadable(f)) {
+        total += 1;
+        let Some(m) = FeedMeta::load(config_dir, &f.id) else {
+            continue;
+        };
+        if m.has_data() {
+            ok += 1;
+            if mirror_prefix.as_ref().is_some_and(|p| m.url.starts_with(p)) {
+                from_hub += 1;
+            }
+        }
+        if let Some(c) = m.checked_at {
+            oldest = Some(oldest.map_or(c, |o| o.min(c)));
+        }
+    }
+    IntelStatus {
+        checked_at: oldest,
+        ok,
+        total,
+        source: (ok > 0).then_some(if from_hub * 2 >= ok { "hub" } else { "vendor" }),
+    }
 }
 
 /// (最新, 過期, 未下載) 的已啟用清單類來源數。
@@ -467,6 +567,39 @@ mod tests {
         let (fresh, stale, missing) = freshness(dir.path(), &reg);
         assert_eq!((fresh, stale), (0, 0));
         assert!(missing > 10);
+    }
+
+    #[tokio::test]
+    async fn downloads_from_hub_mirror_first_and_reports_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let reg = Registry::load(dir.path()).unwrap();
+        let (base, cap) = crate::hub::test_server::serve(vec![(200, "# mirrored\n198.51.100.7\n".into())]).await;
+        let mirror = Mirror {
+            base: base.clone(),
+            key: "client-a".into(),
+            agent_id: "a1".into(),
+            ids: ["abusech-feodo".to_string()].into_iter().collect(),
+        };
+        let opts = UpdateOpts {
+            only: vec!["abusech-feodo".into()],
+            force: true,
+            mirror: Some(mirror),
+        };
+        let outs = update(dir.path(), &reg, &opts, &|_| {}).await.unwrap();
+        assert_eq!(outs[0].status, "updated");
+        assert_eq!(outs[0].source.as_deref(), Some("hub"));
+        let head = cap.lock().unwrap()[0].head.to_ascii_lowercase();
+        assert!(head.starts_with("get /api/v1/feeds/abusech-feodo "));
+        assert!(head.contains("authorization: bearer client-a"));
+        assert!(head.contains("x-asa-agent-id: a1"));
+        let meta = FeedMeta::load(dir.path(), "abusech-feodo").unwrap();
+        assert_eq!(meta.entries, 1);
+        let s = intel_status(dir.path(), &reg, Some(&base));
+        assert_eq!(s.ok, 1);
+        assert!(s.total > 10);
+        assert_eq!(s.source, Some("hub"));
+        assert!(s.checked_at.is_some());
+        assert_eq!(intel_status(dir.path(), &reg, None).source, Some("vendor"));
     }
 
     #[test]

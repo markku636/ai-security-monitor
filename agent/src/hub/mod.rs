@@ -213,6 +213,25 @@ impl HubClient {
         Ok(self.post("/api/v1/agents/me/heartbeat", hb).await?.body)
     }
 
+    /// hub 的情資鏡像清單（舊版 hub 沒有這個端點 → 錯誤，呼叫端改直接找廠商）。
+    pub async fn feed_mirror(&self) -> AppResult<crate::intel::fetch::Mirror> {
+        let r = self.get("/api/v1/feeds/manifest").await?;
+        let ids = r.body["feeds"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|f| f["id"].as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(crate::intel::fetch::Mirror {
+            base: self.base.clone(),
+            key: self.key.clone(),
+            agent_id: self.agent_id.clone(),
+            ids,
+        })
+    }
+
     /// 領取已核准的遠端動作。
     pub async fn poll_actions(&self) -> AppResult<Vec<actions::RemoteAction>> {
         let r = self.get("/api/v1/agents/me/actions").await?;

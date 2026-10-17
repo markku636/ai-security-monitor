@@ -50,6 +50,13 @@
       "when": 1792204981032,
       "tag": "0006_ip_reputation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792206874587,
+      "tag": "0007_intel_sync",
+      "breakpoints": true
     }
   ]
 }
