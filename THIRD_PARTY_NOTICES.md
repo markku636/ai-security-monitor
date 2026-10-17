@@ -20,6 +20,7 @@
 | NIST NVD | CVE data | [terms of use](https://nvd.nist.gov/developers/terms-of-use) | rate limits apply |
 | OSV.dev | open-source vulnerability DB | Apache-2.0 (API) / CC-BY 4.0 (data) | |
 | AbuseIPDB / GreyNoise / CrowdSec CTI / AlienVault OTX | IP reputation (API key, opt-in) | each vendor's ToS; community tiers are non-commercial | disabled by default |
+| HackerTarget / VirusTotal / AlienVault OTX (Hub "Domains on this IP") | passive DNS: domains seen on an IP | [HackerTarget terms](https://hackertarget.com/terms/), [VirusTotal ToS](https://cloud.google.com/terms/virustotal) (public API: **non-commercial only**), OTX ToS | only sent when an admin presses "Look up domains"; results cached, not redistributed |
 
 Optional rule sets the user may add (not bundled): SigmaHQ (DRL 1.1), Neo23x0 signature-base (DRL), Emerging Threats Suricata rules (BSD). Keep their attribution when importing.
 
