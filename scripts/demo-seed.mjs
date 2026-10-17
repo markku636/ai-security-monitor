@@ -590,14 +590,14 @@ const METRICS = {
     performance: false,
     ifaces: [['Ethernet', false, 1]],
     rx: 0.35 * MB, tx: 0.42 * MB, office: 0.5,
-    procs: [['lsass.exe', 0.4, 0.5], ['svchost.exe', 0.25, 0.2], ['dfsrs.exe', 0.2, 0.25], ['dns.exe', 0.1, 0.05]],
+    procs: [['lsass.exe', 0.4, 0.5], ['svchost.exe', 0.25, 0.2], ['dfsrs.exe', 0.2, 0.25, 'night'], ['dns.exe', 0.1, 0.05]],
     source: 'estats',
   },
   'design-mac-03': {
     performance: false,
     ifaces: [['en0', false, 1], ['utun3', true, 0.08], ['awdl0', true, 0.01]],
     rx: 1.6 * MB, tx: 0.5 * MB, office: 1,
-    procs: [['Figma', 0.35, 0.3], ['Google Chrome He', 0.3, 0.1], ['zoom.us', 0.2, 0.55], ['Dropbox', 0.15, 0.05]],
+    procs: [['Figma', 0.35, 0.3], ['Google Chrome He', 0.3, 0.1], ['zoom.us', 0.2, 0.55, 'meeting'], ['Dropbox', 0.15, 0.05, 'sync']],
     source: 'nettop',
   },
 };
@@ -607,6 +607,14 @@ function officeFactor(t, weight) {
   const h = new Date(t).getUTCHours() + new Date(t).getUTCMinutes() / 60;
   const day = h >= 1 && h <= 10 ? 0.5 + 0.5 * Math.sin(((h - 1) / 9) * Math.PI) : 0;
   return 1 - weight + weight * (0.15 + 1.6 * day);
+}
+// 各程式自己的使用時段（各程式流量圖才不會每條線都長一樣）：開會、每 3 小時同步一次、半夜複寫
+function procFactor(pattern, t) {
+  const h = new Date(t).getUTCHours() + new Date(t).getUTCMinutes() / 60;
+  if (pattern === 'meeting') return (h >= 2 && h < 3) || (h >= 6 && h < 7.5) ? 3.2 : 0.1;
+  if (pattern === 'sync') return Math.floor(t / 60_000) % 180 < 20 ? 3 : 0.3;
+  if (pattern === 'night') return h >= 15 && h < 21 ? 2.5 : 0.4; // 台灣 23:00–05:00
+  return 1;
 }
 const wobble = (seed, t) => 0.75 + 0.5 * ((Math.sin(seed * 12.9898 + t / 97_000) * 43758.5453) % 1 + 1) % 1;
 
@@ -626,7 +634,10 @@ function metricSample(host, m, t, interval) {
     interfaces: m.ifaces.map(([name, virt, share]) => ({ name, virtual: virt, rx_bytes: Math.round(rx * share), tx_bytes: Math.round(tx * share) })),
   };
   if (m.procs) {
-    net.processes = m.procs.map(([name, rs, ts]) => ({ name, rx_bytes: Math.round(rx * rs), tx_bytes: Math.round(tx * ts) }));
+    net.processes = m.procs.map(([name, rs, ts, pattern]) => {
+      const pf = procFactor(pattern, t);
+      return { name, rx_bytes: Math.round(rx * rs * pf), tx_bytes: Math.round(tx * ts * pf) };
+    });
     net.process_source = m.source;
   }
   const s = { ts: new Date(t).toISOString(), interval_s: interval, net };

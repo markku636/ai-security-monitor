@@ -1,6 +1,7 @@
 // 網路流量與效能的頁面區塊（server component）：頻寬圖、主機流量排行、各介面、各程式、主機效能分頁。
 import Link from 'next/link';
 import { TimeChart } from '@/components/charts/TimeChart';
+import { ProcessTrafficChart } from '@/components/metrics/ProcessTrafficChart';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,6 +15,7 @@ import {
   hostPerfSeries,
   interfaceBreakdown,
   latestPerf,
+  processSeries,
   processTraffic,
   type HostTraffic,
   type IfaceTraffic,
@@ -210,7 +212,12 @@ export function ProcessTrafficTable({ t, data, showHosts = true }: { t: TFn; dat
 
 /** 流量頁最上面的區塊：所有主機的頻寬、排行、各介面、各程式。 */
 export async function FleetTrafficSection({ t, range, agentId, ranking = [] }: { t: TFn; range: Range; agentId?: string; ranking?: HostTraffic[] }) {
-  const [bw, ifaces, procs] = await Promise.all([bandwidthSeries(range, agentId), interfaceBreakdown(range, agentId, 30), processTraffic(range, agentId, 15)]);
+  const [bw, ifaces, procs, pseries] = await Promise.all([
+    bandwidthSeries(range, agentId),
+    interfaceBreakdown(range, agentId, 30),
+    processTraffic(range, agentId, 15),
+    processSeries(range, agentId, 6),
+  ]);
   if (!bw.hasData && !ranking.length) {
     return (
       <EmptyState title={t('還沒有流量統計')}>
@@ -235,6 +242,31 @@ export async function FleetTrafficSection({ t, range, agentId, ranking = [] }: {
       >
         <BandwidthChart t={t} data={bw} />
       </Card>
+      <Card
+        title={
+          <span>
+            {agentId ? t('各程式的網路流量') : t('各程式的網路流量（所有主機加總）')}
+            <Hint text={t('哪個程式在什麼時候用了多少網路：流量最多的 6 個程式各一條線，其餘合併成「其他程式」（虛線）。可切換合計、下載、上傳。')} />
+          </span>
+        }
+      >
+        {pseries.hasData ? (
+          <ProcessTrafficChart times={pseries.times} series={pseries.series} timeMode={timeMode(range)} />
+        ) : (
+          <div className="space-y-1 text-sm text-slate-500">
+            <p>{t('這段期間沒有主機回報各程式的流量，所以畫不出這張圖。')}</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                {t('Windows：背景服務要以系統管理員身分執行才讀得到。在「系統管理員」PowerShell 執行')}{' '}
+                <code className="rounded bg-slate-100 px-1 font-mono text-xs dark:bg-slate-800">ai-security-monitor service install --system --yes</code>
+                {t('（改成開機時啟動的系統服務），幾分鐘後就會有資料。')}
+              </li>
+              <li>{t('macOS：會自動回報（用系統內建的 nettop）。')}</li>
+              <li>{t('Linux：目前量不到各程式的流量，可以看下方「各行程目前的連線」。')}</li>
+            </ul>
+          </div>
+        )}
+      </Card>
       {!agentId && ranking.length ? (
         <section className="space-y-2">
           <h2 className={H2}>{t('流量最多的主機')}</h2>
@@ -257,7 +289,7 @@ export async function FleetTrafficSection({ t, range, agentId, ranking = [] }: {
             <ProcessTrafficTable t={t} data={procs} showHosts={!agentId} />
           ) : (
             <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700">
-              {t('這段期間沒有主機回報各程式的流量（Linux 需要 eBPF；Windows 要以系統管理員執行）。可以改看下方各行程的連線數。')}
+              {t('沒有資料，怎麼開啟請看上方「各程式的網路流量」。')}
             </p>
           )}
         </section>

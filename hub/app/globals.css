@@ -24,10 +24,13 @@
 
 :root {
   color-scheme: light;
-  /* 圖表：類別色（下載＝藍、上傳＝橘）、格線、座標字 */
+  /* 圖表：類別色（下載＝藍、上傳＝橘；各程式圖用 1–6）、格線、座標字 */
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
+  --chart-4: #8b5cf6;
+  --chart-5: #d03f8f;
+  --chart-6: #b98900;
   --chart-grid: #e2e8f0;
   --chart-axis: #64748b;
   --chart-surface: #ffffff;
@@ -38,6 +41,9 @@
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
+  --chart-4: #a78bfa;
+  --chart-5: #e2589f;
+  --chart-6: #d4a017;
   --chart-grid: #1e293b;
   --chart-axis: #94a3b8;
   --chart-surface: #0f172a;

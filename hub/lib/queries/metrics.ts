@@ -186,6 +186,66 @@ export async function processTraffic(range: Range, agentId?: string, limit = 20,
   };
 }
 
+export interface ProcSeries {
+  /** 程式名稱；null＝其餘程式合併的「其他」。 */
+  name: string | null;
+  /** 每個 bucket 的平均速率 bytes/s；這段時間沒有任何主機回報各程式流量是 null。 */
+  rx: (number | null)[];
+  tx: (number | null)[];
+  totalRx: number;
+  totalTx: number;
+}
+
+/** 各程式流量的時間序列：這段期間流量最多的前 top 個程式各一條，其餘合併成「其他」（在 SQL 裡先合併，列數固定）。 */
+export async function processSeries(range: Range, agentId?: string, top = 6, now = new Date()) {
+  const spec = RANGE_SPEC[range];
+  const { t, at } = table(sourceFor(spec.ms, spec.source));
+  const since = new Date(now.getTime() - spec.ms);
+  const res = await getDb().execute(sql`
+    with s as (
+      select floor(extract(epoch from ${at}) / ${spec.bucketS})::bigint * ${spec.bucketS} as b,
+             p->>'name' as name, (p->>'rx')::float8 as rx, (p->>'tx')::float8 as tx
+      from ${t} m join agents a on a.id = m.agent_id and a.deleted_at is null
+      cross join lateral jsonb_array_elements(m.processes) as p
+      where m.processes is not null and ${at} >= ${since.toISOString()}::timestamptz ${agentId ? sql`and m.agent_id = ${agentId}` : sql``}
+    ), top as (
+      select name, row_number() over (order by sum(rx + tx) desc, name) as rank
+      from s group by name order by sum(rx + tx) desc, name limit ${top}
+    )
+    select s.b, top.name, min(top.rank) as rank, sum(s.rx)::float8 as rx, sum(s.tx)::float8 as tx
+    from s left join top on top.name = s.name
+    group by s.b, top.name`);
+  const rows = rowsOf(res);
+  const times = buckets(since.getTime(), now.getTime(), spec.bucketS);
+  const index = new Map(times.map((b, i) => [b, i]));
+  const withData = new Set(rows.map((r) => num(r.b) * 1000));
+  const byName = new Map<string | null, { rank: number; rx: Map<number, number>; tx: Map<number, number> }>();
+  for (const r of rows) {
+    const name = r.name == null ? null : String(r.name);
+    const e = byName.get(name) ?? { rank: name == null ? Number.MAX_SAFE_INTEGER : num(r.rank), rx: new Map(), tx: new Map() };
+    const b = num(r.b) * 1000;
+    if (index.has(b)) {
+      e.rx.set(b, num(r.rx));
+      e.tx.set(b, num(r.tx));
+    }
+    byName.set(name, e);
+  }
+  const series: ProcSeries[] = [...byName.entries()]
+    .sort((x, y) => x[1].rank - y[1].rank)
+    .map(([name, e]) => {
+      // 有主機回報各程式流量、但這個程式沒出現的時段算 0；整段時間都沒人回報才是 null（圖上斷開）
+      const vals = (m: Map<number, number>) => times.map((b) => (withData.has(b) ? (m.get(b) ?? 0) / spec.bucketS : null));
+      return {
+        name,
+        rx: vals(e.rx),
+        tx: vals(e.tx),
+        totalRx: [...e.rx.values()].reduce((a, v) => a + v, 0),
+        totalTx: [...e.tx.values()].reduce((a, v) => a + v, 0),
+      };
+    });
+  return { range, bucketS: spec.bucketS, times: times.map((b) => new Date(b).toISOString()), series, hasData: withData.size > 0 };
+}
+
 export interface PerfPoint {
   t: string;
   cpu: number | null;

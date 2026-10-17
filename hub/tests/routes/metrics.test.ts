@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { POST as mcpPost } from '@/app/api/mcp/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
@@ -22,6 +22,7 @@ import {
   interfaceBreakdown,
   latestPerf,
   perfAlerts,
+  processSeries,
   processTraffic,
   trafficSummary,
 } from '@/lib/queries/metrics';
@@ -218,6 +219,38 @@ describe('metrics findings, queries and rollup', () => {
     const sum = await trafficSummary();
     expect(sum).toMatchObject({ hosts24h: 1, reporting: 1, perfEnabled: 0 });
     expect(sum.rx24h).toBeGreaterThan(0);
+  });
+
+  it('processSeries: top programs get their own line, the rest are merged into "other", gaps stay null', async () => {
+    // 放在 2030 年（不跟其他測試的樣本混在一起），測完刪掉
+    const now = new Date('2030-01-01T01:00:00Z');
+    const at = (m: number) => new Date(Date.UTC(2030, 0, 1, 0, m));
+    const proc = (name: string, rx: number, tx: number) => ({ name, rx, tx });
+    await db.insert(hostMetrics).values([
+      { agentId: A, at: at(10), intervalS: 60, rxBytes: 7320, txBytes: 600, processes: [proc('a', 6000, 600), proc('b', 1200, 0), proc('c', 60, 0)] },
+      { agentId: A, at: at(11), intervalS: 60, rxBytes: 6120, txBytes: 60, processes: [proc('a', 6000, 0), proc('d', 120, 60)] },
+      { agentId: A, at: at(12), intervalS: 60, rxBytes: 100, txBytes: 10, processes: null },
+    ]);
+    try {
+      const s = await processSeries('1h', A, 2, now);
+      expect(s.hasData).toBe(true);
+      expect(s.series.map((x) => x.name)).toEqual(['a', 'b', null]);
+      const i10 = s.times.indexOf(at(10).toISOString());
+      expect(i10).toBeGreaterThanOrEqual(0);
+      const [a, b, other] = s.series;
+      expect(a.rx.slice(i10, i10 + 3)).toEqual([100, 100, null]);
+      expect(a.tx.slice(i10, i10 + 2)).toEqual([10, 0]);
+      // b 在 00:11 沒出現，但那一分鐘有回報各程式 → 0（不是 null）
+      expect(b.rx.slice(i10, i10 + 2)).toEqual([20, 0]);
+      expect(other.rx.slice(i10, i10 + 2)).toEqual([1, 2]);
+      expect(other.tx[i10 + 1]).toBe(1);
+      expect(a.totalRx).toBe(12_000);
+      expect(other.totalRx).toBe(180);
+      expect(s.series.every((x) => x.rx.length === s.times.length)).toBe(true);
+      expect((await processSeries('1h', A, 6, new Date('2031-01-01T00:00:00Z'))).hasData).toBe(false);
+    } finally {
+      await db.delete(hostMetrics).where(and(eq(hostMetrics.agentId, A), gte(hostMetrics.at, at(0))));
+    }
   });
 
   it('hourly rollup is idempotent, feeds the 7-day charts and applies retention', async () => {

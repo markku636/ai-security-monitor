@@ -87,8 +87,10 @@ The MCP tool `get_metrics` returns the same plus a summary of the last hour (pea
   idempotent and guarded by a PostgreSQL advisory lock, so with several Hub processes only one does the work; the same run deletes expired data.
 - **Pages**:
   - Traffic: ranges 1 hour / 24 hours / 7 days / 30 days (1 h and 24 h from per-minute data, 7 d and 30 d from hourly rollups); fleet bandwidth chart
-    (download/upload, hover for each time slot), hosts with the most traffic (24 h and 7 days), per network card (virtual ones marked), traffic per
-    program (hosts that cannot measure it are noted). The device filter narrows it to one host.
+    (download/upload, hover for each time slot), a **per-program traffic chart** (one line for each of the 6 busiest programs, the rest combined as a
+    dashed "Other programs" line; switch between total, download and upload), hosts with the most traffic (24 h and 7 days), per network card (virtual
+    ones marked), a per-program traffic table (hosts that cannot measure it are noted). The device filter narrows it to one host; the host page's
+    "Traffic" tab has the same chart.
   - Host page "Performance" tab: current CPU, memory, fullest volume and battery or uptime; charts of CPU (average and peak), memory, disk usage,
     disk I/O, network rate and battery; top programs by CPU and memory; volumes. When the host has not turned it on, an "off" notice explains how,
     and the network rate chart is still shown. The host's "Traffic" tab also gets its bandwidth and per-card breakdown.
@@ -109,7 +111,9 @@ The MCP tool `get_metrics` returns the same plus a summary of the last hour (pea
 ## Limitations
 
 - Linux has no per-program network usage (not without eBPF); the Hub's traffic page shows "Current connections per process" instead.
-- Per-program usage on Windows needs administrator rights and counts TCP payload bytes only; the per-user sign-in variant does not have it.
+- Per-program usage on Windows needs administrator rights and counts TCP payload bytes only; the per-user sign-in variant does not have it (the Hub's
+  per-program chart stays empty). To get it, run `ai-security-monitor service install --system --yes` in an administrator PowerShell to switch to a
+  system service that starts at boot.
 - macOS `nettop` may be unavailable on some managed machines (MDM restrictions); only the per-program figures are missing then.
 - Disk I/O depends on the platform: Windows has none when disk performance counters are off (`diskperf -n`); network drives and tmpfs are not listed.
 - If the computer sleeps or shuts down within an interval, that time's bytes are counted in the first sample after waking (rates use the real elapsed time).
