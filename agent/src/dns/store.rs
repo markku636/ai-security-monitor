@@ -156,6 +156,7 @@ mod tests {
         DnsRecord {
             ts,
             name: name.into(),
+            registrable: None,
             qtype: 1,
             rcode: "NOERROR".into(),
             process: Some("app.exe".into()),

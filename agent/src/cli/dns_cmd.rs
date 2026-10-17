@@ -311,7 +311,10 @@ async fn follow(env: &Env, a: &DnsArgs) -> AppResult<()> {
         eprintln!("{}", t!("即時顯示 DNS 查詢，Ctrl+C 結束"));
     }
     let mut print = |ev: DnsEvent| {
-        let proc = ev.pid.and_then(|p| procs.get(p)).map(|p| p.name);
+        let proc = ev
+            .process
+            .clone()
+            .or_else(|| ev.pid.and_then(|p| procs.get(p)).map(|p| p.name));
         if let Some(f) = &filter {
             if !proc.as_deref().is_some_and(|p| p.to_ascii_lowercase().contains(f)) {
                 return;

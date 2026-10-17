@@ -153,11 +153,12 @@ pub async fn flush(config_dir: &Path, client: &crate::hub::HubClient, agent_id: 
 pub fn sample_batch() -> DnsBatch {
     let at = |m: u32| Utc.with_ymd_and_hms(2026, 10, 17, 9, m, 0).unwrap();
     DnsBatch {
-        agent_id: "6f1c2e7a-3b4d-4e5f-8a9b-0c1d2e3f4a5b".into(),
+        agent_id: "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee".into(),
         records: vec![
             DnsRecord {
                 ts: at(30),
                 name: "updates.example.net".into(),
+                registrable: Some("example.net".into()),
                 qtype: 1,
                 rcode: "NOERROR".into(),
                 process: Some("updater.exe".into()),
@@ -171,6 +172,7 @@ pub fn sample_batch() -> DnsBatch {
             DnsRecord {
                 ts: at(31),
                 name: "kqfcpqbyqllgbr.example".into(),
+                registrable: Some("kqfcpqbyqllgbr.example".into()),
                 qtype: 1,
                 rcode: "NXDOMAIN".into(),
                 process: None,

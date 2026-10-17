@@ -30,6 +30,13 @@ use crate::error::{AppError, AppResult};
 pub const SERVICE_SESSION: &str = "ai-security-monitor-dns";
 const DNS_CLIENT: GUID = GUID::from_u128(0x1c95126e_7eea_49a9_a3fe_a378b03ddb4d);
 const EVENT_QUERY_COMPLETED: u16 = 3008;
+/// Microsoft-Windows-Kernel-Process：記下「PID → 程式名稱」，查完就結束的程式（powershell、curl…）也對得到。
+const KERNEL_PROCESS: GUID = GUID::from_u128(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716);
+const EVENT_PROCESS_START: u16 = 1;
+const KEYWORD_PROCESS: u64 = 0x10;
+/// PID → 程式名稱保留多久（每次用到就延長）、最多幾筆。
+const PROC_TTL: Duration = Duration::from_secs(600);
+const PROC_MAX: usize = 8192;
 /// 查本機自己名稱的查詢。
 const LOCAL_NAME_OPTION: u64 = 0x8000_0000_0000;
 const ERROR_ACCESS_DENIED: u32 = 5;
@@ -92,6 +99,10 @@ struct Ctx {
     tx: Sender<DnsEvent>,
     dropped: Arc<AtomicU64>,
     skip_pid: Option<u32>,
+    /// 行程啟動事件記下的 PID → 程式名稱（callback 只在 ProcessTrace 的執行緒上跑，鎖不會競爭）。
+    procs: std::sync::Mutex<HashMap<u32, (String, Instant)>>,
+    p_pid: Vec<u16>,
+    p_image: Vec<u16>,
     p_name: Vec<u16>,
     p_type: Vec<u16>,
     p_options: Vec<u16>,
@@ -186,11 +197,45 @@ impl EtwSession {
                 rc = rc
             )));
         }
+        // 行程啟動事件（失敗也沒關係：只是查完就結束的程式對不到名稱）
+        let mut pfilter = EVENT_FILTER_EVENT_ID {
+            FilterIn: true,
+            Reserved: 0,
+            Count: 1,
+            Events: [EVENT_PROCESS_START],
+        };
+        let mut pdesc = EVENT_FILTER_DESCRIPTOR {
+            Ptr: &mut pfilter as *mut _ as u64,
+            Size: std::mem::size_of::<EVENT_FILTER_EVENT_ID>() as u32,
+            Type: EVENT_FILTER_TYPE_EVENT_ID,
+        };
+        let pparams = ENABLE_TRACE_PARAMETERS {
+            Version: ENABLE_TRACE_PARAMETERS_VERSION_2,
+            EnableFilterDesc: &mut pdesc,
+            FilterDescCount: 1,
+            ..Default::default()
+        };
+        // SAFETY: 同上。
+        unsafe {
+            EnableTraceEx2(
+                handle,
+                &KERNEL_PROCESS,
+                EVENT_CONTROL_CODE_ENABLE_PROVIDER,
+                TRACE_LEVEL_VERBOSE,
+                KEYWORD_PROCESS,
+                0,
+                0,
+                &pparams,
+            );
+        }
 
         let ctx = Box::new(Ctx {
             tx,
             dropped,
             skip_pid: dnscache_pid(),
+            procs: std::sync::Mutex::new(HashMap::new()),
+            p_pid: wide("ProcessID"),
+            p_image: wide("ImageName"),
             p_name: wide("QueryName"),
             p_type: wide("QueryType"),
             p_options: wide("QueryOptions"),
@@ -318,15 +363,56 @@ unsafe extern "system" fn on_event(rec: *mut EVENT_RECORD) {
     });
 }
 
-fn handle(r: &EVENT_RECORD) {
-    let h = &r.EventHeader;
-    if h.EventDescriptor.Id != EVENT_QUERY_COMPLETED || !same_guid(&h.ProviderId, &DNS_CLIENT) {
+/// NT 路徑或一般路徑的最後一段（`\Device\HarddiskVolume3\Windows\System32\curl.exe` → `curl.exe`）。
+fn file_name(path: &str) -> &str {
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
+fn remember_process(ctx: &Ctx, r: &EVENT_RECORD) {
+    // SAFETY: r 是有效事件，屬性名稱以 0 結尾。
+    let get = |n: &[u16]| unsafe { prop(r, n) };
+    let (Some(pid), Some(image)) = (
+        get(&ctx.p_pid).as_deref().and_then(le_u64),
+        get(&ctx.p_image).map(|b| utf16z(&b)),
+    ) else {
+        return;
+    };
+    let name = file_name(&image).to_string();
+    if name.is_empty() {
         return;
     }
+    if let Ok(mut m) = ctx.procs.lock() {
+        let now = Instant::now();
+        if m.len() >= PROC_MAX {
+            m.retain(|_, (_, at)| now.duration_since(*at) < PROC_TTL);
+            if m.len() >= PROC_MAX {
+                m.clear();
+            }
+        }
+        m.insert(pid as u32, (name, now));
+    }
+}
+
+fn process_name(ctx: &Ctx, pid: u32) -> Option<String> {
+    let mut m = ctx.procs.lock().ok()?;
+    let e = m.get_mut(&pid)?;
+    e.1 = Instant::now();
+    Some(e.0.clone())
+}
+
+fn handle(r: &EVENT_RECORD) {
+    let h = &r.EventHeader;
     // SAFETY: UserContext 是 start() 放進去的 Ctx，生命週期涵蓋整個 ProcessTrace。
     let Some(ctx) = (unsafe { (r.UserContext as *const Ctx).as_ref() }) else {
         return;
     };
+    if h.EventDescriptor.Id == EVENT_PROCESS_START && same_guid(&h.ProviderId, &KERNEL_PROCESS) {
+        remember_process(ctx, r);
+        return;
+    }
+    if h.EventDescriptor.Id != EVENT_QUERY_COMPLETED || !same_guid(&h.ProviderId, &DNS_CLIENT) {
+        return;
+    }
     if ctx.skip_pid == Some(h.ProcessId) {
         return;
     }
@@ -360,6 +446,7 @@ fn handle(r: &EVENT_RECORD) {
         cnames,
         ttl: None,
         pid: Some(h.ProcessId),
+        process: process_name(ctx, h.ProcessId),
         source: Source::Etw,
     };
     if ctx.tx.try_send(ev).is_err() {
@@ -424,6 +511,7 @@ impl CacheTracker {
                 cnames: Vec::new(),
                 ttl: Some(ttl),
                 pid: None,
+                process: None,
                 source: Source::Cache,
             });
             if let Some(ip) = answer {
@@ -470,6 +558,15 @@ mod tests {
         assert_eq!(nx.rcode, "NXDOMAIN");
         // 同一份快照再看一次：沒有新事件
         assert!(t.diff(snap, now).is_empty());
+    }
+
+    #[test]
+    fn image_file_names() {
+        assert_eq!(
+            file_name(r"\Device\HarddiskVolume3\Windows\System32\curl.exe"),
+            "curl.exe"
+        );
+        assert_eq!(file_name("powershell.exe"), "powershell.exe");
     }
 
     #[test]

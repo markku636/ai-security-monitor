@@ -47,6 +47,8 @@ pub struct DnsEvent {
     /// 答案的 TTL（快取快照與封包才有）。
     pub ttl: Option<u32>,
     pub pid: Option<u32>,
+    /// 來源自己知道的程式名稱（Windows 的行程啟動事件）；沒有時由聚合端依 PID 查。
+    pub process: Option<String>,
     pub source: Source,
 }
 
@@ -56,6 +58,9 @@ pub struct DnsRecord {
     /// 這一分鐘的開始（UTC）。
     pub ts: DateTime<Utc>,
     pub name: String,
+    /// 可註冊網域（eTLD+1，依 Public Suffix List）；Hub 依這個彙總。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registrable: Option<String>,
     pub qtype: u16,
     pub rcode: String,
     /// 程式名稱（例 `chrome.exe`）；快取快照與分不出程式的封包是 None。

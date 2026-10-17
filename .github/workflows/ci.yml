@@ -97,8 +97,12 @@ jobs:
               Q='dscacheutil -q host -a name asm-ci-follow.example.com; nslookup asm-ci-follow.example.com'
             fi
             (sleep 6; for i in 1 2 3; do sh -c "$Q" > /dev/null 2>&1 || true; sleep 2; done) &
-            sudo -E timeout 20 $B --json dns --follow > follow.jsonl || true
-            wait
+            # macOS 沒有 timeout 指令：背景跑 20 秒再停掉（sudo 會把 TERM 轉給程式）
+            sudo -E $B --json dns --follow > follow.jsonl &
+            FOLLOW=$!
+            sleep 20
+            sudo kill $FOLLOW 2>/dev/null || true
+            wait || true
             grep asm-ci-follow follow.jsonl | head -3 || true
             jq -se 'map(select(.name == "asm-ci-follow.example.com" and .source == "packet")) | length >= 1' follow.jsonl > /dev/null
           fi

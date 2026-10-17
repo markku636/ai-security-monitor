@@ -125,7 +125,16 @@ impl Aggregator {
             let cutoff = ev.ts - DEDUP_WINDOW;
             self.recent.retain(|_, t| *t >= cutoff);
         }
-        let proc = ev.pid.and_then(|p| self.procs.get(p));
+        // 來源知道名稱（Windows 行程啟動事件）就用它；不然依 PID 查（程式還在跑才查得到）
+        let looked = ev.pid.and_then(|p| self.procs.get(p));
+        let proc = match (&ev.process, looked) {
+            (Some(n), Some(l)) if l.name.eq_ignore_ascii_case(n) => Some(l),
+            (Some(n), _) => Some(super::procname::ProcName {
+                name: n.clone(),
+                exe: None,
+            }),
+            (None, l) => l,
+        };
         let key = Key {
             minute: minute_of(ev.ts),
             name: ev.name.clone(),
@@ -136,6 +145,7 @@ impl Aggregator {
         let rec = self.buckets.entry(key.clone()).or_insert_with(|| DnsRecord {
             ts: key.minute,
             name: key.name.clone(),
+            registrable: super::heuristics::registrable_domain(&key.name).map(str::to_string),
             qtype: key.qtype,
             rcode: key.rcode.clone(),
             process: key.process.clone(),
@@ -196,6 +206,7 @@ mod tests {
             cnames: vec![],
             ttl: Some(60),
             pid,
+            process: None,
             source: Source::Etw,
         }
     }

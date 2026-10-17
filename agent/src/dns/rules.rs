@@ -514,6 +514,7 @@ mod tests {
         DnsRecord {
             ts: DateTime::from_timestamp(1_760_000_000 - 1_760_000_000 % 300 + min * 60, 0).unwrap(),
             name: name.into(),
+            registrable: None,
             qtype,
             rcode: rcode.into(),
             process: proc.map(str::to_string),

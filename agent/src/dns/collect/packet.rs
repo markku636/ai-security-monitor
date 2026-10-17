@@ -141,6 +141,7 @@ pub fn event_from_response(payload: &[u8], ts: DateTime<Utc>, pid: Option<u32>) 
         cnames,
         ttl: None,
         pid,
+        process: None,
         source: Source::Packet,
     })
 }

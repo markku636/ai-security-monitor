@@ -1,9 +1,10 @@
 {
-  "agent_id": "6f1c2e7a-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
   "records": [
     {
       "ts": "2026-10-17T09:30:00Z",
       "name": "updates.example.net",
+      "registrable": "example.net",
       "qtype": 1,
       "rcode": "NOERROR",
       "process": "updater.exe",
@@ -21,6 +22,7 @@
     {
       "ts": "2026-10-17T09:31:00Z",
       "name": "kqfcpqbyqllgbr.example",
+      "registrable": "kqfcpqbyqllgbr.example",
       "qtype": 1,
       "rcode": "NXDOMAIN",
       "count": 1,
