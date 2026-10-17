@@ -5,6 +5,7 @@ import { FilterChip, FilterRow } from '@/components/ui/Filters';
 import { requireAdmin } from '@/lib/auth/require';
 import { HostFilter } from '@/components/ui/HostFilter';
 import { getT } from '@/lib/i18n/server';
+import { cachedRisks } from '@/lib/ipintel/service';
 import { clampInt, strParam, toQuery } from '@/lib/queries/params';
 import { newDestinations, processActivity, topDestinations } from '@/lib/queries/traffic';
 
@@ -22,6 +23,7 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
     topDestinations({ days, agentId, limit: 50 }),
     processActivity(agentId, 20),
   ]);
+  const risks = await cachedRisks([...risky, ...fresh, ...top].map((d) => d.remoteIp));
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
@@ -47,7 +49,7 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
       {risky.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('危險與可疑目的地')}</h2>
-          <DestinationTable t={t} rows={risky} />
+          <DestinationTable t={t} rows={risky} risks={risks} />
         </section>
       ) : null}
       {procs.length ? (
@@ -59,13 +61,13 @@ export default async function TrafficPage({ searchParams }: { searchParams: Prom
       {fresh.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('24 小時內新出現的目的地')}</h2>
-          <DestinationTable t={t} rows={fresh.map((d) => ({ ...d, asn: null, lastSeenAt: d.firstSeenAt, seenCount: 1 }))} />
+          <DestinationTable t={t} rows={fresh.map((d) => ({ ...d, asn: null, lastSeenAt: d.firstSeenAt, seenCount: 1 }))} risks={risks} />
         </section>
       ) : null}
       {top.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('最常連的目的地')}</h2>
-          <DestinationTable t={t} rows={top} />
+          <DestinationTable t={t} rows={top} risks={risks} />
         </section>
       ) : null}
       <GeoAttribution t={t} />

@@ -8,6 +8,7 @@ import { Gauge } from '@/components/ui/Gauge';
 import { ScorePill } from '@/components/ui/Severity';
 import { endpoint, since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
+import type { IpRisk } from '@/lib/ipintel/types';
 import type { listAgents } from '@/lib/queries/agents';
 import type { inboundAttackers, listConnections } from '@/lib/queries/connections';
 import type { topIntelFeeds } from '@/lib/queries/intel';
@@ -42,7 +43,7 @@ function groupRisky(items: RiskyResult['items'], max: number) {
   return [...groups.values()].slice(0, max);
 }
 
-export function RiskyConnectionsCard({ t, risky }: { t: TFn; risky: RiskyResult }) {
+export function RiskyConnectionsCard({ t, risky, risks = {} }: { t: TFn; risky: RiskyResult; risks?: Record<string, IpRisk> }) {
   const empty = <p className="text-sm text-slate-500">{t('目前沒有可疑或危險的連線。')}</p>;
   const rows = groupRisky(risky.items, 8);
   return (
@@ -54,7 +55,7 @@ export function RiskyConnectionsCard({ t, risky }: { t: TFn; risky: RiskyResult 
             <div className="flex flex-wrap items-center gap-2">
               <VerdictChip verdict={c.verdict} t={t} />
               <DirectionBadge direction={c.direction} t={t} />
-              <IpLink ip={c.remoteIp} className="font-mono text-xs">
+              <IpLink ip={c.remoteIp} className="font-mono text-xs" risk={c.remoteIp ? risks[c.remoteIp] : undefined} t={t}>
                 {endpoint(c.remoteIp ?? c.localIp, c.remotePort ?? c.localPort)}
               </IpLink>
               <span className="text-xs text-slate-500">
@@ -117,14 +118,14 @@ export function IntelFeedsCard({ t, feeds }: { t: TFn; feeds: Feeds }) {
 
 type Attackers = Awaited<ReturnType<typeof inboundAttackers>>;
 
-export function AttackersCard({ t, attackers }: { t: TFn; attackers: Attackers }) {
+export function AttackersCard({ t, attackers, risks = {} }: { t: TFn; attackers: Attackers; risks?: Record<string, IpRisk> }) {
   return (
     <Card title={t('對內攻擊來源')}>
       <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
         {attackers.map((a) => (
           <li key={a.remoteIp} className="flex flex-wrap items-center gap-2 py-2">
             <VerdictChip verdict={a.worst} t={t} />
-            <IpLink ip={a.remoteIp} className="font-mono text-xs">
+            <IpLink ip={a.remoteIp} className="font-mono text-xs" risk={risks[a.remoteIp]} t={t}>
               {a.remoteIp}
             </IpLink>
             <span className="text-xs text-slate-500">

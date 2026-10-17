@@ -1,8 +1,10 @@
-// 可疑／危險 IP 排名（連線頁上方；server component）。
+// 可疑／危險 IP 排名（連線頁上方；server component）。勾選與批次操作在 IpBatchSelect（client）。
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
+import { IpBatchBar, IpSelectAll, IpSelectCheckbox, IpSelectionProvider } from '@/components/security/IpBatchSelect';
 import { IpLink, ipHref } from '@/components/security/IpLink';
+import { IpRiskBadge, IpRiskLegend } from '@/components/security/IpRisk';
 import { Card } from '@/components/ui/Card';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
@@ -73,13 +75,29 @@ export function RiskyIpRanking({
       }
     >
       {items.length ? (
+        <IpSelectionProvider rows={items.map((r) => ({ ip: r.remoteIp, isPublic: r.risk.kind !== 'private' }))}>
+        <IpBatchBar />
+        <div className="mb-2">
+          <IpRiskLegend t={t} />
+        </div>
         <div className="-mx-2 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
+                <th className={`${TH} w-8`}>
+                  <IpSelectAll />
+                </th>
                 <th className={TH}>#</th>
                 <SortTh k="verdict" sort={sort} hrefFor={sortHref}>
                   {t('判定')}
+                </SortTh>
+                <SortTh
+                  k="risk"
+                  sort={sort}
+                  hrefFor={sortHref}
+                  title={t('外部威脅情資（AbuseIPDB、GreyNoise 等第三方資料庫）算出的風險分數 0–100，越高越可能是惡意來源；「—」是還沒查過，勾選後按「查詢外部情資」就會有')}
+                >
+                  {t('外部風險')} ⓘ
                 </SortTh>
                 <SortTh k="ip" sort={sort} hrefFor={sortHref}>
                   {t('遠端 IP')}
@@ -113,12 +131,18 @@ export function RiskyIpRanking({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((r) => (
                 <tr key={r.remoteIp}>
+                  <td className={TD}>
+                    <IpSelectCheckbox ip={r.remoteIp} />
+                  </td>
                   <td className={`${TD} tabular-nums text-slate-500`}>{r.rank}</td>
                   <td className={TD}>
                     <VerdictChip verdict={r.worst} t={t} />
                   </td>
                   <td className={TD}>
-                    <IpLink ip={r.remoteIp} className="font-mono text-xs">
+                    <IpRiskBadge t={t} risk={r.risk} />
+                  </td>
+                  <td className={TD}>
+                    <IpLink ip={r.remoteIp} className="font-mono text-xs" risk={r.risk} t={t}>
                       {r.remoteIp}
                     </IpLink>
                   </td>
@@ -158,6 +182,7 @@ export function RiskyIpRanking({
             </tbody>
           </table>
         </div>
+        </IpSelectionProvider>
       ) : (
         <p className="text-sm text-slate-500">{t('目前沒有被判定可疑或危險的遠端 IP。')}</p>
       )}

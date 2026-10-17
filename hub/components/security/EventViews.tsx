@@ -1,8 +1,10 @@
 // 當機與資安事件、流量目的地的表格（server component，只吃 t）。
 import Link from 'next/link';
 import { IpLink, ipHref } from '@/components/security/IpLink';
+import { IpRiskIcon } from '@/components/security/IpRisk';
 import { DirectionBadge, SourceBadge, VerdictChip } from '@/components/security/Verdict';
 import { since } from '@/lib/format';
+import type { IpRisk } from '@/lib/ipintel/types';
 import type { TFn } from '@/lib/i18n/core';
 import type { recentCrashes, securityHits } from '@/lib/queries/events';
 import type { processActivity, topDestinations } from '@/lib/queries/traffic';
@@ -117,7 +119,7 @@ const SEV_TONE: Record<string, string> = {
   info: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
-export function SecurityTable({ t, rows, showHost = true }: { t: TFn; rows: Hit[]; showHost?: boolean }) {
+export function SecurityTable({ t, rows, showHost = true, risks = {} }: { t: TFn; rows: Hit[]; showHost?: boolean; risks?: Record<string, IpRisk> }) {
   return (
     <div className={TABLE}>
       <table className="w-full text-left text-sm">
@@ -141,7 +143,11 @@ export function SecurityTable({ t, rows, showHost = true }: { t: TFn; rows: Hit[
               <td className="px-3 py-2 whitespace-nowrap">{securityRuleLabel(t, h.rule)}</td>
               {showHost ? <td className="px-3 py-2 whitespace-nowrap">{h.hostname}</td> : null}
               <td className="px-3 py-2 font-mono text-xs">
-                {h.sourceIp ? <IpLink ip={h.sourceIp}>{h.sourceIp}</IpLink> : null}
+                {h.sourceIp ? (
+                  <IpLink ip={h.sourceIp} risk={risks[h.sourceIp]} t={t}>
+                    {h.sourceIp}
+                  </IpLink>
+                ) : null}
                 {h.sourceIp && h.userName ? ' · ' : ''}
                 {h.userName ?? ''}
                 {Array.isArray(h.intel) && h.intel.length ? (
@@ -165,7 +171,7 @@ export function SecurityTable({ t, rows, showHost = true }: { t: TFn; rows: Hit[
 
 type Dest = Awaited<ReturnType<typeof topDestinations>>[number];
 
-export function DestinationTable({ t, rows, showHost = true }: { t: TFn; rows: Dest[]; showHost?: boolean }) {
+export function DestinationTable({ t, rows, showHost = true, risks = {} }: { t: TFn; rows: Dest[]; showHost?: boolean; risks?: Record<string, IpRisk> }) {
   return (
     <div className={TABLE}>
       <table className="w-full text-left text-sm">
@@ -191,9 +197,12 @@ export function DestinationTable({ t, rows, showHost = true }: { t: TFn; rows: D
                 <DirectionBadge direction={d.direction} t={t} />
               </td>
               <td className="px-3 py-2 font-mono text-xs">
-                <Link className="hover:underline" href={ipHref(d.remoteIp)}>
-                  {d.remoteIp}:{d.remotePort}
-                </Link>
+                <span className="inline-flex items-center gap-1">
+                  <IpRiskIcon t={t} risk={risks[d.remoteIp]} />
+                  <Link className="hover:underline" href={ipHref(d.remoteIp)}>
+                    {d.remoteIp}:{d.remotePort}
+                  </Link>
+                </span>
               </td>
               {showHost ? <td className="px-3 py-2 whitespace-nowrap">{d.hostname}</td> : null}
               <td className="px-3 py-2 text-xs">{d.processName ?? '—'}</td>

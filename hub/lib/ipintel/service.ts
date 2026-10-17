@@ -2,7 +2,7 @@
 // 原則：hub 不會自動把 IP 送給第三方，只有管理員在 IP 分析頁按「查詢」（POST /api/v1/ip-intel）才會打外部 API。
 import dns from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { destinations, intelHits, ipReputation, settings } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 import { readEnv } from '@/lib/env';
@@ -20,7 +20,7 @@ import {
   type ProviderMeta,
 } from './providers';
 import { scoreIp } from './score';
-import { PROVIDER_IDS, type IpIntelView, type LocalHit, type Profile, type ProviderId, type ProviderResult, type ProviderView, type SourcesConfigStatus } from './types';
+import { PROVIDER_IDS, type BatchLookupItem, type IpIntelView, type IpRisk, type LocalHit, type Profile, type ProviderId, type ProviderResult, type ProviderView, type SourcesConfigStatus } from './types';
 
 const CONFIG_KEY = 'ipintel.config';
 const QUOTA_KEY = 'ipintel.quota';
@@ -108,6 +108,29 @@ async function writeQuota(q: { date: string; used: Partial<Record<ProviderId, nu
     .onConflictDoUpdate({ target: settings.key, set: { value: q, updatedAt: new Date(), updatedBy: 'system' } });
 }
 
+// 同一個行程裡額度的讀改寫排隊進行（批次查詢會並行好幾個 IP）。
+let quotaChain: Promise<unknown> = Promise.resolve();
+
+/** 預留這些來源各 1 次額度；回傳拿到額度的來源（→ 預留後的已用次數），額度用完的不在裡面。 */
+async function reserveQuota(want: ProviderMeta[], cfg: IpIntelConfig): Promise<Map<ProviderId, number>> {
+  const run = quotaChain.then(async () => {
+    const quota = await readQuota();
+    const granted = new Map<ProviderId, number>();
+    for (const p of want) {
+      const { key } = keyFor(p, cfg);
+      const limit = key && p.quotaWithKey ? p.quotaWithKey : p.quota;
+      const used = quota.used[p.id] ?? 0;
+      if (used >= limit) continue;
+      quota.used[p.id] = used + 1;
+      granted.set(p.id, used + 1);
+    }
+    if (granted.size) await writeQuota(quota);
+    return granted;
+  });
+  quotaChain = run.catch(() => undefined);
+  return run;
+}
+
 // ---- 查詢 ----
 
 export interface LookupDeps {
@@ -141,22 +164,28 @@ export async function lookupIp(
   const cfg = await getConfig();
   const [row] = await db.select().from(ipReputation).where(eq(ipReputation.ip, ip)).limit(1);
   const results = { ...((row?.results ?? {}) as Partial<Record<ProviderId, ProviderResult>>) };
-  const quota = await readQuota();
+  // 先決定要打哪些來源，再一次預留額度（批次查詢會同時跑好幾個 IP，額度的讀改寫要排隊才不會少算）
+  const want: ProviderMeta[] = [];
+  for (const p of PROVIDERS) {
+    if (cfg.disabled.includes(p.id) || (v6 && !p.ipv6)) continue;
+    const { key } = keyFor(p, cfg);
+    if (p.key === 'required' && !key) continue;
+    const prev = results[p.id];
+    if (!opts.refresh && prev?.ok && Date.now() - Date.parse(prev.fetchedAt) < p.ttlMs) continue;
+    want.push(p);
+  }
+  const granted = want.length ? await reserveQuota(want, cfg) : new Map<ProviderId, number>();
   const queried: ProviderId[] = [];
 
   await Promise.all(
-    PROVIDERS.map(async (p) => {
-      if (cfg.disabled.includes(p.id) || (v6 && !p.ipv6)) return;
+    want.map(async (p) => {
       const { key } = keyFor(p, cfg);
-      if (p.key === 'required' && !key) return;
       const prev = results[p.id];
-      if (!opts.refresh && prev?.ok && Date.now() - Date.parse(prev.fetchedAt) < p.ttlMs) return;
-      const limit = key && p.quotaWithKey ? p.quotaWithKey : p.quota;
-      if ((quota.used[p.id] ?? 0) >= limit) {
+      if (!granted.has(p.id)) {
+        const limit = key && p.quotaWithKey ? p.quotaWithKey : p.quota;
         results[p.id] = { ok: false, reason: 'quota-exhausted', detail: `${limit}/day`, fetchedAt: new Date().toISOString() };
         return;
       }
-      quota.used[p.id] = (quota.used[p.id] ?? 0) + 1;
       queried.push(p.id);
       const call = { ip, key, fetch: f, timeoutMs: TIMEOUT_MS };
       const r =
@@ -174,7 +203,6 @@ export async function lookupIp(
     }),
   );
 
-  if (queried.length) await writeQuota(quota);
   const now = new Date();
   await db
     .insert(ipReputation)
@@ -293,4 +321,103 @@ export async function getIpIntelView(input: string): Promise<IpIntelView> {
     profile,
     score: scoreIp(profile, localHits, queried),
   };
+}
+
+// ---- 批次 ----
+
+export const BATCH_MAX = 50;
+export const BATCH_CONCURRENCY = 3;
+
+/**
+ * 一次查多個 IP（呼叫端已驗證格式、去重）：最多同時查 BATCH_CONCURRENCY 個，快取與每日額度照常；
+ * 內網／保留位址直接略過、某個 IP 失敗不影響其他 IP。每個來源本來就有逾時，慢的來源不會卡住整批。
+ */
+export async function lookupBatch(
+  ips: string[],
+  opts: { refresh?: boolean; actor: string; deps?: LookupDeps; concurrency?: number; lookup?: typeof lookupIp },
+): Promise<BatchLookupItem[]> {
+  const lookup = opts.lookup ?? lookupIp;
+  if (!lookupsEnabled()) throw new LookupsDisabled();
+  const out: BatchLookupItem[] = new Array(ips.length);
+  const seen = new Set<string>();
+  const todo: number[] = [];
+  ips.forEach((raw, i) => {
+    const ip = normalizeIp(raw);
+    if (seen.has(ip)) out[i] = { ip, score: null, level: null, cached: true, skipped: 'duplicate' };
+    else if (!isPublicIp(ip)) out[i] = { ip, score: null, level: null, cached: true, skipped: 'not_public' };
+    else todo.push(i);
+    seen.add(ip);
+  });
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const i = todo[next++];
+      const ip = normalizeIp(ips[i]);
+      try {
+        const r = await lookup(ip, { refresh: opts.refresh, actor: opts.actor, deps: opts.deps });
+        out[i] = { ip, score: r.view.score?.score ?? null, level: r.view.score?.level ?? null, cached: r.queried.length === 0 };
+      } catch (e) {
+        out[i] = { ip, score: null, level: null, cached: false, error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200) };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(opts.concurrency ?? BATCH_CONCURRENCY, todo.length)) }, worker));
+  return out;
+}
+
+/**
+ * 多個 IP 的快取風險（清單頁 IP 旁的圖示、排名的「外部風險」欄）：只讀 ip_reputation／intel_hits／destinations，
+ * 用跟 IP 分析頁同一套 mergeProfile＋scoreIp 算分。key 是傳進來的原字串。
+ */
+export async function cachedRiskMap(input: (string | null | undefined)[]): Promise<Map<string, IpRisk>> {
+  const out = new Map<string, IpRisk>();
+  const norm = new Map<string, string>();
+  for (const raw of input) {
+    if (!raw || norm.has(raw) || !isIP(normalizeIp(raw))) continue;
+    norm.set(raw, normalizeIp(raw));
+  }
+  const pub = [...new Set([...norm.values()].filter(isPublicIp))];
+  const db = getDb();
+  const rows = pub.length
+    ? await db.select({ ip: ipReputation.ip, results: ipReputation.results, queriedAt: ipReputation.queriedAt }).from(ipReputation).where(inArray(ipReputation.ip, pub))
+    : [];
+  const queried = rows.map((r) => r.ip);
+  const [hitRows, geoRows] = queried.length
+    ? await Promise.all([
+        db
+          .select({
+            ip: intelHits.indicator,
+            feedId: intelHits.feedId,
+            feedName: sql<string>`max(${intelHits.feedName})`,
+            vendor: sql<string>`max(${intelHits.vendor})`,
+            confidence: sql<number>`max(${intelHits.confidence})::int`,
+            sourceUrl: sql<string>`max(${intelHits.sourceUrl})`,
+          })
+          .from(intelHits)
+          .where(inArray(intelHits.indicator, queried))
+          .groupBy(intelHits.indicator, intelHits.feedId),
+        db
+          .selectDistinctOn([destinations.remoteIp], { ip: destinations.remoteIp, country: destinations.country, asn: destinations.asn, org: destinations.org })
+          .from(destinations)
+          .where(inArray(destinations.remoteIp, queried))
+          .orderBy(destinations.remoteIp, desc(destinations.lastSeenAt)),
+      ])
+    : [[], []];
+  const hits = new Map<string, LocalHit[]>();
+  for (const h of hitRows) hits.set(h.ip, [...(hits.get(h.ip) ?? []), { feedId: h.feedId, feedName: h.feedName, vendor: h.vendor, confidence: Number(h.confidence), sourceUrl: h.sourceUrl }]);
+  const geo = new Map(geoRows.map((g) => [g.ip, { country: g.country, asn: g.asn, asnOrg: g.org } as Profile]));
+  const scored = new Map<string, IpRisk>();
+  for (const r of rows) {
+    const results = (r.results ?? {}) as Partial<Record<ProviderId, ProviderResult>>;
+    const any = Object.values(results).some((x) => x?.ok);
+    const s = scoreIp(mergeProfile(results, geo.get(r.ip)), hits.get(r.ip) ?? [], any);
+    scored.set(r.ip, s ? { kind: 'scored', score: s.score, level: s.level, queriedAt: r.queriedAt.toISOString() } : { kind: 'unqueried' });
+  }
+  for (const [raw, ip] of norm) out.set(raw, !isPublicIp(ip) ? { kind: 'private' } : (scored.get(ip) ?? { kind: 'unqueried' }));
+  return out;
+}
+
+/** 同上，回傳一般物件（給 props 用）。 */
+export async function cachedRisks(input: (string | null | undefined)[]): Promise<Record<string, IpRisk>> {
+  return Object.fromEntries(await cachedRiskMap(input));
 }

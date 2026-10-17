@@ -121,3 +121,23 @@ export interface SourcesConfigStatus {
   lookupsEnabled: boolean;
   providers: SourceStatus[];
 }
+
+/**
+ * 清單頁 IP 旁的風險圖示用：快取裡的外部情資分數（不打外部 API）。
+ * private＝內網／保留位址（設計上不查）；unqueried＝還沒查過外部情資。
+ */
+export type IpRisk =
+  | { kind: 'private' }
+  | { kind: 'unqueried' }
+  | { kind: 'scored'; score: number; level: RiskLevel; queriedAt: string };
+
+/** 批次查詢外部情資：每個 IP 的結果。 */
+export interface BatchLookupItem {
+  ip: string;
+  score: number | null;
+  level: RiskLevel | null;
+  /** true＝這次沒有打任何外部來源（全部用快取）。 */
+  cached: boolean;
+  skipped?: 'not_public' | 'duplicate';
+  error?: string;
+}

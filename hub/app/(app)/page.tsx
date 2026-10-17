@@ -9,6 +9,7 @@ import { pingDb, type DbHealth } from '@/lib/db';
 import { env, isOpenMode } from '@/lib/env';
 import type { TFn } from '@/lib/i18n/core';
 import { getT } from '@/lib/i18n/server';
+import { cachedRisks } from '@/lib/ipintel/service';
 import { averageScore, fleetSummary, listAgents } from '@/lib/queries/agents';
 import { inboundAttackers, listConnections } from '@/lib/queries/connections';
 import { topIntelFeeds } from '@/lib/queries/intel';
@@ -59,6 +60,7 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
     isAdmin ? inboundAttackers(5) : [],
   ]);
   if (!fleet.agents.total) return <NoAgents t={t} />;
+  const risks = isAdmin ? await cachedRisks([...(risky?.items ?? []).map((c) => c.remoteIp), ...attackers.map((a) => a.remoteIp)]) : {};
   return (
     <>
       <div className="grid gap-4 lg:grid-cols-3">
@@ -81,9 +83,9 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
         ) : null}
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">
-        {risky ? <RiskyConnectionsCard t={t} risky={risky} /> : null}
+        {risky ? <RiskyConnectionsCard t={t} risky={risky} risks={risks} /> : null}
         <IntelFeedsCard t={t} feeds={feeds} />
-        {attackers.length ? <AttackersCard t={t} attackers={attackers} /> : null}
+        {attackers.length ? <AttackersCard t={t} attackers={attackers} risks={risks} /> : null}
         <WorstHostsCard t={t} agents={list} linkable={isAdmin} />
       </div>
     </>

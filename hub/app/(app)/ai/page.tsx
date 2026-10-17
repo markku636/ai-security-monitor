@@ -3,6 +3,7 @@ import { AiConsole } from '@/components/ai/AiConsole';
 import { Card } from '@/components/ui/Card';
 import { aiAnalyses } from '@/drizzle/schema';
 import { PROVIDERS, resolveBin } from '@/lib/ai/run';
+import { AI_MAX_IPS, splitIpList } from '@/lib/ai/scope';
 import { requireAdmin } from '@/lib/auth/require';
 import { getDb } from '@/lib/db';
 import { since } from '@/lib/format';
@@ -16,7 +17,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
   await requireAdmin();
   const { t } = await getT();
   const sp = await searchParams;
-  const scope = ['fleet', 'connections', 'indicator', 'agent', 'traffic', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
+  const scope = ['fleet', 'connections', 'indicator', 'ips', 'agent', 'traffic', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
   const [agents, recent] = await Promise.all([
     listAgents(),
     getDb().select().from(aiAnalyses).orderBy(desc(aiAnalyses.createdAt)).limit(20),
@@ -36,6 +37,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
         initialScope={scope}
         initialAgent={strParam(sp, 'agent_id', 64)}
         initialIndicator={strParam(sp, 'q', 64)}
+        initialIps={splitIpList(strParam(sp, 'ips', 2000)).slice(0, AI_MAX_IPS).join(', ')}
       />
       {recent.length ? (
         <Card title={t('最近的分析')}>

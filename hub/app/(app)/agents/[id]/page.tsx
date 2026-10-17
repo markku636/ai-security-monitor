@@ -13,6 +13,7 @@ import { requireAdmin } from '@/lib/auth/require';
 import { bytes, since, utc } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import { getT } from '@/lib/i18n/server';
+import { cachedRisks } from '@/lib/ipintel/service';
 import { agentReports, getAgent } from '@/lib/queries/agents';
 import { riskyDestinations } from '@/lib/queries/connections';
 import { latestSummary, recentCrashes, securityHits } from '@/lib/queries/events';
@@ -49,6 +50,7 @@ function StatusBadge({ t, a }: { t: TFn; a: Agent }) {
 
 async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
   const [risky, history] = await Promise.all([riskyDestinations(10, a.id), agentReports(a.id, 60)]);
+  const risks = await cachedRisks(risky.map((d) => d.remoteIp));
   const trend = history
     .slice()
     .reverse()
@@ -104,7 +106,7 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
               <li key={`${d.remoteIp}-${d.remotePort}-${d.direction}`} className="flex flex-wrap items-center gap-2 py-2">
                 <VerdictChip verdict={d.worstVerdict} t={t} />
                 <DirectionBadge direction={d.direction} t={t} />
-                <IpLink ip={d.remoteIp} className="font-mono text-xs">
+                <IpLink ip={d.remoteIp} className="font-mono text-xs" risk={risks[d.remoteIp]} t={t}>
                   {d.remoteIp}:{d.remotePort}
                 </IpLink>
                 <span className="text-xs text-slate-500">
@@ -129,6 +131,7 @@ async function EventsTab({ t, a }: { t: TFn; a: Agent }) {
     securityHits({ agentId: a.id, days: 90, limit: 100 }),
     latestSummary(a.id, 'events'),
   ]);
+  const risks = await cachedRisks(sec.map((h) => h.sourceIp));
   const s = (summary?.summary ?? {}) as {
     needs_admin?: string[];
     top_error_sources?: { provider: string; event_id: number; count: number; sample?: string }[];
@@ -147,7 +150,7 @@ async function EventsTab({ t, a }: { t: TFn; a: Agent }) {
       {sec.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('資安事件')}</h2>
-          <SecurityTable t={t} rows={sec} showHost={false} />
+          <SecurityTable t={t} rows={sec} showHost={false} risks={risks} />
         </section>
       ) : null}
       {crashes.length ? (
@@ -179,6 +182,7 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
     newDestinations(24, 30, a.id),
     processActivity(a.id, 20),
   ]);
+  const risks = await cachedRisks([...fresh, ...top].map((d) => d.remoteIp));
   if (!top.length && !procs.length) {
     return <EmptyState title={t('還沒有流量資料')}>{t('主機執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>;
   }
@@ -193,13 +197,13 @@ async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
       {fresh.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('24 小時內新出現的目的地')}</h2>
-          <DestinationTable t={t} rows={fresh.map((d) => ({ ...d, asn: null, lastSeenAt: d.firstSeenAt, seenCount: 1 }))} showHost={false} />
+          <DestinationTable t={t} rows={fresh.map((d) => ({ ...d, asn: null, lastSeenAt: d.firstSeenAt, seenCount: 1 }))} showHost={false} risks={risks} />
         </section>
       ) : null}
       {top.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('最常連的目的地（7 天）')}</h2>
-          <DestinationTable t={t} rows={top} showHost={false} />
+          <DestinationTable t={t} rows={top} showHost={false} risks={risks} />
         </section>
       ) : null}
     </div>

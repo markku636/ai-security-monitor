@@ -1,4 +1,5 @@
 import { CrashTable, SecurityTable, crashKindLabel } from '@/components/security/EventViews';
+import { IpRiskIcon } from '@/components/security/IpRisk';
 import { SourceBadge } from '@/components/security/Verdict';
 import { Card, Stat } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -7,6 +8,7 @@ import { requireAdmin } from '@/lib/auth/require';
 import { HostFilter } from '@/components/ui/HostFilter';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
+import { cachedRisks } from '@/lib/ipintel/service';
 import { bruteForceSources, crashCounts, recentCrashes, securityHits, topBugchecks } from '@/lib/queries/events';
 import { clampInt, strParam, toQuery } from '@/lib/queries/params';
 
@@ -29,6 +31,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     securityHits({ days, agentId, minSeverity: 'medium', rules: undefined, limit: 50 }),
   ]);
   const shown = KINDS.filter((k) => counts[k]);
+  const risks = await cachedRisks([...brute.map((b) => b.sourceIp), ...sec.map((h) => h.sourceIp)]);
   const empty = !crashes.length && !sec.length && !brute.length;
   return (
     <div className="space-y-4">
@@ -82,9 +85,12 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
               {brute.map((b) => (
                 <li key={b.sourceIp} className="flex flex-col gap-1 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <a className="font-mono text-xs hover:underline" href={`/ip/${encodeURIComponent(b.sourceIp)}`}>
-                      {b.sourceIp}
-                    </a>
+                    <span className="inline-flex items-center gap-1">
+                      <IpRiskIcon t={t} risk={risks[b.sourceIp]} />
+                      <a className="font-mono text-xs hover:underline" href={`/ip/${encodeURIComponent(b.sourceIp)}`}>
+                        {b.sourceIp}
+                      </a>
+                    </span>
                     <span className="text-xs text-slate-500">
                       {t('{n} 次失敗登入、{h} 台主機，最近 {at}', { n: b.attempts, h: b.hosts, at: since(b.last, t) })}
                     </span>
@@ -105,7 +111,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       {sec.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('資安事件（中以上）')}</h2>
-          <SecurityTable t={t} rows={sec} />
+          <SecurityTable t={t} rows={sec} risks={risks} />
         </section>
       ) : null}
       {crashes.length ? (

@@ -718,4 +718,57 @@ export const en: Record<string, string> = {
   '完成：{updated} 個有新資料、{same} 個沒變、{bad} 個失敗；主機會在下次心跳（約 1 分鐘內）更新。': 'Done: {updated} updated, {same} unchanged, {bad} failed; hosts will update on their next heartbeat (within about a minute).',
   '同步中…（最多約 1 分鐘）': 'Syncing… (up to about a minute)',
   '立即同步情資': 'Sync threat intel now',
+
+  // ---- batch IP analysis / risk icons ----
+  '一次分析多個 IP': 'Analyze several IPs',
+  '用逗號或空白分隔；在連線頁的「可疑 IP 排名」勾選後按「請 AI 分析選取的 IP」會自動帶入':
+    'Separate with commas or spaces; ticking IPs in "Suspicious IP ranking" on the Connections page and pressing "Ask AI about the selected IPs" fills this in for you',
+  'IP 清單（最多 {max} 個）': 'IP list (up to {max})',
+  '{n} 個 IP；AI 會拿到每個 IP 的連線紀錄、黑名單命中、備註與外部情資快取':
+    '{n} IPs; the AI gets each IP\'s connection records, blocklist hits, notes and cached external intel',
+  '選取 {ip}': 'Select {ip}',
+  '全選本頁': 'Select all on this page',
+  '選取的都是內網或保留位址，這些不會送給外部情資來源查詢。':
+    'All selected IPs are private or reserved addresses; those are never sent to external intel sources.',
+  '外部查詢已被關閉（ASA_HUB_IP_LOOKUPS=off），沒有送出任何 IP。': 'External lookups are turned off (ASA_HUB_IP_LOOKUPS=off); no IP was sent.',
+  '查詢失敗：{error}': 'Lookup failed: {error}',
+  '這一頁都是內網或保留位址，這些不會送給外部情資來源查詢。':
+    'Every IP on this page is a private or reserved address; those are never sent to external intel sources.',
+  '要把這一頁 {n} 個公網 IP 送給已啟用的外部情資來源查詢嗎？會用掉各來源的每日免費額度（查過、還在快取內的不會重打）。':
+    'Send the {n} public IPs on this page to the enabled external intel sources? This uses each source\'s free daily quota (IPs still in the cache are not looked up again).',
+  '批次操作': 'Batch actions',
+  '已選 {n} 個 IP': '{n} IPs selected',
+  '把勾選的公網 IP 送給已啟用的外部情資來源（AbuseIPDB、GreyNoise 等）查風險分數；內網位址會自動略過。':
+    'Send the ticked public IPs to the enabled external intel sources (AbuseIPDB, GreyNoise, …) to get a risk score; private addresses are skipped automatically.',
+  '查詢外部情資（{n} 個）': 'Look up external intel ({n})',
+  'AI 一次最多分析 {max} 個 IP，請少勾一些': 'The AI can analyze at most {max} IPs at a time; untick some',
+  '請 AI 分析選取的 IP': 'Ask AI about the selected IPs',
+  '開 AI 助手，把這些 IP 的連線紀錄、黑名單命中、備註與外部情資一起交給 AI 判讀（唯讀，不會改任何設定）。':
+    'Open the AI assistant with these IPs\' connection records, blocklist hits, notes and external intel (read-only; nothing is changed).',
+  '清除選取': 'Clear selection',
+  '勾選左邊的方框可以一次查多個 IP，或：': 'Tick the boxes on the left to work on several IPs at once, or:',
+  '全部查詢（前 {n} 名）': 'Look up all (top {n})',
+  '平常查過的 IP 在快取有效期間（約一天）不會重打外部來源；勾這個會強制重新查詢，會多用額度。':
+    'IPs looked up recently (within about a day) are normally served from the cache; tick this to force a fresh lookup, which uses more quota.',
+  '略過快取重查': 'Ignore cache',
+  '已查 {done}／{total}': 'Looked up {done}/{total}',
+  '完成：新查 {queried} 個、用快取 {cached} 個、略過 {skipped} 個、失敗 {errors} 個。分數已更新在「外部風險」欄。':
+    'Done: {queried} looked up, {cached} from cache, {skipped} skipped, {errors} failed. Scores are now in the "External risk" column.',
+  '極高': 'critical',
+  '內網或保留位址：不會送給外部情資來源查詢': 'Private or reserved address: never sent to external intel sources',
+  '尚未查詢外部情資，點進去或在排名勾選後批次查詢':
+    'External intel not looked up yet; open the IP, or tick it in the ranking and look it up in a batch',
+  '外部風險：{level}（{score} 分，{at}查詢）': 'External risk: {level} ({score} points, looked up {at})',
+  '內網': 'Private',
+  '低（0–24 分）': 'Low (0–24)',
+  '中（25–49 分）': 'Medium (25–49)',
+  '高（50–74 分）': 'High (50–74)',
+  '極高（75–100 分）': 'Critical (75–100)',
+  '尚未查詢': 'Not looked up',
+  'IP 旁的圖示是外部威脅情資（AbuseIPDB、GreyNoise 等第三方資料庫）算出的風險分數 0–100，越高越可能是惡意來源；內網位址不會查，所以不顯示。':
+    'The icon next to an IP is the 0–100 risk score from external threat intel (third-party databases such as AbuseIPDB and GreyNoise); higher means more likely malicious. Private addresses are never looked up, so they have no icon.',
+  '圖示說明': 'Legend',
+  '外部威脅情資（AbuseIPDB、GreyNoise 等第三方資料庫）算出的風險分數 0–100，越高越可能是惡意來源；「—」是還沒查過，勾選後按「查詢外部情資」就會有':
+    '0–100 risk score from external threat intel (third-party databases such as AbuseIPDB and GreyNoise); higher means more likely malicious. "—" means not looked up yet: tick the IP and press "Look up external intel"',
+  '外部風險': 'External risk',
 };

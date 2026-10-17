@@ -5,6 +5,7 @@ import { FilterChip, FilterRow, Pager, SearchBox, toggled } from '@/components/u
 import { HostFilter } from '@/components/ui/HostFilter';
 import { getT } from '@/lib/i18n/server';
 import { DIRECTIONS, listConnections, parseConnectionFilter, VERDICTS, type ConnectionFilter } from '@/lib/queries/connections';
+import { cachedRisks } from '@/lib/ipintel/service';
 import { ipNoteMap } from '@/lib/queries/ipnotes';
 import { toQuery } from '@/lib/queries/params';
 
@@ -30,7 +31,9 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
   const { t } = await getT();
   const f = { ...parseConnectionFilter(params), ...(agentId ? { agentId } : {}) };
   const r = await listConnections(f);
-  const notes = Object.fromEntries(await ipNoteMap(r.items.map((c) => c.remoteIp)));
+  const ips = r.items.map((c) => c.remoteIp);
+  const [noteMap, risks] = await Promise.all([ipNoteMap(ips), cachedRisks(ips)]);
+  const notes = Object.fromEntries(noteMap);
   const showHost = !agentId;
   return (
     <div className="space-y-3">
@@ -85,7 +88,7 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
         </div>
       </div>
       {r.items.length ? (
-        <ConnectionsTable rows={r.items} t={t} showHost={showHost} notes={notes} />
+        <ConnectionsTable rows={r.items} t={t} showHost={showHost} notes={notes} risks={risks} />
       ) : (
         <EmptyState title={t('沒有符合條件的連線')}>{t('換個篩選條件，或等主機下一次回報快照。')}</EmptyState>
       )}

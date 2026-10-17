@@ -7,7 +7,9 @@ import { aiAnalyses } from '@/drizzle/schema';
 import { audit } from '@/lib/audit';
 import { actorOf, apiWrite } from '@/lib/auth/api';
 import type { AiEvent } from '@/lib/ai/events';
+import { buildIpsContext } from '@/lib/ai/context';
 import { PROVIDERS, resolveBin, runAi, running, SCOPE_PROMPTS, SYSTEM_PROMPT, type Provider } from '@/lib/ai/run';
+import { AI_MAX_IPS } from '@/lib/ai/scope';
 import { getDb } from '@/lib/db';
 import { error, parseCookies, readJson, sourceIp } from '@/lib/http';
 import { LANG_COOKIE, resolveLang } from '@/lib/i18n/core';
@@ -19,8 +21,10 @@ export const maxDuration = 900;
 
 const Body = z.object({
   provider: z.enum(['claude', 'codex']).optional(),
-  scope: z.enum(['fleet', 'connections', 'indicator', 'traffic', 'events', 'agent']).default('fleet'),
+  scope: z.enum(['fleet', 'connections', 'indicator', 'ips', 'traffic', 'events', 'agent']).default('fleet'),
   indicator: z.string().max(64).refine((s) => isIP(s) > 0).optional(),
+  /** scope=ips：多個 IP（最多 AI_MAX_IPS 個）。 */
+  ips: z.array(z.string().trim().max(64).refine((s) => isIP(s) > 0)).min(1).max(AI_MAX_IPS).optional(),
   agent_id: z.string().max(64).optional(),
   prompt: z.string().max(4000).optional(),
   max_turns: z.number().int().min(1).max(30).default(12),
@@ -44,11 +48,16 @@ export async function POST(req: Request): Promise<Response> {
   if (!picked?.bin) return error(503, 'no_ai_cli', { hint: 'install and sign in to claude or codex on the hub host' });
   if (body.scope === 'agent' && !body.agent_id) return error(400, 'bad_request', { rule: 'agent_id' });
   if (body.scope === 'indicator' && !body.indicator) return error(400, 'bad_request', { rule: 'indicator' });
+  if (body.scope === 'ips' && !body.ips?.length) return error(400, 'bad_request', { rule: 'ips' });
 
   const lang = resolveLang(parseCookies(req)[LANG_COOKIE], req.headers.get('accept-language'));
   const base = body.prompt?.trim() || (lang === 'en' ? SCOPE_PROMPTS[body.scope].en : SCOPE_PROMPTS[body.scope].zh);
   // 指定裝置時只看那一台（每種範圍都適用）
   let prompt = body.indicator ? `${base}\n\nIP: ${body.indicator}` : base;
+  if (body.scope === 'ips' && body.ips?.length) {
+    const ips = [...new Set(body.ips)];
+    prompt += `\n\nIPs (${ips.length}): ${ips.join(', ')}\n\n${await buildIpsContext(ips, lang)}`;
+  }
   if (body.agent_id) prompt += `\n\n${lang === 'en' ? 'Only look at this host' : '只看這一台主機'}：agent_id: ${body.agent_id}`;
   const id = `ai_${crypto.randomBytes(8).toString('hex')}`;
   const actor = actorOf(who);

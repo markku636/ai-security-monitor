@@ -2,6 +2,8 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { agents, connections, destinations, ipNotes } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
+import { cachedRiskMap } from '@/lib/ipintel/service';
+import type { IpRisk } from '@/lib/ipintel/types';
 import { clampInt, listParam, strParam, type Params } from './params';
 
 export const DIRECTIONS = ['outbound', 'inbound', 'listening', 'local'] as const;
@@ -180,7 +182,7 @@ export async function inboundAttackers(limit = 20) {
 const DEST_WORST = sql`min(case ${destinations.worstVerdict} when 'dangerous' then 0 else 1 end)`;
 
 /** 排名表可排序的欄位（表頭點了就換）。 */
-export const RANK_SORT_KEYS = ['verdict', 'ip', 'seen', 'live', 'hosts', 'port', 'process', 'geo', 'note', 'last'] as const;
+export const RANK_SORT_KEYS = ['verdict', 'risk', 'ip', 'seen', 'live', 'hosts', 'port', 'process', 'geo', 'note', 'last'] as const;
 export type RankSortKey = (typeof RANK_SORT_KEYS)[number];
 export interface RankSort {
   key: RankSortKey;
@@ -189,6 +191,7 @@ export interface RankSort {
 /** 文字欄位第一次點是 A→Z，數字與時間是大→小。 */
 export const RANK_SORT_DEFAULT_DIR: Record<RankSortKey, 'asc' | 'desc'> = {
   verdict: 'desc',
+  risk: 'desc',
   ip: 'asc',
   seen: 'desc',
   live: 'desc',
@@ -207,6 +210,9 @@ export function parseRankSort(p: Params): RankSort {
   return { key, dir };
 }
 
+/** 依外部風險排序時最多先撈幾個 IP 在記憶體裡排（分數是用快取的外部情資即時算的，SQL 排不了）。 */
+const RISK_SORT_CAP = 2000;
+
 /**
  * 可疑／危險 IP 排名：長期目的地表依遠端 IP 跨主機、跨 port 彙總。
  * seen＝被快照看到的累計次數（每次快照每個 ip:port:方向 算一次），live＝最新快照裡仍判定可疑／危險的條數。
@@ -222,6 +228,8 @@ export async function riskyIpRanking(limit = 10, agentId?: string, sort: RankSor
   const seen = sql`sum(${destinations.seenCount})`;
   const sortExpr: Record<RankSortKey, SQL> = {
     verdict: sql`(1 - ${DEST_WORST})`,
+    // 外部風險在下面用快取算完再排；SQL 先用預設順序
+    risk: sql`(1 - ${DEST_WORST})`,
     ip: sql`${destinations.remoteIp}::inet`,
     seen,
     live,
@@ -232,7 +240,12 @@ export async function riskyIpRanking(limit = 10, agentId?: string, sort: RankSor
     note: sql`max(${ipNotes.note})`,
     last: sql`max(${destinations.lastSeenAt})`,
   };
-  const primary = sort.dir === 'asc' ? sql`${sortExpr[sort.key]} asc nulls last` : sql`${sortExpr[sort.key]} desc nulls last`;
+  const byRisk = sort.key === 'risk';
+  const primary = byRisk
+    ? sql`${sortExpr.risk} desc`
+    : sort.dir === 'asc'
+      ? sql`${sortExpr[sort.key]} asc nulls last`
+      : sql`${sortExpr[sort.key]} desc nulls last`;
   const [rows, total] = await Promise.all([
     db
       .select({
@@ -256,18 +269,39 @@ export async function riskyIpRanking(limit = 10, agentId?: string, sort: RankSor
       .where(and(...conds))
       .groupBy(destinations.remoteIp)
       .orderBy(primary, DEST_WORST, desc(seen), desc(sql`max(${destinations.lastSeenAt})`), destinations.remoteIp)
-      .limit(limit),
+      .limit(byRisk ? RISK_SORT_CAP : limit),
     db
       .select({ n: sql<number>`count(distinct ${destinations.remoteIp})::int` })
       .from(destinations)
       .innerJoin(agents, eq(agents.id, destinations.agentId))
       .where(and(...conds)),
   ]);
+  const risks = await cachedRiskMap(rows.map((r) => r.remoteIp));
+  const riskOf = (ip: string): IpRisk => risks.get(ip) ?? { kind: 'unqueried' };
+  let picked = rows;
+  if (byRisk) {
+    // 沒查過／內網的一律排最後；同分維持預設順序（Array.sort 是穩定的）
+    const val = (ip: string) => {
+      const r = riskOf(ip);
+      return r.kind === 'scored' ? r.score : null;
+    };
+    picked = [...rows]
+      .sort((a, b) => {
+        const x = val(a.remoteIp);
+        const y = val(b.remoteIp);
+        if (x === y) return 0;
+        if (x === null) return 1;
+        if (y === null) return -1;
+        return sort.dir === 'asc' ? x - y : y - x;
+      })
+      .slice(0, limit);
+  }
   return {
     total: Number(total[0]?.n ?? 0),
-    items: rows.map((r, i) => ({
+    items: picked.map((r, i) => ({
       rank: i + 1,
       remoteIp: r.remoteIp,
+      risk: riskOf(r.remoteIp),
       worst: (r.worst === 0 ? 'dangerous' : 'suspicious') as VerdictLevel,
       seen: Number(r.seen),
       live: Number(r.live ?? 0),

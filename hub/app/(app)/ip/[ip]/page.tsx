@@ -4,11 +4,12 @@ import { isIP } from 'node:net';
 import { GeoAttribution } from '@/components/security/ConnectionsTable';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
 import { IpNoteEditor } from '@/components/security/IpNoteEditor';
+import { IpRiskBadge, IpRiskIcon } from '@/components/security/IpRisk';
 import { IpThreatIntel } from '@/components/security/IpThreatIntel';
 import { Card } from '@/components/ui/Card';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
-import { getIpIntelView } from '@/lib/ipintel/service';
+import { cachedRiskMap, getIpIntelView } from '@/lib/ipintel/service';
 import { getIpNote } from '@/lib/queries/ipnotes';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,8 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
   const { t } = await getT();
   const ip = decodeURIComponent((await params).ip).trim();
   if (!isIP(ip)) notFound();
-  const note = await getIpNote(ip);
+  const [note, riskMap] = await Promise.all([getIpNote(ip), cachedRiskMap([ip])]);
+  const risk = riskMap.get(ip);
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
@@ -43,7 +45,15 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
             </Link>{' '}
             / {t('IP 分析')}
           </p>
-          <h1 className="font-mono text-xl font-semibold">{ip}</h1>
+          <h1 className="flex flex-wrap items-center gap-2 font-mono text-xl font-semibold">
+            <IpRiskIcon t={t} risk={risk} />
+            {ip}
+            {risk?.kind === 'scored' ? (
+              <span className="font-sans text-sm font-normal">
+                <IpRiskBadge t={t} risk={risk} />
+              </span>
+            ) : null}
+          </h1>
           <p className="text-sm text-slate-500">
             {t('這個 IP 在所有主機裡的紀錄：哪些情資來源列名、哪台主機的哪個程式連過它、為什麼被判可疑。')}
           </p>

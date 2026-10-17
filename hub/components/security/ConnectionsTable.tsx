@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { endpoint } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
+import type { IpRisk } from '@/lib/ipintel/types';
 import type { ConnectionRow } from '@/lib/queries/connections';
 import { IpLink } from './IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
@@ -11,12 +12,15 @@ export function ConnectionsTable({
   t,
   showHost = true,
   notes = {},
+  risks = {},
 }: {
   rows: ConnectionRow[];
   t: TFn;
   showHost?: boolean;
   /** 遠端 IP → 人工備註（有備註的 IP 旁邊顯示 📝，滑過看全文）。 */
   notes?: Record<string, string>;
+  /** 遠端 IP → 快取的外部風險（IP 前面顯示圖示）。 */
+  risks?: Record<string, IpRisk>;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -57,7 +61,9 @@ export function ConnectionsTable({
                 ) : (
                   <>
                     <div>
-                      <IpLink ip={c.remoteIp}>{endpoint(c.remoteIp, c.remotePort)}</IpLink>
+                      <IpLink ip={c.remoteIp} risk={c.remoteIp ? risks[c.remoteIp] : undefined} t={t}>
+                        {endpoint(c.remoteIp, c.remotePort)}
+                      </IpLink>
                       {c.remoteIp && notes[c.remoteIp] ? (
                         <span className="ml-1 cursor-help font-sans" title={t('備註：{note}', { note: notes[c.remoteIp] })}>
                           📝

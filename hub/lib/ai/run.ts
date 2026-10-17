@@ -223,6 +223,10 @@ export const SCOPE_PROMPTS: Record<string, { zh: string; en: string }> = {
     zh: '分析這個 IP（見下方）：用 lookup_indicator 查它的情資命中（附來源）、國家／ASN、哪些主機的哪個程式連過、連線狀態與次數；判斷它大概是什麼服務（CDN、雲端、廣告、更新伺服器、掃描器、C2…），被判可疑的理由是情資還是行為判斷、是不是誤報，最後給出建議（放著、加白名單、或建議封鎖）。',
     en: 'Analyze this IP (below): use lookup_indicator for its intel hits (with sources), country/ASN, which hosts and processes connected to it, connection states and counts; work out what service it probably is (CDN, cloud, ads, update server, scanner, C2, …), whether the suspicious rating comes from intel or behavior and whether it is a false positive, then recommend what to do (leave it, allowlist it, or suggest a block).',
   },
+  ips: {
+    zh: '分析下方這幾個 IP（附有 hub 已有的資料：連線紀錄、黑名單命中、人工備註、快取的外部情資）：逐一說明它大概是什麼服務（CDN、雲端、廣告、更新伺服器、掃描器、C2…）、被判可疑的理由是情資還是行為判斷、是不是誤報；再看它們之間有沒有關聯（同一個 ASN／國家、同一個程式、同時間出現）。最後依急迫程度排序，給出每個 IP 的建議（放著、加白名單、或建議封鎖）。',
+    en: 'Analyze the IPs below (the hub data on each is attached: connection records, blocklist hits, operator notes, cached external intel): for each, work out what service it probably is (CDN, cloud, ads, update server, scanner, C2, …), whether the suspicious rating comes from intel or behavior and whether it is a false positive; then look for links between them (same ASN/country, same process, appearing at the same time). Finally rank them by urgency and recommend what to do with each (leave it, allowlist it, or suggest a block).',
+  },
   traffic: { zh: '解讀網路流量：哪些目的地或行程可疑？哪些看起來正常？', en: 'Interpret the traffic: which destinations or processes look suspicious, which look normal?' },
   events: { zh: '分析各主機的當機原因（藍屏代碼、模組、時間模式），並評估資安事件是否需要處理。', en: 'Analyze crash root causes on each host (bugcheck codes, modules, timing patterns) and assess whether the security events need action.' },
   agent: { zh: '檢查這台主機（agent_id 見下方）：連線、發現、當機與資安事件，給出結論與處置。', en: 'Review this host (agent_id below): connections, findings, crashes and security events; give a verdict and next steps.' },

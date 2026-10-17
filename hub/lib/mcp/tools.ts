@@ -1,7 +1,9 @@
 // Hub MCP 工具：全部唯讀，直接重用 lib/queries（「AI 看到的＝畫面顯示的」）。
 import fs from 'node:fs';
 import path from 'node:path';
+import { isIP } from 'node:net';
 import { listActions } from '@/lib/actions/store';
+import { ipContext } from '@/lib/ai/context';
 import { getDb } from '@/lib/db';
 import { feedsDir, loadRegistry } from '@/lib/intel/registry';
 import { averageScore, fleetSummary, listAgents } from '@/lib/queries/agents';
@@ -48,7 +50,7 @@ export const TOOLS: ToolDef[] = [
     }),
   },
   { name: 'inbound_attackers', description: 'Remote IPs currently connected inbound and rated suspicious/dangerous, aggregated across hosts.', inputSchema: obj({}) },
-  { name: 'lookup_indicator', description: 'Where an IP or domain shows up in the fleet: intel feeds that listed it, current connections, history.', inputSchema: obj({ q: { type: 'string' } }, ['q']) },
+  { name: 'lookup_indicator', description: 'Where an IP or domain shows up in the fleet: intel feeds that listed it, current connections, history. For an IP also the operator note and cached external threat intel (risk score, AbuseIPDB/GreyNoise/etc.; read from cache only, never queried live).', inputSchema: obj({ q: { type: 'string' } }, ['q']) },
   { name: 'top_destinations', description: 'Most contacted destinations (optionally only suspicious/dangerous) and per-process connection counts.', inputSchema: obj({ days, risky: { type: 'boolean' }, agent_id: agent }) },
   { name: 'crash_history', description: 'Blue screens, unexpected shutdowns, app crashes, service failures, disk/hardware errors with likely causes; plus the most common bugcheck codes.', inputSchema: obj({ days, agent_id: agent }) },
   { name: 'security_events', description: 'Security events from host logs: brute force, remote logons from the internet, new accounts/admins, new services, scheduled tasks, cleared logs, Defender.', inputSchema: obj({ days, agent_id: agent, rule: { type: 'string' } }) },
@@ -131,7 +133,10 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
     case 'lookup_indicator': {
       const q = str(args, 'q');
       if (!q) throw new Error('q is required');
-      return toText({ q, ...(await lookupIndicator(q)) });
+      const base = await lookupIndicator(q);
+      if (!isIP(q)) return toText({ q, ...base });
+      const c = await ipContext(q);
+      return toText({ q, ...base, note: c.note, external_intel: c.external_intel });
     }
     case 'top_destinations': {
       const d = num(args, 'days', 7, 90);

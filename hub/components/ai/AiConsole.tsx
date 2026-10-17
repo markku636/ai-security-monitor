@@ -3,6 +3,7 @@
 // AI 分析主控台：選範圍與 AI，送出後以 SSE 即時顯示回答文字與工具呼叫；可中途停止。
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { AI_MAX_IPS, splitIpList } from '@/lib/ai/scope';
 import { useT } from '@/lib/i18n/client';
 
 type Ev =
@@ -26,12 +27,15 @@ export function AiConsole({
   initialScope,
   initialAgent,
   initialIndicator,
+  initialIps,
 }: {
   providers: { id: string; available: boolean }[];
   agents: { id: string; hostname: string }[];
   initialScope: string;
   initialAgent?: string;
   initialIndicator?: string;
+  /** scope=ips：逗號分隔的 IP 清單（從可疑 IP 排名勾選帶過來）。 */
+  initialIps?: string;
 }) {
   const { t } = useT();
   const router = useRouter();
@@ -40,6 +44,8 @@ export function AiConsole({
   const [scope, setScope] = useState(initialScope);
   const [agent, setAgent] = useState(initialAgent ?? '');
   const [indicator, setIndicator] = useState(initialIndicator ?? '');
+  const [ipList, setIpList] = useState(initialIps ?? '');
+  const ips = splitIpList(ipList);
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
@@ -51,6 +57,7 @@ export function AiConsole({
     ['fleet', t('整體狀況')],
     ['connections', t('分析可疑連線')],
     ['indicator', t('分析單一 IP')],
+    ['ips', t('一次分析多個 IP')],
     ['agent', t('單一主機完整檢查')],
     ['traffic', t('解讀流量')],
     ['events', t('分析當機與資安事件')],
@@ -66,7 +73,7 @@ export function AiConsole({
       const res = await fetch('/api/ai/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-asa-request': '1' },
-        body: JSON.stringify({ provider: provider || undefined, scope, agent_id: agent || (scope === 'agent' ? agents[0]?.id : undefined), indicator: scope === 'indicator' ? indicator.trim() : undefined, prompt: prompt.trim() || undefined }),
+        body: JSON.stringify({ provider: provider || undefined, scope, agent_id: agent || (scope === 'agent' ? agents[0]?.id : undefined), indicator: scope === 'indicator' ? indicator.trim() : undefined, ips: scope === 'ips' ? ips : undefined, prompt: prompt.trim() || undefined }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -140,6 +147,23 @@ export function AiConsole({
             <input className={`${field} font-mono`} value={indicator} onChange={(e) => setIndicator(e.target.value)} disabled={busy} maxLength={64} placeholder="203.0.113.7" />
           </label>
         ) : null}
+        {scope === 'ips' ? (
+          <label className="flex min-w-64 flex-1 flex-col gap-1 text-xs text-slate-500" title={t('用逗號或空白分隔；在連線頁的「可疑 IP 排名」勾選後按「請 AI 分析選取的 IP」會自動帶入')}>
+            {t('IP 清單（最多 {max} 個）', { max: AI_MAX_IPS })} ⓘ
+            <textarea
+              className={`${field} min-h-[2.25rem] font-mono`}
+              value={ipList}
+              onChange={(e) => setIpList(e.target.value)}
+              disabled={busy}
+              rows={Math.min(4, Math.max(1, Math.ceil(ips.length / 4)))}
+              maxLength={2000}
+              placeholder="203.0.113.7, 198.51.100.9"
+            />
+            <span className={ips.length > AI_MAX_IPS ? 'text-red-600 dark:text-red-400' : ''}>
+              {t('{n} 個 IP；AI 會拿到每個 IP 的連線紀錄、黑名單命中、備註與外部情資快取', { n: ips.length })}
+            </span>
+          </label>
+        ) : null}
         {agents.length ? (
           <label className="flex flex-col gap-1 text-xs text-slate-500">
             {t('裝置')}
@@ -172,7 +196,12 @@ export function AiConsole({
             {t('停止')}
           </button>
         ) : (
-          <button type="button" onClick={start} className="rounded-md bg-teal-700 px-3 py-1.5 text-sm text-white hover:bg-teal-800">
+          <button
+            type="button"
+            onClick={start}
+            disabled={scope === 'ips' && (!ips.length || ips.length > AI_MAX_IPS)}
+            className="rounded-md bg-teal-700 px-3 py-1.5 text-sm text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {t('開始分析')}
           </button>
         )}
