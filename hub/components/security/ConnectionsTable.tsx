@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { endpoint } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import type { IpRisk } from '@/lib/ipintel/types';
-import type { ConnectionRow } from '@/lib/queries/connections';
+import type { ConnectionRow, ConnSortKey } from '@/lib/queries/connections';
+import { SortHeader } from '@/components/ui/SortHeader';
 import { IpLink } from './IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
 
@@ -13,8 +14,13 @@ export function ConnectionsTable({
   showHost = true,
   notes = {},
   risks = {},
+  sort,
+  sortHref,
 }: {
   rows: ConnectionRow[];
+  /** 目前排序與換排序的連結；有給才把表頭變成可點。 */
+  sort?: { key: ConnSortKey; dir: 'asc' | 'desc' };
+  sortHref?: (k: ConnSortKey) => string;
   t: TFn;
   showHost?: boolean;
   /** 遠端 IP → 人工備註（有備註的 IP 旁邊顯示 📝，滑過看全文）。 */
@@ -27,13 +33,27 @@ export function ConnectionsTable({
       <table className="w-full text-left text-sm">
         <thead className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-800">
           <tr>
-            <th className="px-3 py-2">{t('判定')}</th>
-            <th className="px-3 py-2">{t('方向')}</th>
-            {showHost ? <th className="px-3 py-2">{t('主機')}</th> : null}
-            <th className="px-3 py-2">{t('遠端')}</th>
-            <th className="px-3 py-2">{t('國家／組織')}</th>
-            <th className="px-3 py-2">{t('行程')}</th>
-            <th className="px-3 py-2">{t('理由與來源')}</th>
+            {(
+              [
+                ['verdict', t('判定')],
+                ['direction', t('方向')],
+                ...(showHost ? [['host', t('主機')] as const] : []),
+                ['remote', t('遠端')],
+                ['country', t('國家／組織')],
+                ['process', t('行程')],
+                ['reason', t('理由與來源')],
+              ] as [ConnSortKey, string][]
+            ).map(([k, label]) =>
+              sort && sortHref ? (
+                <SortHeader key={k} active={sort.key === k} dir={sort.dir} href={sortHref(k)} title={t('點一下依「{c}」排序，再點一次反向', { c: label })}>
+                  {label}
+                </SortHeader>
+              ) : (
+                <th key={k} className="px-3 py-2">
+                  {label}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>

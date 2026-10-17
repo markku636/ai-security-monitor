@@ -119,7 +119,7 @@ async function pageOverview() {
     const c = await invoke('connections');
     const bad = c.connections.filter((x) => x.verdict.level === 'dangerous' || x.verdict.level === 'suspicious');
     document.getElementById('ov-conn').innerHTML = bad.length
-      ? connTable(groupConns(bad).slice(0, 8))
+      ? connTable(groupConns(bad).slice(0, 8), { sortable: false })
       : '<p class="muted">目前沒有可疑或危險的連線。</p>';
   } catch (e) {
     document.getElementById('ov-conn').textContent = String(e);
@@ -260,8 +260,71 @@ function groupConns(list) {
   return [...m.values()].sort((a, b) => rank[a.c.verdict.level] - rank[b.c.verdict.level] || b.n - a.n);
 }
 
-function connTable(rows) {
-  return `<table><thead><tr><th>判定</th><th>方向</th><th>遠端</th><th>國家／組織</th><th>程式</th><th>理由與來源</th></tr></thead><tbody>${rows
+// 欄位排序：點表頭切換，同一欄再點一次反向。
+const CONN_COLS = [
+  ['verdict', '判定'],
+  ['direction', '方向'],
+  ['remote', '遠端'],
+  ['n', '條數'],
+  ['country', '國家／組織'],
+  ['process', '程式'],
+  ['reason', '理由與來源'],
+];
+const VERDICT_RANK = { dangerous: 0, suspicious: 1, unknown: 2, safe: 3 };
+const DIR_RANK = { outbound: 0, inbound: 1, listening: 2, local: 3 };
+
+/** IP 排序鍵：IPv4 補零成可比較字串，IPv6 放後面。 */
+function ipKey(ip) {
+  if (!ip) return '~';
+  if (ip.includes('.') && !ip.includes(':')) return ip.split('.').map((x) => x.padStart(3, '0')).join('.');
+  return `~${ip}`;
+}
+
+function reasonKind(c) {
+  const r = c.verdict.reasons ?? [];
+  if (r.some((x) => x.type === 'intel_hit')) return 'intel';
+  if (r.some((x) => x.type === 'anomaly')) return 'behavior';
+  return 'none';
+}
+
+function sortKey(key, { c, n }) {
+  switch (key) {
+    case 'verdict':
+      return VERDICT_RANK[c.verdict.level] ?? 9;
+    case 'direction':
+      return DIR_RANK[c.direction] ?? 9;
+    case 'remote':
+      return c.direction === 'listening' ? `${ipKey(c.local_ip)}:${String(c.local_port).padStart(5, '0')}` : `${ipKey(c.remote_ip)}:${String(c.remote_port ?? 0).padStart(5, '0')}`;
+    case 'n':
+      return n;
+    case 'country':
+      return `${c.geo?.country ?? '~'} ${c.geo?.org ?? ''}`.toLowerCase();
+    case 'process':
+      return (c.process?.name ?? '~').toLowerCase();
+    case 'reason':
+      return { intel: 0, behavior: 1, none: 2 }[reasonKind(c)] * 100 - (c.verdict.reasons ?? []).length;
+    default:
+      return 0;
+  }
+}
+
+function sortGroups(groups) {
+  const { key, dir } = connState.sort;
+  return groups.slice().sort((a, b) => {
+    const x = sortKey(key, a);
+    const y = sortKey(key, b);
+    const cmp = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
+    // 同值時用「判定、條數多的在前」當第二排序，結果穩定
+    return cmp * dir || (VERDICT_RANK[a.c.verdict.level] ?? 9) - (VERDICT_RANK[b.c.verdict.level] ?? 9) || b.n - a.n;
+  });
+}
+
+function connTable(rows, { sortable = true } = {}) {
+  const { key, dir } = connState.sort;
+  const th = ([k, label]) =>
+    !sortable ? `<th>${label}</th>` :
+    `<th class="sortable" data-sort="${k}" title="點一下依「${label}」排序，再點一次反向">${label}${k === key ? `<span class="sort-ind">${dir > 0 ? '▲' : '▼'}</span>` : ''}</th>`;
+  return `<table><thead><tr>${CONN_COLS.map(th).join('')}</tr></thead><tbody>${rows
     .map(({ c, n }) => {
       const remote = c.direction === 'listening'
         ? `<span class="mono">${esc(endpoint(c.local_ip, c.local_port))}</span>`
@@ -272,7 +335,8 @@ function connTable(rows) {
       return `<tr>
         <td><span class="chip ${esc(c.verdict.level)}">${VERDICT[c.verdict.level] ?? esc(c.verdict.level)}</span></td>
         <td><span class="chip dir">${DIRECTION[c.direction] ?? esc(c.direction)}</span><div class="muted small">${esc(c.proto)} · ${esc(c.state)}</div></td>
-        <td>${remote}${n > 1 ? `<div class="muted small">× ${n} 條連線</div>` : ''}</td>
+        <td>${remote}</td>
+        <td class="small mono" style="text-align:right">${n}</td>
         <td class="small">${geo}</td>
         <td class="small"><b>${esc(c.process?.name ?? '—')}</b>${c.process?.pid != null ? `<div class="muted">pid ${esc(c.process.pid)}</div>` : ''}</td>
         <td>${(c.verdict.reasons ?? []).map(reasonHtml).join('') || '<span class="muted">—</span>'}</td>
@@ -281,12 +345,47 @@ function connTable(rows) {
     .join('')}</tbody></table>`;
 }
 
-const connState = { verdict: new Set(['dangerous', 'suspicious']), direction: new Set(), q: '', auto: false, timer: null };
+const connState = {
+  verdict: new Set(['dangerous', 'suspicious']),
+  direction: new Set(),
+  proto: new Set(),
+  state: new Set(),
+  reason: new Set(),
+  process: '',
+  country: '',
+  port: '',
+  publicOnly: false,
+  hideLoopback: false,
+  q: '',
+  sort: { key: 'verdict', dir: 1 },
+  auto: false,
+  timer: null,
+};
+
+const REASON_KIND = { intel: '情資', behavior: '行為', none: '沒有理由' };
+const REASON_HINT = { intel: '有威脅情資清單列名', behavior: 'asa 自己的行為判斷（例如週期性連線、新目的地）', none: '沒有任何可疑理由' };
+
+/** 私有、保留、本機位址（不算公網）。 */
+function isPublicIp(ip) {
+  if (!ip) return false;
+  if (ip.includes(':')) {
+    const l = ip.toLowerCase();
+    if (l.startsWith('::ffff:')) return isPublicIp(l.slice(7));
+    return !(l === '::' || l === '::1' || /^f[cd]/.test(l) || /^fe[89ab]/.test(l) || l.startsWith('ff'));
+  }
+  const [a, b] = ip.split('.').map(Number);
+  return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127));
+}
+
+function isLoopback(c) {
+  const ip = c.remote_ip ?? c.local_ip ?? '';
+  return ip.startsWith('127.') || ip === '::1' || ip.startsWith('::ffff:127.');
+}
 
 async function pageConnections() {
   $main.innerHTML = `
     <div class="head">
-      <div><h1>連線</h1><p class="sub">這台電腦目前的連線，依威脅情資與異常行為判定；點 IP 可看詳細分析。</p></div>
+      <div><h1>連線</h1><p class="sub">這台電腦目前的連線，依威脅情資與異常行為判定；點 IP 可看詳細分析，點表頭可排序。</p></div>
       <div class="row">
         <label class="small row"><input type="checkbox" id="auto" ${connState.auto ? 'checked' : ''}/> 每 10 秒更新</label>
         <button class="btn" id="refresh">重新整理</button>
@@ -298,7 +397,17 @@ async function pageConnections() {
         <div class="card">
           <div class="filters" id="f-verdict"></div>
           <div class="filters" id="f-dir"></div>
-          <div class="filters"><input type="text" id="q" placeholder="IP、程式或組織" value="${esc(connState.q)}" style="width:260px"/><span class="muted small" id="count"></span></div>
+          <div class="filters" id="f-proto"></div>
+          <div class="filters" id="f-state"></div>
+          <div class="filters" id="f-reason"></div>
+          <div class="filters">
+            <label class="small">程式 <select id="f-process"></select></label>
+            <label class="small">國家 <select id="f-country"></select></label>
+            <label class="small">port <input type="text" id="f-port" inputmode="numeric" placeholder="例：443" value="${esc(connState.port)}" style="width:80px"/></label>
+            <label class="small row" title="只看連到網際網路上的位址（排除區網、本機、保留位址）"><input type="checkbox" id="f-public" ${connState.publicOnly ? 'checked' : ''}/> 只看公網位址</label>
+            <label class="small row" title="隱藏 127.0.0.1、::1 這類程式在自己電腦內部的連線"><input type="checkbox" id="f-loop" ${connState.hideLoopback ? 'checked' : ''}/> 隱藏本機迴路</label>
+          </div>
+          <div class="filters"><input type="text" id="q" placeholder="IP、程式或組織" value="${esc(connState.q)}" style="width:260px"/><button class="btn" id="f-clear">清除篩選</button><span class="muted small" id="count"></span></div>
           <div id="tbl" class="muted">載入中…</div>
         </div>
       </div>
@@ -307,6 +416,23 @@ async function pageConnections() {
   document.getElementById('refresh').onclick = () => loadConns();
   document.getElementById('ask').onclick = () => goAi('connections', '');
   document.getElementById('q').oninput = (e) => { connState.q = e.target.value; renderConns(); };
+  document.getElementById('f-port').oninput = (e) => { connState.port = e.target.value.replace(/\D/g, ''); renderConns(); };
+  document.getElementById('f-public').onchange = (e) => { connState.publicOnly = e.target.checked; renderConns(); };
+  document.getElementById('f-loop').onchange = (e) => { connState.hideLoopback = e.target.checked; renderConns(); };
+  document.getElementById('f-process').onchange = (e) => { connState.process = e.target.value; renderConns(); };
+  document.getElementById('f-country').onchange = (e) => { connState.country = e.target.value; renderConns(); };
+  document.getElementById('f-clear').onclick = () => {
+    for (const k of ['verdict', 'direction', 'proto', 'state', 'reason']) connState[k].clear();
+    Object.assign(connState, { process: '', country: '', port: '', publicOnly: false, hideLoopback: false, q: '' });
+    pageConnections();
+  };
+  document.getElementById('tbl').addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-sort]');
+    if (!th) return;
+    const key = th.dataset.sort;
+    connState.sort = connState.sort.key === key ? { key, dir: -connState.sort.dir } : { key, dir: key === 'n' ? -1 : 1 };
+    renderConns();
+  });
   document.getElementById('auto').onchange = (e) => { connState.auto = e.target.checked; setAuto(); };
   setAuto();
   await loadConns();
@@ -321,32 +447,73 @@ let lastConns = [];
 async function loadConns() {
   try {
     lastConns = (await invoke('connections')).connections;
+    fillSelects();
     renderConns();
   } catch (e) {
     document.getElementById('tbl').textContent = String(e);
   }
 }
 
+/** 程式、國家下拉：依出現次數排序（資料更新時才重建，選到的值保留）。 */
+function fillSelects() {
+  const fill = (id, all, values, cur) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const counts = new Map();
+    for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const opts = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    if (cur && !counts.has(cur)) opts.unshift([cur, 0]);
+    el.innerHTML = `<option value="">${all}</option>` + opts.map(([v, n]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)}（${n}）</option>`).join('');
+  };
+  fill('f-process', '全部程式', lastConns.map((c) => c.process?.name), connState.process);
+  fill('f-country', '全部國家', lastConns.map((c) => c.geo?.country), connState.country);
+}
+
 function renderConns() {
   const fv = document.getElementById('f-verdict');
   if (!fv) return;
-  const count = (k, v) => lastConns.filter((c) => (k === 'v' ? c.verdict.level : c.direction) === v).length;
-  const chip = (set, v, label, k) => `<button class="fchip ${set.has(v) ? 'on' : ''}" data-k="${k}" data-v="${v}">${label} <span class="muted">${count(k, v)}</span></button>`;
-  fv.innerHTML = `<span class="muted small" style="width:40px">判定</span>` + Object.entries(VERDICT).map(([v, l]) => chip(connState.verdict, v, l, 'v')).join('');
-  document.getElementById('f-dir').innerHTML = `<span class="muted small" style="width:40px">方向</span>` + Object.entries(DIRECTION).map(([v, l]) => chip(connState.direction, v, l, 'd')).join('');
-  for (const b of document.querySelectorAll('.fchip')) {
+  const chipRow = (el, label, set, entries, valueOf, hints = {}) => {
+    const counts = new Map();
+    for (const c of lastConns) {
+      const v = valueOf(c);
+      counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    document.getElementById(el).innerHTML =
+      `<span class="muted small" style="width:40px">${label}</span>` +
+      entries(counts)
+        .map(([v, l]) => `<button class="fchip ${set.has(v) ? 'on' : ''}" data-set="${el}" data-v="${esc(v)}" ${hints[v] ? `title="${esc(hints[v])}"` : ''}>${esc(l)} <span class="muted">${counts.get(v) ?? 0}</span></button>`)
+        .join('');
+  };
+  const SETS = { 'f-verdict': connState.verdict, 'f-dir': connState.direction, 'f-proto': connState.proto, 'f-state': connState.state, 'f-reason': connState.reason };
+  chipRow('f-verdict', '判定', connState.verdict, () => Object.entries(VERDICT), (c) => c.verdict.level);
+  chipRow('f-dir', '方向', connState.direction, () => Object.entries(DIRECTION), (c) => c.direction);
+  chipRow('f-proto', '協定', connState.proto, (m) => [...m.keys()].sort().map((v) => [v, v.toUpperCase()]), (c) => String(c.proto ?? '').toLowerCase());
+  chipRow('f-state', '狀態', connState.state, (m) => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => [v, v || '—']), (c) => c.state ?? '');
+  chipRow('f-reason', '理由', connState.reason, () => Object.entries(REASON_KIND), reasonKind, REASON_HINT);
+  for (const b of document.querySelectorAll('.fchip[data-set]')) {
     b.onclick = () => {
-      const set = b.dataset.k === 'v' ? connState.verdict : connState.direction;
+      const set = SETS[b.dataset.set];
       set.has(b.dataset.v) ? set.delete(b.dataset.v) : set.add(b.dataset.v);
       renderConns();
     };
   }
   const q = connState.q.trim().toLowerCase();
-  const rows = lastConns.filter((c) =>
-    (!connState.verdict.size || connState.verdict.has(c.verdict.level)) &&
-    (!connState.direction.size || connState.direction.has(c.direction)) &&
-    (!q || [c.remote_ip, c.process?.name, c.geo?.org, c.geo?.country].some((x) => String(x ?? '').toLowerCase().includes(q))));
-  const groups = groupConns(rows);
+  const port = connState.port ? Number(connState.port) : null;
+  const rows = lastConns.filter(
+    (c) =>
+      (!connState.verdict.size || connState.verdict.has(c.verdict.level)) &&
+      (!connState.direction.size || connState.direction.has(c.direction)) &&
+      (!connState.proto.size || connState.proto.has(String(c.proto ?? '').toLowerCase())) &&
+      (!connState.state.size || connState.state.has(c.state ?? '')) &&
+      (!connState.reason.size || connState.reason.has(reasonKind(c))) &&
+      (!connState.process || c.process?.name === connState.process) &&
+      (!connState.country || c.geo?.country === connState.country) &&
+      (port === null || c.remote_port === port || c.local_port === port) &&
+      (!connState.publicOnly || isPublicIp(c.remote_ip)) &&
+      (!connState.hideLoopback || !isLoopback(c)) &&
+      (!q || [c.remote_ip, c.process?.name, c.geo?.org, c.geo?.country].some((x) => String(x ?? '').toLowerCase().includes(q))),
+  );
+  const groups = sortGroups(groupConns(rows));
   document.getElementById('count').textContent = `${rows.length} 條連線（合併成 ${groups.length} 列）`;
   document.getElementById('tbl').innerHTML = groups.length ? connTable(groups) : '<div class="empty">沒有符合的連線</div>';
 }

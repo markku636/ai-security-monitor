@@ -1,5 +1,5 @@
 // 連線查詢（每個 agent 最新快照）：車隊級篩選、對內攻擊來源、危險目的地。
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { agents, connections, destinations, ipNotes } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 import { cachedRiskMap } from '@/lib/ipintel/service';
@@ -8,19 +8,36 @@ import { clampInt, listParam, strParam, type Params } from './params';
 
 export const DIRECTIONS = ['outbound', 'inbound', 'listening', 'local'] as const;
 export const VERDICTS = ['dangerous', 'suspicious', 'unknown', 'safe'] as const;
+export const PROTOS = ['tcp', 'udp'] as const;
+/** 理由類型：情資命中／行為判斷（agent 的異常規則）／沒有任何理由。 */
+export const REASON_KINDS = ['intel', 'behavior', 'none'] as const;
+export const CONN_SORTS = ['verdict', 'direction', 'host', 'remote', 'country', 'process', 'reason'] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 export type VerdictLevel = (typeof VERDICTS)[number];
+export type ReasonKind = (typeof REASON_KINDS)[number];
+export type ConnSortKey = (typeof CONN_SORTS)[number];
 
 export interface ConnectionFilter {
   agentId?: string;
   direction?: Direction[];
   verdict?: VerdictLevel[];
+  proto?: string[];
+  state?: string[];
+  reason?: ReasonKind[];
   feed?: string;
   country?: string;
+  process?: string;
+  port?: number;
+  /** 只看公網位址（排除私有、本機、保留網段） */
+  publicOnly?: boolean;
   q?: string;
+  sort?: ConnSortKey;
+  dir?: 'asc' | 'desc';
   limit: number;
   offset: number;
 }
+
+const STATE_RE = /^[A-Za-z_]{1,20}$/;
 
 /** 查詢字串 → 篩選條件（不認得的值直接忽略）。 */
 export function parseConnectionFilter(p: Params): ConnectionFilter {
@@ -28,9 +45,24 @@ export function parseConnectionFilter(p: Params): ConnectionFilter {
     agentId: strParam(p, 'agent_id', 64),
     direction: listParam(p, 'direction', DIRECTIONS),
     verdict: listParam(p, 'verdict', VERDICTS),
+    proto: listParam(p, 'proto', PROTOS),
+    state: (strParam(p, 'state', 200) ?? '')
+      .split(',')
+      .map((x) => x.trim().toUpperCase())
+      .filter((x) => STATE_RE.test(x))
+      .slice(0, 12),
+    reason: listParam(p, 'reason', REASON_KINDS),
     feed: strParam(p, 'feed', 64),
     country: strParam(p, 'country', 2)?.toUpperCase(),
+    process: strParam(p, 'process', 100),
+    port: (() => {
+      const n = clampInt(p, 'port', -1, -1, 65535);
+      return n >= 0 ? n : undefined;
+    })(),
+    publicOnly: ['1', 'true', 'on'].includes(strParam(p, 'public', 5) ?? ''),
     q: strParam(p, 'q', 100),
+    sort: (listParam(p, 'sort', CONN_SORTS)[0] as ConnSortKey | undefined) ?? undefined,
+    dir: strParam(p, 'dir', 4) === 'desc' ? 'desc' : strParam(p, 'dir', 4) === 'asc' ? 'asc' : undefined,
     limit: clampInt(p, 'limit', 100, 1, 200),
     offset: clampInt(p, 'offset', 0, 0, 100_000),
   };
@@ -40,13 +72,34 @@ export function likePattern(q: string): string {
   return `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
 }
 
-function where(f: ConnectionFilter, skip: { verdict?: boolean; direction?: boolean } = {}): SQL {
+const HAS_INTEL = sql`${connections.reasons} @> '[{"type":"intel_hit"}]'::jsonb`;
+const HAS_ANOMALY = sql`${connections.reasons} @> '[{"type":"anomaly"}]'::jsonb`;
+/** 理由類型（SQL）：有情資就算情資，否則有行為異常算行為，都沒有算 none。 */
+export const REASON_KIND_SQL = sql<string>`case when ${HAS_INTEL} then 'intel' when ${HAS_ANOMALY} then 'behavior' else 'none' end`;
+/** 公網位址：排除私有、本機、連結本地、CGNAT、多播與未指定位址。 */
+const PUBLIC_IP = sql`(${connections.remoteIp} is not null and not (
+  ${connections.remoteIp}::inet << '10.0.0.0/8' or ${connections.remoteIp}::inet << '172.16.0.0/12' or ${connections.remoteIp}::inet << '192.168.0.0/16'
+  or ${connections.remoteIp}::inet << '127.0.0.0/8' or ${connections.remoteIp}::inet << '169.254.0.0/16' or ${connections.remoteIp}::inet << '100.64.0.0/10'
+  or ${connections.remoteIp}::inet << '224.0.0.0/3' or ${connections.remoteIp}::inet <<= '0.0.0.0/32'
+  or ${connections.remoteIp}::inet << 'fc00::/7' or ${connections.remoteIp}::inet << 'fe80::/10' or ${connections.remoteIp}::inet << 'ff00::/8'
+  or ${connections.remoteIp}::inet <<= '::1/128' or ${connections.remoteIp}::inet <<= '::/128' or ${connections.remoteIp}::inet << '::ffff:0:0/96'
+))`;
+
+type Skip = { verdict?: boolean; direction?: boolean; proto?: boolean; state?: boolean; reason?: boolean };
+
+function where(f: ConnectionFilter, skip: Skip = {}): SQL {
   const conds: SQL[] = [isNull(agents.deletedAt)];
   if (f.agentId) conds.push(eq(connections.agentId, f.agentId));
   if (!skip.direction && f.direction?.length) conds.push(inArray(connections.direction, f.direction));
   if (!skip.verdict && f.verdict?.length) conds.push(inArray(connections.verdict, f.verdict));
+  if (!skip.proto && f.proto?.length) conds.push(inArray(sql`lower(${connections.proto})`, f.proto));
+  if (!skip.state && f.state?.length) conds.push(inArray(sql`upper(${connections.state})`, f.state));
+  if (!skip.reason && f.reason?.length) conds.push(inArray(REASON_KIND_SQL, f.reason));
   if (f.feed) conds.push(sql`${connections.intelFeedIds} @> ${JSON.stringify([f.feed])}::jsonb`);
   if (f.country) conds.push(eq(connections.country, f.country));
+  if (f.process) conds.push(eq(connections.processName, f.process));
+  if (f.port !== undefined) conds.push(or(eq(connections.remotePort, f.port), eq(connections.localPort, f.port))!);
+  if (f.publicOnly) conds.push(PUBLIC_IP);
   if (f.q) {
     const like = likePattern(f.q);
     conds.push(
@@ -62,6 +115,23 @@ function where(f: ConnectionFilter, skip: { verdict?: boolean; direction?: boole
 }
 
 const VERDICT_ORDER = sql`case ${connections.verdict} when 'dangerous' then 0 when 'suspicious' then 1 when 'unknown' then 2 else 3 end`;
+const DIRECTION_ORDER = sql`case ${connections.direction} when 'outbound' then 0 when 'inbound' then 1 when 'listening' then 2 else 3 end`;
+
+/** 表頭排序：每個欄位對應的排序運算式（同值再依判定、遠端 IP 排，結果穩定）。 */
+function orderBy(f: ConnectionFilter): SQL[] {
+  const d = f.dir === 'desc' ? desc : asc;
+  const key = f.sort ?? 'verdict';
+  const expr: Record<ConnSortKey, SQL> = {
+    verdict: VERDICT_ORDER,
+    direction: DIRECTION_ORDER,
+    host: sql`lower(${agents.hostname})`,
+    remote: sql`coalesce(${connections.remoteIp}, ${connections.localIp})`,
+    country: sql`coalesce(${connections.country}, '~') || coalesce(${connections.org}, '')`,
+    process: sql`lower(coalesce(${connections.processName}, '~'))`,
+    reason: sql`case ${REASON_KIND_SQL} when 'intel' then 0 when 'behavior' then 1 else 2 end`,
+  };
+  return [d(expr[key]), VERDICT_ORDER, sql`${connections.remoteIp}`, sql`${connections.id}`];
+}
 
 /** 判定理由（agent 的 Verdict.reasons；hub 只負責顯示）。 */
 export interface Reason {
@@ -88,14 +158,16 @@ export interface Reason {
 
 export async function listConnections(f: ConnectionFilter) {
   const db = getDb();
-  const facet = (k: typeof connections.verdict | typeof connections.direction, skip: { verdict?: boolean; direction?: boolean }) =>
+  const facet = (k: SQL | typeof connections.verdict | typeof connections.direction, skip: Skip, limit = 50) =>
     db
-      .select({ k, n: count() })
+      .select({ k: sql<string>`${k}`, n: count() })
       .from(connections)
       .innerJoin(agents, eq(agents.id, connections.agentId))
       .where(where(f, skip))
-      .groupBy(k);
-  const [items, total, byVerdict, byDirection] = await Promise.all([
+      .groupBy(sql`1`)
+      .orderBy(desc(count()))
+      .limit(limit);
+  const [items, total, byVerdict, byDirection, byProto, byState, byReason, byProcess] = await Promise.all([
     db
       .select({
         id: connections.id,
@@ -122,7 +194,7 @@ export async function listConnections(f: ConnectionFilter) {
       .from(connections)
       .innerJoin(agents, eq(agents.id, connections.agentId))
       .where(where(f))
-      .orderBy(VERDICT_ORDER, connections.direction, connections.remoteIp, connections.id)
+      .orderBy(...orderBy(f))
       .limit(f.limit)
       .offset(f.offset),
     db
@@ -132,12 +204,24 @@ export async function listConnections(f: ConnectionFilter) {
       .where(where(f)),
     facet(connections.verdict, { verdict: true }),
     facet(connections.direction, { direction: true }),
+    facet(sql`lower(${connections.proto})`, { proto: true }),
+    facet(sql`upper(${connections.state})`, { state: true }, 12),
+    facet(REASON_KIND_SQL, { reason: true }),
+    facet(sql`${connections.processName}`, {}, 60),
   ]);
   const toMap = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, Number(r.n)])) as Record<string, number>;
   return {
     items: items.map((r) => ({ ...r, reasons: (Array.isArray(r.reasons) ? r.reasons : []) as Reason[] })),
     total: Number(total[0]?.n ?? 0),
-    facets: { verdict: toMap(byVerdict), direction: toMap(byDirection) },
+    facets: {
+      verdict: toMap(byVerdict),
+      direction: toMap(byDirection),
+      proto: toMap(byProto),
+      state: toMap(byState),
+      reason: toMap(byReason),
+      /** 出現最多的程式（給「程式」輸入框的建議清單） */
+      process: byProcess.filter((r) => r.k).map((r) => ({ name: r.k, n: Number(r.n) })),
+    },
   };
 }
 

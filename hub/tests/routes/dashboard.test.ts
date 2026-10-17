@@ -124,6 +124,30 @@ describe('connection queries', () => {
     expect(reasons.find((r) => r.type === 'intel_hit')?.source_url).toContain('feodotracker');
   });
 
+  it('filters by protocol, state, reason kind, process, port and public IPs; sorts by any column', async () => {
+    const q = async (p: Record<string, string>) => (await listConnections(parseConnectionFilter(p))).items.map((c) => c.remoteIp);
+    const all = await listConnections(parseConnectionFilter({}));
+    expect(all.facets.proto).toEqual({ tcp: 3 });
+    expect(all.facets.state).toEqual({ ESTABLISHED: 3 });
+    expect(all.facets.reason).toEqual({ intel: 2, none: 1 });
+    expect(all.facets.process.map((p) => p.name).sort()).toEqual(['chrome.exe', 'svchost.exe', 'updater.exe']);
+
+    expect((await q({ reason: 'none' }))).toEqual(['1.1.1.1']);
+    expect((await q({ reason: 'intel' })).sort()).toEqual(['198.51.100.23', '203.0.113.66']);
+    expect(await q({ proto: 'udp' })).toEqual([]);
+    expect((await q({ state: 'established' })).length).toBe(3);
+    expect(await q({ process: 'chrome.exe' })).toEqual(['1.1.1.1']);
+    expect(await q({ port: '3389' })).toEqual(['198.51.100.23']);
+    expect((await q({ public: '1' })).length).toBe(3);
+
+    expect(await q({ sort: 'remote', dir: 'asc' })).toEqual(['1.1.1.1', '198.51.100.23', '203.0.113.66']);
+    expect(await q({ sort: 'remote', dir: 'desc' })).toEqual(['203.0.113.66', '198.51.100.23', '1.1.1.1']);
+    expect(await q({ sort: 'process' })).toEqual(['1.1.1.1', '198.51.100.23', '203.0.113.66']);
+
+    const f = parseConnectionFilter({ port: 'abc', sort: 'bogus', state: 'ESTABLISHED,drop table,TIME_WAIT', public: 'yes' });
+    expect(f).toMatchObject({ port: undefined, sort: undefined, state: ['ESTABLISHED', 'TIME_WAIT'], publicOnly: false });
+  });
+
   it('aggregates inbound attackers with their feeds', async () => {
     const a = await inboundAttackers();
     expect(a).toHaveLength(1);

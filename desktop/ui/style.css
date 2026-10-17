@@ -215,3 +215,7 @@ details > summary { cursor: pointer; }
 .sub-section > summary { font-size: 13px; }
 .card { transition: box-shadow 0.4s ease; scroll-margin-top: 12px; }
 .card.focus { box-shadow: 0 0 0 2px var(--accent); }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--accent); }
+.sort-ind { margin-left: 4px; font-size: 10px; color: var(--accent); }
+.filters select { max-width: 220px; }

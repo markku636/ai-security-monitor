@@ -1102,4 +1102,15 @@ export const en: Record<string, string> = {
   '開啟 Claude 授權頁面': 'Open the Claude authorization page',
   '開啟 OpenAI 的裝置登入頁面（可以用手機或任何電腦）：': 'Open OpenAI\'s device sign-in page (a phone or any computer works):',
   '開啟授權頁面，用你的 Claude 帳號登入並按「授權」：': 'Open the authorization page, sign in with your Claude account and click Authorize:',
+
+  // ---- connection filters ----
+  '{n} 條': '{n} connections',
+  '例：chrome.exe': 'e.g. chrome.exe',
+  '協定': 'Protocol',
+  '只看公網位址': 'Public addresses only',
+  '只看連到網際網路上的位址（排除區網、本機、保留位址）': 'Only addresses on the internet (excludes LAN, local and reserved addresses)',
+  '沒有理由': 'No reason',
+  '清除篩選': 'Clear filters',
+  '理由': 'Reason',
+  '點一下依「{c}」排序，再點一次反向': 'Click to sort by {c}; click again to reverse',
 };
