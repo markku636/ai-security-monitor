@@ -53,6 +53,8 @@ pub fn backend_env() -> Option<String> {
 pub const KEY_HUB_CLIENT: &str = "hub.client_key";
 pub const KEY_HUB_ACTION: &str = "hub.action_key";
 pub const KEY_HUB_AGENT_TOKEN: &str = "hub.agent_token";
+/// 免金鑰加入申請的密語（只有這台 agent 知道；Hub 只存 sha256）。
+pub const KEY_HUB_ENROLL_SECRET: &str = "hub.enroll_request_secret";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
@@ -82,6 +84,8 @@ impl SecretStore {
     pub fn open(dir: &Path) -> Self {
         let forced = backend_env().map(|s| s.to_ascii_lowercase());
         let backend = match forced.as_deref() {
+            // 單元測試一律用檔案（keychain 項目是全機共用的，測試不能碰到使用者真正的金鑰）
+            _ if cfg!(test) => Backend::File,
             Some("file") => Backend::File,
             Some("keychain") if keychain_available() => Backend::Keychain,
             _ if keychain_available() => Backend::Keychain,

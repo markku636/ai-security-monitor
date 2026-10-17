@@ -63,6 +63,10 @@ pcap-parser = "0.17"
 quick-xml = "0.42"
 regex = "1"
 serde_yaml_ng = "0.10"
+# Hub discovery: mDNS/DNS-SD browse + `hub advertise` responder (pure Rust, no async runtime).
+mdns-sd = { version = "0.21", default-features = false }
+# Ed25519 verification of the Hub identity (already in the tree via rustls).
+ring = "0.17"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"

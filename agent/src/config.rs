@@ -115,6 +115,12 @@ pub struct HubConfig {
     pub max_report_bytes: Option<u64>,
     pub snapshot_interval_s: Option<u64>,
     pub feed_mirror: bool,
+    /// 釘選的 Hub 身分指紋（第一次加入時記下，TOFU）；之後 Hub 身分不同就拒絕上傳，除非重新加入。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+    /// 釘選的 Hub 公鑰（Ed25519，base64url），用來驗 Hub 的簽章。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

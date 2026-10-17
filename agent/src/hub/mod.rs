@@ -1,7 +1,12 @@
 //! Hub 客戶端：註冊、上傳報告（gzip）、連線快照、心跳；失敗的上傳存進 outbox 下次重送。
 
 pub mod actions;
+pub mod advertise;
 pub mod contract;
+pub mod discover;
+pub mod dns;
+pub mod enroll;
+pub mod identity;
 pub mod outbox;
 pub mod watch;
 
@@ -101,6 +106,11 @@ impl HubClient {
 
     pub fn base(&self) -> &str {
         &self.base
+    }
+
+    /// 查 Hub 身分（驗章）；舊版 Hub 沒有身分端點回 `Ok(None)`。
+    pub async fn identity(&self) -> AppResult<Option<identity::HubIdentity>> {
+        identity::fetch(&self.http, &self.base).await
     }
 
     async fn post<T: Serialize>(&self, path: &str, body: &T) -> AppResult<HubResponse> {

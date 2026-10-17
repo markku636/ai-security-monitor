@@ -79,19 +79,14 @@ pub enum Command {
     Scan(ScanArgs),
     /// 列出連線：方向、判定（安全／未知／可疑／危險）、行程、原因
     Connections(ConnectionsArgs),
-    /// 註冊到 Security Hub（client 金鑰存進 keychain）
-    Enroll {
-        /// Hub 網址（https://…；本機或私網可用 http）
-        url: String,
-        /// client 金鑰；- 表示從標準輸入讀取
-        #[arg(long)]
-        key: String,
-        /// 接受 hub 核准的遠端動作（預設關）
-        #[arg(long)]
-        accept_remote_actions: bool,
-        /// 允許對公網 hub 使用未加密的 http
-        #[arg(long)]
-        insecure_http: bool,
+    /// 註冊到 Security Hub：給 --key 用金鑰；不給金鑰就自動尋找 Hub、送出加入申請等管理員核准
+    Enroll(EnrollArgs),
+    /// 尋找區網／公司 DNS 上的 Security Hub（只列出，不加入）
+    Discover(DiscoverArgs),
+    /// Security Hub 相關工具（在區網上幫 Hub 廣播）
+    Hub {
+        #[command(subcommand)]
+        cmd: HubCmd,
     },
     /// 取消註冊（刪除 hub 設定與金鑰）
     Unenroll,
@@ -589,6 +584,68 @@ pub struct PortsArgs {
     /// 允許探測公網位址（只限你擁有或已獲授權的主機）
     #[arg(long)]
     pub allow_public: bool,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct EnrollArgs {
+    /// Hub 網址（https://…；本機或私網可用 http）；免金鑰時可省略，改用自動尋找
+    pub url: Option<String>,
+    /// client 金鑰或註冊金鑰；- 表示從標準輸入讀取。不給就送出免金鑰的加入申請
+    #[arg(long)]
+    pub key: Option<String>,
+    /// 免金鑰加入：自動尋找公司的 Hub（DNS SRV、區網廣播），送出加入申請並等管理員核准
+    #[arg(long)]
+    pub auto: bool,
+    /// 要加入的 Hub 網址（找到好幾個 Hub 時用它指定；安裝程式會預填）
+    #[arg(long, value_name = "URL")]
+    pub hub: Option<String>,
+    /// 等候管理員核准多久（例：15m、2h；0＝送出申請就結束，之後 watch／服務會繼續等）
+    #[arg(long, value_name = "DUR")]
+    pub wait: Option<String>,
+    /// 這台電腦記得的 Hub 指紋和現在找到的不同時，仍改加入新的 Hub（確認過指紋才用）
+    #[arg(long)]
+    pub repin: bool,
+    /// 接受 hub 核准的遠端動作（預設關）
+    #[arg(long)]
+    pub accept_remote_actions: bool,
+    /// 允許對公網 hub 使用未加密的 http
+    #[arg(long)]
+    pub insecure_http: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct DiscoverArgs {
+    /// 等候區網廣播回應的時間
+    #[arg(long, default_value = "3s", value_name = "DUR")]
+    pub timeout: String,
+    /// 不查公司 DNS 的 SRV 紀錄
+    #[arg(long)]
+    pub no_dns: bool,
+    /// 不用區網廣播（mDNS）尋找
+    #[arg(long)]
+    pub no_mdns: bool,
+    /// 允許對公網 hub 使用未加密的 http
+    #[arg(long)]
+    pub insecure_http: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum HubCmd {
+    /// 用 mDNS 在區網上廣播這個 Hub（Hub 在 Docker Desktop／bridge 網路裡時，廣播出不了區網，改在這台執行）
+    Advertise {
+        /// Hub 的對外網址（電腦要連的那個，例：https://hub.corp.example 或 http://192.168.1.10:8088）
+        #[arg(long, value_name = "URL")]
+        url: String,
+        /// 廣播的名稱（預設：Hub 的名稱＋這台電腦的名稱）
+        #[arg(long)]
+        name: Option<String>,
+        /// 廣播多久就結束（預設一直執行到 Ctrl-C）
+        #[arg(long, value_name = "DUR")]
+        duration: Option<String>,
+        /// 允許對公網 hub 使用未加密的 http
+        #[arg(long)]
+        insecure_http: bool,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]

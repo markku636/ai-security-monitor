@@ -7,8 +7,12 @@
     AI_SECURITY_MONITOR_VERSION         version to install (default: latest release)
     AI_SECURITY_MONITOR_INSTALL_DIR     install directory (default: %LOCALAPPDATA%\ai-security-monitor\bin,
                                         or %ProgramFiles%\ai-security-monitor with the system service; added to your PATH)
-    AI_SECURITY_MONITOR_HUB_URL         Security Hub URL to enroll with (needs AI_SECURITY_MONITOR_ENROLL_KEY)
-    AI_SECURITY_MONITOR_ENROLL_KEY      enroll key or client key from the Hub
+    AI_SECURITY_MONITOR_HUB_URL         Security Hub URL to enroll with. Without an enroll key this sends a keyless
+                                        enrollment request that an administrator approves in the Hub
+                                        (the script served by a Security Hub at /install.ps1 has its own URL prefilled)
+    AI_SECURITY_MONITOR_ENROLL_KEY      enroll key or client key from the Hub (optional)
+    AI_SECURITY_MONITOR_AUTO_ENROLL     set to 1 to find the Hub via company DNS (SRV) or the local network (mDNS)
+    AI_SECURITY_MONITOR_ENROLL_WAIT     how long to wait for approval (default 2m; the service keeps waiting afterwards)
     AI_SECURITY_MONITOR_SERVICE         none | user | system (start at login / at boot; system needs an administrator PowerShell)
     AI_SECURITY_MONITOR_DOWNLOAD_BASE   mirror that serves ai-security-monitor-<version>-windows-<arch>.exe and SHA256SUMS
     AI_SECURITY_MONITOR_NO_MODIFY_PATH  set to 1 to leave your PATH unchanged
@@ -36,7 +40,10 @@ $Service = Get-Setting 'SERVICE'
 if (-not $Service) { $Service = 'none' }
 $Base = Get-Setting 'DOWNLOAD_BASE'
 $NoModifyPath = Get-Setting 'NO_MODIFY_PATH'
-# Security Hub 提供的 /install.ps1 會把自己的網址填在這裡（只給 AI_SECURITY_MONITOR_ENROLL_KEY 時註冊到這個 Hub）
+$AutoEnroll = Get-Setting 'AUTO_ENROLL'
+$Wait = Get-Setting 'ENROLL_WAIT'
+if (-not $Wait) { $Wait = '2m' }
+# Security Hub 提供的 /install.ps1 會把自己的網址填在這裡：沒給金鑰就送出免金鑰加入申請（等管理員核准）
 $DefaultHub = ''
 
 function Say([string]$m) { Write-Host "ai-security-monitor-install: $m" }
@@ -44,11 +51,20 @@ function Invoke-Monitor([string[]]$a) {
   & $script:Exe @a
   if ($LASTEXITCODE -ne 0) { throw "$Name $($a -join ' ') failed (exit $LASTEXITCODE)" }
 }
+# 免金鑰加入：送出申請、等一下核准；還沒核准也繼續（常駐服務會在背景接著等，核准後自動開始回報）
+function Invoke-KeylessEnroll([string[]]$pre) {
+  $a = $pre + @('enroll', '--auto')
+  if ($Hub) { $a += @('--hub', $Hub) }
+  $a += @('--wait', $Wait, '--yes')
+  & $script:Exe @a
+  if ($LASTEXITCODE -ne 0) { Say "could not send the enrollment request; run '$Name enroll --auto' later (or ask the Hub administrator for an enroll key)" }
+}
 
 if (@('none', 'user', 'system') -notcontains $Service) { throw 'AI_SECURITY_MONITOR_SERVICE must be none, user or system' }
-if ($Key -and -not $Hub) { $Hub = $DefaultHub }
-if ($Hub -and -not $Key) { throw 'AI_SECURITY_MONITOR_HUB_URL needs AI_SECURITY_MONITOR_ENROLL_KEY (an enroll key or client key from the Hub)' }
+if (-not $Hub) { $Hub = $DefaultHub }
 if ($Key -and -not $Hub) { throw 'AI_SECURITY_MONITOR_ENROLL_KEY needs AI_SECURITY_MONITOR_HUB_URL' }
+# 免金鑰：有 Hub 網址（或 AUTO_ENROLL=1 自動尋找）但沒有金鑰
+$Keyless = (-not $Key) -and ($Hub -or $AutoEnroll -eq '1')
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
 if (-not $Version) {
@@ -127,11 +143,13 @@ if ($Service -eq 'system') {
       Copy-Item -Force $_.FullName $dst
     }
   }
-  if ($Hub) { Invoke-Monitor @('--config-dir', $sysdir, '--secrets-backend', 'file', 'enroll', $Hub, '--key', $Key) }
+  if ($Keyless) { Invoke-KeylessEnroll @('--config-dir', $sysdir, '--secrets-backend', 'file') }
+  elseif ($Hub) { Invoke-Monitor @('--config-dir', $sysdir, '--secrets-backend', 'file', 'enroll', $Hub, '--key', $Key) }
   Invoke-Monitor @('--config-dir', $sysdir, 'service', 'install', '--system', '--yes')
 }
 else {
-  if ($Hub) { Invoke-Monitor @('enroll', $Hub, '--key', $Key) }
+  if ($Keyless) { Invoke-KeylessEnroll @() }
+  elseif ($Hub) { Invoke-Monitor @('enroll', $Hub, '--key', $Key) }
   if ($Service -eq 'user') { Invoke-Monitor @('service', 'install', '--yes') }
 }
 Say "done. Next: $Name doctor; $Name scan; $Name service status"

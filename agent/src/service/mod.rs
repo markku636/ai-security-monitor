@@ -964,7 +964,7 @@ pub async fn current_target(
 ) -> AppResult<Target> {
     let os = Os::current();
     let exe = std::env::current_exe().map_err(|e| AppError::External(e.to_string()))?;
-    let exe = dunce_like(&exe);
+    let exe = stable_exe(&exe, std::env::var_os("APPIMAGE").map(PathBuf::from));
     let home = dirs::home_dir().unwrap_or_default();
     let systemd_user = os == Os::Linux
         && scope == Scope::User
@@ -1020,10 +1020,41 @@ fn dunce_like(p: &Path) -> PathBuf {
     PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s))
 }
 
+/// 開機啟動要用的執行檔路徑：Linux AppImage 執行時 current_exe 是每次都不同的暫時掛載點（/tmp/.mount_…），
+/// 改用 `APPIMAGE`（AppImage 檔本身的位置）；其他情況就是安裝位置本身（桌面版的安裝路徑在更新後不變）。
+pub fn stable_exe(current: &Path, appimage: Option<PathBuf>) -> PathBuf {
+    match appimage.filter(|p| p.is_absolute() && p.is_file()) {
+        Some(p) => p,
+        None => dunce_like(current),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::util::cmd::{CmdOutput, FakeRunner};
+
+    #[test]
+    fn stable_exe_prefers_the_appimage_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let img = dir.path().join("AI-Security-Monitor.AppImage");
+        std::fs::write(&img, b"x").unwrap();
+        let mounted = Path::new("/tmp/.mount_AIabc/usr/bin/ai-security-monitor-desktop");
+        assert_eq!(stable_exe(mounted, Some(img.clone())), img);
+        // APPIMAGE 指到不存在的檔案、或是相對路徑：照用目前的執行檔
+        assert_eq!(
+            stable_exe(mounted, Some(dir.path().join("gone"))),
+            mounted.to_path_buf()
+        );
+        assert_eq!(
+            stable_exe(mounted, Some(PathBuf::from("rel.AppImage"))),
+            mounted.to_path_buf()
+        );
+        assert_eq!(
+            stable_exe(Path::new(r"\\?\C:\Apps\x.exe"), None),
+            PathBuf::from(r"C:\Apps\x.exe")
+        );
+    }
 
     fn target(os: Os, scope: Scope) -> Target {
         let (exe, cfg, home) = match os {

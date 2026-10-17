@@ -1,19 +1,22 @@
 //! `ai-security-monitor enroll` / `unenroll` / `status` / `watch`：註冊到 Security Hub 與常駐回報。
 
-use std::io::BufRead;
+use std::io::{BufRead, IsTerminal, Write};
 use std::time::Duration;
 
 use chrono::Utc;
 
-use super::args::{ScanArgs, WatchArgs};
+use super::args::{DiscoverArgs, EnrollArgs, HubCmd, ScanArgs, WatchArgs};
 use super::render::{print_json, table};
 use super::Env;
 use crate::config::{self, HubConfig};
 use crate::error::{AppError, AppResult};
 use crate::hub::contract::{HeartbeatPayload, IntelFeedsInfo};
+use crate::hub::discover::{self, Choice, Found};
+use crate::hub::enroll::{self as keyless, PendingEnroll, Step};
+use crate::hub::identity::{self, HubIdentity, PinCheck};
 use crate::hub::{actions as remote, outbox, validate_url, watch, HubClient};
 use crate::model::report::AgentInfo;
-use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT};
+use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT, KEY_HUB_ENROLL_SECRET};
 
 fn log(env: &Env, msg: &str) {
     let line = format!("[{}] {msg}", Utc::now().format("%Y-%m-%d %H:%M:%S"));
@@ -65,7 +68,7 @@ async fn reapply_firewall(env: &Env) {
     }
 }
 
-fn agent_info(cfg: &config::AgentConfig) -> AgentInfo {
+pub fn agent_info(cfg: &config::AgentConfig) -> AgentInfo {
     let mut a = AgentInfo::current(&cfg.agent_id);
     crate::sysmeta::enrich(&mut a);
     a.scanners_available = super::scan_cmd::build_pipeline().available();
@@ -104,6 +107,8 @@ pub async fn enroll(
         })?;
     SecretStore::open(&env.config_dir).set(KEY_HUB_CLIENT, &key)?;
     let has_action_key = watch::save_action_key(&env.config_dir, accept_remote_actions, reg.action_key.as_deref())?;
+    // 用金鑰註冊也釘選 Hub 身分（舊版 Hub 沒有身分端點就不釘）；明確給金鑰＝使用者確定要這個 Hub
+    let hub_id = client.identity().await.ok().flatten();
     cfg.hub = Some(HubConfig {
         url: url.clone(),
         enrolled_at: crate::util::time::now_iso(),
@@ -111,12 +116,18 @@ pub async fn enroll(
         max_report_bytes: Some(reg.hub.max_report_bytes),
         snapshot_interval_s: Some(reg.hub.snapshot_interval_s),
         feed_mirror: false,
+        fingerprint: hub_id.as_ref().map(|i| i.fingerprint.clone()),
+        public_key: hub_id.as_ref().map(|i| i.public_key.clone()),
     });
     cfg.remote_actions.accept = accept_remote_actions;
     config::save(&env.config_dir, &cfg)?;
+    // 改用金鑰加入：之前的免金鑰申請就不用再等
+    if keyless::load_pending(&env.config_dir).is_some() {
+        keyless::clear_pending(&env.config_dir)?;
+    }
     if env.global.json {
         print_json(
-            &serde_json::json!({ "ok": true, "hub": url, "agent_id": reg.agent_id, "created": reg.created, "pinned": reg.pinned, "remote_actions": has_action_key, "hub_info": reg.hub, "health": health }),
+            &serde_json::json!({ "ok": true, "hub": url, "agent_id": reg.agent_id, "created": reg.created, "pinned": reg.pinned, "remote_actions": has_action_key, "hub_info": reg.hub, "health": health, "hub_fingerprint": hub_id.as_ref().map(|i| i.fingerprint.clone()) }),
         );
     } else {
         println!(
@@ -129,6 +140,15 @@ pub async fn enroll(
                 id = reg.agent_id
             )
         );
+        if let Some(i) = &hub_id {
+            println!(
+                "{}",
+                tf!(
+                    "Hub 指紋：{fp}（已記下，之後 Hub 身分不同會拒絕上傳）",
+                    fp = i.fingerprint
+                )
+            );
+        }
         if accept_remote_actions && !has_action_key {
             println!(
                 "{}",
@@ -148,6 +168,454 @@ pub async fn enroll(
     Ok(())
 }
 
+/// `enroll`：有 `--key` 走原本的金鑰註冊；沒有就免金鑰加入（自動尋找＋加入申請）。
+pub async fn enroll_cmd(env: &Env, a: EnrollArgs) -> AppResult<()> {
+    match a.key.as_deref() {
+        Some(key) => {
+            let url = a.url.as_deref().or(a.hub.as_deref()).ok_or_else(|| {
+                AppError::InvalidArg(
+                    t!("用 --key 註冊時要給 Hub 網址（ai-security-monitor enroll <HUB_URL> --key …）").into(),
+                )
+            })?;
+            enroll(env, url, key, a.accept_remote_actions, a.insecure_http).await
+        }
+        None => enroll_auto(env, a).await,
+    }
+}
+
+fn fmt_found_rows(found: &[Found], pinned: Option<&str>) -> Vec<Vec<String>> {
+    found
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let state = match (&f.identity, &f.error) {
+                (Some(id), None) if pinned.is_some_and(|p| identity::same_fingerprint(p, &id.fingerprint)) => {
+                    t!("可加入 · 這台電腦釘選的 Hub").to_string()
+                }
+                (Some(id), None) if !id.enrollment.keyless => t!("可連線，但不接受免金鑰加入").to_string(),
+                (Some(_), None) => t!("可加入").to_string(),
+                (_, Some(e)) => e.clone(),
+                (None, None) => "-".into(),
+            };
+            vec![
+                (i + 1).to_string(),
+                f.candidate.source.label().to_string(),
+                f.candidate.url.clone(),
+                f.identity
+                    .as_ref()
+                    .map(|i| i.name.clone())
+                    .unwrap_or_else(|| "-".into()),
+                f.identity
+                    .as_ref()
+                    .map(|i| i.fingerprint.clone())
+                    .unwrap_or_else(|| "-".into()),
+                state,
+            ]
+        })
+        .collect()
+}
+
+fn found_table(found: &[Found], pinned: Option<&str>) -> String {
+    table(
+        &["#", t!("來源"), t!("網址"), t!("名稱"), t!("指紋"), t!("狀態")],
+        fmt_found_rows(found, pinned),
+    )
+}
+
+const NOT_FOUND_HINT: &str = "沒有找到 Security Hub。請管理員在公司 DNS 加 _ai-security-monitor._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>";
+
+/// `discover`：列出找到的 Hub（每一種方式都試）。
+pub async fn discover(env: &Env, a: DiscoverArgs) -> AppResult<()> {
+    let cfg = config::load_or_init(&env.config_dir)?;
+    let opts = discover::Opts {
+        config_url: cfg.hub.as_ref().map(|h| h.url.clone()),
+        dns: !a.no_dns,
+        mdns: !a.no_mdns,
+        timeout: crate::util::time::parse_duration(&a.timeout)?,
+        insecure_http: a.insecure_http,
+        all: true,
+        ..discover::Opts::default()
+    };
+    if !env.global.json && !env.global.quiet {
+        eprintln!("{}", t!("正在尋找 Security Hub（公司 DNS、區網廣播）…"));
+    }
+    let found = discover::find(&opts).await?;
+    let pinned = cfg.hub.as_ref().and_then(|h| h.fingerprint.clone());
+    if env.global.json {
+        print_json(&serde_json::json!({ "hubs": found, "pinned_fingerprint": pinned }));
+        return Ok(());
+    }
+    if found.is_empty() {
+        println!("{}", crate::i18n::lookup(NOT_FOUND_HINT));
+        return Ok(());
+    }
+    println!("{}", found_table(&found, pinned.as_deref()));
+    Ok(())
+}
+
+/// 等候中的申請說明（給使用者核對）。
+fn print_waiting(p: &PendingEnroll) {
+    println!(
+        "{}",
+        tf!(
+            "等候管理員核准… Hub「{name}」（{url}）\n  Hub 指紋：{fp}\n  這台電腦的核對碼：{code}\n  請管理員在 Hub 的「新增主機 → 待核准的主機」核對後按核准。",
+            name = p.hub_name,
+            url = p.hub_url,
+            fp = p.hub_fingerprint,
+            code = p.request_code
+        )
+    );
+}
+
+/// 互動確認（沒有終端機就要 --yes）。
+fn confirm(env: &Env, prompt: &str) -> AppResult<bool> {
+    if env.global.yes {
+        return Ok(true);
+    }
+    if !std::io::stdin().is_terminal() {
+        return Err(AppError::InvalidArg(
+            t!("要加入這個 Hub 請加 --yes（或用 --hub <網址> 指定）").into(),
+        ));
+    }
+    print!("{prompt} [y/N] ");
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    Ok(matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes" | "是"))
+}
+
+/// 送出加入申請並存檔（密語存密鑰庫）。桌面版也用這個。
+pub async fn start_enroll_request(
+    config_dir: &std::path::Path,
+    url: &str,
+    hub: &HubIdentity,
+    accept_remote_actions: bool,
+) -> AppResult<(PendingEnroll, keyless::EnrollStatus)> {
+    if !hub.enrollment.keyless {
+        return Err(AppError::Hub(
+            t!("這個 Hub 沒有開放免金鑰加入：請向管理員要註冊金鑰（enroll --key）").into(),
+        ));
+    }
+    let cfg = config::load_or_init(config_dir)?;
+    let secret = keyless::new_secret()?;
+    SecretStore::open(config_dir).set(KEY_HUB_ENROLL_SECRET, &secret)?;
+    let http = identity::http_client(Duration::from_secs(20))?;
+    let agent = agent_info(&cfg);
+    let (p, st) = keyless::submit(&http, url, hub, &agent, accept_remote_actions, &secret).await?;
+    keyless::save_pending(config_dir, &p)?;
+    Ok((p, st))
+}
+
+fn finish_message(env: &Env, cfg: &config::AgentConfig, reg: &crate::hub::contract::RegisterResponse) {
+    let h = cfg.hub.as_ref();
+    if env.global.json {
+        print_json(&serde_json::json!({
+            "ok": true,
+            "status": "enrolled",
+            "hub": h.map(|h| h.url.clone()),
+            "agent_id": reg.agent_id,
+            "hub_fingerprint": h.and_then(|h| h.fingerprint.clone()),
+            "hub_info": reg.hub,
+        }));
+        return;
+    }
+    println!(
+        "{}",
+        tf!(
+            "管理員已核准：已加入 {url}（{hub} {version}）；agent id {id}",
+            url = h.map(|h| h.url.as_str()).unwrap_or("?"),
+            hub = reg.hub.name,
+            version = reg.hub.version,
+            id = reg.agent_id
+        )
+    );
+    println!(
+        "{}",
+        t!("下一步：執行 ai-security-monitor service install --yes 開機自動回報（或 ai-security-monitor watch --once 先試一輪）")
+    );
+}
+
+/// 已經加入某個 Hub 時再執行 `enroll --auto`：同一個 Hub 不用再申請；指紋相同的新網址就更新網址；不同的 Hub 要 --repin。
+async fn already_enrolled(
+    env: &Env,
+    cfg: &mut config::AgentConfig,
+    h: HubConfig,
+    target: Option<String>,
+    insecure_http: bool,
+) -> AppResult<()> {
+    let same_url = target
+        .as_deref()
+        .is_none_or(|t| t.trim_end_matches('/').eq_ignore_ascii_case(&h.url));
+    if same_url {
+        if env.global.json {
+            print_json(
+                &serde_json::json!({ "ok": true, "status": "enrolled", "hub": h.url, "hub_fingerprint": h.fingerprint }),
+            );
+        } else {
+            println!(
+                "{}",
+                tf!("這台電腦已經加入 {url}（要改加入別的 Hub 請加 --repin）", url = h.url)
+            );
+        }
+        return Ok(());
+    }
+    let url = discover::acceptable_url(target.as_deref().unwrap_or_default(), insecure_http).await?;
+    let http = identity::http_client(Duration::from_secs(10))?;
+    let id = identity::fetch(&http, &url)
+        .await?
+        .ok_or_else(|| AppError::Hub(t!("這個 Hub 版本太舊，不支援免金鑰加入（請用 --key）").into()))?;
+    match identity::check_pin(h.fingerprint.as_deref(), &id.fingerprint) {
+        PinCheck::Same => {
+            // 同一個 Hub 換了網址：更新網址就好
+            let mut nh = h;
+            nh.url = url.clone();
+            cfg.hub = Some(nh);
+            config::save(&env.config_dir, cfg)?;
+            println!(
+                "{}",
+                tf!(
+                    "同一個 Hub（指紋 {fp}）的新網址：已改成 {url}",
+                    fp = id.fingerprint,
+                    url = url
+                )
+            );
+            Ok(())
+        }
+        PinCheck::Mismatch { pinned, seen } => Err(AppError::HubIdentity(identity::mismatch_message(&pinned, &seen))),
+        PinCheck::Unpinned => Err(AppError::InvalidArg(tf!(
+            "這台電腦已經加入 {url}；要改加入 {new} 請加 --repin",
+            url = h.url,
+            new = url
+        ))),
+    }
+}
+
+/// 尋找 Hub → 確認指紋 → 送出申請。
+async fn discover_and_request(
+    env: &Env,
+    cfg: &config::AgentConfig,
+    a: &EnrollArgs,
+    explicit: Option<String>,
+) -> AppResult<PendingEnroll> {
+    let opts = discover::Opts {
+        explicit: explicit.clone(),
+        insecure_http: a.insecure_http,
+        ..discover::Opts::default()
+    };
+    if !env.global.json && explicit.is_none() {
+        eprintln!("{}", t!("正在尋找 Security Hub（公司 DNS、區網廣播）…"));
+    }
+    let found = discover::find(&opts).await?;
+    let pinned = if a.repin {
+        None
+    } else {
+        cfg.hub.as_ref().and_then(|h| h.fingerprint.clone())
+    };
+    if !env.global.json && !found.is_empty() {
+        println!("{}", found_table(&found, pinned.as_deref()));
+    }
+    let idx = match discover::choose(&found, pinned.as_deref()) {
+        Choice::One(i) => i,
+        Choice::None => {
+            let detail = found
+                .iter()
+                .filter_map(|f| f.error.clone())
+                .collect::<Vec<_>>()
+                .join("；");
+            return Err(AppError::Hub(if found.is_empty() {
+                crate::i18n::lookup(NOT_FOUND_HINT).into()
+            } else {
+                tf!("找到的 Hub 都不能用：{detail}", detail = detail)
+            }));
+        }
+        Choice::Many(_) => {
+            return Err(AppError::InvalidArg(
+                t!("找到好幾個不同的 Hub：請和管理員確認指紋後，用 ai-security-monitor enroll --hub <網址> 指定")
+                    .into(),
+            ));
+        }
+        Choice::PinnedMismatch(v) => {
+            let seen = found[v[0]].fingerprint().unwrap_or("?").to_string();
+            return Err(AppError::HubIdentity(identity::mismatch_message(
+                pinned.as_deref().unwrap_or("?"),
+                &seen,
+            )));
+        }
+    };
+    let f = &found[idx];
+    let Some(id) = f.identity.clone() else {
+        return Err(AppError::Hub(crate::i18n::lookup(NOT_FOUND_HINT).into()));
+    };
+    if explicit.is_none()
+        && !confirm(
+            env,
+            &tf!(
+                "加入「{name}」（{url}，指紋 {fp}）？",
+                name = id.name,
+                url = f.candidate.url,
+                fp = id.fingerprint
+            ),
+        )?
+    {
+        return Err(AppError::Cancelled);
+    }
+    let (p, _) = start_enroll_request(&env.config_dir, &f.candidate.url, &id, a.accept_remote_actions).await?;
+    Ok(p)
+}
+
+/// 重試也不會過的錯誤（簽章、指紋）：等候迴圈直接停。
+fn fatal_enroll_error(e: &AppError) -> bool {
+    matches!(e, AppError::HubIdentity(_))
+}
+
+/// 免金鑰加入：接著等之前的申請，或尋找 Hub → 確認指紋 → 送出申請 → 等核准。
+async fn enroll_auto(env: &Env, a: EnrollArgs) -> AppResult<()> {
+    let dir = &env.config_dir;
+    let mut cfg = config::load_or_init(dir)?;
+    let wait = crate::util::time::parse_duration(a.wait.as_deref().unwrap_or("15m"))?;
+    let explicit = a
+        .hub
+        .clone()
+        .or(a.url.clone())
+        .map(|u| u.trim().trim_end_matches('/').to_string());
+    let has_key = SecretStore::open(dir).get(KEY_HUB_CLIENT).ok().flatten().is_some();
+    if let (Some(h), true, false) = (cfg.hub.clone(), has_key, a.repin) {
+        let target = explicit.clone().or_else(|| crate::util::env::var("HUB_URL"));
+        return already_enrolled(env, &mut cfg, h, target, a.insecure_http).await;
+    }
+
+    // 有等候中的申請：同一個 Hub（或沒指定）就接著等；指定了別的 Hub 就改申請那個
+    let mut pending = keyless::load_pending(dir);
+    if let (Some(p), Some(e)) = (&pending, &explicit) {
+        if !p.hub_url.eq_ignore_ascii_case(e) {
+            keyless::clear_pending(dir)?;
+            pending = None;
+        }
+    }
+    let pending = match pending {
+        Some(p) => {
+            if !env.global.json {
+                println!("{}", t!("接著等候之前送出的加入申請。"));
+            }
+            p
+        }
+        None => discover_and_request(env, &cfg, &a, explicit).await?,
+    };
+    if !env.global.json {
+        print_waiting(&pending);
+    }
+
+    // 等候核准（每次都重新讀檔：watch／另一個 enroll 也可能在等）
+    let agent = agent_info(&cfg);
+    let deadline = tokio::time::Instant::now() + wait;
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+    loop {
+        let delay = match keyless::step(dir, &mut cfg, &agent, false).await {
+            Ok(Some(Step::Done(reg))) => {
+                finish_message(env, &cfg, &reg);
+                return Ok(());
+            }
+            Ok(Some(Step::Rejected(reason))) => {
+                return Err(AppError::Hub(match reason.filter(|r| !r.trim().is_empty()) {
+                    Some(r) => tf!("管理員拒絕了這台電腦的加入申請：{reason}", reason = r),
+                    None => t!("管理員拒絕了這台電腦的加入申請").into(),
+                }));
+            }
+            Ok(Some(Step::Expired)) | Ok(None) => {
+                return Err(AppError::Hub(
+                    t!("加入申請已過期或被刪除：請重新執行 ai-security-monitor enroll --auto").into(),
+                ));
+            }
+            Ok(Some(Step::Waiting(st))) => keyless::poll_delay(Some(&pending), Some(&st)),
+            Err(e) if fatal_enroll_error(&e) => return Err(e),
+            Err(e) => {
+                if !env.global.json {
+                    eprintln!("{}", tf!("查詢核准狀態失敗，稍後重試：{e}", e = e.message()));
+                }
+                Duration::from_secs(30)
+            }
+        };
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            if env.global.json {
+                print_json(&serde_json::json!({
+                    "ok": true,
+                    "status": "pending",
+                    "hub": pending.hub_url,
+                    "request_id": pending.request_id,
+                    "request_code": pending.request_code,
+                    "hub_fingerprint": pending.hub_fingerprint,
+                }));
+            } else {
+                println!("{}", t!("還沒核准。之後再執行 ai-security-monitor enroll --auto 會接著等；已安裝常駐服務（watch）的話，它會在背景繼續等，核准後自動開始回報。"));
+            }
+            return Ok(());
+        }
+        tokio::select! {
+            _ = tokio::time::sleep(delay.min(deadline - now)) => {}
+            _ = &mut ctrl_c => {
+                println!("{}", t!("已中斷等候；申請仍然有效，之後再執行 ai-security-monitor enroll --auto 會接著等。"));
+                return Ok(());
+            }
+        }
+    }
+}
+
+/// `hub advertise`：用 mDNS 在區網上廣播 Hub。
+pub async fn hub(env: &Env, cmd: HubCmd) -> AppResult<()> {
+    match cmd {
+        HubCmd::Advertise {
+            url,
+            name,
+            duration,
+            insecure_http,
+        } => {
+            let url = discover::acceptable_url(&url, insecure_http).await?;
+            let http = identity::http_client(Duration::from_secs(10))?;
+            let id = identity::fetch(&http, &url)
+                .await?
+                .ok_or_else(|| AppError::Hub(t!("這個 Hub 版本太舊，沒有身分端點，不能廣播").into()))?;
+            let host = hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let instance = name.unwrap_or_else(|| format!("{} ({host})", id.name));
+            let dur = duration.as_deref().map(crate::util::time::parse_duration).transpose()?;
+            let (daemon, fullname) = crate::hub::advertise::start(&url, &id, &instance)?;
+            if env.global.json {
+                print_json(
+                    &serde_json::json!({ "ok": true, "advertising": fullname, "url": url, "fingerprint": id.fingerprint }),
+                );
+            } else {
+                println!(
+                    "{}",
+                    tf!(
+                        "正在區網廣播「{name}」→ {url}（指紋 {fp}）。按 Ctrl-C 結束。",
+                        name = instance,
+                        url = url,
+                        fp = id.fingerprint
+                    )
+                );
+            }
+            let stop = crate::service::instance::stopped();
+            match dur {
+                Some(d) => {
+                    tokio::select! {
+                        _ = tokio::time::sleep(d) => {}
+                        _ = stop => {}
+                    }
+                }
+                None => stop.await,
+            }
+            crate::hub::advertise::stop(&daemon, &fullname);
+            if !env.global.json {
+                println!("{}", t!("已停止廣播"));
+            }
+            Ok(())
+        }
+    }
+}
+
 pub async fn unenroll(env: &Env) -> AppResult<()> {
     let mut cfg = config::load_or_init(&env.config_dir)?;
     let was = cfg.hub.take();
@@ -155,6 +623,10 @@ pub async fn unenroll(env: &Env) -> AppResult<()> {
     let store = SecretStore::open(&env.config_dir);
     store.delete(KEY_HUB_CLIENT)?;
     store.delete(KEY_HUB_ACTION)?;
+    if let Some(p) = keyless::load_pending(&env.config_dir) {
+        keyless::clear_pending(&env.config_dir)?;
+        println!("{}", tf!("已取消等候中的加入申請（{url}）", url = p.hub_url));
+    }
     match was {
         Some(h) => println!("{}", tf!("已取消註冊：{url}", url = h.url)),
         None => println!("{}", t!("原本就沒有註冊任何 hub")),
@@ -166,6 +638,7 @@ pub async fn status(env: &Env) -> AppResult<()> {
     let cfg = config::load_or_init(&env.config_dir)?;
     let latest = watch::load_latest(&env.config_dir);
     let pending = outbox::list(&env.config_dir).len();
+    let enroll_req = keyless::load_pending(&env.config_dir);
     let key_ok = SecretStore::open(&env.config_dir)
         .get(KEY_HUB_CLIENT)
         .ok()
@@ -182,6 +655,7 @@ pub async fn status(env: &Env) -> AppResult<()> {
             "config_dir": env.config_dir,
             "hub": cfg.hub,
             "client_key": key_ok,
+            "enroll_request": enroll_req.as_ref().map(|p| serde_json::json!({ "hub": p.hub_url, "hub_name": p.hub_name, "hub_fingerprint": p.hub_fingerprint, "request_id": p.request_id, "request_code": p.request_code, "status": p.status, "created_at": p.created_at })),
             "outbox": pending,
             "last_report": latest.as_ref().map(|r| serde_json::json!({ "finished_at": r.finished_at, "score": r.score, "findings": r.findings.len() })),
             "hub_health": health.as_ref().map(|h| match h { Ok(v) => v.clone(), Err(e) => serde_json::json!({ "error": e }) }),
@@ -218,6 +692,20 @@ pub async fn status(env: &Env) -> AppResult<()> {
             },
         ]);
         rows.push(vec![t!("待重送").to_string(), pending.to_string()]);
+        if let Some(fp) = cfg.hub.as_ref().and_then(|h| h.fingerprint.as_deref()) {
+            rows.push(vec![t!("Hub 指紋").to_string(), fp.to_string()]);
+        }
+    }
+    if let Some(p) = &enroll_req {
+        rows.push(vec![
+            t!("加入申請").to_string(),
+            tf!(
+                "等候管理員核准 · {url} · 核對碼 {code} · Hub 指紋 {fp}",
+                url = p.hub_url,
+                code = p.request_code,
+                fp = p.hub_fingerprint
+            ),
+        ]);
     }
     rows.push(vec![
         t!("最後一次掃描").to_string(),
@@ -310,6 +798,50 @@ async fn execute_remote(
             ),
         ),
         Err(e) => (false, e.message()),
+    }
+}
+
+/// 檢查 Hub 身分是否是釘選的那一個；沒釘選過（舊設定）就第一次看到時釘選。回傳能不能上傳。
+async fn hub_identity_ok(env: &Env, c: &HubClient, cfg: &mut config::AgentConfig) -> bool {
+    let pinned = cfg.hub.as_ref().and_then(|h| h.fingerprint.clone());
+    match c.identity().await {
+        Ok(Some(id)) => match identity::check_pin(pinned.as_deref(), &id.fingerprint) {
+            PinCheck::Same => true,
+            PinCheck::Unpinned => {
+                if let Some(h) = cfg.hub.as_mut() {
+                    h.fingerprint = Some(id.fingerprint.clone());
+                    h.public_key = Some(id.public_key.clone());
+                }
+                match config::save(&env.config_dir, cfg) {
+                    Ok(()) => log(env, &tf!("已記下 Hub 指紋 {fp}", fp = id.fingerprint)),
+                    Err(e) => log(env, &e.message()),
+                }
+                true
+            }
+            PinCheck::Mismatch { pinned, seen } => {
+                log(env, &identity::mismatch_message(&pinned, &seen));
+                log(env, t!("Hub 身分不符：停止上傳，直到重新加入"));
+                false
+            }
+        },
+        Ok(None) if pinned.is_some() => {
+            log(
+                env,
+                t!("這個網址的 Hub 不再提供身分驗證（可能被換掉）：停止上傳，直到重新加入"),
+            );
+            false
+        }
+        Ok(None) => true,
+        Err(e @ AppError::HubIdentity(_)) => {
+            log(env, &e.message());
+            log(env, t!("Hub 身分不符：停止上傳，直到重新加入"));
+            false
+        }
+        // 暫時連不上：之後的上傳也會失敗、下一輪重試；不因此擋住
+        Err(e) => {
+            log(env, &tf!("無法確認 Hub 身分：{e}", e = e.message()));
+            true
+        }
     }
 }
 
@@ -446,16 +978,40 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         );
         reapply_firewall(env).await;
     }
-    let cfg = config::load_or_init(&env.config_dir)?;
-    let client = if a.no_upload {
+    let mut cfg = config::load_or_init(&env.config_dir)?;
+    let mut client = if a.no_upload {
         None
     } else {
         watch::client_from_config(&env.config_dir, &cfg)?
     };
-    if client.is_none() && !a.no_upload {
+    // 釘選的 Hub 身分不符就不上傳（TOFU）
+    let mut pin_blocked = false;
+    if let Some(c) = &client {
+        if !hub_identity_ok(env, c, &mut cfg).await {
+            client = None;
+            pin_blocked = true;
+        }
+    }
+    // 免金鑰加入的申請還在等核准：背景繼續問，核准後就開始上傳
+    let mut next_enroll = (!a.no_upload && client.is_none() && !pin_blocked)
+        .then(|| keyless::load_pending(&env.config_dir))
+        .flatten()
+        .map(|p| {
+            log(
+                env,
+                &tf!(
+                    "等候 Hub 管理員核准加入申請：{url}（核對碼 {code}，Hub 指紋 {fp}）",
+                    url = p.hub_url,
+                    code = p.request_code,
+                    fp = p.hub_fingerprint
+                ),
+            );
+            tokio::time::Instant::now()
+        });
+    if client.is_none() && !a.no_upload && !pin_blocked && next_enroll.is_none() {
         log(
             env,
-            t!("尚未註冊 hub：只在本機掃描（ai-security-monitor enroll <HUB_URL> --key … 後才會上傳）"),
+            t!("尚未註冊 hub：只在本機掃描（ai-security-monitor enroll --auto 自動尋找公司的 Hub，或 enroll <HUB_URL> --key …）"),
         );
     }
     let mut interval = crate::util::time::parse_duration(a.interval.as_deref().unwrap_or(&cfg.scan.interval))?;
@@ -507,6 +1063,57 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
 
     loop {
         let now = tokio::time::Instant::now();
+        if next_enroll.is_some_and(|t| now >= t) {
+            next_enroll = match keyless::step(&env.config_dir, &mut cfg, &agent, a.service).await {
+                Ok(Some(Step::Done(r))) => {
+                    log(
+                        env,
+                        &tf!(
+                            "管理員已核准：已加入 {url}（{hub} {version}），開始回報",
+                            url = cfg.hub.as_ref().map(|h| h.url.as_str()).unwrap_or("?"),
+                            hub = r.hub.name,
+                            version = r.hub.version
+                        ),
+                    );
+                    client = watch::client_from_config(&env.config_dir, &cfg).unwrap_or(None);
+                    interval = interval.max(Duration::from_secs(r.hub.min_report_interval_s));
+                    snap_every = snap_every.max(Duration::from_secs(r.hub.snapshot_interval_s.max(10)));
+                    if r.action_key.is_some() && cfg.remote_actions.accept {
+                        log(env, t!("遠端動作：已啟用"));
+                    }
+                    // 馬上送第一份快照與報告
+                    next_snap = now;
+                    next_scan = now;
+                    None
+                }
+                Ok(Some(Step::Rejected(reason))) => {
+                    log(
+                        env,
+                        &tf!(
+                            "管理員拒絕了這台電腦的加入申請：{reason}",
+                            reason = reason.unwrap_or_else(|| "-".into())
+                        ),
+                    );
+                    None
+                }
+                Ok(Some(Step::Expired)) | Ok(None) => {
+                    log(
+                        env,
+                        t!("加入申請已過期或被刪除：請重新執行 ai-security-monitor enroll --auto"),
+                    );
+                    None
+                }
+                Ok(Some(Step::Waiting(st))) => Some(now + keyless::poll_delay(None, Some(&st))),
+                Err(e) if matches!(e, AppError::HubIdentity(_)) => {
+                    log(env, &e.message());
+                    None
+                }
+                Err(e) => {
+                    log(env, &tf!("查詢核准狀態失敗，稍後重試：{e}", e = e.message()));
+                    Some(now + Duration::from_secs(60))
+                }
+            };
+        }
         if now >= next_snap {
             if intel_loaded.elapsed() > Duration::from_secs(3600) {
                 intel = watch::load_intel(&env.config_dir).await;
@@ -627,7 +1234,10 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         if a.once || crate::service::instance::stop_requested() {
             break;
         }
-        let wake = next_scan.min(next_snap).min(next_intel);
+        let mut wake = next_scan.min(next_snap).min(next_intel);
+        if let Some(t) = next_enroll {
+            wake = wake.min(t);
+        }
         tokio::select! {
             _ = tokio::time::sleep_until(wake) => {}
             _ = &mut stop => {

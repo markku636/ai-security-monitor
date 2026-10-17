@@ -251,4 +251,17 @@ mod tests {
             }),
         );
     }
+
+    /// 免金鑰加入申請。`hub-identity.v1.json`／`enroll-status.v1.json` 帶真的簽章（測試專用金鑰），
+    /// 由 hub 那邊產生，這裡只驗（`hub::identity`、`hub::enroll` 的測試）。
+    #[test]
+    fn contract_enroll_request_v1() {
+        let p = crate::hub::enroll::EnrollRequestPayload {
+            agent: sample_agent(),
+            accept_remote_actions: false,
+            request_secret: "Zm9vYmFyLXRlc3Qtb25seS1yZXF1ZXN0LXNlY3JldDE".into(),
+            hub_fingerprint: Some("72AS-YEXT-VNGO-NLC5-W2NM".into()),
+        };
+        check("enroll-request.v1.json", serde_json::to_value(p).unwrap());
+    }
 }

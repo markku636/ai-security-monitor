@@ -29,6 +29,9 @@ pub enum AppError {
     HubAuth,
     #[error("hub rejected payload: {0}")]
     HubRejected(String),
+    /// Hub 身分驗證失敗（簽章不對、指紋和釘選的不同）：重試也不會過。
+    #[error("hub identity: {0}")]
+    HubIdentity(String),
     #[error("mcp error: {0}")]
     Mcp(String),
     #[error("ai provider: {0}")]
@@ -69,6 +72,7 @@ impl AppError {
             AppError::Hub(_) => "hub",
             AppError::HubAuth => "hub_auth",
             AppError::HubRejected(_) => "hub_rejected",
+            AppError::HubIdentity(_) => "hub_identity",
             AppError::Mcp(_) => "mcp",
             AppError::Ai(_) => "ai",
             AppError::Capture(_) => "capture",
@@ -97,6 +101,7 @@ impl AppError {
             AppError::Hub(_) => "ERR_HUB",
             AppError::HubAuth => "ERR_HUB_AUTH",
             AppError::HubRejected(_) => "ERR_HUB_REJECTED",
+            AppError::HubIdentity(_) => "ERR_HUB_IDENTITY",
             AppError::Mcp(_) => "ERR_MCP",
             AppError::Ai(_) => "ERR_AI",
             AppError::Capture(_) => "ERR_CAPTURE",
@@ -125,6 +130,7 @@ impl AppError {
             AppError::Hub(d) => tf!("Hub 錯誤：{detail}", detail = d),
             AppError::HubAuth => t!("Hub 拒絕了這把金鑰").to_string(),
             AppError::HubRejected(d) => tf!("Hub 拒收這份資料（不會重送）：{detail}", detail = d),
+            AppError::HubIdentity(d) => tf!("Hub 身分驗證失敗：{detail}", detail = d),
             AppError::Mcp(d) => tf!("MCP 錯誤：{detail}", detail = d),
             AppError::Ai(d) => tf!("AI 提供者錯誤：{detail}", detail = d),
             AppError::Capture(d) => tf!("抓包錯誤：{detail}", detail = d),

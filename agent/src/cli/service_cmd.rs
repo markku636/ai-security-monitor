@@ -129,6 +129,33 @@ async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool
     res.map(|_| ())
 }
 
+/// 桌面版用：使用者層的開機自動回報（等同 `service install|uninstall --yes`，不提權）。
+/// 和命令列走同一份計畫：會換掉舊版 asa 的登入啟動項目、停掉舊版常駐行程並搬設定目錄。回傳執行結果（每步一行）。
+pub async fn set_user_service(config_dir: &std::path::Path, install: bool) -> AppResult<Vec<String>> {
+    let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
+    let plan = if install {
+        service::plan_install(&target)
+    } else {
+        service::plan_uninstall(&target)
+    };
+    let mut lines = service::apply(&plan, &RealRunner).await?;
+    lines.extend(plan.notes.iter().map(|n| format!("· {n}")));
+    Ok(lines)
+}
+
+/// 桌面版用：使用者層服務的狀態（已安裝／舊版 asa／狀態）、會用哪個執行檔，以及目前常駐中的 watch 數。
+pub async fn user_service_status(config_dir: &std::path::Path) -> AppResult<serde_json::Value> {
+    let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
+    let st = service::scope_status(&target, &RealRunner).await;
+    Ok(serde_json::json!({
+        "status": st,
+        "exe": target.exe,
+        "config_dir": target.config_dir,
+        "running": service::running_watchers(None).len(),
+        "legacy_running": service::legacy_watcher_running(),
+    }))
+}
+
 async fn restart(env: &Env, scope: Scope) -> AppResult<()> {
     let target = service::current_target(scope, &env.config_dir, None, &RealRunner).await?;
     if !target.existing && !target.legacy {

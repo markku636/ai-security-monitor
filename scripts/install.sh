@@ -2,11 +2,17 @@
 # AI Security Monitor (ai-security-monitor) installer for Linux and macOS.
 #
 #   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
-#   sh install.sh [--version 0.2.0] [--dir DIR] [--hub URL --key KEY] [--service none|user|system]
+#   sh install.sh [--version 0.2.0] [--dir DIR] [--hub URL [--key KEY]] [--auto-enroll] [--wait 2m] [--service none|user|system]
+#
+#   --hub URL without --key  keyless: send an enrollment request and wait for an administrator to approve it
+#                            (the script served by a Security Hub at /install.sh has its own URL prefilled)
+#   --auto-enroll            keyless without a URL: find the Hub via company DNS (SRV) or the local network (mDNS)
+#   --wait DUR               how long to wait for approval (default 2m; the service keeps waiting afterwards)
 #
 # Environment variables (same meaning as the options; the old ASA_* names still work):
 #   AI_SECURITY_MONITOR_VERSION, AI_SECURITY_MONITOR_INSTALL_DIR, AI_SECURITY_MONITOR_HUB_URL,
-#   AI_SECURITY_MONITOR_ENROLL_KEY, AI_SECURITY_MONITOR_SERVICE,
+#   AI_SECURITY_MONITOR_ENROLL_KEY, AI_SECURITY_MONITOR_SERVICE, AI_SECURITY_MONITOR_AUTO_ENROLL=1,
+#   AI_SECURITY_MONITOR_ENROLL_WAIT,
 #   AI_SECURITY_MONITOR_DOWNLOAD_BASE  mirror that serves ai-security-monitor-<version>-<os>-<arch> and SHA256SUMS
 #
 # The binary is verified against the release's SHA256SUMS before it is installed.
@@ -19,8 +25,10 @@ DIR="${AI_SECURITY_MONITOR_INSTALL_DIR:-${ASA_INSTALL_DIR:-}}"
 HUB="${AI_SECURITY_MONITOR_HUB_URL:-${ASA_HUB_URL:-}}"
 KEY="${AI_SECURITY_MONITOR_ENROLL_KEY:-${ASA_ENROLL_KEY:-}}"
 SERVICE="${AI_SECURITY_MONITOR_SERVICE:-${ASA_SERVICE:-none}}"
+AUTO="${AI_SECURITY_MONITOR_AUTO_ENROLL:-${ASA_AUTO_ENROLL:-}}"
+WAIT="${AI_SECURITY_MONITOR_ENROLL_WAIT:-${ASA_ENROLL_WAIT:-2m}}"
 BASE="${AI_SECURITY_MONITOR_DOWNLOAD_BASE:-${ASA_DOWNLOAD_BASE:-}}"
-# Security Hub 提供的 /install.sh 會把自己的網址填在這裡（只給 --key 時註冊到這個 Hub）
+# Security Hub 提供的 /install.sh 會把自己的網址填在這裡：沒給 --key 就送出免金鑰加入申請（等管理員核准）
 DEFAULT_HUB=""
 
 say() { printf 'ai-security-monitor-install: %s\n' "$*" >&2; }
@@ -33,15 +41,19 @@ while [ $# -gt 0 ]; do
     --hub) HUB="${2:-}"; shift 2 ;;
     --key) KEY="${2:-}"; shift 2 ;;
     --service) SERVICE="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,14p' "$0" 2>/dev/null || true; exit 0 ;;
+    --auto-enroll) AUTO=1; shift ;;
+    --wait) WAIT="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
 case "$SERVICE" in none|user|system) ;; *) die "--service must be none, user or system" ;; esac
-if [ -n "$KEY" ] && [ -z "$HUB" ]; then HUB="$DEFAULT_HUB"; fi
-if [ -n "$HUB" ] && [ -z "$KEY" ]; then die "--hub needs --key (an enroll key or client key from the Hub)"; fi
+if [ -z "$HUB" ]; then HUB="$DEFAULT_HUB"; fi
 if [ -n "$KEY" ] && [ -z "$HUB" ]; then die "--key needs --hub URL"; fi
+# 免金鑰：有 Hub 網址（或 --auto-enroll 自動尋找）但沒有金鑰
+KEYLESS=""
+if [ -z "$KEY" ] && { [ -n "$HUB" ] || [ "$AUTO" = 1 ]; }; then KEYLESS=1; fi
 
 fetch() {
   if command -v curl >/dev/null 2>&1; then
@@ -115,6 +127,14 @@ for old in /usr/local/bin/asa "$HOME/.local/bin/asa" "$DIR/asa"; do
   fi
 done
 
+# 免金鑰加入：送出申請、等一下核准；還沒核准也繼續（常駐服務會在背景接著等，核准後自動開始回報）
+keyless_enroll() {
+  if [ -n "$HUB" ]; then set -- "$@" enroll --auto --hub "$HUB"; else set -- "$@" enroll --auto; fi
+  if ! "$@" --wait "$WAIT" --yes; then
+    say "could not send the enrollment request; run '$NAME enroll --auto' later (or ask the Hub administrator for an enroll key)"
+  fi
+}
+
 ROOT=""
 if [ "$SERVICE" = system ] && [ "$(id -u)" != 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "--service system needs root (sudo)"
@@ -128,12 +148,18 @@ if [ "$SERVICE" = system ]; then
     $ROOT cp -a "$legacy_sysdir" "$sysdir"
   fi
   # 系統服務用系統設定目錄與檔案密鑰庫：直接註冊到那裡
-  if [ -n "$HUB" ]; then
+  if [ -n "$KEYLESS" ]; then
+    keyless_enroll $ROOT "$bin" --config-dir "$sysdir" --secrets-backend file
+  elif [ -n "$HUB" ]; then
     $ROOT "$bin" --config-dir "$sysdir" --secrets-backend file enroll "$HUB" --key "$KEY"
   fi
   $ROOT "$bin" --config-dir "$sysdir" service install --system --yes
 else
-  if [ -n "$HUB" ]; then "$bin" enroll "$HUB" --key "$KEY"; fi
+  if [ -n "$KEYLESS" ]; then
+    keyless_enroll "$bin"
+  elif [ -n "$HUB" ]; then
+    "$bin" enroll "$HUB" --key "$KEY"
+  fi
   if [ "$SERVICE" = user ]; then "$bin" service install --yes; fi
 fi
 say "done. Next: $NAME doctor · $NAME scan · $NAME service status"
