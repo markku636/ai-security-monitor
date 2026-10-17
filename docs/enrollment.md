@@ -98,9 +98,17 @@ Hub「新增主機 → 自動尋找」卡片會依這個 Hub 的網址與指紋�
   TXT 帶 `fp=`、`v=`、`path=`、`proto=`，設了 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` 時另帶 `url=`（建議設，電腦端直接用它）。
 - **Docker 注意**：Docker Desktop（Windows／macOS）與預設的 bridge 網路**不會把 multicast 送到區網**，容器裡的廣播出不去。做法擇一：
   - Linux 主機：Hub 容器用 `network_mode: host`（compose 的 `ports:` 要拿掉，改用 `PORT` 環境變數決定 port）。
-  - 任何平台（建議）：在區網上任一台電腦（通常就是跑 Docker 的那台）執行
-    `ai-security-monitor hub advertise --url https://hub.corp.example`，它會先驗 Hub 的身分，再代為廣播（TXT 帶 `url=`，所以不必和 Hub 在同一台）。
-    要長期執行可用 systemd／工作排程器，或 compose（Linux）：
+  - 任何平台（建議）：讓區網上一台電腦（通常就是跑 Docker 的那台）的**背景服務**代為廣播：
+    桌面版「設定 → 讓區網裡的電腦找到這台的 Hub」打開，或命令列
+
+    ```bash
+    ai-security-monitor config set hub.advertise_url http://192.168.1.10:8088   # 區網的電腦要連的網址
+    ```
+
+    背景服務（`watch`）每分鐘確認一次 Hub 的身分端點：連得到才廣播（TXT 帶 `url=` 與 Hub 指紋 `fp=`），連續 3 次連不到就停止廣播，
+    Hub 回來再自動恢復；設定改了一分鐘內生效，`off` 關閉。心跳會回報廣播狀態，Hub「新增主機」頁看得到哪台電腦在幫忙廣播。
+  - 只想臨時廣播：`ai-security-monitor hub advertise --url https://hub.corp.example`（前景執行到 Ctrl-C）。它會先驗 Hub 的身分，再代為廣播
+    （TXT 帶 `url=`，所以不必和 Hub 在同一台）。要用它長期執行可用 systemd／工作排程器，或 compose（Linux）：
 
     ```yaml
     services:
@@ -115,6 +123,15 @@ Hub「新增主機 → 自動尋找」卡片會依這個 Hub 的網址與指紋�
 
 - 防火牆：電腦端找 Hub 只送出 multicast 查詢並接收回應（UDP 5353）；廣播端（Hub 或 `hub advertise`）要允許 UDP 5353 進來，Windows 第一次執行可能跳出防火牆詢問。
 - mDNS 只在同一個網段（同一個廣播網域）有效；跨網段、VPN、遠端辦公室請用 DNS SRV 或預填網址的安裝指令。
+- **單機版只綁 127.0.0.1**：辦公室其他電腦連不到，廣播了也沒用。要給全辦公室用，改用伺服器版（`docker/compose.yml`），或在單機版的 `.env` 設
+  `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` 與 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<區網 IP>:8088` 後重新 `docker compose up -d`。
+  打開之後同一個網路的任何人都看得到登入頁、也能呼叫上傳 API：一定要有管理員金鑰、只在公司內網使用，對外請放在 https 反向代理後面。
+
+### Hub 上看「辦公室的電腦找得到這個 Hub 嗎？」
+
+Hub「新增主機」頁最上面用一句白話說明現在的狀況（找得到／連得到但還找不到／連不到），並逐項列出：綁定位址（compose 帶進容器的
+`AI_SECURITY_MONITOR_HUB_BIND`）、對外網址是不是本機位址、Hub 自己的 mDNS（在 Docker 裡會提醒出不了區網）、有沒有電腦在幫忙廣播
+（最近 15 分鐘的心跳，指紋要和這個 Hub 相同）、公司 DNS 有沒有 `_aisecmon._tcp` SRV 紀錄（對外網址是公司網域的名稱才查）。連不到時附上改法與安全提醒。
 
 ## Hub 端設定
 
@@ -122,6 +139,7 @@ Hub「新增主機 → 自動尋找」卡片會依這個 Hub 的網址與指紋�
 |---|---|---|
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | 開 | `0` 關閉免金鑰加入申請（只能用金鑰） |
 | `AI_SECURITY_MONITOR_HUB_MDNS` | 伺服器版開、單機版關 | 區網 mDNS 廣播 |
+| `AI_SECURITY_MONITOR_HUB_BIND` | 伺服器版 `0.0.0.0`、單機版 `127.0.0.1` | compose 的主機綁定位址（也帶進容器，讓「新增主機」頁判斷區網連不連得到） |
 | `AI_SECURITY_MONITOR_HUB_NAME` | `Security Hub` | 電腦端看到的 Hub 名稱 |
 | `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | － | 對外網址：安裝指令、SRV 範例與 mDNS 的 `url=` 都用它 |
 | `AI_SECURITY_MONITOR_HUB_TRUST_PROXY` | 關 | 在反向代理後面時開啟，自動核准網段才看得到真正的來源 IP |
@@ -133,7 +151,9 @@ API 細節見 [Agent ↔ Hub 契約](hub-contract.md#免金鑰加入)。
 
 | 狀況 | 原因與處理 |
 |---|---|
-| `沒有找到 Security Hub` | DNS 沒有 SRV 紀錄、不在同一個網段、或 Hub 在 Docker 裡沒廣播出來 → 用 `enroll --hub <網址>`，或依上面設定 SRV／`hub advertise` |
+| `沒有找到 Security Hub` | DNS 沒有 SRV 紀錄、不在同一個網段、或 Hub 在 Docker 裡沒廣播出來 → 用 `enroll --hub <網址>`，或依上面設定 SRV／`hub.advertise_url` |
+| `discover` 只找到「設定檔」那一列 | 這台已經加入的 Hub 連得到，但公司 DNS 與區網廣播都找不到它 → 其他電腦也會找不到；照上面設定 SRV 或 `hub.advertise_url`，並確認 Hub 不是只綁 127.0.0.1 |
+| 打開區網廣播後別台還是找不到 | Hub 只綁 127.0.0.1（廣播的網址連不到時會自動暫停，`status`／桌面版會顯示原因）、防火牆擋了 UDP 5353，或不在同一個網段 |
 | `找到好幾個不同的 Hub` | 區網上有多個 Hub（例如測試機）→ 問管理員指紋，用 `--hub` 指定 |
 | `Hub 的身分指紋變了` | Hub 重新安裝（換了資料庫）或有人冒充 → 先跟管理員確認新指紋，再 `enroll --auto --repin` |
 | `這個 Hub 沒有開放免金鑰加入` | Hub 設了 `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0` → 跟管理員拿註冊金鑰 |

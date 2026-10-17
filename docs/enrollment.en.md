@@ -111,9 +111,19 @@ The Hub's *Add hosts → Automatic discovery* card generates ready-to-copy comma
 - **Docker caveat**: Docker Desktop (Windows/macOS) and the default bridge network **do not pass multicast to the LAN**, so advertising from inside
   the container never leaves it. Pick one:
   - Linux host: run the Hub container with `network_mode: host` (drop `ports:` and choose the port with the `PORT` environment variable).
-  - Any platform (recommended): on any computer in the LAN (usually the Docker host) run
-    `ai-security-monitor hub advertise --url https://hub.corp.example`. It verifies the Hub's identity first and then advertises on its behalf
-    (TXT carries `url=`, so it does not have to be the same machine as the Hub). Keep it running with systemd / Task Scheduler, or compose (Linux):
+  - Any platform (recommended): let the **background service** of a computer in the LAN (usually the Docker host) advertise it:
+    turn on desktop app Settings → "Let computers on the LAN find the Hub on this computer", or run
+
+    ```bash
+    ai-security-monitor config set hub.advertise_url http://192.168.1.10:8088   # the URL other computers should use
+    ```
+
+    The background service (`watch`) checks the Hub's identity endpoint every minute: it advertises only while the Hub answers (TXT carries `url=`
+    and the Hub fingerprint `fp=`), stops after 3 failed checks in a row and resumes when the Hub is back; changes take effect within a minute,
+    `off` turns it off. The heartbeat reports the advertising state, so the Hub's "Add a host" page shows which computer advertises it.
+  - Just for a while: `ai-security-monitor hub advertise --url https://hub.corp.example` (runs in the foreground until Ctrl-C). It verifies the
+    Hub's identity first and then advertises on its behalf (TXT carries `url=`, so it does not have to be the same machine as the Hub). To keep that
+    running use systemd / Task Scheduler, or compose (Linux):
 
     ```yaml
     services:
@@ -129,6 +139,18 @@ The Hub's *Add hosts → Automatic discovery* card generates ready-to-copy comma
 - Firewalls: finding a Hub only sends a multicast query and receives answers (UDP 5353). The advertiser (Hub or `hub advertise`) must accept
   incoming UDP 5353; Windows may show a firewall prompt the first time.
 - mDNS only works inside one network segment (one broadcast domain). Across subnets, VPNs or branch offices use DNS SRV or the prefilled install command.
+- **The standalone edition binds 127.0.0.1**: other office computers cannot reach it, so advertising it is pointless. For the whole office, switch to
+  the server edition (`docker/compose.yml`), or set `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` and `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<LAN IP>:8088`
+  in the standalone `.env` and run `docker compose up -d` again. Afterwards anyone on the network can see the sign-in page and call the upload API:
+  always set an admin key, use it only on the company network, and put an https reverse proxy in front for access from outside.
+
+### On the Hub: "Can office computers find this Hub?"
+
+The top of the Hub's "Add a host" page sums up the situation in one plain sentence (findable / reachable but not findable yet / unreachable) and lists
+each item: the bind address (`AI_SECURITY_MONITOR_HUB_BIND`, passed into the container by compose), whether the public URL is a local address, the
+Hub's own mDNS (with a warning inside Docker), computers advertising it (heartbeats from the last 15 minutes whose fingerprint matches this Hub), and
+whether the company DNS has an `_aisecmon._tcp` SRV record (checked when the public URL is a name under a company domain). When it is unreachable the
+page shows how to fix it, with a security note.
 
 ## Hub settings
 
@@ -136,6 +158,7 @@ The Hub's *Add hosts → Automatic discovery* card generates ready-to-copy comma
 |---|---|---|
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | on | `0` disables keyless enrollment requests (keys only) |
 | `AI_SECURITY_MONITOR_HUB_MDNS` | on for server, off for standalone | local network mDNS advertising |
+| `AI_SECURITY_MONITOR_HUB_BIND` | `0.0.0.0` for server, `127.0.0.1` for standalone | host bind address in compose (also passed into the container so "Add a host" can tell whether the LAN can reach it) |
 | `AI_SECURITY_MONITOR_HUB_NAME` | `Security Hub` | Hub name shown to computers |
 | `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | – | public URL used by install commands, SRV examples and mDNS `url=` |
 | `AI_SECURITY_MONITOR_HUB_TRUST_PROXY` | off | turn on behind a reverse proxy so auto-approve networks see the real client IP |
@@ -147,7 +170,9 @@ while; the identity endpoint allows 120 requests per minute. API details: [Agent
 
 | Symptom | Cause and fix |
 |---|---|
-| `No Security Hub found` | No SRV record, different network segment, or the Hub is in Docker and its broadcast does not leave the container → use `enroll --hub <url>`, or set up SRV / `hub advertise` as above |
+| `No Security Hub found` | No SRV record, different network segment, or the Hub is in Docker and its broadcast does not leave the container → use `enroll --hub <url>`, or set up SRV / `hub.advertise_url` as above |
+| `discover` only lists the "config file" row | The Hub this computer joined is reachable, but neither the company DNS nor LAN advertising finds it → other computers won't find it either; set up SRV or `hub.advertise_url`, and make sure the Hub does not bind 127.0.0.1 only |
+| Others still can't find it after turning on LAN advertising | The Hub binds 127.0.0.1 only (advertising pauses when its URL is unreachable; `status` and the desktop app show why), UDP 5353 is blocked by a firewall, or they are on another subnet |
 | `Found several different Hubs` | More than one Hub on the network (e.g. a test box) → ask for the fingerprint and pick one with `--hub` |
 | `The Hub identity fingerprint changed` | The Hub was reinstalled (new database) or someone impersonates it → confirm the new fingerprint with your administrator, then `enroll --auto --repin` |
 | `This Hub does not accept keyless enrollment` | The Hub has `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS=0` → ask for an enroll key |

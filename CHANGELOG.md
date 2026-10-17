@@ -12,6 +12,19 @@
   - **桌面版**：總覽多一排卡片（網路速率與最近 1 小時小圖；開啟效能時另有 CPU、記憶體、磁碟），設定頁新增效能蒐集開關。
   - **CI**：三個平台檢查 `metrics --json` 讀得到介面計數器、效能預設關、開啟後數值合理（Windows 檢查 TCP 延伸統計）；Hub smoke 送契約範例、e2e 確認 `watch --once` 有送樣本。`scripts/demo-seed.mjs` 多了 7 天的流量樣本（三台開啟效能、兩台沒開），README 與文件加上流量頁與主機「效能」分頁截圖。
 - **可疑 IP 排名可以選時間範圍（最近 7 天／30 天／全部，預設 30 天）**：依「最後一次被判可疑」的時間篩選，之後判定變好的 IP（例如修正前的 beacon 誤報）過了這段時間就不再列出。目的地表新增 `last_risky_at`（migration 0010，既有的可疑目的地先用最後看到的時間回填）。
+- **自動更新（每台電腦一個設定 `update.mode`：關閉／有新版時通知（預設）／自動更新）**（[docs/install.md](docs/install.md#更新)）：
+  - **命令列版背景服務**：`ai-security-monitor config set update.mode off|notify|auto`。`watch` 每天最多查一次 GitHub Release（服務啟動後 2～20 分鐘第一次，之後 24 小時＋0～3 小時隨機；照樣支援 `AI_SECURITY_MONITOR_UPDATE_URL` 鏡像與 `asa-*` 舊資產名），結果記在 `<設定目錄>/update-state.json`、放進心跳。`auto` 時背景服務（`--service`）下載、比對 `SHA256SUMS`、原地替換後重新啟動：Windows 服務以失敗結束碼結束讓「失敗時重新啟動」拉起、systemd／launchd 同理、登入時啟動的（`HKCU\…\Run`、XDG autostart）先啟動新版再結束。開發版（debug、`cargo run`、`target/` 底下）與套件管理員裝的（`/usr/bin`、Homebrew、Scoop、winget、Chocolatey、Nix、Snap）只通知不安裝；前景 `watch`、`watch --once` 也只記錄。
+  - **手動更新**：`self-update --yes` 更新後自動重新啟動正在用這個執行檔的背景服務（`--no-restart` 不重啟；系統服務沒有系統管理員權限時提示指令）；套件管理員／開發版要加 `--force`；桌面版內建的 agent 一律拒絕（不然會把桌面版換成命令列版）。`version --check`／`self-update --check` 也記下最新版。`status` 多了「自動更新」「上次上傳」「區網廣播」。
+  - **桌面版**：用 tauri-plugin-updater 讀 `releases/latest/download/latest.json`，安裝檔有 minisign 簽章、App 內建公鑰驗過才裝。「設定 → 背景自動回報與自動更新」：三種模式（白話說明）、「檢查更新」（目前／最新版本、看更新內容）、「立即更新」（Windows 安裝程式被動模式，裝完自動重新開啟）。通知模式在右下角顯示「有新版 0.x.y，立即更新」；自動模式先下載，從系統匣「結束」或下次開啟時安裝（登入時以系統匣啟動、還沒開過視窗就直接裝）。.deb 安裝要按「立即更新」並輸入密碼才裝。
+  - **誰負責更新**：桌面版和它的背景自動回報是同一個執行檔，一律由桌面版的更新器負責；Windows 安裝程式裝完會依 `HKCU\…\Run` 把背景回報重新啟動（NSIS 收尾步驟 `windows/hooks.nsh`），macOS／Linux 由桌面版重新啟動，桌面版啟動時也會把「有登記卻沒在跑」的背景回報拉起來。另外裝的命令列版背景服務列在同一區，照它自己的 `update.mode`，也可以按「更新命令列版」。
+  - **Hub**：心跳多了 `update`（模式、誰負責、最新版）與 `advertising` 欄位（migration 0012：`agents.update_info`、`agents.advertising`）；主機清單與主機頁顯示「有新版 0.x.y」（agent 回報的或 Hub 自己查到的最新版，滑鼠移上去說明這台會怎麼更新），主機頁多了「自動更新」「最後上傳」「區網廣播」。
+  - **發版**：release.yml 用 GitHub secrets `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)` 簽桌面版更新檔（NSIS、macOS `.app.tar.gz` x64／arm64、AppImage；.deb 有簽章才加），`scripts/updater-manifest.mjs` 先用 `tauri.conf.json` 的公鑰逐一驗章（金鑰對不上就失敗）再產生 `latest.json`；Release 多了 `latest.json` 與兩個 `.app.tar.gz`。本機 `npx tauri build` 不需要私鑰（更新檔只在 CI 用 `src-tauri/tauri.updater.conf.json` 產生）。
+- **手動上傳**：新增 `ai-security-monitor upload`（立即掃描並上傳：先補送 outbox，再上傳連線快照、完整報告與心跳，印出「已上傳，Hub 收到 N 筆」；失敗的報告照樣暫存）。桌面版總覽多了「上傳到 Security Hub」卡片：上次上傳是多久以前、待重送幾份、「立即掃描並上傳到 Hub」與「重新上傳」，有進度與結果。上傳時間記在 `<設定目錄>/upload-state.json`。
+- **區網找 Hub 更實用**（[docs/enrollment.md](docs/enrollment.md#mdns-廣播)）：
+  - 背景服務可以常駐幫 Hub 做 mDNS 廣播：`config set hub.advertise_url http://<區網 IP>:8088`，或桌面版設定頁「讓區網裡的電腦找到這台的 Hub」（偵測到這台有跑 Hub 才顯示，自動帶這台的區網 IP，開之前確認網址連得到、指紋和這台的 Hub 相同）。每分鐘確認 Hub 身分，TXT 帶 `fp=`，連續 3 次連不到就停止廣播、恢復後自動繼續；設定改了一分鐘內生效；狀態放進心跳。`hub advertise` 前景指令照舊。
+  - Hub「新增主機」頁最上面多了「辦公室的電腦找得到這個 Hub 嗎？」：一句白話結論＋逐項（綁定位址、對外網址是不是本機、Hub 自己的 mDNS 與 Docker 限制、哪台電腦在幫忙廣播、公司 DNS 有沒有 SRV），連不到時說明怎麼改成伺服器版或設 `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` 與安全提醒。compose 把 `AI_SECURITY_MONITOR_HUB_BIND` 帶進容器；單機版的 port 綁定改成讀這個變數（預設仍是 127.0.0.1），也可以設 `AI_SECURITY_MONITOR_HUB_MDNS`。
+  - 桌面版「尋找公司的 Hub」：每一列顯示找到的方式（滑鼠移上去說明）、連不連得到（連不到附原因）、指紋，「重新尋找」；找不到時說明三種解法（問管理員要網址、Hub 要讓區網連得到、Docker Desktop 要有人幫忙廣播）。`discover` 只找到設定檔那一列時提示下一步（JSON 多 `hint`）。
+- **背景服務偵測**：桌面版執行檔帶 `watch --service` 的常駐行程現在也認得出來（Windows 上以前認不出，設定頁顯示「沒在跑」、關掉開關也不會結束它）。
 - **減少「週期性連線（疑似 beacon）」誤報**：瀏覽器、VS Code、Claude 等一般用戶端反覆開關 keep-alive 連到 Cloudflare、Microsoft、Google 這類服務，以前會被判可疑而佔滿「可疑 IP 排名」。現在週期至少要是快照間隔的 3 倍才算數（間隔只有一兩個快照時，規律其實是取樣造成的），連到已知良好服務或來自一般用戶端（瀏覽器、編輯器、AI 工具、通訊與同步軟體）的週期性不再判可疑；node、python、PowerShell 等通用執行環境與不明程式照樣偵測。
 - **圖示改成滿版圓角方塊（參考 db-kit）**：桌面版的應用程式圖示（標題列、工作列、系統匣、安裝檔）與 Hub 的瀏覽器分頁圖示改成深藍圓角方塊、海豹放大到帽子與臉撐滿，小尺寸（16／32px）也看得清楚；側欄的透明背景 logo 不變。
 ## v0.3.0 — 2026-10-17

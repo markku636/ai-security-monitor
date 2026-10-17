@@ -85,13 +85,39 @@ The Hub's "Add a host" page (`/install`) creates an enroll key and shows command
 
 ## Update
 
+<a id="updating"></a>
+
+### Automatic updates (`update.mode`)
+
+One setting per computer, shared by the desktop app and the command line (stored in `config.json` in the config directory):
+
+| Setting | Meaning |
+|---|---|
+| `off` | Never check. |
+| `notify` (default) | Check GitHub Releases once a day (first 2–20 minutes after the service starts, then every 24 hours plus 0–3 hours of jitter); remember a new version (`ai-security-monitor status` shows it), include it in the heartbeat so the Hub's host list shows "New version", and show a notice in the desktop app. **Nothing is installed automatically.** |
+| `auto` | Same, and the background service (`watch --service`) downloads the release, verifies `SHA256SUMS`, replaces itself and restarts on the new version; the desktop app downloads it first and installs it when you quit or reopen it. |
+
 ```bash
-ai-security-monitor self-update --check           # is there a new version? (ai-security-monitor version --check works too)
-ai-security-monitor self-update --yes             # download, verify against SHA256SUMS, replace in place
-ai-security-monitor self-update --to 0.2.0 --yes  # a specific version (rollback works too)
-ai-security-monitor service restart --yes         # switch the resident ai-security-monitor watch to the new version (add --system for the system service)
+ai-security-monitor config set update.mode auto   # or off / notify
 ```
 
+- **Who updates what**: the desktop app and its "background reporting" are the same executable, so the **desktop app's updater** owns it (the installers carry a minisign signature that the app checks against its built-in public key); the agent built into the desktop app never updates itself, and `self-update` refuses there (it would replace the desktop app with the command-line build). A separately installed command-line build follows its own `update.mode` / `self-update`.
+- **Never installed automatically**: development builds (built from source, `cargo run`) and package-manager installs (`/usr/bin`, Homebrew, Scoop, winget, Chocolatey, Nix, Snap) are only notified; update those with the package manager (a manual `self-update` needs `--force`).
+- **Restart**: the Windows service exits with a failure code and its "restart on failure" action brings it back within a minute; systemd (`Restart=on-failure`) and launchd (`KeepAlive`) likewise; sign-in launches (Windows `HKCU\…\Run`, XDG autostart) start the new version and then exit.
+- A foreground `watch` (not a service) and `watch --once` never install; they only record that a new version exists.
+
+### Updating by hand
+
+```bash
+ai-security-monitor version --check                 # is there a new version? (ai-security-monitor self-update --check works too)
+ai-security-monitor self-update --yes               # download, verify against SHA256SUMS, replace in place, restart background services that use this executable
+ai-security-monitor self-update --to 0.2.0 --yes    # a specific version (rollback works too)
+ai-security-monitor self-update --yes --no-restart  # replace only, don't restart the background service
+```
+
+Desktop app: Settings → "Background reporting and automatic updates" → "Check for updates" shows the current and latest versions, "Update now" updates right away (the app reopens and background reporting switches to the new version). A separately installed command-line background service is listed there too, with "Update the command-line build" when it is out of date.
+
+- For the system service (`--system`) run `self-update` as an administrator, or afterwards `ai-security-monitor service restart --system --yes`.
 - `SHA256SUMS` is always checked; a release without it, or a hash mismatch, aborts the update.
 - A running exe cannot be overwritten on Windows: the old file is renamed to `ai-security-monitor.exe.old-<time>` and removed on the next update.
 - When installed somewhere that needs root, such as `/usr/local/bin`, run `sudo ai-security-monitor self-update --yes`.

@@ -176,10 +176,43 @@ Nothing is sent to us; the project has no telemetry and nothing reports back to 
 
 - **Downloading threat intel** from list providers such as abuse.ch and Spamhaus (from your own Hub first, if you have one). These are downloads; your connections are not uploaded.
 - **Vulnerability checks**: on Linux, installed package names and versions are looked up on OSV.dev (turn off with `--no-online`).
-- **Update checks**: `self-update` and `version --check` ask GitHub Releases; the Hub also checks for new versions and shows a banner to admins (`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` turns it off).
+- **Update checks**: the desktop app and the background service check GitHub Releases once a day by default (they only read the latest version number; `update.mode off`, or "Off" under the desktop app's automatic updates, stops it); `self-update` and `version --check` ask too; the Hub also checks for new versions and shows a banner to admins (`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` turns it off).
 - **When you click**: online IP reputation lookups (`intel lookup --online`, or "Look up external intel" in the Hub, with API keys you provide; private ranges are never sent), and the desktop app's VirusTotal / AbuseIPDB links (they just open the web page in your browser).
 - **AI analysis** goes through the Claude Code / Codex CLI on your own computer, under your account's terms with Anthropic / OpenAI.
 - **Your own Hub**: once enrolled, reports go only to the Hub you chose. Looking for a Hub only queries your company DNS and asks on the local network.
+</details>
+
+<details>
+<summary><b>How do I update? How do I turn automatic updates off?</b></summary>
+
+The default is "notify me when a new version is out": it checks GitHub once a day and tells you (the Hub's host list also shows "New version"); it **does not install anything by itself**.
+
+- **Desktop app**: Settings → "Background reporting and automatic updates": choose Off, Notify me, or Update automatically. "Check for updates" shows the current and latest versions; "Update now" downloads, verifies the signature, installs and reopens the app. With automatic updates the new version is downloaded in the background and installed the next time you quit or reopen the app. Background reporting runs the desktop app itself, so it is updated with it.
+- **Command line**: `ai-security-monitor config set update.mode off` / `notify` (default) / `auto` (the background service downloads, checks SHA256, replaces itself and restarts). By hand: `ai-security-monitor version --check`, then `ai-security-monitor self-update --yes`; the background service is restarted on the new version (the system service needs an administrator). If you installed it with apt, Homebrew, Scoop, winget or another package manager, update it there.
+- To use your own mirror, set `AI_SECURITY_MONITOR_UPDATE_URL` (command line).
+
+See [docs/install.en.md](docs/install.en.md#updating).
+</details>
+
+<details>
+<summary><b>How do I upload to the Hub right now?</b></summary>
+
+The background service already reports on a schedule (a full scan every 10 minutes and a connection snapshot every minute by default). To see results immediately:
+
+- **Desktop app**: on the Overview page, the "Upload to Security Hub" card has "Scan now and upload to the Hub". The card also shows when the last upload happened and how many reports are waiting to be resent (they are queued while the Hub is unreachable); "Upload again" resends them first.
+- **Command line**: `ai-security-monitor upload` resends queued reports, then uploads a connection snapshot, a full scan report and a heartbeat, and prints "Uploaded; the Hub received N findings".
+</details>
+
+<details>
+<summary><b>Why can't my computer find the company Hub?</b></summary>
+
+"Find your company's Hub" relies on an SRV record in the company DNS or on LAN advertising (mDNS). It usually fails for one of three reasons:
+
+1. **The Hub is only open to its own computer**: the standalone edition binds 127.0.0.1 by default, so other office computers can neither reach nor find it. Ask the administrator to switch to the server edition, or add `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` and `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<its LAN IP>:8088` to the Hub's `.env` (always with an admin key, and only on the company network).
+2. **The Hub runs in Docker Desktop**: its LAN advertising cannot leave Docker. On the computer running the Hub, turn on desktop app Settings → "Let computers on the LAN find the Hub on this computer", or run `ai-security-monitor config set hub.advertise_url http://<its LAN IP>:8088`; the background service then advertises it.
+3. **You are on a different subnet**: LAN advertising does not cross routers; the administrator needs to add an `_aisecmon._tcp` SRV record to the company DNS (the Hub's "Add a host" page has ready-made commands).
+
+If nothing works, ask the administrator for the Hub URL: enter it under "Or enter the Hub URL your administrator gave you" in the desktop app, or run `ai-security-monitor enroll --hub <url>`. On the Hub, "Add a host → Can office computers find this Hub?" tells the administrator in plain words which step is missing.
 </details>
 
 <details>
@@ -360,7 +393,8 @@ ai-security-monitor service install --yes        # report automatically after lo
 | `metrics` | Current upload/download rate (per card, per program); with performance collection on also CPU, memory and disk |
 | `ai`, `mcp` | Claude Code / Codex analysis, MCP server and one-step client setup |
 | `enroll`, `discover`, `unenroll`, `status`, `watch`, `service` | Find a Hub, join it, keep reporting, start at boot |
-| `self-update`, `version`, `doctor` | Updates and environment check |
+| `self-update`, `version`, `doctor` | Updates and environment check (`config set update.mode off\|notify\|auto` sets automatic updates) |
+| `upload` | Scan now and upload to the Hub (resends queued reports first) |
 | `allowlist`, `baseline`, `config` | Allowlist, baseline (only show what's new), settings |
 
 `ai-security-monitor --help` and `ai-security-monitor <command> --help` list every option; `--lang en` switches to English, `--json` gives machine-readable output.

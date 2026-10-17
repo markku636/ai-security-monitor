@@ -64,7 +64,13 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 
 ### `POST /api/v1/agents/me/heartbeat`
 
-內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated }`。未知 agent 回 404。
+內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`。未知 agent 回 404。
+
+- `update`（0.4.0 起）：`{ mode: "off"|"notify"|"auto", owner: "agent"|"desktop", latest?, available, checked_at?, note? }`——自動更新設定、
+  誰負責安裝（桌面版內建的 agent 是 `desktop`）、查到的最新版；Hub 存在 `agents.update_info`，主機清單顯示「有新版」。
+- `advertising`（0.4.0 起）：`{ url, state: "advertising"|"hub_unreachable"|"starting"|"error", fingerprint?, error?, since? }`——這台的背景服務
+  在幫哪個 Hub 做區網廣播（`hub.advertise_url`）；Hub 存在 `agents.advertising`，「新增主機」頁用最近 15 分鐘、指紋相同的列判斷有沒有電腦在廣播。
+- 兩者都沒送（舊版 agent、`upload` 的心跳）時保留上一次的值。
 
 ### 遠端動作
 
@@ -116,5 +122,8 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
    每 `metrics.interval`（預設 1 分鐘）：取一個流量（＋效能）樣本 → 排進 `metrics/queue.jsonl` → `ingest/metrics`（每輪最多 3 批、每批 120 個）。
 3. 每 `interval`（預設 10 分鐘）：先送 outbox 裡的舊報告（遇到可重試錯誤就停）→ 掃描 → `ingest/report`；失敗就放進 outbox。
 4. 最新報告存在 `<config>/reports/latest.json`，`ai-security-monitor status` 顯示 hub 狀態、待重送數與最後一次掃描。
+5. 自動更新（`update.mode` 不是 `off`）：每天最多查一次 GitHub Release；`auto` 且是背景服務（`--service`）就下載、驗證、替換並重新啟動。
+6. `hub.advertise_url` 有設：在背景常駐 mDNS 廣播那個 Hub（每分鐘確認 Hub 的身分，連不到就暫停），狀態放進心跳的 `advertising`。
 
-`--once` 跑一輪就結束（適合排程或測試）；`--no-upload` 只在本機掃描。
+`--once` 跑一輪就結束（適合排程或測試，不檢查更新、不廣播）；`--no-upload` 只在本機掃描。`ai-security-monitor upload` 是手動的一輪：補送 outbox、
+快照、完整報告、心跳，並印出結果。

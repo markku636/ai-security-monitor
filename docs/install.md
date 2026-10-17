@@ -84,13 +84,37 @@ Hub 的「新增主機」頁（`/install`）會建立一把註冊金鑰，並給
 
 ## 更新
 
+### 自動更新（`update.mode`）
+
+每台電腦一個設定，桌面版和命令列版共用（存在設定目錄的 `config.json`）：
+
+| 設定 | 說明 |
+|---|---|
+| `off` | 不檢查。 |
+| `notify`（預設） | 每天查一次 GitHub Releases（服務啟動後 2～20 分鐘第一次，之後每 24 小時再加 0～3 小時隨機）；有新版就記下來（`ai-security-monitor status` 看得到）、放進心跳讓 Hub 的主機清單顯示「有新版」，桌面版跳出提示。**不會自己安裝。** |
+| `auto` | 同上，而且背景服務（`watch --service`）會自己下載、比對 `SHA256SUMS`、原地替換，再重新啟動成新版；桌面版則先下載好，結束或重新開啟時安裝。 |
+
 ```bash
-ai-security-monitor self-update --check           # 有沒有新版（ai-security-monitor version --check 也可以）
-ai-security-monitor self-update --yes             # 下載、比對 SHA256SUMS、原地替換
-ai-security-monitor self-update --to 0.2.0 --yes  # 指定版本（也可退回）
-ai-security-monitor service restart --yes         # 讓常駐的 ai-security-monitor watch 換成新版（系統服務加 --system）
+ai-security-monitor config set update.mode auto   # 或 off／notify
 ```
 
+- **誰負責更新**：桌面版和它的「背景自動回報」是同一個執行檔，由**桌面版的更新器**負責（安裝檔有 minisign 簽章，App 內建公鑰驗過才裝）；桌面版帶的 agent 不會自我更新，`self-update` 也會拒絕（不然會把桌面版換成命令列版）。另外裝的命令列版由它自己的 `update.mode`／`self-update` 負責。
+- **不自動安裝的情況**：開發版（從原始碼建置、`cargo run`）、套件管理員裝的（`/usr/bin`、Homebrew、Scoop、winget、Chocolatey、Nix、Snap）——只通知，請用套件管理員更新；手動 `self-update` 要加 `--force` 才會替換。
+- **重新啟動**：Windows 服務以失敗結束碼結束，由服務的「失敗時重新啟動」1 分鐘後拉起；systemd（`Restart=on-failure`）、launchd（`KeepAlive`）同理；登入時啟動的（Windows `HKCU\…\Run`、XDG autostart）先啟動新版再結束自己。
+- 前景執行的 `watch`（不是服務）、`watch --once` 不會自動安裝，只記錄有新版。
+
+### 手動更新
+
+```bash
+ai-security-monitor version --check               # 有沒有新版（ai-security-monitor self-update --check 也可以）
+ai-security-monitor self-update --yes             # 下載、比對 SHA256SUMS、原地替換，並重新啟動用這個執行檔的背景服務
+ai-security-monitor self-update --to 0.2.0 --yes  # 指定版本（也可退回）
+ai-security-monitor self-update --yes --no-restart  # 只替換，不重新啟動背景服務
+```
+
+桌面版：「設定 → 背景自動回報與自動更新」按「檢查更新」看目前與最新版本、「立即更新」馬上更新（裝完自動重新開啟，背景自動回報一起換成新版）。另外裝的命令列版背景服務也會列在那裡，有新版時可以按「更新命令列版」。
+
+- 系統服務（`--system`）要用系統管理員執行 `self-update`，或更新後執行 `ai-security-monitor service restart --system --yes`。
 - 一律比對 `SHA256SUMS`；Release 沒有 `SHA256SUMS` 或雜湊不符就放棄。
 - Windows 執行中的 exe 不能覆寫：舊檔改名成 `ai-security-monitor.exe.old-<時間>`，下次更新時清掉。
 - 安裝在 `/usr/local/bin` 之類需要 root 的位置時，用 `sudo ai-security-monitor self-update --yes`。

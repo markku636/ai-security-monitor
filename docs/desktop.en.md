@@ -62,6 +62,32 @@ From 0.2.0 the desktop app is called **AI Security Monitor** and its application
 Scan reports, threat intel, Hub enrollment and keys live in the agent's config directory, not in those folders: the first 0.2.0 command-line run
 moves `%APPDATA%\ai-security-agent` to `%APPDATA%\ai-security-monitor`, and the new desktop app picks it up without re-enrolling.
 
+## Automatic updates
+
+Settings → "Background reporting and automatic updates":
+
+- **Automatic updates**: "Off", "Notify me when a new version is out (recommended, default)", "Update automatically". It checks once a day (first about 30 seconds after start). In notify mode a "New version 0.x.y" notice appears in the bottom-right corner; press "Update now" or dismiss it. In automatic mode the update is downloaded in the background and installed the next time you choose "Quit" from the tray or reopen the app (if the app was started in the tray at sign-in and its window has not been opened yet, it installs right away).
+- **Check for updates / Update now** work at any time regardless of the setting, and show the current version, the latest version and a link to the release notes.
+- Updates carry a minisign signature checked against the public key built into the app; on Windows the installer runs in passive mode (progress bar only) and the app reopens afterwards.
+- **Background reporting is updated with it**: it runs the desktop executable, so it switches to the new version too (on Windows the installer restarts it from `HKCU\…\Run`; on macOS/Linux the app restarts it). A separately installed command-line background service is listed in the same section; it follows its own `update.mode`, and "Update the command-line build" updates it on demand.
+- Installed from the .deb: automatic updates are downloaded but only installed when you press "Update now" and enter an administrator password. Development builds (built from source) are not updated.
+- The setting is shared with the command line (`update.mode` in `config.json`); see [Install and update](install.en.md#updating).
+
+## Upload to the Hub now
+
+After joining a Hub, the Overview page has an "Upload to Security Hub" card: when the last upload happened, how many reports are waiting to be resent (queued while the Hub is unreachable), and "Scan now and upload to the Hub", which resends queued reports, uploads a connection snapshot, runs a full scan and uploads it, sends a heartbeat, and then reports "Uploaded; the Hub received N findings". The command-line equivalent is `ai-security-monitor upload`.
+
+## Let computers on the LAN find the Hub on this computer
+
+When this computer runs a Security Hub (e.g. the standalone edition in Docker Desktop), Settings shows "Let computers on the LAN find the Hub on this computer": turn it on and enter the URL other computers should use (this computer's LAN IP is filled in, e.g. `http://192.168.1.10:8088`); background reporting then advertises it on the LAN (mDNS, with the Hub fingerprint in TXT) and colleagues see it under "Find your company's Hub". Advertising pauses while the Hub is unreachable and resumes automatically.
+
+- Before turning it on, the app checks that the URL reaches the Hub and that it is the same Hub as the one on this computer. The standalone Hub binds 127.0.0.1 by default and is unreachable from the LAN: set `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` in the Hub's `.env` first (see [Find the Hub automatically](enrollment.en.md#mdns-advertising)).
+- Background reporting must be on for advertising to keep running. Command-line equivalent: `ai-security-monitor config set hub.advertise_url <url>`.
+
+## Finding your company's Hub
+
+The "Join company Hub" page lists every Hub found: how it was found (company DNS, LAN advertising, config file…, with a tooltip), whether it is reachable (with the reason when not), and its fingerprint. "Search again" repeats the search. When nothing is found, the page explains the three usual fixes: ask the administrator for the Hub URL, make the Hub reachable on the LAN, and have a computer advertise a Hub that runs in Docker Desktop.
+
 ## How it relates to the CLI and service
 
 - It shares the config directory (`%APPDATA%\ai-security-monitor` etc.), so it sees the background `ai-security-monitor watch`'s latest report, intel and Hub enrollment.

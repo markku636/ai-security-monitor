@@ -65,7 +65,15 @@ Body: `contract/metrics.v1.json` `{ agent_id, performance, samples: [{ ts, inter
 
 ### `POST /api/v1/agents/me/heartbeat`
 
-Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated }`. Unknown agents get 404.
+Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`. Unknown agents get 404.
+
+- `update` (0.4.0+): `{ mode: "off"|"notify"|"auto", owner: "agent"|"desktop", latest?, available, checked_at?, note? }` — the automatic-update
+  setting, who installs updates (`desktop` for the agent built into the desktop app) and the latest version found; stored in `agents.update_info`,
+  the host list shows "New version".
+- `advertising` (0.4.0+): `{ url, state: "advertising"|"hub_unreachable"|"starting"|"error", fingerprint?, error?, since? }` — which Hub this
+  computer's background service advertises on the LAN (`hub.advertise_url`); stored in `agents.advertising`; "Add a host" counts rows from the last
+  15 minutes whose fingerprint matches.
+- When either is missing (older agents, the heartbeat sent by `upload`) the previous value is kept.
 
 ### Remote actions
 
@@ -121,5 +129,8 @@ All binary values are base64url without padding; fingerprints/codes are RFC 4648
    Every `metrics.interval` (default 1 min): take a traffic (+ performance) sample → queue it in `metrics/queue.jsonl` → `ingest/metrics` (up to 3 batches of 120 per round).
 3. Every `interval` (default 10 min): flush queued reports first (stop at the first retryable error) → scan → `ingest/report`; queue it on failure.
 4. The latest report is saved to `<config>/reports/latest.json`; `ai-security-monitor status` shows hub health, queued reports and the last scan.
+5. Automatic updates (`update.mode` not `off`): check GitHub Releases at most once a day; with `auto` in a background service (`--service`), download, verify, replace and restart.
+6. With `hub.advertise_url` set: keep advertising that Hub over mDNS in the background (its identity is checked every minute; advertising pauses while it is unreachable); the state goes into the heartbeat's `advertising`.
 
-`--once` runs a single round (handy for schedulers and tests); `--no-upload` scans locally only.
+`--once` runs a single round (handy for schedulers and tests; no update checks, no advertising); `--no-upload` scans locally only. `ai-security-monitor upload`
+is a manual round: flush the outbox, snapshot, full report, heartbeat, and print the result.

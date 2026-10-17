@@ -176,10 +176,43 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 
 - **下載威脅情資**：向 abuse.ch、Spamhaus 等名單提供者下載清單（有 Hub 就先向你自己的 Hub 拿）。這是「下載」，不會上傳你的連線。
 - **檢查漏洞**：Linux 會拿已安裝套件的名稱和版本去問 OSV.dev（不想要可以加 `--no-online`）。
-- **檢查新版本**：`self-update`、`version --check` 會查 GitHub Releases；Hub 也會查有沒有新版並在管理頁顯示（`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` 關閉）。
+- **檢查新版本**：桌面版與背景服務預設每天查一次 GitHub Releases（只是讀取最新版本號，`update.mode` 設 `off` 或桌面版「自動更新」選「關閉」就不查）；`self-update`、`version --check` 也會查；Hub 也會查有沒有新版並在管理頁顯示（`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` 關閉）。
 - **你主動按的時候**：IP 線上名譽查詢（`intel lookup --online`，或 Hub 上按「查詢外部情資」，要自己填 API 金鑰；私有網段一律不送）、桌面版的 VirusTotal／AbuseIPDB 連結（只是用瀏覽器打開網頁）。
 - **AI 分析**：透過你自己電腦上的 Claude Code／Codex CLI，資料只會照你和 Anthropic／OpenAI 之間的帳號條款處理。
 - **你自己的 Hub**：註冊後，報告只送到你指定的 Hub。自動找 Hub 時，只會查公司 DNS 和在區網裡廣播詢問。
+</details>
+
+<details>
+<summary><b>怎麼更新？自動更新怎麼關？</b></summary>
+
+預設是「有新版時通知我」：每天到 GitHub 查一次，有新版就提醒你（Hub 的主機清單也會標「有新版」），**不會自己裝**。
+
+- **桌面版**：「設定 → 背景自動回報與自動更新」選「關閉」「有新版時通知我」或「自動更新」。按「檢查更新」看目前和最新版本、「立即更新」馬上更新（下載、驗證簽章後安裝，裝完自動重新開啟）。選「自動更新」時，新版會先在背景下載好，下次結束或重新開啟時安裝。背景自動回報用的就是桌面版本身，會跟著一起更新。
+- **命令列版**：`ai-security-monitor config set update.mode off`（關閉）／`notify`（預設）／`auto`（背景服務自動下載、比對 SHA256、替換並重新啟動）。手動更新：`ai-security-monitor version --check` 看有沒有新版，`ai-security-monitor self-update --yes` 更新，背景服務會自動重新啟動成新版（系統服務要用系統管理員執行）。用 apt、Homebrew、Scoop、winget 等套件管理員裝的，請用套件管理員更新。
+- 公司要用自己的鏡像：設 `AI_SECURITY_MONITOR_UPDATE_URL`（命令列版）。
+
+細節見 [docs/install.md](docs/install.md#更新)。
+</details>
+
+<details>
+<summary><b>怎麼手動上傳到 Hub？</b></summary>
+
+背景服務本來就會定時回報（預設每 10 分鐘完整掃描、每分鐘連線快照）。想馬上看到結果時：
+
+- **桌面版**：總覽頁的「上傳到 Security Hub」卡片按「立即掃描並上傳到 Hub」。卡片也會顯示上次上傳是多久以前、有幾份報告在等重送（Hub 連不上時先暫存），按「重新上傳」就會先補送。
+- **命令列版**：`ai-security-monitor upload`——先補送暫存的報告，再上傳連線快照、完整掃描報告與心跳，最後顯示「已上傳，Hub 收到 N 筆」。
+</details>
+
+<details>
+<summary><b>為什麼找不到公司的 Hub？</b></summary>
+
+「尋找公司的 Hub」靠公司 DNS 的 SRV 紀錄或區網廣播（mDNS）。找不到通常是這三種情況：
+
+1. **Hub 只開放給它自己那台電腦**：單機版預設只綁 127.0.0.1，辦公室其他電腦連不到也找不到。請管理員改用伺服器版，或在 Hub 的 `.env` 加 `AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0` 與 `AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<那台的區網 IP>:8088`（一定要有管理員金鑰，只在公司內網使用）。
+2. **Hub 跑在 Docker Desktop 裡**：它的區網廣播出不了 Docker。在跑 Hub 的那台電腦打開桌面版「設定 → 讓區網裡的電腦找到這台的 Hub」，或執行 `ai-security-monitor config set hub.advertise_url http://<那台的區網 IP>:8088`，由背景服務幫忙廣播。
+3. **不在同一個網段**：區網廣播過不了路由器，要請管理員在公司 DNS 加 `_aisecmon._tcp` 的 SRV 紀錄（Hub「新增主機」頁有現成指令）。
+
+都不行時，直接跟管理員要 Hub 網址：桌面版填在「或輸入管理員給的 Hub 網址」，命令列 `ai-security-monitor enroll --hub <網址>`。Hub「新增主機」頁的「辦公室的電腦找得到這個 Hub 嗎？」會用白話告訴管理員現在卡在哪一步。
 </details>
 
 <details>
@@ -360,7 +393,8 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 | `metrics` | 現在的上傳／下載速率（各網卡、各程式），開啟效能蒐集時另有 CPU、記憶體、磁碟 |
 | `ai`、`mcp` | Claude Code／Codex 分析、MCP server 與一鍵設定 |
 | `enroll`、`discover`、`unenroll`、`status`、`watch`、`service` | 找 Hub、加入 Hub、常駐回報、開機自動啟動 |
-| `self-update`、`version`、`doctor` | 更新與環境檢查 |
+| `self-update`、`version`、`doctor` | 更新與環境檢查（`config set update.mode off\|notify\|auto` 設定自動更新） |
+| `upload` | 立即掃描並上傳到 Hub（先補送暫存的報告） |
 | `allowlist`、`baseline`、`config` | 白名單、基準線（只看新增）、設定 |
 
 `ai-security-monitor --help`、`ai-security-monitor <命令> --help` 看完整參數；`--lang en` 切英文、`--json` 給程式讀。
