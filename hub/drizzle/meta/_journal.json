@@ -120,6 +120,13 @@
       "when": 1792270740008,
       "tag": "0016_groups_response",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792273563893,
+      "tag": "0017_dns_protect",
+      "breakpoints": true
     }
   ]
 }

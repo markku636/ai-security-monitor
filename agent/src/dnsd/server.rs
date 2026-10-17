@@ -37,13 +37,16 @@ const STALE_TTL: u32 = 30;
 pub struct Shared {
     pub lists: ArcSwap<Lists>,
     pub cache: Cache,
-    pub pool: Pool,
+    /// 上游（Hub 改設定時整組換掉）。
+    pub pool: ArcSwap<Pool>,
     pub stats: Stats,
     pub acl: Vec<IpNet>,
     pub rrl_qps: u32,
     pub blocking: AtomicBool,
-    pub internal_suffixes: Vec<String>,
+    pub internal_suffixes: ArcSwap<Vec<String>>,
     pub log: Option<mpsc::Sender<LogEvent>>,
+    /// 記不記錄查詢（Hub 可以關）。
+    pub log_on: AtomicBool,
     inflight: Mutex<HashMap<Key, Vec<Waiter>>>,
 }
 
@@ -65,12 +68,13 @@ impl Shared {
         Shared {
             lists: ArcSwap::from_pointee(lists),
             cache,
-            pool,
+            pool: ArcSwap::from_pointee(pool),
             stats: Stats::default(),
             acl,
             rrl_qps,
             blocking: AtomicBool::new(blocking),
-            internal_suffixes,
+            internal_suffixes: ArcSwap::from_pointee(internal_suffixes),
+            log_on: AtomicBool::new(log.is_some()),
             log,
             inflight: Mutex::new(HashMap::new()),
         }
@@ -156,6 +160,7 @@ pub fn is_rebinding(sh: &Shared, name: &str, answers: &[IpAddr]) -> bool {
     if internal.iter().any(|s| name.ends_with(s))
         || sh
             .internal_suffixes
+            .load()
             .iter()
             .any(|s| name == s.trim_start_matches('.') || name.ends_with(&format!(".{}", s.trim_start_matches('.'))))
     {
@@ -173,6 +178,9 @@ fn log(sh: &Shared, client: IpAddr, q: &Query, rcode: u8, answers: &[IpAddr], bl
     let Some(tx) = &sh.log else {
         return;
     };
+    if !sh.log_on.load(Ordering::Relaxed) {
+        return;
+    }
     let ev = LogEvent {
         ts: chrono::Utc::now(),
         client,
@@ -298,7 +306,8 @@ pub async fn fetch(sh: &Arc<Shared>, raw: &[u8], q: &Query) -> Option<Arc<Entry>
         Stats::inc(&sh.stats.coalesced);
         return rx.await.ok().flatten();
     }
-    let result = match sh.pool.query(raw, q).await {
+    let pool = sh.pool.load_full();
+    let result = match pool.query(raw, q).await {
         Ok(bytes) => wire::analyze_response(&bytes, q).map(|info| Arc::new(Entry::new(bytes, info))),
         Err(_) => None,
     };

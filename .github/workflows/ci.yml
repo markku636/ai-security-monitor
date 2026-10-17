@@ -529,6 +529,42 @@ jobs:
           sudo -E $BIN --config-dir "$CFG" fw unblock --all-asa --yes
           ! sudo nft list table inet asa 2>/dev/null
           echo "e2e ok"
+      - name: Protective DNS server managed by the hub
+        run: |
+          set -euo pipefail
+          BIN="$PWD/agent/target/debug/ai-security-monitor"; CFG="$RUNNER_TEMP/asm-dnsd"; B=http://127.0.0.1:3911; A='authorization: Bearer ci-admin-secret'
+          q() { python3 scripts/dnsq.py 127.0.0.1 15353 "$1"; }
+          TOK=$(curl -sf -H "$A" -H 'content-type: application/json' -d '{"name":"ci dns","scopes":["dns"]}' $B/api/v1/admin/tokens | jq -r .token)
+          # Hub 開啟封鎖、自訂封鎖 www.example.org（真的存在的名稱，關掉封鎖後要解析得到）
+          curl -sf -X PUT -H "$A" -H 'content-type: application/json' -d '{"enabled":true,"block":["www.example.org"],"upstreams":["8.8.8.8","1.1.1.1"]}' $B/api/v1/admin/dns-protect > /dev/null
+          $BIN --config-dir "$CFG" dns-server --listen 127.0.0.1:15353 --hub $B --hub-token "$TOK" --no-feed-update > "$RUNNER_TEMP/dnsd.log" 2>&1 &
+          DNSD=$!
+          sleep 5
+          q www.example.org | tee b1.txt
+          grep -q "rcode=3" b1.txt
+          q example.com | tee b2.txt
+          grep -q "rcode=0" b2.txt
+          # Hub 關掉封鎖：下一次心跳（30 秒）帶新的 etag，dns-server 馬上重拉設定、改成只轉送
+          curl -sf -X PUT -H "$A" -H 'content-type: application/json' -d '{"enabled":false}' $B/api/v1/admin/dns-protect > /dev/null
+          ok=0
+          for i in $(seq 1 25); do sleep 3; if q www.example.org | grep -q "rcode=0 answers=[1-9]"; then ok=1; break; fi; done
+          test "$ok" = 1
+          $BIN --config-dir "$CFG" dns-server --status | tee dnsd-status.json
+          jq -e '.hub.connected == true and .hub.auth == "token"' dnsd-status.json > /dev/null
+          # Hub 收到心跳與查詢紀錄（紀錄每分鐘聚合、30 秒送一次，最多等 3 分鐘）
+          ok=0
+          for i in $(seq 1 36); do
+            curl -sf -H "$A" $B/api/v1/admin/dns-protect > protect.json
+            if jq -e '(.servers | map(select(.name == "ci dns" and .online)) | length) == 1 and .stats.blocked >= 1 and .stats.queries >= 3' protect.json > /dev/null; then ok=1; break; fi
+            sleep 5
+          done
+          jq '{servers: [.servers[] | {name, online, version}], stats: {queries: .stats.queries, blocked: .stats.blocked, top: .stats.topBlocked}}' protect.json
+          test "$ok" = 1
+          jq -e '.recentBlocked[0].name == "www.example.org" and .recentBlocked[0].client == "127.0.0.1"' protect.json > /dev/null
+          kill $DNSD 2>/dev/null || true
+          echo "protective dns e2e ok"
       - name: Hub log on failure
         if: failure()
-        run: tail -100 "$RUNNER_TEMP/hub.log" || true
+        run: |
+          tail -100 "$RUNNER_TEMP/hub.log" || true
+          tail -50 "$RUNNER_TEMP/dnsd.log" || true

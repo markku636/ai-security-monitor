@@ -62,7 +62,7 @@ pub struct Stats {
     pub miss_latency: Histogram,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct Snapshot {
     pub queries: u64,
     pub blocked: u64,

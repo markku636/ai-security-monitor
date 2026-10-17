@@ -1500,6 +1500,14 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "封鎖清單" => "Blocklist",
         "測試網域" => "Test domain",
         "不是合法的上游 DNS：{value}" => "Not a valid upstream DNS: {value}",
+        "連上 Hub：封鎖開關、上游、清單以 Hub 的「防護 DNS」設定為準，送心跳與查詢紀錄（例 https://hub.example:8088）" => "Connect to a Hub: blocking switch, upstreams and lists follow the Hub's protective DNS settings; sends heartbeats and query logs (e.g. https://hub.example:8088)",
+        "連 Hub 用的防護 DNS 權杖（Hub 的 API token 勾「防護 DNS 伺服器」，或 compose 的 AI_SECURITY_MONITOR_HUB_DNS_TOKEN）" => "Protective DNS token for the Hub (a Hub API token with the \"Protective DNS server\" permission, or AI_SECURITY_MONITOR_HUB_DNS_TOKEN from compose)",
+        "用這台電腦加入 Hub 的身分連 Hub（背景服務帶起時用）" => "Connect to the Hub as this enrolled computer (used when the background service starts it)",
+        "允許用 http 連公網上的 Hub" => "Allow plain http to a Hub on the public internet",
+        "不自己下載封鎖用的情資清單（交給背景服務更新）" => "Do not download the blocklist feeds itself (the background service updates them)",
+        "這台電腦還沒加入 Hub（--hub-agent 要先 enroll）" => "This computer has not joined a Hub (--hub-agent needs enroll first)",
+        "連 Hub 需要防護 DNS 權杖（--hub-token）" => "Connecting to a Hub needs a protective DNS token (--hub-token)",
+        "連上 Hub：{url}（封鎖開關、上游與清單以 Hub 的設定為準）" => "Connected to Hub: {url} (blocking switch, upstreams and lists follow the Hub settings)",
         _ => return None,
     })
 }

@@ -1,0 +1,38 @@
+{
+  "records": [
+    {
+      "ts": "2026-10-17T09:30:00Z",
+      "name": "updates.example.net",
+      "registrable": "example.net",
+      "qtype": 1,
+      "rcode": "NOERROR",
+      "count": 3,
+      "answers": [
+        "203.0.113.20"
+      ],
+      "client": "192.0.2.10",
+      "source": "resolver"
+    },
+    {
+      "ts": "2026-10-17T09:30:00Z",
+      "name": "login.example-phish.test",
+      "registrable": "example-phish.test",
+      "qtype": 1,
+      "rcode": "BLOCKED",
+      "process": "CERT Polska",
+      "count": 3,
+      "client": "192.0.2.77",
+      "source": "resolver"
+    },
+    {
+      "ts": "2026-10-17T09:31:00Z",
+      "name": "nonexistent.example.org",
+      "registrable": "example.org",
+      "qtype": 1,
+      "rcode": "NXDOMAIN",
+      "count": 3,
+      "client": "2001:db8::77",
+      "source": "resolver"
+    }
+  ]
+}

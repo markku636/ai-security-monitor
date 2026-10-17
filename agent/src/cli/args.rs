@@ -460,6 +460,26 @@ pub struct DnsServerArgs {
     /// 內部網域（回私有位址不當成 DNS rebinding），例 corp.example
     #[arg(long = "internal-suffix", value_name = "SUFFIX")]
     pub internal_suffix: Vec<String>,
+    /// 連上 Hub：封鎖開關、上游、清單以 Hub 的「防護 DNS」設定為準，送心跳與查詢紀錄（例 https://hub.example:8088）
+    #[arg(long, value_name = "URL", env = "AI_SECURITY_MONITOR_DNS_HUB_URL")]
+    pub hub: Option<String>,
+    /// 連 Hub 用的防護 DNS 權杖（Hub 的 API token 勾「防護 DNS 伺服器」，或 compose 的 AI_SECURITY_MONITOR_HUB_DNS_TOKEN）
+    #[arg(
+        long,
+        value_name = "TOKEN",
+        env = "AI_SECURITY_MONITOR_HUB_DNS_TOKEN",
+        hide_env_values = true
+    )]
+    pub hub_token: Option<String>,
+    /// 用這台電腦加入 Hub 的身分連 Hub（背景服務帶起時用）
+    #[arg(long, conflicts_with = "hub_token")]
+    pub hub_agent: bool,
+    /// 允許用 http 連公網上的 Hub
+    #[arg(long)]
+    pub insecure_http: bool,
+    /// 不自己下載封鎖用的情資清單（交給背景服務更新）
+    #[arg(long)]
+    pub no_feed_update: bool,
     /// 檢查本機的防護 DNS 是否正常（健康檢查名稱與測試封鎖網域）後結束
     #[arg(long)]
     pub healthcheck: bool,

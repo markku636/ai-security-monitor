@@ -1,5 +1,5 @@
 // API token 與註冊金鑰：產生時只回傳一次明文，資料庫只存 sha256；以 8 碼 id 定位後常數時間比對。
-//   API token  asa_<8hex>_<40hex>     唯讀，scope：read（API）、export（CSV）、mcp（Hub MCP）
+//   API token  asa_<8hex>_<40hex>     唯讀，scope：read（API）、export（CSV）、mcp（Hub MCP）、dns（防護 DNS 伺服器拉設定、送心跳與查詢紀錄）
 //   註冊金鑰    asa_ek_<8hex>_<40hex>  agent 上傳用（等同 ASA_HUB_CLIENT_SECRETS 裡的一把，但可在網頁建立／撤銷）
 import crypto from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
@@ -7,7 +7,7 @@ import { apiTokens, enrollKeys } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 import { safeEqual, sha256Hex } from './crypto';
 
-export const TOKEN_SCOPES = ['read', 'export', 'mcp'] as const;
+export const TOKEN_SCOPES = ['read', 'export', 'mcp', 'dns'] as const;
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
 
 const API_RE = /^asa_([0-9a-f]{8})_([0-9a-f]{40})$/;

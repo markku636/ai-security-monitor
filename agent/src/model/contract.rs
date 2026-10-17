@@ -270,6 +270,20 @@ mod tests {
         );
     }
 
+    /// 防護 DNS 的查詢紀錄與心跳（`POST /api/v1/dns/queries`、`/api/v1/dns/heartbeat`）。
+    #[cfg(feature = "dns-server")]
+    #[test]
+    fn contract_dns_server_v1() {
+        check(
+            "dns-resolver.v1.json",
+            serde_json::to_value(crate::dnsd::hub::sample_batch()).unwrap(),
+        );
+        check(
+            "dns-heartbeat.v1.json",
+            serde_json::to_value(crate::dnsd::hub::sample_heartbeat()).unwrap(),
+        );
+    }
+
     /// 免金鑰加入申請。`hub-identity.v1.json`／`enroll-status.v1.json` 帶真的簽章（測試專用金鑰），
     /// 由 hub 那邊產生，這裡只驗（`hub::identity`、`hub::enroll` 的測試）。
     #[test]

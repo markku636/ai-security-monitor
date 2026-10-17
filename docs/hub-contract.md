@@ -69,6 +69,13 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 - `registrable` 是 agent 依 Public Suffix List 算的可註冊網域（沒有時 Hub 取最後兩段）。
 - 回應：`{ ok, stored, stale, domains, server_time }`。舊版 Hub 沒有這個端點（404）時，agent 保留紀錄、30 分鐘後再試。
 
+### 防護 DNS（`dns-server --hub`）
+
+身分：dns 權杖（網頁建立的 API token 勾「防護 DNS 伺服器」，或 compose 的 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`，至少 32 字元），或已加入 Hub 的電腦用自己的 client 金鑰（`X-ASA-Agent-Id`，同樣要通過身分釘選）。dns 權杖也能下載情資鏡像（`/api/v1/feeds/*`）。
+- `GET /api/v1/dns/config`：`{ blocking, enabled, paused_until, upstreams[], feeds[], min_confidence, block[], allow[], internal_suffixes[], block_private_relay, log, etag, server_id }`。帶 `If-None-Match` 沒變回 304。`blocking`＝開啟且沒有暫停；關掉或暫停時 dns-server 照常轉送。dns-server 每分鐘拉一次，並把最後一份存在 `dns-server/hub-config.json`（重啟時 Hub 連不上也照上次的設定）。
+- `POST /api/v1/dns/heartbeat`：`contract/dns-heartbeat.v1.json` `{ version, hostname, status }`（`status` 同 `dns-server --status`，≤ 32 KB），每 30 秒一次。回應 `{ ok, server_id, config_etag, blocking, server_time }`；`config_etag` 跟 dns-server 手上的不同就馬上重拉設定。
+- `POST /api/v1/dns/queries`：`contract/dns-resolver.v1.json` `{ records: [{ ts, name, registrable?, qtype, rcode, process?, count, answers[], client, source: "resolver" }] }`，一批 1–1000 列、壓縮後 ≤ 2 MB。每列是（用戶端, 網域, 類型, 結果）每分鐘的聚合；`rcode` 是 `BLOCKED` 時 `process` 是封鎖它的清單。(伺服器, `ts`, `client`, `name`, `qtype`, `rcode`) 唯一，重送覆蓋；Hub 依主機回報的 IP 把用戶端對到主機（對不到＝沒裝 agent 的裝置）；保留期限同 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS`。回應 `{ ok, stored, stale, mapped, server_time }`。
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`。未知 agent 回 404。

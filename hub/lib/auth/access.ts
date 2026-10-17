@@ -2,7 +2,7 @@
 //   admin  ASA_HUB_ADMIN_SECRET（Bearer）或登入後的 session cookie
 //   client ASA_HUB_CLIENT_SECRETS（agent 上傳用）
 //   viewer 不帶金鑰，只在 ASA_HUB_PUBLIC_DASHBOARD 時
-//   reader 網頁建立的 API token（唯讀，依 scope：read／export／mcp）
+//   reader 網頁建立的 API token（唯讀，依 scope：read／export／mcp／dns）；compose 內建防護 DNS 的 ASA_HUB_DNS_TOKEN 等同 dns 權杖
 // 網頁建立的註冊金鑰（asa_ek_…）等同 client。
 // 沒設管理員金鑰＝開放模式：所有人都是 admin（只能綁 loopback，見 scripts/start.mjs）。
 import { env, isOpenMode } from '@/lib/env';
@@ -56,6 +56,7 @@ export async function identifyByCredentials(token: string | undefined, cookieTok
     if (safeEqual(token, e.adminSecret)) return { role: 'admin', via: 'bearer' };
     const idx = e.clientSecrets.findIndex((s) => safeEqual(token, s));
     if (idx >= 0) return { role: 'client', via: 'bearer', keyIndex: idx };
+    if (e.dnsServerToken && safeEqual(token, e.dnsServerToken)) return { role: 'reader', via: 'bearer', tokenId: 'env', scopes: ['dns'] };
     if (isEnrollKeyShape(token)) {
       const k = await verifyEnrollKey(token);
       if (k) return { role: 'client', via: 'enroll', enrollKeyId: k.id, ...(k.boundAgentId ? { boundAgentId: k.boundAgentId } : {}) };

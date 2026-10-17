@@ -7,6 +7,8 @@ import { FilterChip, FilterRow, SearchBox } from '@/components/ui/Filters';
 import { Hint, Term } from '@/components/ui/Hint';
 import { HostFilter } from '@/components/ui/HostFilter';
 import { requireAdmin } from '@/lib/auth/require';
+import { getDb } from '@/lib/db';
+import { getProtect, listServers, resolverStats } from '@/lib/dns/protect';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import type { TFn } from '@/lib/i18n/core';
@@ -48,14 +50,18 @@ export default async function DnsPage({ searchParams }: { searchParams: Promise<
   const agentId = strParam(sp, 'agent_id', 64);
   const q = strParam(sp, 'q', 100);
   const nx = strParam(sp, 'nx', 1) === '1';
-  const [stats, top, fresh, recent, collectors, open] = await Promise.all([
+  const [stats, top, fresh, recent, collectors, open, servers, protect, guard] = await Promise.all([
     dnsStats(days, agentId),
     topDomains(days, agentId, 20),
     newDomains(24, 30),
     recentQueries({ agentId, q, nx, limit: 100 }),
     collectorStatus(agentId),
     listFindings({ agentId, status: ['open', 'acked'], severity: [], scanner: ['dns'], limit: 20, offset: 0 }),
+    listServers(getDb()),
+    getProtect(getDb()),
+    resolverStats(getDb(), 24),
   ]);
+  const online = servers.filter((s) => s.online).length;
   const nxPct = stats.queries ? Math.round((stats.nxdomain / stats.queries) * 1000) / 10 : 0;
   const keep = { days: String(days), agent_id: agentId };
   const empty = !stats.queries && !recent.length && !open.items.length;
@@ -111,6 +117,23 @@ export default async function DnsPage({ searchParams }: { searchParams: Promise<
         />
         <Stat label={t('DNS 告警（待處理）')} value={open.total} hint={<Link className="hover:underline" href={`/findings${toQuery({ scanner: 'dns', agent_id: agentId })}`}>{t('看全部')}</Link>} />
       </div>
+      <p className="flex flex-wrap items-center gap-x-2 text-sm text-slate-600 dark:text-slate-300">
+        <span className="font-medium">
+          {t('防護 DNS')}
+          <Hint text={t('給整個區網用的 DNS 伺服器：把電腦、手機、IoT 的 DNS 指到它，查到威脅情資列名的網域就擋掉（回「查無此網域」），其他照常經加密 DNS 轉送並快取。')} />
+        </span>
+        {servers.length ? (
+          <span>
+            {t('{n} 台在線', { n: online })} · {protect.enabled ? t('封鎖中') : t('封鎖已關閉（只轉送）')} ·{' '}
+            {t('24 小時擋了 {b} 次、{c} 個裝置在用', { b: guard.blocked.toLocaleString(), c: guard.clients })}
+          </span>
+        ) : (
+          <span className="text-slate-500">{t('還沒有防護 DNS 連上來')}</span>
+        )}
+        <Link className="text-teal-700 hover:underline dark:text-teal-400" href="/admin?tab=dns">
+          {t('設定 →')}
+        </Link>
+      </p>
       {open.items.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">

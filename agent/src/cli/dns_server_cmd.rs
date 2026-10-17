@@ -57,6 +57,7 @@ pub async fn run(env: &Env, a: DnsServerArgs) -> AppResult<()> {
         println!("{}", t!("防護 DNS 正常"));
         return Ok(());
     }
+    let link = hub_link(env, &a)?;
     cfg.upstreams = a.upstream;
     cfg.feeds = a.feeds;
     cfg.min_confidence = a.min_confidence;
@@ -71,6 +72,7 @@ pub async fn run(env: &Env, a: DnsServerArgs) -> AppResult<()> {
     cfg.block_private_relay = a.block_private_relay;
     cfg.log = !a.no_log;
     cfg.internal_suffixes = a.internal_suffix;
+    cfg.update_feeds = !a.no_feed_update;
     // 先確認上游設定合法，再開始監聽
     dnsd::upstream::Pool::new(&cfg.upstreams)?;
     if !env.global.json {
@@ -92,6 +94,15 @@ pub async fn run(env: &Env, a: DnsServerArgs) -> AppResult<()> {
             )
         );
     }
+    if let (Some(l), false) = (&link, env.global.json) {
+        println!(
+            "{}",
+            tf!(
+                "連上 Hub：{url}（封鎖開關、上游與清單以 Hub 的設定為準）",
+                url = l.client.base()
+            )
+        );
+    }
     let stop = Arc::new(Notify::new());
     let s2 = stop.clone();
     tokio::spawn(async move {
@@ -102,5 +113,32 @@ pub async fn run(env: &Env, a: DnsServerArgs) -> AppResult<()> {
         }
         s2.notify_waiters();
     });
-    dnsd::run(cfg, env.config_dir.clone(), stop).await
+    dnsd::run(cfg, env.config_dir.clone(), stop, link).await
+}
+
+/// `--hub-agent`：這台電腦加入 Hub 的身分；`--hub URL --hub-token`：防護 DNS 權杖。都沒有＝不連 Hub。
+fn hub_link(env: &Env, a: &DnsServerArgs) -> AppResult<Option<dnsd::hub::Link>> {
+    if a.hub_agent {
+        let c = crate::config::load(&env.config_dir)?;
+        return match crate::hub::watch::client_from_config(&env.config_dir, &c)? {
+            Some(client) => Ok(Some(dnsd::hub::Link::new(client, "agent"))),
+            None => Err(AppError::InvalidArg(
+                t!("這台電腦還沒加入 Hub（--hub-agent 要先 enroll）").into(),
+            )),
+        };
+    }
+    let Some(url) = a.hub.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
+        return Ok(None);
+    };
+    let token = a
+        .hub_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| AppError::InvalidArg(t!("連 Hub 需要防護 DNS 權杖（--hub-token）").into()))?;
+    let url = crate::hub::validate_url(url, a.insecure_http)?;
+    Ok(Some(dnsd::hub::Link::new(
+        crate::hub::HubClient::new(&url, token, "")?,
+        "token",
+    )))
 }

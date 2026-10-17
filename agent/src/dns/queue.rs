@@ -113,6 +113,23 @@ pub enum Flush {
 
 /// 分批送出（最多 [`BATCHES_PER_TICK`] 批）。被拒收（400／413／422）的那批丟掉。
 pub async fn flush(config_dir: &Path, client: &crate::hub::HubClient, agent_id: &str) -> Flush {
+    flush_with(config_dir, |records| async move {
+        client
+            .upload_dns(&DnsBatch {
+                agent_id: agent_id.to_string(),
+                records,
+            })
+            .await
+    })
+    .await
+}
+
+/// 同 [`flush`]，送出的方式由呼叫端決定（防護 DNS 的紀錄送另一個端點）；`Ok(None)`＝Hub 沒有這個端點。
+pub async fn flush_with<F, Fut>(config_dir: &Path, mut send: F) -> Flush
+where
+    F: FnMut(Vec<DnsRecord>) -> Fut,
+    Fut: std::future::Future<Output = AppResult<Option<serde_json::Value>>>,
+{
     let mut sent = 0usize;
     for _ in 0..BATCHES_PER_TICK {
         let (records, total) = peek(config_dir, BATCH);
@@ -125,11 +142,7 @@ pub async fn flush(config_dir: &Path, client: &crate::hub::HubClient, agent_id: 
             continue;
         }
         let n = records.len();
-        let batch = DnsBatch {
-            agent_id: agent_id.to_string(),
-            records,
-        };
-        match client.upload_dns(&batch).await {
+        match send(records).await {
             Ok(Some(_)) => {
                 let _ = drop_first(config_dir, lines);
                 sent += n;

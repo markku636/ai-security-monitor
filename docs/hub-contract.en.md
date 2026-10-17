@@ -70,6 +70,13 @@ Body: `contract/dns.v1.json` `{ agent_id, records: [{ ts, name, registrable?, qt
 - `registrable` is the registrable domain the agent computed from the Public Suffix List (the Hub falls back to the last two labels).
 - Response: `{ ok, stored, stale, domains, server_time }`. When an older Hub does not have the endpoint (404), the agent keeps the records and retries after 30 minutes.
 
+### Protective DNS (`dns-server --hub`)
+
+Identity: a dns token (a web-created API token with the "Protective DNS server" permission, or `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` from compose, at least 32 characters), or an enrolled computer's own client key (`X-ASA-Agent-Id`, subject to identity pinning). A dns token can also download the intel mirror (`/api/v1/feeds/*`).
+- `GET /api/v1/dns/config`: `{ blocking, enabled, paused_until, upstreams[], feeds[], min_confidence, block[], allow[], internal_suffixes[], block_private_relay, log, etag, server_id }`. Returns 304 for a matching `If-None-Match`. `blocking` = on and not paused; when off or paused the dns-server keeps forwarding. The dns-server polls every minute and keeps the last copy in `dns-server/hub-config.json` (after a restart it follows the last settings even if the Hub is unreachable).
+- `POST /api/v1/dns/heartbeat`: `contract/dns-heartbeat.v1.json` `{ version, hostname, status }` (`status` is the same as `dns-server --status`, ≤ 32 KB), every 30 seconds. Response `{ ok, server_id, config_etag, blocking, server_time }`; when `config_etag` differs from the dns-server's copy it fetches the config right away.
+- `POST /api/v1/dns/queries`: `contract/dns-resolver.v1.json` `{ records: [{ ts, name, registrable?, qtype, rcode, process?, count, answers[], client, source: "resolver" }] }`, 1–1000 records per batch, ≤ 2 MB compressed. Each record is a per-minute aggregate by (client, domain, type, result); when `rcode` is `BLOCKED`, `process` names the list that blocked it. (server, `ts`, `client`, `name`, `qtype`, `rcode`) is unique and re-sending overwrites; the Hub maps clients to hosts by the IPs hosts report (unmapped = a device without an agent); retention follows `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS`. Response `{ ok, stored, stale, mapped, server_time }`.
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`. Unknown agents get 404.

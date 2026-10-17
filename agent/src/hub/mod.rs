@@ -59,6 +59,14 @@ pub struct HubClient {
     http: reqwest::Client,
 }
 
+/// [`HubClient::dns_config`] 的結果。
+#[derive(Debug)]
+pub enum DnsConfigFetch {
+    Config(Value),
+    NotModified,
+    Unsupported,
+}
+
 #[derive(Debug)]
 pub struct HubResponse {
     pub status: u16,
@@ -237,6 +245,43 @@ impl HubClient {
     /// DNS 查詢紀錄。`Ok(None)`＝Hub 太舊沒有這個端點（404），紀錄留在佇列稍後再送。
     pub async fn upload_dns(&self, batch: &crate::dns::queue::DnsBatch) -> AppResult<Option<Value>> {
         let sent = self.send_post("/api/v1/ingest/dns", batch).await?;
+        if let Ok(r) = &sent {
+            if r.status().as_u16() == 404 {
+                return Ok(None);
+            }
+        }
+        Ok(Some(Self::finish(sent).await?.body))
+    }
+
+    /// 防護 DNS 拉 Hub 的設定；帶上次的 etag，沒變回 `NotModified`，舊版 Hub（404）回 `Unsupported`。
+    pub async fn dns_config(&self, etag: Option<&str>) -> AppResult<DnsConfigFetch> {
+        let mut req = self.authed(self.http.get(format!("{}/api/v1/dns/config", self.base)));
+        if let Some(e) = etag {
+            req = req.header("if-none-match", e);
+        }
+        let sent = req.send().await;
+        if let Ok(r) = &sent {
+            match r.status().as_u16() {
+                304 => return Ok(DnsConfigFetch::NotModified),
+                404 => return Ok(DnsConfigFetch::Unsupported),
+                _ => {}
+            }
+        }
+        Ok(DnsConfigFetch::Config(Self::finish(sent).await?.body))
+    }
+
+    /// 防護 DNS 的心跳；舊版 Hub 回 `Ok(None)`。
+    pub async fn dns_heartbeat<T: Serialize>(&self, body: &T) -> AppResult<Option<Value>> {
+        self.post_or_unsupported("/api/v1/dns/heartbeat", body).await
+    }
+
+    /// 防護 DNS 的查詢紀錄；舊版 Hub 回 `Ok(None)`。
+    pub async fn upload_resolver<T: Serialize>(&self, batch: &T) -> AppResult<Option<Value>> {
+        self.post_or_unsupported("/api/v1/dns/queries", batch).await
+    }
+
+    async fn post_or_unsupported<T: Serialize>(&self, path: &str, body: &T) -> AppResult<Option<Value>> {
+        let sent = self.send_post(path, body).await?;
         if let Ok(r) = &sent {
             if r.status().as_u16() == 404 {
                 return Ok(None);

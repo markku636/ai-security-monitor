@@ -51,7 +51,7 @@ function feedPath(id: string, file: string): string {
 
 /** 誰能拿鏡像：agent（client 金鑰）、admin、read token；公開檢視不行（原檔是各廠商的授權內容，不對外再散布）。 */
 export function mirrorAllowed(id: Identity): boolean {
-  return id.role === 'client' || id.role === 'admin' || hasScope(id, 'read');
+  return id.role === 'client' || id.role === 'admin' || hasScope(id, 'read') || hasScope(id, 'dns');
 }
 
 /** 只有能整份下載的清單才鏡像（即時查詢 API 不算）；依登錄的預設啟用。 */

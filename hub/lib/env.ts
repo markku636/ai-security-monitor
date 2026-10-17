@@ -29,6 +29,8 @@ export interface HubEnv {
   aiRetentionDays: number;
   /** 外部情資查詢快取保留天數（0＝不自動清）。 */
   ipIntelCacheDays: number;
+  /** compose 內建防護 DNS 用的權杖（`AI_SECURITY_MONITOR_HUB_DNS_TOKEN`，至少 32 字元；沒設＝只能用網頁建立的 dns 權杖）。 */
+  dnsServerToken: string;
 }
 
 /** 改名後的新前綴：ASA_X 也接受 AI_SECURITY_MONITOR_X，新名優先（舊名繼續有效）。 */
@@ -105,6 +107,7 @@ export function loadEnv(): HubEnv {
     dnsHourlyDays: Math.min(3650, Math.max(1, num('ASA_HUB_DNS_HOURLY_DAYS', 90))),
     aiRetentionDays: Math.min(3650, num('ASA_HUB_AI_RETENTION_DAYS', 90)),
     ipIntelCacheDays: Math.min(3650, num('ASA_HUB_IPINTEL_CACHE_DAYS', 30)),
+    dnsServerToken: raw('ASA_HUB_DNS_TOKEN').length >= 32 ? raw('ASA_HUB_DNS_TOKEN') : '',
   };
 }
 

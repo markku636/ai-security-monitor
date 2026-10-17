@@ -10,7 +10,7 @@ use crate::dns::heuristics;
 use crate::intel::domainset::{self, DomainSet, NO_META};
 use crate::intel::fetch::{feed_dir, FeedMeta, DATA_FILE};
 use crate::intel::parse;
-use crate::intel::registry::{FeedKind, Registry};
+use crate::intel::registry::{FeedEntry, FeedKind, Registry};
 
 /// 預設只拿信心 ≥ 這個值的網域清單來封鎖（CERT.PL 85、HaGeZi TIF mini 75）。
 pub const DEFAULT_MIN_CONFIDENCE: u8 = 75;
@@ -66,23 +66,32 @@ pub struct ListOpts<'a> {
     pub block_private_relay: bool,
 }
 
+/// 要拿來封鎖的網域情資：指定的，或自動挑已啟用、信心夠高、可商用的（非商用授權的來源照防火牆的規矩只告警不封鎖）。
+fn picked<'r>(reg: &'r Registry, o: &ListOpts<'_>) -> Vec<&'r FeedEntry> {
+    reg.feeds
+        .iter()
+        .filter(|f| f.kind == FeedKind::Domain)
+        .filter(|f| {
+            if o.feeds.is_empty() {
+                reg.is_enabled(f) && f.confidence >= o.min_confidence && f.license.commercial_ok
+            } else {
+                o.feeds.contains(&f.id)
+            }
+        })
+        .collect()
+}
+
+/// 要下載的清單 id（防護 DNS 自己更新情資時用）。
+pub fn wanted_feeds(config_dir: &Path, o: &ListOpts<'_>) -> Vec<String> {
+    let reg = Registry::load(config_dir).unwrap_or_default();
+    picked(&reg, o).into_iter().map(|f| f.id.clone()).collect()
+}
+
 impl Lists {
     pub fn load(config_dir: &Path, o: &ListOpts<'_>) -> Lists {
         let mut l = Lists::default();
         let reg = Registry::load(config_dir).unwrap_or_default();
-        let picked: Vec<_> = reg
-            .feeds
-            .iter()
-            .filter(|f| f.kind == FeedKind::Domain)
-            .filter(|f| {
-                if o.feeds.is_empty() {
-                    // 自動挑選：已啟用、信心夠高、可商用（非商用授權的來源照防火牆的規矩只告警不封鎖）
-                    reg.is_enabled(f) && f.confidence >= o.min_confidence && f.license.commercial_ok
-                } else {
-                    o.feeds.contains(&f.id)
-                }
-            })
-            .collect();
+        let picked = picked(&reg, o);
         let mut entries: Vec<(u64, u32)> = Vec::new();
         for f in picked {
             let has = FeedMeta::load(config_dir, &f.id).is_some_and(|m| m.has_data());

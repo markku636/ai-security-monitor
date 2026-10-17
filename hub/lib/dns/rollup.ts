@@ -1,7 +1,7 @@
 // DNS 每小時彙總＋保留期限：重算「有新紀錄進來的那幾個小時」（冪等，重跑結果一樣），
 // 再刪掉超過保留天數的原始紀錄、彙總與太久沒出現的網域。跟流量彙總同一支排程（lib/metrics/rollup.ts），用自己的 advisory lock。
 import { eq, gt, lt, sql } from 'drizzle-orm';
-import { dnsDomains, dnsQueries, dnsQueriesHourly, settings } from '@/drizzle/schema';
+import { dnsDomains, dnsQueries, dnsQueriesHourly, dnsResolverQueries, settings } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
 import { env } from '@/lib/env';
 
@@ -60,6 +60,7 @@ export async function rollupDns(db: DB, now = new Date()): Promise<DnsRollupResu
     const delRaw = await t.delete(dnsQueries).where(lt(dnsQueries.ts, rawCut)).returning({ id: dnsQueries.id });
     const delHourly = await t.delete(dnsQueriesHourly).where(lt(dnsQueriesHourly.hour, hourlyCut)).returning({ a: dnsQueriesHourly.agentId });
     await t.delete(dnsDomains).where(lt(dnsDomains.lastSeenAt, hourlyCut));
+    await t.delete(dnsResolverQueries).where(lt(dnsResolverQueries.ts, rawCut));
     await t
       .insert(settings)
       .values({ key: WATERMARK, value: now.toISOString(), updatedBy: 'dns-rollup' })

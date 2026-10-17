@@ -87,8 +87,8 @@ impl Agg {
     }
 }
 
-/// 接紀錄、每 15 秒把結束的分鐘寫檔、每小時清過期的日期檔。
-pub async fn run(dir: PathBuf, mut rx: mpsc::Receiver<LogEvent>, stop: std::sync::Arc<Notify>) {
+/// 接紀錄、每 15 秒把結束的分鐘寫檔（`queue`＝連著 Hub，另外排進待送佇列）、每小時清過期的日期檔。
+pub async fn run(dir: PathBuf, mut rx: mpsc::Receiver<LogEvent>, stop: std::sync::Arc<Notify>, queue: bool) {
     let mut agg = Agg::default();
     let mut flush = tokio::time::interval(FLUSH_EVERY);
     let mut cleanup = tokio::time::interval(Duration::from_secs(3600));
@@ -98,7 +98,13 @@ pub async fn run(dir: PathBuf, mut rx: mpsc::Receiver<LogEvent>, stop: std::sync
             _ = flush.tick() => {
                 let recs = agg.take_finished(Utc::now());
                 let d = dir.clone();
-                let _ = tokio::task::spawn_blocking(move || store::append(&d, &recs)).await;
+                let _ = tokio::task::spawn_blocking(move || {
+                    let _ = store::append(&d, &recs);
+                    if queue {
+                        let _ = crate::dns::queue::push(&d, &recs);
+                    }
+                })
+                .await;
             }
             _ = cleanup.tick() => { store::cleanup(&dir, Utc::now()); }
             _ = stop.notified() => break,
@@ -107,7 +113,11 @@ pub async fn run(dir: PathBuf, mut rx: mpsc::Receiver<LogEvent>, stop: std::sync
     while let Ok(ev) = rx.try_recv() {
         agg.push(ev);
     }
-    let _ = store::append(&dir, &agg.take_all());
+    let rest = agg.take_all();
+    let _ = store::append(&dir, &rest);
+    if queue {
+        let _ = crate::dns::queue::push(&dir, &rest);
+    }
 }
 
 #[cfg(test)]

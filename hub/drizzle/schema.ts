@@ -690,6 +690,55 @@ export const dnsDomains = pgTable(
 );
 
 /**
+ * 連上 Hub 的防護 DNS 伺服器（`ai-security-monitor dns-server`），每 30 秒心跳更新狀態。
+ * id：`token:<API token id>`（網頁建立的 dns 權杖）、`env`（compose 內建，ASA_HUB_DNS_TOKEN）、`agent:<agent id>`（由那台的背景服務帶起）。
+ */
+export const dnsServers = pgTable('dns_servers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  version: text('version').notNull().default(''),
+  hostname: text('hostname').notNull().default(''),
+  sourceIp: text('source_ip'),
+  /** 最後一次心跳的狀態（查詢量、快取、封鎖、延遲、上游、清單）。 */
+  status: jsonb('status').$type<Record<string, unknown>>().notNull().default({}),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+});
+
+/**
+ * 防護 DNS 的查詢紀錄：依（用戶端, 網域, 類型, 結果）每分鐘聚合，保留 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS` 天。
+ * agent_id＝用戶端 IP 對到的主機（對不到＝手機、IoT 這類沒裝 agent 的裝置）；rcode `BLOCKED` 時 blocked_by 是清單名稱。
+ */
+export const dnsResolverQueries = pgTable(
+  'dns_resolver_queries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    serverId: text('server_id')
+      .notNull()
+      .references(() => dnsServers.id, { onDelete: 'cascade' }),
+    ts: ts('ts').notNull(),
+    client: text('client').notNull(),
+    agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    registrable: text('registrable').notNull(),
+    qtype: integer('qtype').notNull(),
+    rcode: text('rcode').notNull(),
+    blockedBy: text('blocked_by').notNull().default(''),
+    count: integer('count').notNull(),
+    answers: jsonb('answers').$type<string[]>().notNull().default([]),
+    receivedAt: ts('received_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('dns_resolver_uq').on(t.serverId, t.ts, t.client, t.name, t.qtype, t.rcode),
+    index('dns_resolver_ts_idx').on(t.ts),
+    index('dns_resolver_reg_ts_idx').on(t.registrable, t.ts),
+    index('dns_resolver_client_ts_idx').on(t.client, t.ts),
+    index('dns_resolver_rcode_ts_idx').on(t.rcode, t.ts),
+  ],
+);
+
+/**
  * 通知頻道：email／slack／discord／teams／webhook／syslog。config 裡的祕密欄位（SMTP 密碼、webhook 網址、HMAC 金鑰）
  * 以 AES-256-GCM 加密存放（`enc:v1:…`），API 只回遮罩。
  */

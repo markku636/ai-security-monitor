@@ -15,7 +15,7 @@ export async function GET(req: Request): Promise<Response> {
 
 const Create = z.object({
   name: z.string().trim().min(1).max(80),
-  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(3),
+  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(TOKEN_SCOPES.length),
   expires_days: z.number().int().min(1).max(3650).nullish(),
 });
 
