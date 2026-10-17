@@ -1306,6 +1306,9 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     tokio::pin!(stop);
     // 背景 DNS 蒐集（dns.enabled，--once 不開）
     let mut dns_rt: Option<crate::dns::runtime::DnsRuntime> = None;
+    // 防護 DNS（dns.server.enabled，--once 不開）：獨立子行程
+    #[cfg(feature = "dns-server")]
+    let mut dns_server = crate::dnsd::child::Supervisor::default();
 
     loop {
         let now = tokio::time::Instant::now();
@@ -1377,6 +1380,15 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             } else if !dns_on {
                 if let Some(rt) = dns_rt.take() {
                     rt.shutdown().await;
+                }
+            }
+            #[cfg(feature = "dns-server")]
+            {
+                let want = crate::dnsd::child::args_for(fresh.as_ref().unwrap_or(&cfg));
+                if let Ok(exe) = std::env::current_exe() {
+                    for ev in dns_server.reconcile(&exe, &env.config_dir, want).await {
+                        log(env, &ev);
+                    }
                 }
             }
         }
@@ -1546,6 +1558,8 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     if let Some(adv) = advertiser {
         adv.shutdown().await;
     }
+    #[cfg(feature = "dns-server")]
+    dns_server.stop().await;
     if let Some(rt) = dns_rt {
         rt.shutdown().await;
     }

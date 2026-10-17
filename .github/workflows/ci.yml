@@ -429,6 +429,23 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build slim image
         run: docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ghcr.io/markku636/ai-security-monitor-hub:ci .
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agent
+          key: musl
+      - name: Build protective DNS image (musl static, FROM scratch)
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null && sudo apt-get install -y musl-tools >/dev/null
+          (cd agent && cargo build -q --release --locked --target x86_64-unknown-linux-musl)
+          mkdir -p dist/dns/amd64
+          cp agent/target/x86_64-unknown-linux-musl/release/ai-security-monitor dist/dns/amd64/
+          docker build -f docker/Dockerfile.dns -t ghcr.io/markku636/ai-security-monitor-dns:ci .
+          docker run --rm ghcr.io/markku636/ai-security-monitor-dns:ci --help | head -3
+          docker image ls ghcr.io/markku636/ai-security-monitor-dns:ci
       - name: Standalone compose smoke
         run: |
           set -euo pipefail
@@ -452,7 +469,20 @@ jobs:
           ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
           # 資料庫密碼空白（.env 沒設）也要拒絕
           ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:@postgres:5432/asa_hub -e AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=x ghcr.io/markku636/ai-security-monitor-hub:ci
-          docker compose -f docker/compose.standalone.yml --env-file ci.env down -v
+          # 防護 DNS（--profile dns）：容器健康、經加密 DNS 解析、Hub 開封鎖後擋自訂網域、Hub 看得到這台
+          cp ci.env dns.env
+          printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\nAI_SECURITY_MONITOR_DNS_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_DNS_PORT=15353\n' >> dns.env
+          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns up -d --wait --no-build
+          q() { python3 scripts/dnsq.py 127.0.0.1 15353 "$1"; }
+          q example.com | tee d1.txt
+          grep -q "rcode=0 answers=[1-9]" d1.txt
+          curl -sf -X PUT -H 'authorization: Bearer ci-admin' -H 'content-type: application/json' -d '{"enabled":true,"block":["www.example.org"]}' $B/api/v1/admin/dns-protect > /dev/null
+          ok=0
+          for i in $(seq 1 30); do sleep 3; if q www.example.org | grep -q "rcode=3"; then ok=1; break; fi; done
+          test "$ok" = 1 || { docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns logs dns | tail -30; exit 1; }
+          curl -sf -H 'authorization: Bearer ci-admin' $B/api/v1/admin/dns-protect | jq -e '.servers | map(select(.id == "env" and .online)) | length == 1' > /dev/null
+          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns exec -T dns /ai-security-monitor dns-server --healthcheck --listen 127.0.0.1:53
+          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns down -v
           echo "docker smoke ok"
 
   e2e:

@@ -63,6 +63,7 @@ services:
       AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS: ${AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS:-${ASA_HUB_METRICS_HOURLY_DAYS:-}}
       AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS: ${AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS:-}
       AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS: ${AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS:-}
+      AI_SECURITY_MONITOR_HUB_DNS_TOKEN: ${AI_SECURITY_MONITOR_HUB_DNS_TOKEN:-}
       AI_SECURITY_MONITOR_HUB_AI_RETENTION_DAYS: ${AI_SECURITY_MONITOR_HUB_AI_RETENTION_DAYS:-}
       AI_SECURITY_MONITOR_HUB_IPINTEL_CACHE_DAYS: ${AI_SECURITY_MONITOR_HUB_IPINTEL_CACHE_DAYS:-}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -74,6 +75,30 @@ services:
     volumes:
       - hubdata:/data
 
+  # 防護 DNS（選用，預設不起）：.env 設好 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（至少 32 字元，Hub 與 dns 共用）後
+  #   docker compose -f docker/compose.standalone.yml --env-file .env --profile dns up -d
+  # 封鎖開關、上游與清單在 Hub「設定與金鑰 → 防護 DNS」（預設關＝只轉送）。
+  # 只發布到 AI_SECURITY_MONITOR_HUB_DNS_BIND（預設 127.0.0.1；給區網用請改成這台的區網 IP——0.0.0.0:53 常被
+  # 系統的 DNS 服務佔走：Linux 的 systemd-resolved、Windows 的網際網路連線共用）。
+  # bridge 網路看不到裝置的真實 IP（Docker Desktop 全部變成同一個位址）；Linux 要分裝置請再加 -f docker/compose.dns-host.yml。
+  dns:
+    image: ghcr.io/markku636/ai-security-monitor-dns:${AI_SECURITY_MONITOR_DNS_IMAGE_TAG:-${AI_SECURITY_MONITOR_HUB_IMAGE_TAG:-latest}}
+    profiles: [dns]
+    restart: unless-stopped
+    depends_on:
+      - hub
+    environment:
+      AI_SECURITY_MONITOR_DNS_HUB_URL: http://hub:3000
+      AI_SECURITY_MONITOR_HUB_DNS_TOKEN: ${AI_SECURITY_MONITOR_HUB_DNS_TOKEN:-}
+    # 容器內走 compose 網路連 Hub（http 只在這個內部網路上）
+    command: ["--insecure-http"]
+    ports:
+      - "${AI_SECURITY_MONITOR_HUB_DNS_BIND:-127.0.0.1}:${AI_SECURITY_MONITOR_HUB_DNS_PORT:-53}:53/udp"
+      - "${AI_SECURITY_MONITOR_HUB_DNS_BIND:-127.0.0.1}:${AI_SECURITY_MONITOR_HUB_DNS_PORT:-53}:53/tcp"
+    volumes:
+      - dnsdata:/data
+
 volumes:
+  dnsdata: {}
   pgdata: {}
   hubdata: {}

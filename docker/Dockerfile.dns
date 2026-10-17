@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+# 防護 DNS 映像（ghcr.io/markku636/ai-security-monitor-dns）：只有 musl 靜態執行檔＋CA 憑證，FROM scratch，amd64／arm64。
+# 建置環境是 repo 根目錄；執行檔先放到 dist/dns/<amd64|arm64>/ai-security-monitor（release.yml 從 agent 產物複製）：
+#   cargo build --release --target x86_64-unknown-linux-musl --manifest-path agent/Cargo.toml
+#   mkdir -p dist/dns/amd64 && cp agent/target/x86_64-unknown-linux-musl/release/ai-security-monitor dist/dns/amd64/
+#   docker build -f docker/Dockerfile.dns -t ai-security-monitor-dns .
+# 以 nobody（65534）執行：Docker 20.10 起容器內綁 53 不需要 root。設定與情資快取在 /data。
+FROM alpine:3.22 AS base
+RUN apk add --no-cache ca-certificates && mkdir -p /data && chown 65534:65534 /data
+
+FROM scratch
+ARG TARGETARCH
+ARG ASA_VERSION=0.5.0
+LABEL org.opencontainers.image.title="AI Security Monitor protective DNS" \
+      org.opencontainers.image.description="Protective DNS server: blocks threat-intel domains, encrypted upstream DNS, managed by the Security Hub" \
+      org.opencontainers.image.source="https://github.com/markku636/ai-security-monitor" \
+      org.opencontainers.image.version="${ASA_VERSION}" \
+      org.opencontainers.image.licenses="MIT"
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=base --chown=65534:65534 /data /data
+COPY --chmod=0755 dist/dns/${TARGETARCH}/ai-security-monitor /ai-security-monitor
+ENV AI_SECURITY_MONITOR_CONFIG_DIR=/data \
+    AI_SECURITY_MONITOR_SECRETS_BACKEND=file \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+USER 65534:65534
+VOLUME /data
+EXPOSE 53/udp 53/tcp
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/ai-security-monitor", "dns-server", "--healthcheck", "--listen", "127.0.0.1:53"]
+ENTRYPOINT ["/ai-security-monitor", "dns-server"]

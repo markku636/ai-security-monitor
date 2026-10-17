@@ -1508,6 +1508,11 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "這台電腦還沒加入 Hub（--hub-agent 要先 enroll）" => "This computer has not joined a Hub (--hub-agent needs enroll first)",
         "連 Hub 需要防護 DNS 權杖（--hub-token）" => "Connecting to a Hub needs a protective DNS token (--hub-token)",
         "連上 Hub：{url}（封鎖開關、上游與清單以 Hub 的設定為準）" => "Connected to Hub: {url} (blocking switch, upstreams and lists follow the Hub settings)",
+        "防護 DNS 結束了（{status}），{s} 秒後重新啟動；原因見 {log}" => "Protective DNS exited ({status}); restarting in {s} seconds; see {log}",
+        "防護 DNS 已停止" => "Protective DNS stopped",
+        "防護 DNS 的設定變了，重新啟動" => "Protective DNS settings changed; restarting",
+        "防護 DNS 已啟動：{args}" => "Protective DNS started: {args}",
+        "防護 DNS 啟動失敗：{e}" => "Protective DNS failed to start: {e}",
         _ => return None,
     })
 }

@@ -1,5 +1,5 @@
 // 發版前檢查：agent（Cargo.toml／lock）、hub（package(-lock).json、env.ts 預設）、桌面版（package(-lock).json、tauri.conf.json、Cargo.toml／lock）、
-// docker/Dockerfile 的 ASA_HUB_VERSION 都等於 <version>，CHANGELOG 有 `## v<version>`。
+// docker/Dockerfile 的 ASA_HUB_VERSION、docker/Dockerfile.dns 的 ASA_VERSION 都等於 <version>，CHANGELOG 有 `## v<version>`。
 // 用法：node scripts/check-version.mjs <version> [--no-changelog]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,6 +45,8 @@ for (const name of ['ai-security-monitor', 'ai-security-monitor-desktop']) {
 }
 const dockerfile = [...read('docker/Dockerfile').matchAll(/ARG ASA_HUB_VERSION=(\S+)/g)].map((m) => m[1]);
 if (!dockerfile.length || dockerfile.some((v) => v !== version)) errors.push(`docker/Dockerfile ASA_HUB_VERSION is ${dockerfile.join(', ')}`);
+const dnsDockerfile = [...read('docker/Dockerfile.dns').matchAll(/ARG ASA_VERSION=(\S+)/g)].map((m) => m[1]);
+if (!dnsDockerfile.length || dnsDockerfile.some((v) => v !== version)) errors.push(`docker/Dockerfile.dns ASA_VERSION is ${dnsDockerfile.join(', ')}`);
 const envDefault = /npm_package_version \|\| '([^']+)'/.exec(read('hub/lib/env.ts'))?.[1];
 if (envDefault !== version) errors.push(`hub/lib/env.ts fallback version is ${envDefault}`);
 

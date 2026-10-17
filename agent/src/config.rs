@@ -118,6 +118,8 @@ pub struct DnsConfig {
     pub upload: DnsUpload,
     /// 拿幾個常見網域的答案跟加密 DNS（Cloudflare）比對，抓 DNS 被竄改（預設關：會把這幾個網域送給 Cloudflare）。
     pub verify_answers: bool,
+    /// 這台當防護 DNS（背景服務帶起 `dns-server`）。
+    pub server: DnsServerConfig,
 }
 
 impl Default for DnsConfig {
@@ -126,8 +128,18 @@ impl Default for DnsConfig {
             enabled: true,
             upload: DnsUpload::All,
             verify_answers: false,
+            server: DnsServerConfig::default(),
         }
     }
+}
+
+/// 背景服務帶起的防護 DNS（預設關）；加入 Hub 時用這台的身分連 Hub，設定以 Hub 為準。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct DnsServerConfig {
+    pub enabled: bool,
+    /// 監聽位址（空＝0.0.0.0:53 與 [::]:53，被佔用時改綁各網卡位址）。
+    pub listen: Vec<String>,
 }
 
 /// 檔案完整性＋開機自啟監控（掃描器 `files`）。
@@ -674,6 +686,8 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "dns.enabled",
     "dns.upload",
     "dns.verify_answers",
+    "dns.server.enabled",
+    "dns.server.listen",
     "update.mode",
     "hub.advertise_url",
 ];
@@ -732,6 +746,16 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "metrics.process_network" => cfg.metrics.process_network = parse_bool(key, value)?,
         "dns.enabled" => cfg.dns.enabled = parse_bool(key, value)?,
         "dns.verify_answers" => cfg.dns.verify_answers = parse_bool(key, value)?,
+        "dns.server.enabled" => cfg.dns.server.enabled = parse_bool(key, value)?,
+        "dns.server.listen" => {
+            let list = parse_list(value);
+            for a in &list {
+                if a.parse::<std::net::SocketAddr>().is_err() && a.parse::<std::net::IpAddr>().is_err() {
+                    return Err(AppError::InvalidArg(tf!("不是合法的監聽位址：{value}", value = a)));
+                }
+            }
+            cfg.dns.server.listen = list;
+        }
         "dns.upload" => {
             cfg.dns.upload = DnsUpload::parse(value)
                 .ok_or_else(|| AppError::InvalidArg(tf!("{key} 只能是 all、alerts 或 off", key = key)))?
@@ -1160,6 +1184,12 @@ mod tests {
         set_value(&mut c, "dns.enabled", "off").unwrap();
         assert!(!c.dns.enabled);
         assert!(set_value(&mut c, "dns.upload", "some").is_err());
+        assert!(!c.dns.server.enabled);
+        set_value(&mut c, "dns.server.enabled", "on").unwrap();
+        set_value(&mut c, "dns.server.listen", "192.168.1.5:53, [fd00::5]:53, 10.0.0.2").unwrap();
+        assert!(c.dns.server.enabled);
+        assert_eq!(c.dns.server.listen, vec!["192.168.1.5:53", "[fd00::5]:53", "10.0.0.2"]);
+        assert!(set_value(&mut c, "dns.server.listen", "lan:53").is_err());
         assert!(!c.metrics.performance);
         set_value(&mut c, "metrics.performance", "true").unwrap();
         assert!(c.metrics.performance);

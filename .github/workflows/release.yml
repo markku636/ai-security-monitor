@@ -22,6 +22,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/markku636/ai-security-monitor-hub
+  DNS_IMAGE: ghcr.io/markku636/ai-security-monitor-dns
   LEGACY_IMAGE: ghcr.io/markku636/ai-security-agent-hub
   DOCKER_BUILD_RECORD_UPLOAD: false
   PUBLISH: ${{ github.event_name == 'push' || !inputs.dry_run }}
@@ -227,8 +228,47 @@ jobs:
             ${{ env.LEGACY_IMAGE }}:slim
           cache-from: type=gha
 
+  # 防護 DNS 映像：直接用上面建好的 Linux musl 靜態執行檔（x64＋arm64），FROM scratch
+  dns-image:
+    needs: [verify, agent]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-linux-*
+          path: artifacts
+      - name: Stage binaries
+        run: |
+          set -euo pipefail
+          V=${{ needs.verify.outputs.version }}
+          mkdir -p dist/dns/amd64 dist/dns/arm64
+          cp "artifacts/agent-linux-x64/ai-security-monitor-$V-linux-x64" dist/dns/amd64/ai-security-monitor
+          cp "artifacts/agent-linux-arm64/ai-security-monitor-$V-linux-arm64" dist/dns/arm64/ai-security-monitor
+          chmod +x dist/dns/*/ai-security-monitor
+          ls -l dist/dns/*
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Protective DNS image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.dns
+          platforms: linux/amd64,linux/arm64
+          build-args: ASA_VERSION=${{ needs.verify.outputs.version }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.DNS_IMAGE }}:${{ needs.verify.outputs.version }}
+            ${{ env.DNS_IMAGE }}:latest
+
   release:
-    needs: [verify, agent, desktop, hub-image]
+    needs: [verify, agent, desktop, hub-image, dns-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

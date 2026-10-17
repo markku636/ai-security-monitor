@@ -6,6 +6,7 @@
 //! 啟動時先用轉送模式服務，封鎖清單在背景建好再換上（重啟只斷不到 1 秒）。
 
 pub mod cache;
+pub mod child;
 pub mod hub;
 pub mod lists;
 pub mod qlog;
