@@ -7,10 +7,14 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div id="splash" class="splash" aria-hidden="true">
+      <img src="icon.png" alt="" class="splash-logo" draggable="false" />
+      <div class="splash-name">AI Security Monitor</div>
+    </div>
     <div class="shell">
       <aside class="side">
         <div class="brand">
-          <img src="icon.png" alt="" width="36" height="36" />
+          <img src="icon.png" alt="" width="56" height="56" />
           <div>
             <div class="brand-name">AI Security Monitor</div>
             <div class="brand-sub" id="brand-host">本機</div>
@@ -31,6 +35,7 @@
       <main id="main"></main>
     </div>
     <div id="toast" class="toast" hidden></div>
+    <script src="splash.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

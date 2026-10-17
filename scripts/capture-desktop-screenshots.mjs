@@ -377,7 +377,13 @@ for (const [name, page, dark, prepare] of SHOTS) {
   // 桌面版視窗預設 1200×780（tauri.conf.json）；連線頁右邊有 IP 分析欄，用放大後的視窗
   const [width, height] = page === 'connections' ? [1440, 860] : [1200, 780];
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' }] });
+  // 減少動態效果：略過啟動畫面（splash.js），截到的是頁面本身
+  await send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' },
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+    ],
+  });
   // 和真的 app 一樣先開總覽（側欄的主機名稱、版本、背景服務狀態是總覽載入時填的），再切到要拍的頁
   await send('Page.navigate', { url: `${BASE}?${name}#overview` });
   await waitFor(`document.readyState === 'complete' && document.getElementById('brand-host').textContent === 'fin-laptop-07' && !!document.querySelector('#ov-conn table')`);
