@@ -16,8 +16,12 @@ The key-based flow (`enroll <url> --key …`) keeps working unchanged.
    listed, together with the Hub **fingerprint** (e.g. `72AS-YEXT-VNGO-NLC5-W2NM`).
 3. **Send an enrollment request** with the host name, OS, IPs, version and a random secret that only this computer knows (the Hub stores only its hash).
    The computer and the Hub's admin page show the same **check code** (e.g. `EA2B-3TOV`) so the administrator can tell which computer it is.
-4. **The administrator approves**: Hub → *Add hosts → Pending hosts* → **Approve** (multi-select works). Requests from a source IP inside the
-   *auto-approve networks* are approved immediately.
+4. **Approval**, depending on the Hub's *join mode*:
+   - **Allow automatically (default)**: requests are approved as soon as they arrive. If *auto-approve networks* is filled in, only those networks are
+     approved automatically and everything else waits for the administrator.
+   - **Review**: Hub → *Add hosts → Pending hosts* → **Approve** (multi-select works); requests from inside the *auto-approve networks* are still approved immediately.
+   - In both modes, hosts that joined before without a pinned identity, or were deleted, always need a manual approval. Automatic approvals are capped at
+     60 per 10 minutes and 500 approved-but-unclaimed; beyond that requests wait for the administrator.
 5. **Done**: the computer receives an enroll key that belongs to **this computer only** (bound to its agent id — any other agent using it is
    rejected; it is listed and revocable under *Settings & keys → Enroll keys*), registers as usual, pins the Hub fingerprint and starts reporting.
 
@@ -32,8 +36,13 @@ Requests that nobody handles expire after 7 days.
    - **Simplest**: hand out the *keyless install commands* from that page (they contain this Hub's URL), or download the prefilled `install.ps1` / `install.sh` and run it with your software-deployment tool.
    - **Company DNS**: add the SRV (+ TXT) record, see *DNS SRV record* below.
    - **Local network broadcast**: the server edition of the Hub advertises by default; if the Hub runs in Docker see *mDNS advertising* below.
-3. (Optional) Fill in *auto-approve networks* with your office ranges, e.g. `192.168.10.0/24`, `10.20.0.0/16`. Requests from those networks are
-   approved immediately; empty = every request needs a manual approval. Only the real TCP source address counts; behind a reverse proxy set
+3. Pick the *join mode*:
+   - **Allow automatically** (default): any computer that can reach the Hub and knows its URL can join. Easiest when the Hub is only on the office
+     network; if it is reachable from the internet, switch to review or fill in *auto-approve networks* so only those networks join automatically.
+   - **Review**: you approve every computer. To force review (and lock the setting on the web page) set `AI_SECURITY_MONITOR_HUB_ENROLL_MODE=review`.
+4. (Optional) Fill in *auto-approve networks* with your office ranges, e.g. `192.168.10.0/24`, `10.20.0.0/16`. In review mode, requests from those
+   networks are approved immediately and empty = every request needs a manual approval; in automatic mode, empty = everyone joins automatically and
+   a list = only those networks join automatically. Only the real TCP source address counts; behind a reverse proxy set
    `AI_SECURITY_MONITOR_HUB_TRUST_PROXY=1` so the proxy's `X-Forwarded-For` is used instead.
 4. When requests arrive, *Add hosts* in the sidebar shows a count. Check host name, IP and check code, then click **Approve** or **Reject**.
    Approvals, rejections, auto-approvals and changes to the networks are written to the audit log.
@@ -157,6 +166,7 @@ page shows how to fix it, with a security note.
 | Environment variable | Default | Meaning |
 |---|---|---|
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | on | `0` disables keyless enrollment requests (keys only) |
+| `AI_SECURITY_MONITOR_HUB_ENROLL_MODE` | – (web setting, default `auto`) | `auto` = allow automatically, `review` = admin review; when set it locks the web setting |
 | `AI_SECURITY_MONITOR_HUB_MDNS` | on for server, off for standalone | local network mDNS advertising |
 | `AI_SECURITY_MONITOR_HUB_BIND` | `0.0.0.0` for server, `127.0.0.1` for standalone | host bind address in compose (also passed into the container so "Add a host" can tell whether the LAN can reach it) |
 | `AI_SECURITY_MONITOR_HUB_NAME` | `Security Hub` | Hub name shown to computers |

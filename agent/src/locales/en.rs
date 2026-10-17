@@ -1223,7 +1223,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "等候管理員核准… Hub「{name}」（{url}）\n  Hub 指紋：{fp}\n  這台電腦的核對碼：{code}\n  請管理員在 Hub 的「新增主機 → 待核准的主機」核對後按核准。" =>
             "Waiting for an administrator to approve… Hub \"{name}\" ({url})\n  Hub fingerprint: {fp}\n  This computer's check code: {code}\n  Ask your administrator to compare it under Add hosts → Pending hosts in the Hub and click Approve.",
         "要加入這個 Hub 請加 --yes（或用 --hub <網址> 指定）" => "To join this Hub add --yes (or pick it with --hub <url>)",
-        "管理員已核准：已加入 {url}（{hub} {version}）；agent id {id}" => "Approved: joined {url} ({hub} {version}); agent id {id}",
+        "加入完成：已加入 {url}（{hub} {version}）；agent id {id}" => "Done: joined {url} ({hub} {version}); agent id {id}",
         "下一步：執行 ai-security-monitor service install --yes 開機自動回報（或 ai-security-monitor watch --once 先試一輪）" =>
             "Next: run ai-security-monitor service install --yes to report automatically at startup (or ai-security-monitor watch --once to try one round)",
         "這台電腦已經加入 {url}（要改加入別的 Hub 請加 --repin）" => "This computer has already joined {url} (add --repin to join a different Hub)",
@@ -1257,7 +1257,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "等候 Hub 管理員核准加入申請：{url}（核對碼 {code}，Hub 指紋 {fp}）" => "Waiting for a Hub administrator to approve the enrollment request: {url} (check code {code}, Hub fingerprint {fp})",
         "尚未註冊 hub：只在本機掃描（ai-security-monitor enroll --auto 自動尋找公司的 Hub，或 enroll <HUB_URL> --key …）" =>
             "Not enrolled with a hub: scanning locally only (ai-security-monitor enroll --auto finds your company's Hub, or enroll <HUB_URL> --key …)",
-        "管理員已核准：已加入 {url}（{hub} {version}），開始回報" => "Approved: joined {url} ({hub} {version}); reporting starts now",
+        "加入完成：已加入 {url}（{hub} {version}），開始回報" => "Done: joined {url} ({hub} {version}); reporting starts now",
         "沒有找到 Security Hub。請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄、在區網開啟 Hub 廣播，或直接用 ai-security-monitor enroll --hub <網址>" =>
             "No Security Hub found. Ask your administrator to add an _aisecmon._tcp SRV record to the company DNS or turn on Hub advertising on the local network, or use ai-security-monitor enroll --hub <url>",
         "Hub 身分驗證失敗：{detail}" => "Hub identity check failed: {detail}",

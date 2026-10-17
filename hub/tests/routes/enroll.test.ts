@@ -1,4 +1,5 @@
-// 免金鑰加入＋Hub 身分：申請 → 輪詢 → 核准 → 拿綁定金鑰註冊 → 已領取；自動核准網段、限流、到期、CSRF、金鑰綁定。
+// 免金鑰加入＋Hub 身分：申請 → 輪詢 → 核准 → 拿綁定金鑰註冊 → 已領取；加入模式（自動允許／審核）、自動核准網段、限流、到期、CSRF、金鑰綁定。
+// 既有測試在「審核」模式下跑（beforeEach 設 ASA_HUB_ENROLL_MODE=review）；加入模式本身在最後一組測。
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +21,7 @@ import { randomToken } from '@/lib/auth/crypto';
 import { resetTokenTouchForTests } from '@/lib/auth/tokens';
 import type { DB } from '@/lib/db';
 import { approvalMessage, FINGERPRINT_RE, pkcs8FromSeed, resetHubIdentityForTests, verifyWithRawKey } from '@/lib/enroll/identity';
-import { CREATES_PER_WINDOW, resetEnrollSecretsForTests, setPendingCapForTests } from '@/lib/enroll/store';
+import { AUTO_PER_WINDOW, CREATES_PER_WINDOW, resetEnrollSecretsForTests, setPendingCapForTests } from '@/lib/enroll/store';
 import { resetEnvForTests } from '@/lib/env';
 import { setPeerIpHookForTests } from '@/lib/http';
 import { resetThrottleForTests } from '@/lib/ingest/route';
@@ -80,6 +81,7 @@ beforeEach(() => {
   process.env.ASA_HUB_CLIENT_SECRETS = 'client-a';
   process.env.ASA_HUB_INGEST_MIN_INTERVAL_MS = '0';
   delete process.env.ASA_HUB_ENROLL_REQUESTS;
+  process.env.ASA_HUB_ENROLL_MODE = 'review';
   delete process.env.ASA_HUB_TRUST_PROXY;
   delete process.env.ASA_HUB_PUBLIC_URL;
   resetEnvForTests();
@@ -432,5 +434,101 @@ describe('admin auth', () => {
     expect(withCsrf.status).toBe(200);
     const [row] = await db.select().from(enrollmentRequests).where(eq(enrollmentRequests.id, c.request_id));
     expect(row.decidedBy).toBe('admin:session');
+  });
+});
+
+describe('join mode (auto by default, or admin review)', () => {
+  const setMode = (mode: unknown) => settingsPut(admin('/api/v1/admin/enroll-settings', { method: 'PUT', body: { join_mode: mode } }));
+
+  beforeEach(async () => {
+    delete process.env.ASA_HUB_ENROLL_MODE;
+    await db.delete(settings).where(eq(settings.key, 'enroll_join_mode'));
+    await setCidrs([]);
+  });
+
+  afterEach(() => {
+    process.env.ASA_HUB_ENROLL_MODE = 'review';
+  });
+
+  it('auto-approves everyone by default, without needing the peer IP', async () => {
+    const s = await (await settingsGet(admin('/api/v1/admin/enroll-settings'))).json();
+    expect(s).toMatchObject({ join_mode: 'auto', join_mode_source: 'default' });
+    expect((await (await identityGet(req('/api/v1/hub/identity'))).json()).enrollment).toEqual({ keyless: true, mode: 'auto' });
+
+    const body = newRequest();
+    const r = await create(body);
+    expect(r.status).toBe(201);
+    const j = await r.json();
+    expect(j).toMatchObject({ status: 'approved', auto_approved: true });
+    const [row] = await db.select().from(enrollmentRequests).where(eq(enrollmentRequests.id, j.request_id));
+    expect(row.decidedBy).toBe('auto:all');
+    const [a] = await audits('enroll_request.auto_approved', j.request_id);
+    expect(a.details).toMatchObject({ mode: 'auto', cidr: null });
+    expect((await (await poll(j.request_id, body.request_secret)).json()).credentials.agent_id).toBe(body.agent.id);
+  });
+
+  it('switches to review: new requests wait for an admin (audited)', async () => {
+    const r = await setMode('review');
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ join_mode: 'review', join_mode_source: 'settings' });
+    const [changed] = (await audits('enroll_settings.updated')).filter((x) => x.targetId === 'enroll_join_mode').slice(-1);
+    expect(changed.details).toMatchObject({ before: 'auto', after: 'review' });
+    expect((await (await create(newRequest())).json()).status).toBe('pending');
+    expect((await (await identityGet(req('/api/v1/hub/identity'))).json()).enrollment.mode).toBe('review');
+    expect((await setMode('sometimes')).status).toBe(400);
+  });
+
+  it('auto mode with a CIDR list only auto-approves those networks', async () => {
+    await setCidrs(['192.0.2.0/24']);
+    // 不知道來源 IP → 不能確定在網段內 → 等人工
+    expect((await (await create(newRequest(), { 'x-asa-peer-ip': '192.0.2.5' })).json()).status).toBe('pending');
+    setPeerIpHookForTests(true);
+    expect((await (await create(newRequest(), { 'x-asa-peer-ip': '198.51.100.7' })).json()).status).toBe('pending');
+    const inside = await (await create(newRequest(), { 'x-asa-peer-ip': '192.0.2.5' })).json();
+    expect(inside.status).toBe('approved');
+    const [row] = await db.select().from(enrollmentRequests).where(eq(enrollmentRequests.id, inside.request_id));
+    expect(row.decidedBy).toBe('auto:192.0.2.0/24');
+  });
+
+  it('never auto-approves an existing agent whose identity was never pinned', async () => {
+    const body = newRequest();
+    expect((await register(req('/api/v1/agents/register', { method: 'POST', token: 'client-a', body: { agent: body.agent } }))).status).toBe(200);
+    expect((await (await create(body)).json()).status).toBe('pending');
+  });
+
+  it('an environment variable locks the mode', async () => {
+    process.env.ASA_HUB_ENROLL_MODE = 'review';
+    const s = await (await settingsGet(admin('/api/v1/admin/enroll-settings'))).json();
+    expect(s).toMatchObject({ join_mode: 'review', join_mode_source: 'env' });
+    const r = await setMode('auto');
+    expect(r.status).toBe(409);
+    expect((await r.json()).error).toBe('locked_by_env');
+  });
+
+  it('brakes after too many auto-approvals in a short time', async () => {
+    const now = new Date();
+    const ids = Array.from({ length: AUTO_PER_WINDOW }, (_, i) => `rq_cap${String(i).padStart(19, '0')}`);
+    await db.insert(enrollmentRequests).values(
+      ids.map((id) => ({
+        id,
+        agentId: `cap-${id}`,
+        hostname: 'cap',
+        secretHash: 'x',
+        requestCode: 'AAAA-AAAA',
+        status: 'approved',
+        autoApproved: true,
+        decidedAt: now,
+        decidedBy: 'auto:all',
+        claimedAt: now,
+        expiresAt: new Date(now.getTime() + 86_400_000),
+      })),
+    );
+    try {
+      const j = await (await create(newRequest())).json();
+      expect(j.status).toBe('pending');
+      expect((await audits('enroll_request.auto_capped', j.request_id))[0].details).toMatchObject({ reason: 'rate', mode: 'auto' });
+    } finally {
+      for (const id of ids) await db.delete(enrollmentRequests).where(eq(enrollmentRequests.id, id));
+    }
   });
 });

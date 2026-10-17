@@ -1027,4 +1027,22 @@ export const en: Record<string, string> = {
   '線上＝最近幾分鐘內有回報；延遲＝超過預期時間沒回報（可能關機、休眠或網路斷了）；離線＝很久沒回報。': 'Online = reported in the last few minutes; late = hasn\'t reported when expected (maybe off, asleep or offline); offline = no report for a long time.',
   '這台電腦連到的地方安不安全：連到威脅情資列名的位址、或行為異常（例如定時連回同一個地方）就扣分。每個問題依嚴重度扣分：嚴重 25、高 15、中 7、低 2。': 'Whether the places this computer talks to are safe: points come off for addresses listed by threat intel or unusual behavior (such as calling home on a timer). Each problem costs by severity: critical 25, high 15, medium 7, low 2.',
   '需要金鑰＝要登入或帶 API 金鑰才看得到資料；開放模式＝沒設管理員金鑰，只允許本機連線。': 'Key required = you must log in or use an API key to see data; open mode = no admin secret set, so only local connections are allowed.',
+
+  // ---- join mode ----
+  'Hub 是「自動允許加入」模式：申請一送出就核准了。': 'The Hub allows computers to join automatically: the request was approved as soon as it arrived.',
+  '任何連得到這個 Hub、又知道網址的電腦都能加入。若 Hub 開放到網際網路，建議改「審核加入」，或在下面填「自動核准的網段」只讓公司網路自動加入。': 'Any computer that can reach this Hub and knows its URL can join. If the Hub is reachable from the internet, switch to Review, or fill in Auto-approve networks below so only your office network joins automatically.',
+  '免金鑰加入：目前是「自動允許加入」，申請一送到 Hub 就發金鑰；那把金鑰只能給那一台主機用。Hub 每 10 分鐘最多自動核准 60 台，超過的改成等你核准。': 'Keyless join: the Hub currently allows automatic joining, so a key is issued as soon as a request arrives, and that key only works for that one host. The Hub approves at most 60 hosts automatically per 10 minutes; anything beyond waits for you.',
+  '加入模式': 'Join mode',
+  '加入模式由環境變數 AI_SECURITY_MONITOR_HUB_ENROLL_MODE 指定，網頁上不能改。': 'The join mode is set by the AI_SECURITY_MONITOR_HUB_ENROLL_MODE environment variable and can\'t be changed here.',
+  '加入模式由環境變數 AI_SECURITY_MONITOR_HUB_ENROLL_MODE 指定，請改那裡。': 'The join mode is set by the AI_SECURITY_MONITOR_HUB_ENROLL_MODE environment variable; change it there.',
+  '審核加入': 'Review each request',
+  '最近加入的主機': 'Recently joined hosts',
+  '比較安全：每一台都要管理員看過才加入。適合 Hub 可以從外面連到、或主機很多需要控管的時候。': 'Safer: an administrator checks every computer before it joins. Good when the Hub is reachable from outside or you have many hosts to control.',
+  '申請送到這裡等你核准；你對照電腦端的申請碼再按核准。自動核准網段內的仍會自動加入。': 'Requests wait here for your approval; compare the request code on the computer before you approve. Requests from auto-approve networks still join automatically.',
+  '自動允許加入（預設）': 'Allow automatically (default)',
+  '還沒有主機透過免金鑰加入。電腦端執行免金鑰安裝後，會自動加入並出現在這裡。': 'No host has joined without a key yet. After a computer runs the keyless installer it joins automatically and shows up here.',
+  '電腦端用免金鑰方式申請加入這個 Hub 時，要直接放行，還是等你核准。用註冊金鑰安裝的不受影響。': 'When a computer asks to join this Hub without a key: let it in right away, or wait for your approval. Installs that use an enroll key aren\'t affected.',
+  '電腦端送出申請就直接加入，不用人按。適合 Hub 只在公司內網、或你想省事的時候。': 'Computers join as soon as they send a request, with no clicking needed. Good when the Hub is only on the office network, or you want it simple.',
+  '（例：192.168.10.0/24）。「自動允許加入」模式下：留空＝任何電腦都自動加入；有填＝只有這些網段自動加入，其他的要你核准。': ' (e.g. 192.168.10.0/24). With automatic joining: empty = every computer joins automatically; filled in = only these networks join automatically and the rest wait for you.',
+  '：裝好後電腦端會送出加入申請並自動加入（目前是「自動允許加入」模式），電腦端會顯示 Hub 指紋。': ': once installed, the computer sends a join request and joins automatically (the Hub currently allows automatic joining); it shows the Hub fingerprint.',
 };

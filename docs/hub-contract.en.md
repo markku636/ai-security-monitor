@@ -93,7 +93,7 @@ auto-approve network), and the agent then gets an enroll key bound to its own ag
 All binary values are base64url without padding; fingerprints/codes are RFC 4648 base32.
 
 - **Hub identity** – `GET /api/v1/hub/identity[?nonce=<16–128 chars [A-Za-z0-9_-]>]` (public). Response: `contract/hub-identity.v1.json`
-  `{ name, version, edition, algorithm: "ed25519", public_key, fingerprint, enrollment: { keyless }, nonce?, signature? }`.
+  `{ name, version, edition, algorithm: "ed25519", public_key, fingerprint, enrollment: { keyless, mode }, nonce?, signature? }` (`mode`: `auto`|`review`, since 0.5).
   `fingerprint` = first 20 base32 characters of SHA-256(raw 32-byte public key), in groups of 4 (`72AS-YEXT-VNGO-NLC5-W2NM`);
   `signature` = Ed25519 over `asa-hub-identity|v1|<nonce>|<fingerprint>`. The key pair is generated once and stored in `settings.hub_identity`.
   120 requests/min per IP.
@@ -116,8 +116,8 @@ All binary values are base64url without padding; fingerprints/codes are RFC 4648
   register marks the request as claimed. Pending requests expire after 7 days; approved but unclaimed ones also expire (and their key is revoked).
 - **Admin** (session + CSRF, or admin Bearer): `GET /api/v1/admin/enroll-requests?status=pending|all` (never returns secrets or keys),
   `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`,
-  `GET|PUT /api/v1/admin/enroll-settings` `{ auto_approve_cidrs[≤64] }` (IPv4 prefix ≥ /8, IPv6 ≥ /16; the GET also reports mDNS status and the
-  SRV/TXT records to add, named `_aisecmon._tcp.<domain>`). Audit: `enroll_request.created|approved|rejected|auto_approved`, `enroll_settings.updated`.
+  `GET|PUT /api/v1/admin/enroll-settings` `{ join_mode?: "auto"|"review", auto_approve_cidrs?[≤64] }` (either field alone is fine; `join_mode` returns 409 `locked_by_env` when an environment variable sets it; GET also returns `join_mode_source: env|settings|default`; IPv4 prefix ≥ /8, IPv6 ≥ /16; the GET also reports mDNS status and the
+  SRV/TXT records to add, named `_aisecmon._tcp.<domain>`). Audit: `enroll_request.created|approved|rejected|auto_approved|auto_capped`, `enroll_settings.updated` (`target_id` = `enroll_join_mode` / `enroll_auto_approve_cidrs`). Automatic approvals record `decided_by` = `auto:all` (automatic mode) or `auto:<network>`.
 - **Agent side**: the Hub fingerprint is pinned in `config.json` (`hub.fingerprint`, `hub.public_key`). `watch` checks
   `/api/v1/hub/identity` at start and stops uploading if it differs; a pending request lives in `<config>/hub-enroll-request.json` (secret in the
   keychain / secrets file) and `watch` keeps polling it.

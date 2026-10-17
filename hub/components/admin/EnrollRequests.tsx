@@ -1,9 +1,10 @@
 'use client';
 
-// 「新增主機」頁：待核准的主機（免金鑰加入申請，每 10 秒自動更新）、自動核准網段設定、可複製的指令區塊。
+// 「新增主機」頁：加入模式（自動允許／審核）、待核准或最近加入的主機（免金鑰加入申請，每 10 秒自動更新）、自動核准網段、可複製的指令區塊。
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { Hint } from '@/components/ui/Hint';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { apiPost, apiPut } from '@/lib/api-client';
 import { utc } from '@/lib/format';
 import { useT } from '@/lib/i18n/client';
@@ -84,11 +85,12 @@ function StatusPill({ s }: { s: EnrollRequestItem['status'] }) {
 }
 
 /** 待核准的主機：勾選＋整批核准／拒絕；頁面開著時每 10 秒更新一次。 */
-export function EnrollRequestsPanel({ initial }: { initial: EnrollRequestItem[] }) {
+export function EnrollRequestsPanel({ initial, mode }: { initial: EnrollRequestItem[]; mode: JoinMode }) {
   const { t } = useT();
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  const [showAll, setShowAll] = useState(false);
+  // 自動允許模式下幾乎不會有待核准的，預設改看最近加入的
+  const [showAll, setShowAll] = useState(mode === 'auto');
   const [picked, setPicked] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -216,9 +218,16 @@ export function EnrollRequestsPanel({ initial }: { initial: EnrollRequestItem[] 
                         </span>
                       ) : null}
                       {r.auto_approved ? (
-                        <span className={`${PILL} cursor-help bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300`} title={t('來源 IP 在「自動核准的網段」內，所以不用人按就核准了。')}>
+                        <Tooltip
+                          className={`${PILL} cursor-help bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300`}
+                          text={
+                            r.decided_by === 'auto:all'
+                              ? t('Hub 是「自動允許加入」模式：申請一送出就核准了。')
+                              : t('來源 IP 在「自動核准的網段」內，所以不用人按就核准了。')
+                          }
+                        >
                           {t('自動核准')}
-                        </span>
+                        </Tooltip>
                       ) : null}
                       {r.accept_remote_actions ? (
                         <span className={`${PILL} cursor-help bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`} title={t('這台主機願意執行你核准的封鎖 IP、關閉 port 等動作。')}>
@@ -254,8 +263,73 @@ export function EnrollRequestsPanel({ initial }: { initial: EnrollRequestItem[] 
           </table>
         </div>
       ) : (
-        <p className="text-sm text-slate-500">{t('目前沒有待核准的主機。電腦端執行免金鑰安裝後，申請會出現在這裡。')}</p>
+        <p className="text-sm text-slate-500">
+          {mode === 'auto' && showAll
+            ? t('還沒有主機透過免金鑰加入。電腦端執行免金鑰安裝後，會自動加入並出現在這裡。')
+            : t('目前沒有待核准的主機。電腦端執行免金鑰安裝後，申請會出現在這裡。')}
+        </p>
       )}
+    </div>
+  );
+}
+
+export type JoinMode = 'auto' | 'review';
+
+/** 加入模式：自動允許（預設，申請一送出就加入）／審核加入（要管理員按核准）。環境變數設定時鎖定。 */
+export function JoinModeForm({ initial, source }: { initial: JoinMode; source: 'env' | 'settings' | 'default' }) {
+  const { t } = useT();
+  const router = useRouter();
+  const [mode, setMode] = useState<JoinMode>(initial);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, start] = useTransition();
+  const locked = source === 'env';
+  const save = (next: JoinMode) =>
+    start(async () => {
+      if (next === mode) return;
+      setMsg(null);
+      const r = await apiPut<{ join_mode?: JoinMode; error?: string }>('/api/v1/admin/enroll-settings', { join_mode: next });
+      if (!r.ok) {
+        setMsg({ ok: false, text: r.data.error === 'locked_by_env' ? t('加入模式由環境變數 AI_SECURITY_MONITOR_HUB_ENROLL_MODE 指定，請改那裡。') : t('儲存失敗（HTTP {n}）', { n: r.status }) });
+        return;
+      }
+      setMode(r.data.join_mode ?? next);
+      setMsg({ ok: true, text: t('已儲存') });
+      router.refresh();
+    });
+  const option = (value: JoinMode, title: string, desc: string, hint: string) => (
+    <label
+      className={`flex flex-1 cursor-pointer gap-3 rounded-lg border p-3 text-sm ${
+        mode === value ? 'border-teal-600 bg-teal-50 dark:border-teal-500 dark:bg-teal-950/40' : 'border-slate-200 dark:border-slate-700'
+      } ${locked || busy ? 'cursor-not-allowed opacity-70' : ''}`}
+    >
+      <input type="radio" name="join_mode" className="mt-1 accent-teal-700" checked={mode === value} disabled={locked || busy} onChange={() => save(value)} />
+      <span>
+        <span className="font-medium">
+          {title}
+          <Hint text={hint} />
+        </span>
+        <span className="mt-0.5 block text-slate-500">{desc}</span>
+      </span>
+    </label>
+  );
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {option(
+          'auto',
+          t('自動允許加入（預設）'),
+          t('電腦端送出申請就直接加入，不用人按。適合 Hub 只在公司內網、或你想省事的時候。'),
+          t('任何連得到這個 Hub、又知道網址的電腦都能加入。若 Hub 開放到網際網路，建議改「審核加入」，或在下面填「自動核准的網段」只讓公司網路自動加入。'),
+        )}
+        {option(
+          'review',
+          t('審核加入'),
+          t('申請送到這裡等你核准；你對照電腦端的申請碼再按核准。自動核准網段內的仍會自動加入。'),
+          t('比較安全：每一台都要管理員看過才加入。適合 Hub 可以從外面連到、或主機很多需要控管的時候。'),
+        )}
+      </div>
+      {locked ? <p className="text-xs text-slate-500">{t('加入模式由環境變數 AI_SECURITY_MONITOR_HUB_ENROLL_MODE 指定，網頁上不能改。')}</p> : null}
+      {msg ? <p className={`text-sm ${msg.ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{msg.text}</p> : null}
     </div>
   );
 }

@@ -540,7 +540,7 @@ async function pageSettings() {
     <p class="sub">桌面版和命令列 ai-security-monitor、背景服務共用同一個設定目錄。</p>
     <div class="card"><h2>公司的 Security Hub</h2>
       <div class="kv">
-        <div>狀態</div><div>${st.hub_url ? '已加入' : st.pending ? `等候管理員核准（<a class="link" href="#join">查看</a>）` : '未加入（只在這台電腦使用）'}</div>
+        <div>狀態</div><div>${st.hub_url ? '已加入' : st.pending ? `加入中（<a class="link" href="#join">查看</a>）` : '未加入（只在這台電腦使用）'}</div>
         <div title="${esc(FP_HINT)}">Hub 指紋 (?)</div><div class="mono">${esc(st.hub_fingerprint ?? '—')}</div>
       </div>
       <div class="row" style="margin-top:10px">
@@ -743,8 +743,10 @@ function stopJoinPoll() {
 }
 
 function waitingCard(p) {
-  return `<div class="card"><h2>等候管理員核准</h2>
-    <p class="small">已送出加入申請到 <b>${esc(p.hub_name)}</b>（<span class="mono">${esc(p.hub_url)}</span>）。請管理員到 Hub 的「新增主機 → 待核准的主機」核對下面兩組號碼後按「核准」。</p>
+  // Hub 是「自動允許加入」模式時申請一送出就核准了，這張卡只會閃一下
+  const auto = p.status === 'approved';
+  return `<div class="card"><h2>${auto ? 'Hub 已允許加入，正在完成…' : '等候管理員核准'}</h2>
+    <p class="small">已送出加入申請到 <b>${esc(p.hub_name)}</b>（<span class="mono">${esc(p.hub_url)}</span>）。${auto ? '' : '請管理員到 Hub 的「新增主機 → 待核准的主機」核對下面兩組號碼後按「核准」。'}</p>
     <div class="kv">
       <div title="${esc(FP_HINT)}">Hub 指紋 (?)</div><div class="mono">${esc(p.hub_fingerprint)}</div>
       <div title="${esc(CODE_HINT)}">這台電腦的核對碼 (?)</div><div class="mono" style="font-size:16px">${esc(p.request_code)}</div>
@@ -764,7 +766,7 @@ async function pollJoin(auto) {
   try {
     const r = await invoke('join_poll');
     if (r.status === 'approved') {
-      toast(`管理員已核准：已加入 ${r.hub_name}`);
+      toast(`加入完成：已加入 ${r.hub_name}`);
       location.hash = '#overview';
       return;
     }
@@ -853,7 +855,7 @@ async function pageJoin(search = true) {
   }
   $main.innerHTML = `
     <h1>尋找公司的 Security Hub</h1>
-    <p class="sub">不需要金鑰：找到公司的 Hub 後按「申請加入」，等管理員核准就完成。${st.hub_url ? `（這台電腦目前已加入 <span class="mono">${esc(st.hub_url)}</span>）` : ''}</p>
+    <p class="sub">不需要金鑰：找到公司的 Hub 後按「申請加入」；Hub 允許自動加入的話馬上完成，否則等管理員核准。${st.hub_url ? `（這台電腦目前已加入 <span class="mono">${esc(st.hub_url)}</span>）` : ''}</p>
     <div class="card"><h2>找到的 Hub</h2><div id="join-found"></div>
       <div class="row" style="margin-top:10px"><button class="btn" id="join-search" title="再查一次公司 DNS 與區網廣播（約 3–10 秒）">重新尋找</button></div></div>
     <div class="card"><h2>或輸入管理員給的 Hub 網址</h2>

@@ -3,6 +3,7 @@
 import { hit } from '@/lib/auth/ratelimit';
 import { getDb } from '@/lib/db';
 import { hubIdentity, hubName, identityMessage, keylessEnabled, sign } from '@/lib/enroll/identity';
+import { getJoinMode } from '@/lib/enroll/store';
 import { env } from '@/lib/env';
 import { error, json, sourceIp } from '@/lib/http';
 
@@ -16,7 +17,10 @@ export async function GET(req: Request): Promise<Response> {
   }
   const nonce = new URL(req.url).searchParams.get('nonce');
   if (nonce !== null && !NONCE_RE.test(nonce)) return error(400, 'bad_nonce');
-  const id = await hubIdentity(getDb());
+  const db = getDb();
+  const id = await hubIdentity(db);
+  // mode 讓電腦端事先知道要不要顯示「等候管理員核准」（auto＝送出就加入）
+  const { mode } = await getJoinMode(db);
   const e = env();
   return json({
     name: hubName(),
@@ -25,7 +29,7 @@ export async function GET(req: Request): Promise<Response> {
     algorithm: 'ed25519',
     public_key: id.publicKeyB64,
     fingerprint: id.fingerprint,
-    enrollment: { keyless: keylessEnabled() },
+    enrollment: { keyless: keylessEnabled(), mode },
     ...(nonce !== null ? { nonce, signature: sign(id, identityMessage(nonce, id.fingerprint)) } : {}),
   });
 }

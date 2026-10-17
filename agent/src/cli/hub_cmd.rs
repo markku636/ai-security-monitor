@@ -343,7 +343,7 @@ fn finish_message(env: &Env, cfg: &config::AgentConfig, reg: &crate::hub::contra
     println!(
         "{}",
         tf!(
-            "管理員已核准：已加入 {url}（{hub} {version}）；agent id {id}",
+            "加入完成：已加入 {url}（{hub} {version}）；agent id {id}",
             url = h.map(|h| h.url.as_str()).unwrap_or("?"),
             hub = reg.hub.name,
             version = reg.hub.version,
@@ -522,11 +522,9 @@ async fn enroll_auto(env: &Env, a: EnrollArgs) -> AppResult<()> {
         }
         None => discover_and_request(env, &cfg, &a, explicit).await?,
     };
-    if !env.global.json {
-        print_waiting(&pending);
-    }
-
-    // 等候核准（每次都重新讀檔：watch／另一個 enroll 也可能在等）
+    // 等候核准（每次都重新讀檔：watch／另一個 enroll 也可能在等）。
+    // Hub 是自動允許模式時第一次查就已核准，不必印「等候管理員核准」。
+    let mut announced = false;
     let agent = agent_info(&cfg);
     let deadline = tokio::time::Instant::now() + wait;
     let ctrl_c = tokio::signal::ctrl_c();
@@ -548,7 +546,13 @@ async fn enroll_auto(env: &Env, a: EnrollArgs) -> AppResult<()> {
                     t!("加入申請已過期或被刪除：請重新執行 ai-security-monitor enroll --auto").into(),
                 ));
             }
-            Ok(Some(Step::Waiting(st))) => keyless::poll_delay(Some(&pending), Some(&st)),
+            Ok(Some(Step::Waiting(st))) => {
+                if !announced && !env.global.json {
+                    print_waiting(&pending);
+                }
+                announced = true;
+                keyless::poll_delay(Some(&pending), Some(&st))
+            }
             Err(e) if fatal_enroll_error(&e) => return Err(e),
             Err(e) => {
                 if !env.global.json {
@@ -1278,7 +1282,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                     log(
                         env,
                         &tf!(
-                            "管理員已核准：已加入 {url}（{hub} {version}），開始回報",
+                            "加入完成：已加入 {url}（{hub} {version}），開始回報",
                             url = cfg.hub.as_ref().map(|h| h.url.as_str()).unwrap_or("?"),
                             hub = r.hub.name,
                             version = r.hub.version

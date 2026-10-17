@@ -22,6 +22,9 @@ pub const IDENTITY_PATH: &str = "/api/v1/hub/identity";
 pub struct EnrollmentInfo {
     /// Hub 是否接受免金鑰的加入申請。
     pub keyless: bool,
+    /// 加入模式：`auto`（申請一送出就核准）或 `review`（等管理員核准）；舊版 Hub 沒有這欄。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -258,6 +261,7 @@ mod tests {
             "72AS-YEXT-VNGO-NLC5-W2NM"
         );
         assert!(id.enrollment.keyless);
+        assert_eq!(id.enrollment.mode.as_deref(), Some("auto"));
         // 別的 nonce（重放）、改指紋、改簽章都要失敗
         assert!(id.verify("another-nonce-123456").is_err());
         let mut bad = id.clone();

@@ -6,7 +6,8 @@
   "public_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
   "fingerprint": "72AS-YEXT-VNGO-NLC5-W2NM",
   "enrollment": {
-    "keyless": true
+    "keyless": true,
+    "mode": "auto"
   },
   "nonce": "q8yA3n0pZx1sT2uV4wX6yZ8a",
   "signature": "xygayHGkq1CKKxGqhLgqPvUMtQR7HnPwlE6UOSdy9_Ip4rYstVbLp5UA3RUoq4pxMojMUPtB4LEMye8tPUYNDg"

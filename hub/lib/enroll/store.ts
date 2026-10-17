@@ -1,4 +1,4 @@
-// 免金鑰加入申請：建立（冪等）、輪詢、核准／拒絕、自動核准網段、到期。
+// 免金鑰加入申請：建立（冪等）、輪詢、核准／拒絕、加入模式（自動允許／審核）與自動核准網段、到期。
 // 安全重點：request_secret 只存 sha256、比對用 safeEqual；核准前絕不回任何憑證；
 // 核准後發的註冊金鑰不存明文（以 enroll_credential_secret HMAC 衍生），而且只綁那台 agent（bound_agent_id）。
 import crypto from 'node:crypto';
@@ -8,6 +8,7 @@ import { agents, enrollKeys, enrollmentRequests, settings } from '@/drizzle/sche
 import { audit } from '@/lib/audit';
 import { safeEqual, sha256Hex } from '@/lib/auth/crypto';
 import type { DB } from '@/lib/db';
+import { readEnv } from '@/lib/env';
 import { AgentInfo } from '@/lib/ingest/schema';
 import { matchCidr, normalizeCidrList, type CidrError } from './cidr';
 import { approvalMessage, hubIdentity, requestCodeOf, sign } from './identity';
@@ -22,6 +23,15 @@ export const STATUSES = ['pending', 'approved', 'rejected', 'expired'] as const;
 export type EnrollStatus = (typeof STATUSES)[number];
 
 const CIDR_KEY = 'enroll_auto_approve_cidrs';
+const MODE_KEY = 'enroll_join_mode';
+/** 加入模式：auto＝申請一送出就自動核准（預設）；review＝要管理員核准（自動核准網段內的仍自動）。 */
+export const JOIN_MODES = ['auto', 'review'] as const;
+export type JoinMode = (typeof JOIN_MODES)[number];
+export const DEFAULT_JOIN_MODE: JoinMode = 'auto';
+/** 自動核准的煞車：全 Hub 每 10 分鐘最多 60 筆、已核准但還沒領走的最多 500 筆；超過改成等人工核准。 */
+export const AUTO_WINDOW_MS = 10 * 60_000;
+export const AUTO_PER_WINDOW = 60;
+export const AUTO_UNCLAIMED_CAP = 500;
 const CRED_KEY = 'enroll_credential_secret';
 
 export const SECRET_RE = /^[A-Za-z0-9_-]{43,128}$/;
@@ -72,6 +82,47 @@ async function credentialSecret(db: DB): Promise<string> {
 export function deriveClientKey(secret: string, requestId: string, keyId: string): string {
   const tail = crypto.createHmac('sha256', secret).update(`asa-enroll-key|${requestId}|${keyId}`).digest('hex').slice(0, 40);
   return `asa_ek_${keyId}_${tail}`;
+}
+
+// ---- 加入模式 ----
+
+function isJoinMode(v: unknown): v is JoinMode {
+  return typeof v === 'string' && (JOIN_MODES as readonly string[]).includes(v);
+}
+
+/** 環境變數 ASA_HUB_ENROLL_MODE（或 AI_SECURITY_MONITOR_HUB_ENROLL_MODE）＞ 網頁設定 ＞ 預設 auto。 */
+export async function getJoinMode(db: DB): Promise<{ mode: JoinMode; source: 'env' | 'settings' | 'default' }> {
+  const fromEnv = readEnv('ASA_HUB_ENROLL_MODE').trim().toLowerCase();
+  if (isJoinMode(fromEnv)) return { mode: fromEnv, source: 'env' };
+  const row = (await db.select().from(settings).where(eq(settings.key, MODE_KEY)).limit(1))[0];
+  if (isJoinMode(row?.value)) return { mode: row.value, source: 'settings' };
+  return { mode: DEFAULT_JOIN_MODE, source: 'default' };
+}
+
+export async function setJoinMode(db: DB, input: unknown, actor: string): Promise<{ before: JoinMode; after: JoinMode } | { error: 'bad_mode' | 'locked_by_env' }> {
+  if (!isJoinMode(input)) return { error: 'bad_mode' };
+  const cur = await getJoinMode(db);
+  if (cur.source === 'env') return { error: 'locked_by_env' };
+  await db
+    .insert(settings)
+    .values({ key: MODE_KEY, value: input, updatedBy: actor, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: settings.key, set: { value: input, updatedBy: actor, updatedAt: new Date() } });
+  return { before: cur.mode, after: input };
+}
+
+/** 自動核准的煞車有沒有踩到（回傳原因，沒踩到回 null）。 */
+async function autoCapHit(db: DB, now = new Date()): Promise<'rate' | 'unclaimed' | null> {
+  const [{ recent }] = await db
+    .select({ recent: sql<number>`count(*)::int` })
+    .from(enrollmentRequests)
+    .where(and(eq(enrollmentRequests.autoApproved, true), gte(enrollmentRequests.decidedAt, new Date(now.getTime() - AUTO_WINDOW_MS))));
+  if (Number(recent) >= AUTO_PER_WINDOW) return 'rate';
+  const [{ unclaimed }] = await db
+    .select({ unclaimed: sql<number>`count(*)::int` })
+    .from(enrollmentRequests)
+    .where(and(eq(enrollmentRequests.status, 'approved'), isNull(enrollmentRequests.claimedAt)));
+  if (Number(unclaimed) >= AUTO_UNCLAIMED_CAP) return 'unclaimed';
+  return null;
 }
 
 // ---- 自動核准網段 ----
@@ -179,25 +230,44 @@ export async function createRequest(
 }
 
 /**
- * 來源（TCP 對端，不是 X-Forwarded-For）在自動核准網段內 → 直接核准。
- * 已登記但還沒釘選身分的舊主機不自動核准：那種情況光靠 agent token 擋不住冒名，要人看過。
+ * 自動核准：
+ * - 來源（TCP 對端，不是 X-Forwarded-For）在自動核准網段內 → 兩種模式都直接核准（decided_by＝auto:<網段>）。
+ * - 自動允許模式且網段清單是空的 → 任何人都直接核准（auto:all，不需要知道來源 IP）；
+ *   網段清單有填 → 只有網段內的自動，其他等管理員（「只讓公司網段自動加入」）。
+ * 已登記但還沒釘選身分的舊主機一律不自動核准：那種情況光靠 agent token 擋不住冒名，要人看過。
+ * 自動核准有煞車（每 10 分 60 筆、未領取 500 筆），踩到就改成等人工核准並記稽核。
  */
 async function maybeAutoApprove(db: DB, row: EnrollRow, meta: { sourceIp: string; peerIp: string | null }): Promise<EnrollRow | null> {
-  if (!meta.peerIp) return null;
-  const cidr = matchCidr(meta.peerIp, await getAutoApproveCidrs(db));
-  if (!cidr) return null;
+  const { mode } = await getJoinMode(db);
+  const cidrs = await getAutoApproveCidrs(db);
+  const cidr = meta.peerIp ? matchCidr(meta.peerIp, cidrs) : null;
+  const actor = cidr ? `auto:${cidr}` : mode === 'auto' && cidrs.length === 0 ? 'auto:all' : null;
+  if (!actor) return null;
   const known = (await db.select({ tokenHash: agents.tokenHash, deletedAt: agents.deletedAt }).from(agents).where(eq(agents.id, row.agentId)).limit(1))[0];
   if (known && (!known.tokenHash || known.deletedAt)) return null;
-  const done = await approveRow(db, row.id, `auto:${cidr}`, { auto: true });
+  const cap = await autoCapHit(db);
+  if (cap) {
+    await audit({
+      actor,
+      actorRole: 'system',
+      action: 'enroll_request.auto_capped',
+      targetType: 'enrollment_request',
+      targetId: row.id,
+      sourceIp: meta.sourceIp,
+      details: { agent_id: row.agentId, hostname: row.hostname, reason: cap, mode },
+    });
+    return null;
+  }
+  const done = await approveRow(db, row.id, actor, { auto: true });
   if (!done) return null;
   await audit({
-    actor: `auto:${cidr}`,
+    actor,
     actorRole: 'system',
     action: 'enroll_request.auto_approved',
     targetType: 'enrollment_request',
     targetId: row.id,
     sourceIp: meta.sourceIp,
-    details: { agent_id: row.agentId, hostname: row.hostname, cidr, peer_ip: meta.peerIp, request_code: row.requestCode },
+    details: { agent_id: row.agentId, hostname: row.hostname, cidr, mode, peer_ip: meta.peerIp, request_code: row.requestCode },
   });
   return done;
 }

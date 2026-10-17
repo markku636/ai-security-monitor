@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { AutoApproveForm, CopyBlock, EnrollRequestsPanel } from '@/components/admin/EnrollRequests';
+import { AutoApproveForm, CopyBlock, EnrollRequestsPanel, JoinModeForm } from '@/components/admin/EnrollRequests';
 import { InstallKeyMaker } from '@/components/admin/KeyManagers';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,7 +10,7 @@ import { mdnsStatus } from '@/lib/discovery/mdns';
 import { discoveryReport, gatherDiscovery, type Level } from '@/lib/discovery/status';
 import { srvCommands, srvInfo } from '@/lib/discovery/srv';
 import { hubIdentity, keylessEnabled } from '@/lib/enroll/identity';
-import { getAutoApproveCidrs, listRequests } from '@/lib/enroll/store';
+import { getAutoApproveCidrs, getJoinMode, listRequests } from '@/lib/enroll/store';
 import { env } from '@/lib/env';
 import { peerIpHookInstalled } from '@/lib/http';
 import { getT } from '@/lib/i18n/server';
@@ -23,11 +23,13 @@ export default async function InstallPage() {
   const { t } = await getT();
   const hub = hubPublicUrl(await headers());
   const db = getDb();
-  const [identity, requests, cidrs] = await Promise.all([
+  const [identity, joinMode, cidrs] = await Promise.all([
     hubIdentity(db).catch(() => null),
-    listRequests(db, { status: 'pending' }).catch(() => ({ items: [], counts: null })),
+    getJoinMode(db).catch(() => ({ mode: 'auto' as const, source: 'default' as const })),
     getAutoApproveCidrs(db).catch(() => [] as string[]),
   ]);
+  const auto = joinMode.mode === 'auto';
+  const requests = await listRequests(db, { status: auto ? 'all' : 'pending' }).catch(() => ({ items: [], counts: null }));
   const fp = identity?.fingerprint ?? null;
   const keyless = keylessEnabled();
   const discovery = discoveryReport(await gatherDiscovery(db, hub, fp), t);
@@ -66,13 +68,24 @@ export default async function InstallPage() {
 
       <DiscoveryStatusCard report={discovery} hub={hub} />
 
-      <Card title={t('待核准的主機')}>
+      <Card
+        title={
+          <>
+            {t('加入模式')}
+            <Hint text={t('電腦端用免金鑰方式申請加入這個 Hub 時，要直接放行，還是等你核准。用註冊金鑰安裝的不受影響。')} />
+          </>
+        }
+      >
+        <JoinModeForm initial={joinMode.mode} source={joinMode.source} />
+      </Card>
+
+      <Card title={auto ? t('最近加入的主機') : t('待核准的主機')}>
         {!keyless ? (
           <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
             {t('免金鑰加入已被關閉（ASA_HUB_ENROLL_REQUESTS=off），電腦端無法送出申請。')}
           </p>
         ) : null}
-        <EnrollRequestsPanel initial={requests.items} />
+        <EnrollRequestsPanel initial={requests.items} mode={joinMode.mode} />
       </Card>
 
       {!hub ? (
@@ -82,7 +95,9 @@ export default async function InstallPage() {
           <Card title={t('免金鑰安裝指令')}>
             <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
               {t('下載預填此 Hub 的安裝指令（不含金鑰）')}
-              {t('：裝好後電腦端會送出加入申請，並顯示申請碼與 Hub 指紋；你在上面「待核准的主機」對照後按核准即可。')}
+              {auto
+                ? t('：裝好後電腦端會送出加入申請並自動加入（目前是「自動允許加入」模式），電腦端會顯示 Hub 指紋。')
+                : t('：裝好後電腦端會送出加入申請，並顯示申請碼與 Hub 指紋；你在上面「待核准的主機」對照後按核准即可。')}
             </p>
             <div className="space-y-2">
               <CopyBlock label={t('Windows 伺服器（系統管理員 PowerShell）')} value={`$env:AI_SECURITY_MONITOR_SERVICE='system'; irm ${hub}/install.ps1 | iex`} />
@@ -115,7 +130,9 @@ export default async function InstallPage() {
               <abbr className="cursor-help underline decoration-dotted underline-offset-2" title={tip.cidr}>
                 CIDR
               </abbr>
-              {t('（例：192.168.10.0/24）。留空＝全部都要人工核准。只建議填公司內部、你信得過的網路。')}
+              {auto
+                ? t('（例：192.168.10.0/24）。「自動允許加入」模式下：留空＝任何電腦都自動加入；有填＝只有這些網段自動加入，其他的要你核准。')
+                : t('（例：192.168.10.0/24）。留空＝全部都要人工核准。只建議填公司內部、你信得過的網路。')}
             </p>
             <AutoApproveForm initial={cidrs} peerIpAvailable={peerIpHookInstalled() || env().trustProxy} />
           </Card>
@@ -131,7 +148,11 @@ export default async function InstallPage() {
               <li>{t('安裝腳本從 GitHub Releases 下載 ai-security-monitor，與 Release 的 SHA256SUMS 比對不符就停止。')}</li>
               <li>{t('「伺服器」裝成系統服務（開機就啟動，需要系統管理員／sudo）；「個人電腦」在使用者登入時啟動，不需要系統管理員。')}</li>
               <li>{t('腳本本身是公開的、不含金鑰：{hub}/install.sh、{hub}/install.ps1。金鑰只出現在你複製的指令裡。', { hub })}</li>
-              <li>{t('免金鑰加入：申請送到 Hub 後要管理員核准才拿得到金鑰，而且那把金鑰只能給那一台主機用。')}</li>
+              <li>
+                {auto
+                  ? t('免金鑰加入：目前是「自動允許加入」，申請一送到 Hub 就發金鑰；那把金鑰只能給那一台主機用。Hub 每 10 分鐘最多自動核准 60 台，超過的改成等你核准。')
+                  : t('免金鑰加入：申請送到 Hub 後要管理員核准才拿得到金鑰，而且那把金鑰只能給那一台主機用。')}
+              </li>
               <li>{t('裝好後的管理：ai-security-monitor service status、ai-security-monitor service logs、ai-security-monitor self-update --yes。')}</li>
             </ul>
             {!scriptsDir() ? <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">{t('找不到安裝腳本（scripts/install.*），/install.sh 會回 404。')}</p> : null}
