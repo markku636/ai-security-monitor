@@ -43,7 +43,7 @@
 
 ## 我該裝哪一個？
 
-所有檔案都在 [Releases（最新版）](https://github.com/markku636/ai-security-monitor/releases/latest)，目前版本 **v0.4.0**。
+所有檔案都在 [Releases（最新版）](https://github.com/markku636/ai-security-monitor/releases/latest)，目前版本 **v0.5.0**。
 
 | 你想要 | 裝這個 | 下載的檔案 |
 |---|---|---|
@@ -302,7 +302,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 
 1. 開 PowerShell。要裝成開機就啟動的系統服務，請用「以系統管理員身分執行」。
 2. 執行 `irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex`，預設裝到 `%LOCALAPPDATA%\ai-security-monitor\bin` 並加進 PATH。
-3. 開一個**新的** PowerShell 視窗，執行 `ai-security-monitor version`，應該印出 `ai-security-monitor 0.4.0 …`。
+3. 開一個**新的** PowerShell 視窗，執行 `ai-security-monitor version`，應該印出 `ai-security-monitor 0.5.0 …`。
 4. （選用）登入後自動啟動：`ai-security-monitor service install --yes`；伺服器開機就啟動：`ai-security-monitor service install --system --yes`（系統管理員）。`ai-security-monitor service status` 可以確認。
 
 **命令列版：Linux、macOS**
