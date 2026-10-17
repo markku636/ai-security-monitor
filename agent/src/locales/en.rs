@@ -1217,6 +1217,59 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "廣播的名稱（預設：Hub 的名稱＋這台電腦的名稱）" => "Advertised name (default: Hub name + this computer's name)",
         "廣播多久就結束（預設一直執行到 Ctrl-C）" => "Stop advertising after this long (default: until Ctrl-C)",
 
+        // ---- metrics（網路流量統計與效能）----
+        "網路流量統計與效能：各介面與各程式的上傳／下載量；開啟後另有 CPU、記憶體、磁碟、電池" =>
+            "Network traffic statistics and performance: upload/download per interface and per process; when enabled also CPU, memory, disk and battery",
+        "量多久（算速率用）" => "How long to measure (for rates)",
+        "沒開啟效能蒐集也量一次 CPU、記憶體、磁碟（只在本機顯示，不會上傳）" =>
+            "Measure CPU, memory and disk once even if performance collection is off (shown locally only, never uploaded)",
+        "取樣逾時，請再試一次" => "Sampling timed out; please try again",
+        "背景回報（ai-security-monitor watch）每 {every} 取樣一次；待上傳 {n} 筆、本機保留最近 {r} 筆" =>
+            "Background reporting (ai-security-monitor watch) samples every {every}; {n} queued for upload, {r} recent samples kept locally",
+        "網路（過去 {secs} 秒，只算實體介面）：下載 {rx}、上傳 {tx}" =>
+            "Network (last {secs} s, physical interfaces only): download {rx}, upload {tx}",
+        "虛擬" => "virtual",
+        "實體" => "physical",
+        "下載" => "Download",
+        "上傳" => "Upload",
+        "開機後累計收到" => "Received since boot",
+        "開機後累計送出" => "Sent since boot",
+        "各程式（來源：{src}）：" => "Per process (source: {src}):",
+        "各程式：這段時間沒有程式收發資料" => "Per process: no process sent or received data in this window",
+        "各程式：需要系統管理員權限才讀得到（以系統管理員執行，或裝成系統服務）" =>
+            "Per process: needs administrator rights (run as administrator, or install the system service)",
+        "各程式：這個平台讀不到各程式的網路用量（Linux 需要 eBPF），請看 connections 的各程式連線數" =>
+            "Per process: not available on this platform (Linux would need eBPF); see the per-process connection counts in `connections`",
+        "效能蒐集：未開啟。開啟：ai-security-monitor config set metrics.performance true（或加 --perf 只在本機看一次）" =>
+            "Performance collection: off. Turn it on: ai-security-monitor config set metrics.performance true (or add --perf to look once, locally)",
+        "效能（--perf：只在本機顯示，不會上傳）：" => "Performance (--perf: shown locally only, not uploaded):",
+        "效能（已開啟，會送到這台加入的 Hub）：" => "Performance (on; sent to the Hub this computer joined):",
+        "，負載 {a} {b} {c}" => ", load {a} {b} {c}",
+        "CPU {cpu}%（{n} 核）{load}" => "CPU {cpu}% ({n} cores){load}",
+        "記憶體 {used}／{total}（{pct}），置換 {su}／{st}" => "Memory {used} / {total} ({pct}), swap {su} / {st}",
+        "磁碟 {mount}：{used}／{total}（{pct}）" => "Disk {mount}: {used} / {total} ({pct})",
+        "磁碟讀寫：讀 {r}、寫 {w}" => "Disk I/O: read {r}, write {w}",
+        "開機時間 {at}（{d} 天 {h} 小時前）" => "Booted {at} ({d} d {h} h ago)",
+        "電池 {p}%（{state}）" => "Battery {p}% ({state})",
+        "充電中" => "charging",
+        "未充電" => "not charging",
+        "最吃 CPU 的程式：" => "Top processes by CPU:",
+        "最吃記憶體的程式：" => "Top processes by memory:",
+        "記憶體" => "Memory",
+        "效能蒐集：已開啟（CPU、記憶體、磁碟，只送到這台加入的 Hub）" =>
+            "Performance collection: on (CPU, memory, disk; sent only to the Hub this computer joined)",
+        "效能蒐集：未開啟（只統計網路流量；開啟：ai-security-monitor config set metrics.performance true）" =>
+            "Performance collection: off (network traffic only; turn it on: ai-security-monitor config set metrics.performance true)",
+        "流量資料暫存失敗：{e}" => "Could not queue traffic data: {e}",
+        "流量／效能取樣逾時，這一輪略過" => "Traffic/performance sampling timed out; skipped this round",
+        "已補送 {n} 筆流量資料（還有 {left} 筆）" => "Uploaded {n} queued traffic samples ({left} left)",
+        "這個 Hub 版本還不收流量／效能資料：先存在本機（最多一天），Hub 升級後自動補送" =>
+            "This Hub version does not accept traffic/performance data yet: keeping it locally (up to a day) and sending it once the Hub is upgraded",
+        "流量資料上傳失敗，稍後再試：{e}" => "Traffic data upload failed, will retry: {e}",
+        "{key} 最短 30 秒" => "{key} must be at least 30 seconds",
+        "這台電腦的網路流量統計（各介面、各程式的上傳／下載量）與效能（CPU、記憶體、磁碟、最吃資源的程式、電池；使用者有開啟才有）：現在的值與最近一小時的摘要。" =>
+            "Network traffic statistics for this computer (upload/download per interface and per process) and performance (CPU, memory, disk, top processes, battery; only when the user turned it on): current values and a summary of the last hour.",
+
         _ => return None,
     })
 }

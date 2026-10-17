@@ -44,6 +44,7 @@ pub struct AgentConfig {
     pub intel: IntelConfig,
     pub hub: Option<HubConfig>,
     pub remote_actions: RemoteActionsConfig,
+    pub metrics: MetricsConfig,
 }
 
 impl Default for AgentConfig {
@@ -56,6 +57,29 @@ impl Default for AgentConfig {
             intel: IntelConfig::default(),
             hub: None,
             remote_actions: RemoteActionsConfig::default(),
+            metrics: MetricsConfig::default(),
+        }
+    }
+}
+
+/// 網路流量統計（一律開啟）與效能指標（預設關，這台電腦自己決定；Hub 不能從遠端開）。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MetricsConfig {
+    /// 蒐集效能：CPU、記憶體、磁碟、最吃資源的程式、電池（只送到這台加入的 Hub）。
+    pub performance: bool,
+    /// 取樣間隔（最短 30 秒）。
+    pub interval: String,
+    /// 估算各程式的網路用量（Windows 需要系統管理員；macOS 用 nettop；Linux 沒有）。
+    pub process_network: bool,
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        Self {
+            performance: false,
+            interval: "1m".into(),
+            process_network: true,
         }
     }
 }
@@ -501,6 +525,9 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "remote_actions.accept",
     "remote_actions.allowed_kinds",
     "remote_actions.allow_destructive",
+    "metrics.performance",
+    "metrics.interval",
+    "metrics.process_network",
 ];
 
 fn parse_bool(key: &str, v: &str) -> AppResult<bool> {
@@ -542,6 +569,15 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "remote_actions.accept" => cfg.remote_actions.accept = parse_bool(key, value)?,
         "remote_actions.allowed_kinds" => cfg.remote_actions.allowed_kinds = parse_list(value),
         "remote_actions.allow_destructive" => cfg.remote_actions.allow_destructive = parse_bool(key, value)?,
+        "metrics.performance" => cfg.metrics.performance = parse_bool(key, value)?,
+        "metrics.interval" => {
+            let v = parse_duration_str(key, value)?;
+            if humantime::parse_duration(&v).map(|d| d.as_secs() < 30).unwrap_or(true) {
+                return Err(AppError::InvalidArg(tf!("{key} 最短 30 秒", key = key)));
+            }
+            cfg.metrics.interval = v;
+        }
+        "metrics.process_network" => cfg.metrics.process_network = parse_bool(key, value)?,
         _ => {
             return Err(AppError::InvalidArg(tf!(
                 "未知的設定鍵：{key}；可用：{keys}",
@@ -947,5 +983,15 @@ mod tests {
         assert!(set_value(&mut c, "nope", "1").is_err());
         set_value(&mut c, "lang", "EN").unwrap();
         assert_eq!(c.lang.as_deref(), Some("en"));
+        // 效能蒐集預設關，要明確開
+        assert!(!c.metrics.performance);
+        set_value(&mut c, "metrics.performance", "true").unwrap();
+        assert!(c.metrics.performance);
+        set_value(&mut c, "metrics.interval", "2m").unwrap();
+        assert_eq!(c.metrics.interval, "2m");
+        assert!(set_value(&mut c, "metrics.interval", "10s").is_err(), "min 30s");
+        // 舊設定檔沒有 metrics：讀成預設（關）
+        let old: AgentConfig = serde_json::from_str(r#"{"schema_version":1,"agent_id":"x"}"#).unwrap();
+        assert!(!old.metrics.performance && old.metrics.process_network);
     }
 }

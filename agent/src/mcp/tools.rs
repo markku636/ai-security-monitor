@@ -46,6 +46,7 @@ pub const READ_ONLY: &[&str] = &[
     "explain_code",
     "vuln_summary",
     "hardening_status",
+    "get_metrics",
 ];
 pub const ACTION_TOOLS: &[&str] = &["preview_action", "execute_action"];
 
@@ -163,6 +164,11 @@ pub fn read_only_defs() -> Vec<ToolDef> {
                 json!({ "only_failed": { "type": "boolean" }, "category": { "type": "string" } }),
                 &[],
             ),
+        },
+        ToolDef {
+            name: "get_metrics",
+            description: t!("這台電腦的網路流量統計（各介面、各程式的上傳／下載量）與效能（CPU、記憶體、磁碟、最吃資源的程式、電池；使用者有開啟才有）：現在的值與最近一小時的摘要。").into(),
+            input_schema: obj(json!({}), &[]),
         },
     ]
 }
@@ -565,6 +571,7 @@ pub async fn call(ctx: &ToolCtx, name: &str, args: &Value) -> Result<String, Str
             }
             Ok(to_text(&serde_json::to_value(r).unwrap_or_default()))
         }
+        "get_metrics" => Ok(to_text(&metrics_view(&ctx.config_dir).await)),
         "explain_code" => {
             let code = s("code").ok_or_else(|| t!("缺少 code").to_string())?;
             let hex = code.to_ascii_lowercase().starts_with("0x");
@@ -592,6 +599,53 @@ pub async fn call(ctx: &ToolCtx, name: &str, args: &Value) -> Result<String, Str
         "execute_action" => execute_action(ctx, args).await,
         other => Err(tf!("未知的工具：{name}", name = other)),
     }
+}
+
+/// `get_metrics`：最近的樣本（背景 watch 寫的）夠新就用最新一個，否則現場量 2 秒；效能只在使用者開啟時才有。
+pub async fn metrics_view(config_dir: &std::path::Path) -> Value {
+    use crate::metrics::{self, MetricsSample};
+    let cfg = crate::config::load(config_dir).unwrap_or_default();
+    let opts = metrics::Options::from_config(&cfg.metrics);
+    let every = metrics::interval_of(&cfg.metrics);
+    let recent = metrics::queue::recent(config_dir);
+    let stale = |s: &MetricsSample| {
+        (chrono::Utc::now() - s.ts).to_std().unwrap_or_default() > every * 3 || (opts.performance != s.perf.is_some())
+    };
+    let current = match recent.last() {
+        Some(s) if !stale(s) => Some(s.clone()),
+        _ => metrics::measure(Duration::from_secs(2), opts).await,
+    };
+    let rx = recent.iter().fold(0u64, |a, s| a.saturating_add(s.net.rx_bytes));
+    let tx = recent.iter().fold(0u64, |a, s| a.saturating_add(s.net.tx_bytes));
+    let peak = |f: fn(&MetricsSample) -> f64| recent.iter().map(f).fold(0.0f64, f64::max);
+    let cpus: Vec<f32> = recent
+        .iter()
+        .filter_map(|s| s.perf.as_ref().map(|p| p.cpu_pct))
+        .collect();
+    let mut procs: std::collections::HashMap<String, (u64, u64)> = std::collections::HashMap::new();
+    for p in recent.iter().filter_map(|s| s.net.processes.as_ref()).flatten() {
+        let e = procs.entry(p.name.clone()).or_default();
+        e.0 = e.0.saturating_add(p.rx_bytes);
+        e.1 = e.1.saturating_add(p.tx_bytes);
+    }
+    let top_net = metrics::procnet::top_by_name(procs.into_iter().map(|(n, (r, t))| (n, r, t)));
+    json!({
+        "performance_enabled": cfg.metrics.performance,
+        "note": if cfg.metrics.performance { Value::Null } else { json!("performance collection is off on this computer (ai-security-monitor config set metrics.performance true); only network traffic is available") },
+        "current": current,
+        "last_hour": {
+            "samples": recent.len(),
+            "from": recent.first().map(|s| s.ts),
+            "to": recent.last().map(|s| s.ts),
+            "rx_bytes": rx,
+            "tx_bytes": tx,
+            "peak_rx_bytes_per_s": peak(|s| s.rates().0),
+            "peak_tx_bytes_per_s": peak(|s| s.rates().1),
+            "cpu_avg_pct": (!cpus.is_empty()).then(|| cpus.iter().sum::<f32>() / cpus.len() as f32),
+            "cpu_max_pct": cpus.iter().cloned().fold(None, |m: Option<f32>, v| Some(m.map_or(v, |m| m.max(v)))),
+            "top_processes_by_network": top_net,
+        },
+    })
 }
 
 fn parse_action(args: &Value) -> Result<(FwAction, bool), String> {

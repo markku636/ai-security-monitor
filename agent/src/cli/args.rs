@@ -108,6 +108,8 @@ pub enum Command {
     Ports(PortsArgs),
     /// 流量：即時觀察連線（免抓包）或分析 pcap／pcapng 檔
     Traffic(TrafficArgs),
+    /// 網路流量統計與效能：各介面與各程式的上傳／下載量；開啟後另有 CPU、記憶體、磁碟、電池
+    Metrics(MetricsArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
     Events(EventsArgs),
     /// 漏洞與更新：作業系統是否仍在支援、多久沒更新、已安裝軟體的已知漏洞（Linux 套件查 OSV）
@@ -380,6 +382,16 @@ pub struct TrafficArgs {
     /// 多久讀一次連線表
     #[arg(long, default_value = "2s", value_name = "DUR")]
     pub every: String,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct MetricsArgs {
+    /// 量多久（算速率用）
+    #[arg(long, default_value = "2s", value_name = "DUR")]
+    pub duration: String,
+    /// 沒開啟效能蒐集也量一次 CPU、記憶體、磁碟（只在本機顯示，不會上傳）
+    #[arg(long)]
+    pub perf: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

@@ -50,6 +50,34 @@ jobs:
           grep -q WHEA_UNCORRECTABLE_ERROR mcp.jsonl
           cargo run -q -- --json ai status > ai.json
 
+      - name: Metrics smoke (interface counters, opt-in performance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 全新的設定目錄：效能蒐集預設關
+          export AI_SECURITY_MONITOR_CONFIG_DIR="$RUNNER_TEMP/asm-metrics" AI_SECURITY_MONITOR_SECRETS_BACKEND=file
+          cargo run -q -- --json metrics --duration 2s > m-off.json
+          jq '{performance_enabled, elevated, rates, interfaces, process_source: .sample.net.process_source}' m-off.json
+          jq -e '.performance_enabled == false and .sample.perf == null' m-off.json > /dev/null
+          jq -e '(.interfaces | length) >= 1 and ([.interfaces[] | select(.rx_total > 0 or .tx_total > 0)] | length) >= 1' m-off.json > /dev/null
+          jq -e '.sample.interval_s >= 1 and .sample.net.rx_bytes >= 0 and .sample.net.tx_bytes >= 0' m-off.json > /dev/null
+          cargo run -q -- config set metrics.performance true
+          cargo run -q -- --json metrics --duration 2s > m-on.json
+          jq '.sample.perf | {cpu_pct, cpu_cores, mem_used, mem_total, swap_total, disks, disk_read_bytes, load, uptime_s, boot_time, top_cpu, top_mem: (.top_mem | map(.name)), battery}' m-on.json
+          jq '.sample.net | {processes, process_source}' m-on.json
+          jq -e '.performance_enabled and .sample.perf.cpu_cores >= 1 and .sample.perf.cpu_pct >= 0 and .sample.perf.cpu_pct <= 100' m-on.json > /dev/null
+          jq -e '.sample.perf.mem_total > 0 and .sample.perf.mem_used <= .sample.perf.mem_total and .sample.perf.uptime_s > 0' m-on.json > /dev/null
+          jq -e '(.sample.perf.disks | length) >= 1 and all(.sample.perf.disks[]; .used <= .total) and (.sample.perf.top_mem | length) >= 1' m-on.json > /dev/null
+          if [ "$RUNNER_OS" = "Windows" ]; then jq -e '.sample.perf.load == null' m-on.json > /dev/null; else jq -e '(.sample.perf.load | length) == 3' m-on.json > /dev/null; fi
+          case "$RUNNER_OS" in
+            # Linux 沒有 eBPF 就沒有各程式用量；Windows runner 是系統管理員，要讀得到 TCP 延伸統計，數字要合理
+            Linux) jq -e '.sample.net.processes == null' m-on.json > /dev/null ;;
+            Windows) jq -e '.elevated and .sample.net.process_source == "estats" and all(.sample.net.processes[]; .rx_bytes < 10000000000 and .tx_bytes < 10000000000)' m-on.json > /dev/null ;;
+            macOS) jq -e '.sample.net.process_source == "nettop"' m-on.json > /dev/null || echo "::warning::nettop per-process bytes unavailable on this runner" ;;
+          esac
+          cargo run -q -- metrics --duration 1s
+          echo "metrics smoke ok on $RUNNER_OS"
+
       - name: Windows Server hardening and edition smoke
         if: runner.os == 'Windows'
         shell: bash

@@ -252,6 +252,15 @@ mod tests {
         );
     }
 
+    /// 網路流量與效能樣本（`POST /api/v1/ingest/metrics`）。
+    #[test]
+    fn contract_metrics_v1() {
+        check(
+            "metrics.v1.json",
+            serde_json::to_value(crate::metrics::sample_batch()).unwrap(),
+        );
+    }
+
     /// 免金鑰加入申請。`hub-identity.v1.json`／`enroll-status.v1.json` 帶真的簽章（測試專用金鑰），
     /// 由 hub 那邊產生，這裡只驗（`hub::identity`、`hub::enroll` 的測試）。
     #[test]

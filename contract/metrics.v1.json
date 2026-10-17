@@ -1,0 +1,105 @@
+{
+  "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+  "performance": true,
+  "samples": [
+    {
+      "ts": "2026-10-17T09:30:00Z",
+      "interval_s": 60,
+      "net": {
+        "rx_bytes": 18874368,
+        "tx_bytes": 2097152,
+        "interfaces": [
+          {
+            "name": "Ethernet",
+            "virtual": false,
+            "rx_bytes": 18874368,
+            "tx_bytes": 2097152
+          },
+          {
+            "name": "vEthernet (WSL)",
+            "virtual": true,
+            "rx_bytes": 4096,
+            "tx_bytes": 1024
+          }
+        ],
+        "processes": [
+          {
+            "name": "chrome.exe",
+            "rx_bytes": 15728640,
+            "tx_bytes": 1048576
+          },
+          {
+            "name": "OneDrive.exe",
+            "rx_bytes": 1048576,
+            "tx_bytes": 786432
+          }
+        ],
+        "process_source": "estats"
+      }
+    },
+    {
+      "ts": "2026-10-17T09:31:00Z",
+      "interval_s": 60,
+      "net": {
+        "rx_bytes": 18874368,
+        "tx_bytes": 2097152,
+        "interfaces": [
+          {
+            "name": "Ethernet",
+            "virtual": false,
+            "rx_bytes": 18874368,
+            "tx_bytes": 2097152
+          },
+          {
+            "name": "vEthernet (WSL)",
+            "virtual": true,
+            "rx_bytes": 4096,
+            "tx_bytes": 1024
+          }
+        ]
+      },
+      "perf": {
+        "cpu_pct": 23.5,
+        "cpu_cores": 8,
+        "mem_used": 9663676416,
+        "mem_total": 17179869184,
+        "swap_used": 536870912,
+        "swap_total": 4294967296,
+        "disks": [
+          {
+            "mount": "C:\\",
+            "fs": "NTFS",
+            "used": 412316860416,
+            "total": 511101108224
+          }
+        ],
+        "disk_read_bytes": 52428800,
+        "disk_write_bytes": 10485760,
+        "uptime_s": 259200,
+        "boot_time": "2026-10-14T09:31:00Z",
+        "top_cpu": [
+          {
+            "name": "chrome.exe",
+            "count": 23,
+            "cpu_pct": 11.199999809265137,
+            "rss": 2147483648
+          }
+        ],
+        "top_mem": [
+          {
+            "name": "Code.exe",
+            "pid": 4120,
+            "count": 1,
+            "cpu_pct": 2.0999999046325684,
+            "rss": 1073741824
+          }
+        ],
+        "battery": {
+          "percent": 81,
+          "charging": false,
+          "plugged": false
+        }
+      }
+    }
+  ]
+}

@@ -114,6 +114,11 @@ impl HubClient {
     }
 
     async fn post<T: Serialize>(&self, path: &str, body: &T) -> AppResult<HubResponse> {
+        Self::finish(self.send_post(path, body).await?).await
+    }
+
+    /// 送出 POST（大於 16 KB 就 gzip），回原始回應（呼叫端自己判斷狀態碼）。
+    async fn send_post<T: Serialize>(&self, path: &str, body: &T) -> AppResult<reqwest::Result<reqwest::Response>> {
         let raw = serde_json::to_vec(body)?;
         let (payload, gz) = if raw.len() > GZIP_OVER {
             (gzip(&raw)?, true)
@@ -132,7 +137,7 @@ impl HubClient {
         if gz {
             req = req.header("content-encoding", "gzip");
         }
-        Self::finish(req.body(payload).send().await).await
+        Ok(req.body(payload).send().await)
     }
 
     async fn get(&self, path: &str) -> AppResult<HubResponse> {
@@ -217,6 +222,17 @@ impl HubClient {
 
     pub async fn upload_snapshot(&self, snap: &SnapshotPayload) -> AppResult<Value> {
         Ok(self.post("/api/v1/ingest/snapshot", snap).await?.body)
+    }
+
+    /// 網路流量／效能樣本。`Ok(None)`＝Hub 太舊沒有這個端點（404），樣本留在佇列稍後再送。
+    pub async fn upload_metrics(&self, batch: &crate::metrics::MetricsBatch) -> AppResult<Option<Value>> {
+        let sent = self.send_post("/api/v1/ingest/metrics", batch).await?;
+        if let Ok(r) = &sent {
+            if r.status().as_u16() == 404 {
+                return Ok(None);
+            }
+        }
+        Ok(Some(Self::finish(sent).await?.body))
     }
 
     pub async fn heartbeat(&self, hb: &HeartbeatPayload) -> AppResult<Value> {
@@ -342,6 +358,53 @@ mod tests {
         assert!(validate_url("http://hub.example.com", false).is_err());
         assert!(validate_url("http://hub.example.com", true).is_ok());
         assert!(validate_url("ftp://x", true).is_err());
+    }
+
+    #[tokio::test]
+    async fn metrics_upload_and_old_hub_without_the_endpoint() {
+        let (url, cap) = test_server::serve(vec![
+            (200, r#"{"ok":true,"stored":2}"#.into()),
+            (404, r#"{"error":"not_found"}"#.into()),
+            (400, r#"{"error":"bad_request","rule":"invalid:samples"}"#.into()),
+        ])
+        .await;
+        let c = HubClient::new(&url, "k1", "a1").unwrap();
+        let b = crate::metrics::sample_batch();
+        let v = c.upload_metrics(&b).await.unwrap().expect("stored");
+        assert_eq!(v["stored"], 2);
+        assert!(c.upload_metrics(&b).await.unwrap().is_none(), "404 = hub too old");
+        assert!(matches!(c.upload_metrics(&b).await, Err(AppError::HubRejected(_))));
+        let reqs = cap.lock().unwrap().clone();
+        assert!(reqs[0].head.starts_with("POST /api/v1/ingest/metrics"));
+        let body: Value = serde_json::from_slice(&reqs[0].body).unwrap();
+        assert_eq!(body["samples"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn metrics_flush_drains_the_queue_in_batches() {
+        let d = tempfile::tempdir().unwrap();
+        for i in 0..(crate::metrics::BATCH as u64 + 5) {
+            crate::metrics::queue::push(d.path(), &crate::metrics::sample_for_tests(i)).unwrap();
+        }
+        let ok = r#"{"ok":true}"#.to_string();
+        let (url, cap) = test_server::serve(vec![(200, ok.clone()), (200, ok), (404, "{}".into())]).await;
+        let c = HubClient::new(&url, "k1", "a1").unwrap();
+        let r = crate::metrics::flush(d.path(), &c, "a1", false).await;
+        assert_eq!(
+            r,
+            crate::metrics::Flush::Sent {
+                sent: crate::metrics::BATCH + 5,
+                left: 0
+            }
+        );
+        assert_eq!(cap.lock().unwrap().len(), 2);
+        // 舊 Hub：樣本留著
+        crate::metrics::queue::push(d.path(), &crate::metrics::sample_for_tests(1)).unwrap();
+        assert_eq!(
+            crate::metrics::flush(d.path(), &c, "a1", false).await,
+            crate::metrics::Flush::Unsupported
+        );
+        assert_eq!(crate::metrics::queue::len(d.path()), 1);
     }
 
     #[tokio::test]

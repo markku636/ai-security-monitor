@@ -909,6 +909,74 @@ fn intel_heartbeat(env: &Env, client: &HubClient) -> (Option<chrono::DateTime<Ut
     )
 }
 
+/// `watch` 的流量／效能取樣狀態。
+struct MetricsState {
+    collector: crate::metrics::Shared,
+    /// Hub 太舊（沒有 metrics 端點）時，下次再試的時間。
+    unsupported_until: Option<tokio::time::Instant>,
+    warned_unsupported: bool,
+    last_performance: Option<bool>,
+}
+
+/// 取一個流量（＋效能）樣本：存進本機最近樣本；有 Hub 就排進待送佇列並分批送出。回傳下一次的間隔。
+/// 設定每輪重讀（桌面版切換「蒐集效能」不必重啟背景服務）。
+async fn metrics_round(env: &Env, st: &mut MetricsState, agent_id: &str, client: Option<&HubClient>) -> Duration {
+    let mc = config::load(&env.config_dir).map(|c| c.metrics).unwrap_or_default();
+    let opts = crate::metrics::Options::from_config(&mc);
+    if st.last_performance != Some(opts.performance) {
+        log(
+            env,
+            if opts.performance {
+                t!("效能蒐集：已開啟（CPU、記憶體、磁碟，只送到這台加入的 Hub）")
+            } else {
+                t!("效能蒐集：未開啟（只統計網路流量；開啟：ai-security-monitor config set metrics.performance true）")
+            },
+        );
+        st.last_performance = Some(opts.performance);
+    }
+    match crate::metrics::tick(&st.collector, opts).await {
+        Some(s) => {
+            let _ = crate::metrics::queue::remember(&env.config_dir, &s);
+            if client.is_some() {
+                if let Err(e) = crate::metrics::queue::push(&env.config_dir, &s) {
+                    log(env, &tf!("流量資料暫存失敗：{e}", e = e.message()));
+                }
+            }
+        }
+        None => log(env, t!("流量／效能取樣逾時，這一輪略過")),
+    }
+    if let Some(c) = client {
+        let now = tokio::time::Instant::now();
+        if st.unsupported_until.is_none_or(|t| now >= t) {
+            match crate::metrics::flush(&env.config_dir, c, agent_id, opts.performance).await {
+                crate::metrics::Flush::Sent { sent, left } => {
+                    st.unsupported_until = None;
+                    if sent > crate::metrics::BATCH || left > 0 {
+                        log(
+                            env,
+                            &tf!("已補送 {n} 筆流量資料（還有 {left} 筆）", n = sent, left = left),
+                        );
+                    }
+                }
+                crate::metrics::Flush::Unsupported => {
+                    if !st.warned_unsupported {
+                        log(
+                            env,
+                            t!("這個 Hub 版本還不收流量／效能資料：先存在本機（最多一天），Hub 升級後自動補送"),
+                        );
+                        st.warned_unsupported = true;
+                    }
+                    st.unsupported_until = Some(now + Duration::from_secs(30 * 60));
+                }
+                crate::metrics::Flush::Failed(m) => {
+                    log(env, &tf!("流量資料上傳失敗，稍後再試：{e}", e = m));
+                }
+            }
+        }
+    }
+    crate::metrics::interval_of(&mc)
+}
+
 async fn flush_outbox(env: &Env, client: &HubClient) {
     for p in outbox::list(&env.config_dir) {
         let Some(r) = outbox::load(&p) else {
@@ -1057,6 +1125,22 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     };
     let mut force_intel = false;
     let mut last_scan_at: Option<chrono::DateTime<Utc>> = None;
+    // 流量／效能：建立取樣器時記下基準讀數，第一個樣本在一個間隔之後（--once 等 2 秒）
+    let mut metrics = MetricsState {
+        collector: tokio::task::spawn_blocking(crate::metrics::shared)
+            .await
+            .map_err(|e| AppError::Scan(e.to_string()))?,
+        unsupported_until: None,
+        warned_unsupported: false,
+        last_performance: None,
+    };
+    let metrics_started = tokio::time::Instant::now();
+    let mut next_metrics = metrics_started
+        + if a.once {
+            Duration::from_secs(2)
+        } else {
+            crate::metrics::interval_of(&cfg.metrics)
+        };
     // 停止訊號（Ctrl-C／SIGTERM／服務停止）：等待與掃描中都會被打斷，服務停止不必等完整掃描跑完
     let stop = crate::service::instance::stopped();
     tokio::pin!(stop);
@@ -1231,10 +1315,18 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             }
             next_scan = now + interval;
         }
+        if a.once {
+            // 跑一次也送一個流量樣本（離開取樣器建立至少 2 秒）
+            tokio::time::sleep_until(next_metrics).await;
+        }
+        if tokio::time::Instant::now() >= next_metrics {
+            let every = metrics_round(env, &mut metrics, &cfg.agent_id, client.as_ref()).await;
+            next_metrics = tokio::time::Instant::now() + every;
+        }
         if a.once || crate::service::instance::stop_requested() {
             break;
         }
-        let mut wake = next_scan.min(next_snap).min(next_intel);
+        let mut wake = next_scan.min(next_snap).min(next_intel).min(next_metrics);
         if let Some(t) = next_enroll {
             wake = wake.min(t);
         }

@@ -22,6 +22,7 @@ pub mod hardening;
 pub mod hub;
 pub mod intel;
 pub mod mcp;
+pub mod metrics;
 pub mod model;
 pub mod ports;
 pub mod scan;

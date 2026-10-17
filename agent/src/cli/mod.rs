@@ -19,6 +19,7 @@ pub mod harden_cmd;
 pub mod hub_cmd;
 pub mod intel_cmd;
 pub mod mcp_cmd;
+pub mod metrics_cmd;
 pub mod ports_cmd;
 pub mod scan_cmd;
 pub mod service_cmd;
