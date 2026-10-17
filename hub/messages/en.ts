@@ -58,7 +58,7 @@ export const en: Record<string, string> = {
   '{n} 天前': '{n} d ago',
 
   // ---- login ----
-  '貼上管理員金鑰（ASA_HUB_ADMIN_SECRET）登入': 'Paste the administrator key (ASA_HUB_ADMIN_SECRET) to sign in',
+  '貼上管理員金鑰（AI_SECURITY_MONITOR_HUB_ADMIN_SECRET）登入': 'Paste the administrator key (AI_SECURITY_MONITOR_HUB_ADMIN_SECRET) to sign in',
   '嘗試太多次，請一分鐘後再試': 'Too many attempts; try again in a minute',
   '金鑰不正確': 'Wrong key',
   '登入失敗（{status}）': 'Sign-in failed ({status})',

@@ -11,9 +11,12 @@ export function Sidebar({ t, groups, viewer, openMode }: { t: TFn; groups: NavGr
       groups={groups}
       menuLabel={t('選單')}
       header={
-        <div>
-          <div className="text-base font-semibold tracking-tight">Security Hub</div>
-          <div className="text-xs text-slate-400">ai-security-monitor</div>
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="" width={40} height={40} className="h-10 w-10 shrink-0" />
+          <div>
+            <div className="text-base font-semibold tracking-tight">Security Hub</div>
+            <div className="text-xs text-slate-400">ai-security-monitor</div>
+          </div>
         </div>
       }
       footer={
