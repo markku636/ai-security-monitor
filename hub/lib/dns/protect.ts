@@ -52,6 +52,11 @@ export const ProtectSettings = z.object({
   internal_suffixes: z.array(domain).max(50).default([]),
   block_private_relay: z.boolean().default(false),
   log: z.boolean().default(true),
+  /** 裝置要用的 DNS 位址（`dns use-hub` 指過去、`dns.not_protected` 比對用）。 */
+  resolver_ips: z
+    .array(z.string().trim().refine((s) => net.isIP(s) > 0, 'ip'))
+    .max(8)
+    .default([]),
 });
 export type ProtectSettingsT = z.infer<typeof ProtectSettings>;
 
@@ -82,7 +87,12 @@ export async function setProtect(
   const before = await getProtect(db);
   const merged = ProtectSettings.safeParse({ ...before, ...(input as Record<string, unknown>) });
   if (!merged.success) return { error: `invalid:${merged.error.issues[0]?.path.join('.') ?? ''}` };
-  const after = { ...merged.data, block: [...new Set(merged.data.block)], allow: [...new Set(merged.data.allow)] };
+  const after = {
+    ...merged.data,
+    block: [...new Set(merged.data.block)],
+    allow: [...new Set(merged.data.allow)],
+    resolver_ips: [...new Set(merged.data.resolver_ips.map((s) => s.toLowerCase()))],
+  };
   await save(db, after, actor);
   return { before, after };
 }
@@ -114,6 +124,7 @@ export function serverConfig(s: ProtectSettingsT, now = new Date()) {
     internal_suffixes: s.internal_suffixes,
     block_private_relay: s.block_private_relay,
     log: s.log,
+    resolver_ips: s.resolver_ips,
   };
   const etag = `"${crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 32)}"`;
   return { ...body, etag };
@@ -325,6 +336,19 @@ export async function recentBlocked(db: DB, limit = 50) {
     .limit(limit);
 }
 
+/** 「裝置要用的 DNS 位址」的建議：在線伺服器明確監聽的位址（不含萬用、loopback）與連 Hub 的來源 IP。 */
+export function suggestResolvers(servers: Awaited<ReturnType<typeof listServers>>): string[] {
+  const out = new Set<string>();
+  for (const s of servers.filter((x) => x.online)) {
+    for (const l of ((s.status as { listen?: string[] }).listen ?? [])) {
+      const host = l.startsWith('[') ? l.slice(1, l.indexOf(']')) : l.slice(0, l.lastIndexOf(':'));
+      if (net.isIP(host) && !['0.0.0.0', '::', '127.0.0.1', '::1'].includes(host) && !host.startsWith('127.')) out.add(host);
+    }
+    if (s.sourceIp && net.isIP(s.sourceIp) && !s.sourceIp.startsWith('127.') && s.sourceIp !== '::1') out.add(s.sourceIp);
+  }
+  return [...out].slice(0, 8);
+}
+
 /** 設定頁要的全部資料（管理員 API 與頁面共用）。 */
 export async function protectView(db: DB) {
   const s = await getProtect(db);
@@ -336,6 +360,7 @@ export async function protectView(db: DB) {
     recentBlocked: blocked.map((b) => ({ ...b, ts: b.ts.toISOString() })),
     feeds: domainFeedOptions(s.min_confidence),
     defaultUpstreams: DEFAULT_UPSTREAMS,
+    suggestedResolvers: suggestResolvers(servers),
     composeTokenConfigured: !!env().dnsServerToken,
   };
 }

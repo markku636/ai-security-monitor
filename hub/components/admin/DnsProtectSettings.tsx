@@ -80,6 +80,7 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
     internal: s.internal_suffixes.join('\n'),
     privateRelay: s.block_private_relay,
     log: s.log,
+    resolvers: s.resolver_ips.join('\n'),
   });
   const left = remaining(s.paused_until, now);
   useEffect(() => {
@@ -111,6 +112,7 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
       internal_suffixes: lines(form.internal),
       block_private_relay: form.privateRelay,
       log: form.log,
+      resolver_ips: lines(form.resolvers),
     });
   const st = stateText(t, view, left);
   const autoFeeds = view.feeds.filter((f) => f.auto).map((f) => f.name);
@@ -344,6 +346,17 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
           <Field label={t('上游 DNS（一行一個；空白＝預設）')} hint={t('https:// 開頭＝加密 DNS（DoH），否則填 IP。預設：{d}', { d: view.defaultUpstreams.join('、') })}>
             <textarea className={INPUT} rows={3} value={form.upstreams} placeholder={view.defaultUpstreams.join('\n')} onChange={(e) => setForm({ ...form, upstreams: e.target.value })} />
           </Field>
+          <Field
+            label={t('裝置要用的 DNS 位址（一行一個）')}
+            hint={t('這些電腦執行 ai-security-monitor dns use-hub 時會把 DNS 指到這裡；有填時，沒在用它的主機會出現「沒有用公司的防護 DNS」提醒。填防護 DNS 在區網的 IP。')}
+          >
+            <textarea className={INPUT} rows={3} value={form.resolvers} placeholder={view.suggestedResolvers.join('\n')} onChange={(e) => setForm({ ...form, resolvers: e.target.value })} />
+            {view.suggestedResolvers.length && !form.resolvers.trim() ? (
+              <button type="button" className={`${SMALL} mt-1`} onClick={() => setForm({ ...form, resolvers: view.suggestedResolvers.join('\n') })}>
+                {t('填入建議：{l}', { l: view.suggestedResolvers.join('、') })}
+              </button>
+            ) : null}
+          </Field>
           <Field label={t('內部網域（一行一個）')} hint={t('公司內部的網域（例 corp.example）解析到私有 IP 是正常的；其他公網網域回私有 IP 會被當成 DNS rebinding 擋掉。')}>
             <textarea className={INPUT} rows={3} value={form.internal} onChange={(e) => setForm({ ...form, internal: e.target.value })} />
           </Field>
@@ -402,9 +415,15 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
             <p className="text-slate-500">{t('到「API token」分頁建立權杖、權限勾「防護 DNS 伺服器」，再用系統管理員（root）執行：')}</p>
             <pre className="mt-1 overflow-x-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{`ai-security-monitor dns-server --hub ${hubUrl || 'https://<hub>'} --hub-token <TOKEN>`}</pre>
             <p className="text-xs text-slate-500">{t('建議原生跑：看得到每個裝置的真實 IP。Windows／macOS 的 Docker Desktop 會把來源都變成同一個位址。')}</p>
+            <p className="mt-1 text-slate-500">{t('已加入這個 Hub 的電腦，也可以交給背景服務帶起（掛掉自動重啟）：')}</p>
+            <pre className="mt-1 overflow-x-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{'ai-security-monitor config set dns.server.enabled true'}</pre>
+            <p className="mt-1 text-slate-500">{t('或用 Hub 的 compose：.env 設 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（至少 32 字元）與 AI_SECURITY_MONITOR_HUB_DNS_BIND（這台的區網 IP），再加 --profile dns 啟動。')}</p>
+            {view.composeTokenConfigured ? <p className="text-xs text-emerald-700 dark:text-emerald-400">{t('這個 Hub 已設定 compose 的防護 DNS 權杖。')}</p> : null}
           </div>
           <div>
             <h4 className="font-medium">{t('2. 把裝置的 DNS 指到它')}</h4>
+            <p className="text-slate-500">{t('個別電腦：在那台以系統管理員執行（會記下原設定；防護 DNS 連續 3 分鐘查不到會自動改回）：')}</p>
+            <pre className="mt-1 overflow-x-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{'ai-security-monitor dns use-hub --yes\nai-security-monitor dns restore --yes   # ' + t('改回原本的 DNS')}</pre>
             <p className="text-slate-500">
               {t('最省事是在路由器的 DHCP 設定把 DNS 伺服器改成這台電腦的區網 IP。有 IPv6 的話，路由器的')}
               <Term hint={t('IPv6 的路由器通告會告訴裝置用哪台 DNS（RDNSS），DHCPv6 也可能另外給一組；沒改的話裝置會走 IPv6 的 DNS，繞過防護。')}>{t('IPv6 DNS（RDNSS／DHCPv6）')}</Term>

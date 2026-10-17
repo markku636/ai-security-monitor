@@ -12,6 +12,7 @@ pub mod runtime;
 pub mod scanner;
 pub mod store;
 pub mod tamper;
+pub mod usehub;
 
 use std::path::Path;
 

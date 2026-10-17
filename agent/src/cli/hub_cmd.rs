@@ -1309,6 +1309,8 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     // 防護 DNS（dns.server.enabled，--once 不開）：獨立子行程
     #[cfg(feature = "dns-server")]
     let mut dns_server = crate::dnsd::child::Supervisor::default();
+    // Hub 的防護 DNS 資訊（裝置要用的 DNS 位址）：每 10 分鐘更新，給 dns.not_protected 用
+    let mut next_protect = tokio::time::Instant::now();
 
     loop {
         let now = tokio::time::Instant::now();
@@ -1380,6 +1382,22 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             } else if !dns_on {
                 if let Some(rt) = dns_rt.take() {
                     rt.shutdown().await;
+                }
+            }
+            // dns use-hub 的保險：防護 DNS 連續查不到就改回原本的 DNS
+            if let Some(msg) = crate::dns::usehub::watch_tick(
+                &env.config_dir,
+                &crate::util::cmd::RealRunner,
+                crate::elevate::is_elevated(),
+            )
+            .await
+            {
+                log(env, &msg);
+            }
+            if let (Some(c), true) = (&client, now >= next_protect) {
+                next_protect = now + Duration::from_secs(600);
+                if let Ok(crate::hub::DnsConfigFetch::Config(v)) = c.dns_config(None).await {
+                    let _ = crate::dns::usehub::HubProtect::from_config(&v).save(&env.config_dir);
                 }
             }
             #[cfg(feature = "dns-server")]

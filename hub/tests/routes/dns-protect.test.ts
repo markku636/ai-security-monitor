@@ -120,8 +120,15 @@ describe('protective DNS: config', () => {
     expect((await (await configGet(req('/api/v1/dns/config', { token: dnsToken }))).json()).blocking).toBe(true);
   });
 
+  it('hands out the resolver IPs devices should use', async () => {
+    const put = await adminPut(req('/api/v1/admin/dns-protect', { method: 'PUT', token: 'test-admin', body: { resolver_ips: ['192.168.1.5', 'FD00::5', '192.168.1.5'] } }));
+    expect(put.status).toBe(200);
+    const cfg = await (await configGet(req('/api/v1/dns/config', { token: 'client-a', headers: { 'x-asa-agent-id': A } }))).json();
+    expect(cfg.resolver_ips).toEqual(['192.168.1.5', 'fd00::5']);
+  });
+
   it('validates settings', async () => {
-    for (const body of [{ upstreams: ['ftp://x'] }, { block: ['not a domain'] }, { min_confidence: 5 }, { enabled: 'yes' }]) {
+    for (const body of [{ upstreams: ['ftp://x'] }, { block: ['not a domain'] }, { min_confidence: 5 }, { enabled: 'yes' }, { resolver_ips: ['lan'] }]) {
       const r = await adminPut(req('/api/v1/admin/dns-protect', { method: 'PUT', token: 'test-admin', body }));
       expect(r.status, JSON.stringify(body)).toBe(400);
     }

@@ -494,6 +494,24 @@ pub enum DnsCmd {
     Status,
     /// 確認這個網路目前的 DNS 伺服器是正確的（之後被改才告警）
     Accept,
+    /// 把這台的系統 DNS 指到公司的防護 DNS（記下原設定；防護 DNS 連續 3 分鐘查不到時背景服務會自動改回）
+    UseHub {
+        /// 防護 DNS 的位址（逗號分隔；省略＝Hub「防護 DNS」設定的「裝置要用的 DNS 位址」）
+        #[arg(long, value_delimiter = ',', value_name = "IP")]
+        server: Vec<std::net::IpAddr>,
+        /// 只顯示會改什麼，不執行
+        #[arg(long)]
+        dry_run: bool,
+        /// 不先確認防護 DNS 查得到（不建議：查不到會斷網）
+        #[arg(long)]
+        skip_check: bool,
+    },
+    /// 改回 dns use-hub 之前的 DNS 設定
+    Restore {
+        /// 只顯示會改什麼，不執行
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Args, Debug, Clone)]

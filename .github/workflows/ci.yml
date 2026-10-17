@@ -60,6 +60,60 @@ jobs:
           cargo run -q -- --json discover --no-dns --no-mdns > discover.json
           grep -q '"hint"' discover.json
 
+      - name: DNS use-hub / restore (real system DNS, disposable runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AI_SECURITY_MONITOR_CONFIG_DIR="$RUNNER_TEMP/asm-usehub" AI_SECURITY_MONITOR_SECRETS_BACKEND=file
+          cargo build -q
+          B="$PWD/target/debug/ai-security-monitor"
+          SUDO=""; [ "$RUNNER_OS" = "Windows" ] || SUDO="sudo -E"
+          snap() {
+            case "$RUNNER_OS" in
+              Windows) powershell -NoProfile -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Get-DnsClientServerAddress -InterfaceIndex \$_.ifIndex } | Sort-Object InterfaceIndex,AddressFamily | ForEach-Object { '{0} {1} {2}' -f \$_.InterfaceIndex,\$_.AddressFamily,(\$_.ServerAddresses -join ',') }" ;;
+              macOS) networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' | while read -r svc; do echo "$svc: $(networksetup -getdnsservers "$svc" | tr '\n' ' ')"; done ;;
+              Linux) resolvectl dns ;;
+            esac
+          }
+          blocked() {
+            case "$RUNNER_OS" in
+              Windows) ! powershell -NoProfile -Command "Resolve-DnsName www.example.org -DnsOnly -ErrorAction Stop | Out-Null" ;;
+              macOS) dig www.example.org | grep -q NXDOMAIN ;;
+              Linux) ! resolvectl query www.example.org > /dev/null 2>&1 ;;
+            esac
+          }
+          resolves() {
+            case "$RUNNER_OS" in
+              Windows) powershell -NoProfile -Command "Resolve-DnsName example.com -DnsOnly -ErrorAction Stop | Out-Null" ;;
+              macOS) dig +short example.com | grep -q . ;;
+              Linux) resolvectl query example.com > /dev/null ;;
+            esac
+          }
+          # 本機起一台防護 DNS（綁 127.0.0.1:53，擋 www.example.org）
+          $SUDO "$B" dns-server --listen 127.0.0.1:53 --upstream 8.8.8.8,1.1.1.1 --block www.example.org --no-feed-update > "$RUNNER_TEMP/dnsd53.log" 2>&1 &
+          sleep 5
+          "$B" dns-server --healthcheck --listen 127.0.0.1:53
+          snap | tee before.txt
+          "$B" dns use-hub --server 127.0.0.1 --dry-run
+          ! "$B" dns use-hub --server 127.0.0.1    # 沒加 --yes 不執行
+          trap '$SUDO "$B" dns restore --yes || true' EXIT
+          $SUDO "$B" dns use-hub --server 127.0.0.1 --yes
+          snap | tee during.txt
+          grep -q 127.0.0.1 during.txt
+          # 系統解析經過防護 DNS：被擋的網域查不到、一般網域照常
+          ok=0; for i in $(seq 1 10); do if blocked; then ok=1; break; fi; sleep 1; done; test "$ok" = 1
+          resolves
+          ! "$B" dns use-hub --server 127.0.0.1 --yes   # 已經改過：要先 restore
+          $SUDO "$B" dns restore --yes
+          trap - EXIT
+          ok=0; for i in $(seq 1 15); do snap > after.txt; if diff before.txt after.txt > /dev/null; then ok=1; break; fi; sleep 1; done
+          diff before.txt after.txt
+          test "$ok" = 1
+          resolves
+          ! test -f "$AI_SECURITY_MONITOR_CONFIG_DIR/dns/use-hub.json"
+          $SUDO pkill -f "dns-server --listen 127.0.0.1:53" 2>/dev/null || taskkill //F //IM ai-security-monitor.exe > /dev/null 2>&1 || true
+          echo "use-hub ok on $RUNNER_OS"
+
       - name: DNS smoke (live collection)
         shell: bash
         run: |

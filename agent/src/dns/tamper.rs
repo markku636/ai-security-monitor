@@ -590,8 +590,8 @@ pub async fn check(config_dir: &Path, i: Inputs<'_>) -> Vec<Finding> {
     let now = Utc::now();
     let mut st = TamperState::load(config_dir);
     let mut out = Vec::new();
+    let servers = current_servers().await;
     if let Some(key) = network_key() {
-        let servers = current_servers().await;
         out.extend(resolver_findings(&mut st, &key, &servers, i.intel, i.kg, now));
         if let Some(net) = st.networks.get_mut(&key) {
             if net.nx_checked_at.is_none_or(|t| now - t > NX_EVERY) {
@@ -612,7 +612,77 @@ pub async fn check(config_dir: &Path, i: Inputs<'_>) -> Vec<Finding> {
         out.extend(verify_answers(i.intel).await);
     }
     out.extend(macos_profile_findings().await);
+    out.extend(protect_findings(config_dir, &servers, now));
     let _ = st.save(config_dir);
+    out
+}
+
+/// 公司有防護 DNS 但這台沒在用（`dns.not_protected`）、防護 DNS 連不上而自動改回原本的 DNS（`dns.protect_restored`）。
+pub fn protect_findings(config_dir: &Path, servers: &[IpAddr], now: chrono::DateTime<Utc>) -> Vec<Finding> {
+    use crate::dns::usehub::{HubProtect, Restored, RESTORED_FILE};
+    let mut out = Vec::new();
+    let restored: Option<Restored> = std::fs::read_to_string(config_dir.join(RESTORED_FILE))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok());
+    if let Some(r) = restored.filter(|r| now - r.at < chrono::Duration::hours(24)) {
+        let list = r.servers.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
+        out.push(
+            Finding::new(
+                ScannerId::Dns,
+                "dns.protect_restored",
+                &format!("protect_restored|{}", r.at.timestamp()),
+                Severity::Medium,
+                t!("防護 DNS 連不上，已改回原本的 DNS"),
+                tf!(
+                    "這台設定成用公司的防護 DNS（{servers}），但連續查不到，背景服務為了不斷網已自動改回原本的 DNS；這段期間不受防護 DNS 保護。",
+                    servers = list.clone()
+                ),
+                text(format!("servers={list} restored_at={}", r.at.to_rfc3339())),
+                t!("確認防護 DNS 在跑、這台連得到，再執行 ai-security-monitor dns use-hub"),
+            )
+            .with_tag("dns"),
+        );
+    }
+    let Some(hp) = HubProtect::load(config_dir) else {
+        return out;
+    };
+    if !hp.enabled || hp.resolver_ips.is_empty() || servers.is_empty() {
+        return out;
+    }
+    // 這台自己就是防護 DNS 時，系統 DNS 指向 loopback 也算有保護
+    let local = crate::config::load(config_dir)
+        .map(|c| c.dns.server.enabled)
+        .unwrap_or(false);
+    if servers
+        .iter()
+        .any(|s| hp.resolver_ips.contains(s) || (local && s.is_loopback()))
+    {
+        return out;
+    }
+    let cur = servers.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
+    let want = hp
+        .resolver_ips
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    out.push(
+        Finding::new(
+            ScannerId::Dns,
+            "dns.not_protected",
+            "not_protected",
+            Severity::Low,
+            t!("這台沒有用公司的防護 DNS"),
+            tf!(
+                "公司的防護 DNS（{want}）會擋掉威脅情資列名的網域，但這台目前用的是 {cur}，查詢不會經過它。",
+                want = want.clone(),
+                cur = cur.clone()
+            ),
+            text(format!("current={cur} expected={want}")),
+            t!("在這台執行 ai-security-monitor dns use-hub（或請網管把路由器 DHCP 的 DNS 改成防護 DNS）"),
+        )
+        .with_tag("dns"),
+    );
     out
 }
 
@@ -635,6 +705,52 @@ pub async fn accept(config_dir: &Path) -> AppResult<Option<(String, Vec<IpAddr>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn protect_findings_follow_hub_settings() {
+        use crate::dns::usehub::{HubProtect, Restored, RESTORED_FILE};
+        let dir = tempfile::tempdir().unwrap();
+        let now = Utc::now();
+        let lan: Vec<IpAddr> = vec!["192.168.1.1".parse().unwrap()];
+        // 沒有 Hub 資訊：不提醒
+        assert!(protect_findings(dir.path(), &lan, now).is_empty());
+        HubProtect {
+            enabled: true,
+            resolver_ips: vec!["192.168.1.5".parse().unwrap()],
+            fetched_at: Some(now),
+        }
+        .save(dir.path())
+        .unwrap();
+        let f = protect_findings(dir.path(), &lan, now);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "dns.not_protected");
+        // 有用防護 DNS：不提醒
+        assert!(protect_findings(dir.path(), &["192.168.1.5".parse().unwrap()], now).is_empty());
+        // Hub 關掉：不提醒
+        HubProtect {
+            enabled: false,
+            ..HubProtect::load(dir.path()).unwrap()
+        }
+        .save(dir.path())
+        .unwrap();
+        assert!(protect_findings(dir.path(), &lan, now).is_empty());
+        // 24 小時內自動還原過：中
+        crate::store::write_json_in(
+            dir.path(),
+            RESTORED_FILE,
+            &Restored {
+                at: now - chrono::Duration::hours(1),
+                servers: vec!["192.168.1.5".parse().unwrap()],
+            },
+        )
+        .unwrap();
+        let f = protect_findings(dir.path(), &lan, now);
+        assert_eq!(
+            (f.len(), f[0].rule.as_str(), f[0].severity),
+            (1, "dns.protect_restored", Severity::Medium)
+        );
+        assert!(protect_findings(dir.path(), &lan, now + chrono::Duration::hours(30)).is_empty());
+    }
 
     fn ip(s: &str) -> IpAddr {
         s.parse().unwrap()

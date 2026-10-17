@@ -18,7 +18,7 @@ use crate::config;
 use crate::dns::model::{qtype_name, DnsEvent, DnsRecord};
 use crate::dns::store::{self, DnsStatus};
 use crate::dns::{collect, heuristics};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::intel::registry::Registry;
 use crate::intel::IntelDb;
 
@@ -26,6 +26,12 @@ pub async fn run(env: &Env, a: DnsArgs) -> AppResult<()> {
     match a.cmd {
         Some(DnsCmd::Status) => status(env).await,
         Some(DnsCmd::Accept) => accept(env).await,
+        Some(DnsCmd::UseHub {
+            server,
+            dry_run,
+            skip_check,
+        }) => use_hub(env, server, dry_run, skip_check).await,
+        Some(DnsCmd::Restore { dry_run }) => restore(env, dry_run).await,
         None if a.follow => follow(env, &a).await,
         None => list(env, &a).await,
     }
@@ -397,4 +403,200 @@ async fn follow(env: &Env, a: &DnsArgs) -> AppResult<()> {
         }
     }
     Ok(())
+}
+
+/// 提權重跑的共同流程：不是系統管理員就以管理員身分重跑自己，顯示子行程的結果；回傳 true＝已交給子行程做完。
+async fn elevated_or_rerun(env: &Env) -> AppResult<bool> {
+    use crate::elevate;
+    if elevate::is_elevated() {
+        return Ok(false);
+    }
+    if env.global.elevated {
+        return Err(AppError::Elevation(t!("已嘗試提權但仍不是系統管理員").into()));
+    }
+    let r = elevate::rerun_elevated(&env.config_dir).await?;
+    if env.global.json {
+        print_json(&r.json);
+    } else {
+        for l in &r.lines {
+            println!("{l}");
+        }
+    }
+    if !r.ok {
+        let msg = r
+            .error
+            .as_ref()
+            .and_then(|e| e["message"].as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| t!("提權後的動作失敗").to_string());
+        return Err(AppError::External(msg));
+    }
+    Ok(true)
+}
+
+/// 結果：提權子行程寫檔交給父行程，否則直接印。
+fn finish(env: &Env, res: AppResult<(Vec<String>, serde_json::Value)>) -> AppResult<()> {
+    use crate::elevate::ElevatedResult;
+    let out = match &res {
+        Ok((lines, j)) => ElevatedResult {
+            ok: true,
+            lines: lines.clone(),
+            json: j.clone(),
+            error: None,
+        },
+        Err(e) => ElevatedResult {
+            ok: false,
+            lines: Vec::new(),
+            json: json!({ "error": e }),
+            error: serde_json::to_value(e).ok(),
+        },
+    };
+    if let Some(rf) = &env.global.result_file {
+        out.write(rf)?;
+        return Ok(());
+    }
+    if env.global.json {
+        print_json(&out.json);
+    } else {
+        for l in &out.lines {
+            println!("{l}");
+        }
+    }
+    res.map(|_| ())
+}
+
+/// 要指過去的位址：向 Hub 拿「裝置要用的 DNS 位址」。
+async fn hub_resolvers(env: &Env) -> AppResult<Vec<std::net::IpAddr>> {
+    use crate::dns::usehub::HubProtect;
+    use crate::hub::DnsConfigFetch;
+    let cfg = config::load(&env.config_dir)?;
+    let Some(client) = crate::hub::watch::client_from_config(&env.config_dir, &cfg)? else {
+        return Err(AppError::InvalidArg(
+            t!("這台還沒加入 Hub：用 --server 指定防護 DNS 的位址").into(),
+        ));
+    };
+    let hp = match client.dns_config(None).await? {
+        DnsConfigFetch::Config(v) => HubProtect::from_config(&v),
+        _ => return Err(AppError::Hub(t!("這個 Hub 還不支援防護 DNS（請升級 Hub）").into())),
+    };
+    let _ = hp.save(&env.config_dir);
+    if hp.resolver_ips.is_empty() {
+        return Err(AppError::InvalidArg(
+            t!("Hub 還沒設定「裝置要用的 DNS 位址」（設定與金鑰 → 防護 DNS），或用 --server 指定").into(),
+        ));
+    }
+    Ok(hp.resolver_ips)
+}
+
+async fn use_hub(env: &Env, server: Vec<std::net::IpAddr>, dry_run: bool, skip_check: bool) -> AppResult<()> {
+    use crate::dns::usehub::{self, UseHubState};
+    use crate::util::cmd::RealRunner;
+    if let Some(st) = UseHubState::load(&env.config_dir) {
+        return Err(AppError::InvalidArg(tf!(
+            "這台已經指到防護 DNS（{servers}）；要換位址請先執行 ai-security-monitor dns restore",
+            servers = st.servers.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ")
+        )));
+    }
+    let servers = if server.is_empty() {
+        hub_resolvers(env).await?
+    } else {
+        server
+    };
+    let list = servers.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
+    if !skip_check && !usehub::any_alive(&servers).await {
+        return Err(AppError::External(tf!(
+            "查不到防護 DNS（{servers}）：先確認它在跑、這台連得到它的 53 port（改了會斷網，所以沒有執行）",
+            servers = list
+        )));
+    }
+    let method = usehub::detect_method(&RealRunner).await;
+    let desc = tf!(
+        "把這台的 DNS 改成 {servers}（方式：{method}）",
+        servers = list,
+        method = method
+    );
+    if dry_run {
+        if env.global.json {
+            print_json(&json!({ "dry_run": true, "servers": servers, "method": method }));
+        } else {
+            println!("{}", tf!("預演（未執行）：{action}", action = desc));
+            println!(
+                "  · {}",
+                t!("原本的設定會存起來，ai-security-monitor dns restore 可以改回")
+            );
+            println!(
+                "  · {}",
+                t!("背景服務每分鐘檢查，防護 DNS 連續 3 次查不到就自動改回原本的 DNS")
+            );
+        }
+        return Ok(());
+    }
+    super::guard::ensure_confirmed(env.global.yes, env.global.force, false, &desc)?;
+    if elevated_or_rerun(env).await? {
+        return Ok(());
+    }
+    let res = async {
+        let st = usehub::apply(&RealRunner, &servers).await?;
+        st.save(&env.config_dir)?;
+        let _ = std::fs::remove_file(env.config_dir.join(usehub::RESTORED_FILE));
+        let mut lines = vec![tf!(
+            "已把 DNS 改成 {servers}（方式：{method}）",
+            servers = list,
+            method = st.method
+        )];
+        for o in &st.original {
+            let prev: Vec<String> = o.v4.iter().chain(o.v6.iter()).cloned().collect();
+            lines.push(format!(
+                "  · {}：{}",
+                if o.label.is_empty() { &o.target } else { &o.label },
+                if prev.is_empty() {
+                    t!("原本自動取得").to_string()
+                } else {
+                    tf!("原本 {list}", list = prev.join(", "))
+                }
+            ));
+        }
+        if servers.iter().all(|s| s.is_ipv4()) {
+            lines.push(format!(
+                "  · {}",
+                t!("IPv6 的 DNS 沒有改：網路有 IPv6 時，請網管讓路由器的 IPv6 DNS 也指到防護 DNS")
+            ));
+        }
+        Ok((lines, serde_json::to_value(&st).unwrap_or_default()))
+    }
+    .await;
+    finish(env, res)
+}
+
+async fn restore(env: &Env, dry_run: bool) -> AppResult<()> {
+    use crate::dns::usehub::{self, UseHubState};
+    use crate::util::cmd::RealRunner;
+    let Some(st) = UseHubState::load(&env.config_dir) else {
+        return Err(AppError::InvalidArg(t!("這台沒有用 dns use-hub 改過 DNS").into()));
+    };
+    let desc = tf!(
+        "把這台的 DNS 改回 dns use-hub 之前的設定（{n} 個網路介面）",
+        n = st.original.len()
+    );
+    if dry_run {
+        if env.global.json {
+            print_json(&json!({ "dry_run": true, "state": st }));
+        } else {
+            println!("{}", tf!("預演（未執行）：{action}", action = desc));
+        }
+        return Ok(());
+    }
+    super::guard::ensure_confirmed(env.global.yes, env.global.force, false, &desc)?;
+    if elevated_or_rerun(env).await? {
+        return Ok(());
+    }
+    let res = async {
+        usehub::restore(&RealRunner, &st).await?;
+        let _ = std::fs::remove_file(env.config_dir.join(usehub::STATE_FILE));
+        Ok((
+            vec![t!("已改回原本的 DNS 設定").to_string()],
+            json!({ "ok": true, "method": st.method }),
+        ))
+    }
+    .await;
+    finish(env, res)
 }

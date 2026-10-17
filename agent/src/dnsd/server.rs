@@ -28,7 +28,7 @@ use super::wire::{self, Query, WireError};
 use crate::util::net::{classify, IpClass};
 
 /// 本機測試名稱：健康檢查（回 NOERROR，不問上游）與一定被封鎖的測試網域。
-pub const HEALTH_NAME: &str = "healthcheck.asm-dns.invalid";
+pub const HEALTH_NAME: &str = crate::dns::usehub::HEALTH_NAME;
 pub const BLOCK_TEST_NAME: &str = "blocked-test.asm-dns.invalid";
 const TCP_IDLE: Duration = Duration::from_secs(10);
 /// serve-stale 回應的 TTL（RFC 8767 建議 30 秒）。

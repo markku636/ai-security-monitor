@@ -1490,4 +1490,12 @@ export const en: Record<string, string> = {
   '{n} 台在線': '{n} online',
   '24 小時擋了 {b} 次、{c} 個裝置在用': 'blocked {b} times in 24 hours, {c} devices using it',
   '設定 →': 'Settings →',
+  '裝置要用的 DNS 位址（一行一個）': 'DNS addresses devices should use (one per line)',
+  '這些電腦執行 ai-security-monitor dns use-hub 時會把 DNS 指到這裡；有填時，沒在用它的主機會出現「沒有用公司的防護 DNS」提醒。填防護 DNS 在區網的 IP。': 'Computers running ai-security-monitor dns use-hub point their DNS here; when set, hosts not using it get a "not using the company protective DNS" notice. Enter the protective DNS\'s LAN IPs.',
+  '填入建議：{l}': 'Use suggestion: {l}',
+  '已加入這個 Hub 的電腦，也可以交給背景服務帶起（掛掉自動重啟）：': 'On a computer enrolled in this Hub, the background service can run it (restarted automatically if it stops):',
+  '或用 Hub 的 compose：.env 設 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（至少 32 字元）與 AI_SECURITY_MONITOR_HUB_DNS_BIND（這台的區網 IP），再加 --profile dns 啟動。': 'Or use the Hub\'s compose: set AI_SECURITY_MONITOR_HUB_DNS_TOKEN (at least 32 characters) and AI_SECURITY_MONITOR_HUB_DNS_BIND (this machine\'s LAN IP) in .env, then start with --profile dns.',
+  '這個 Hub 已設定 compose 的防護 DNS 權杖。': 'This Hub has a compose protective DNS token configured.',
+  '個別電腦：在那台以系統管理員執行（會記下原設定；防護 DNS 連續 3 分鐘查不到會自動改回）：': 'Single computers: run as administrator on that computer (the old settings are saved; if the protective DNS is unreachable for 3 minutes in a row it switches back automatically):',
+  '改回原本的 DNS': 'switch back to the original DNS',
 };
