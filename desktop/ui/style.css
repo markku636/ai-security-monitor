@@ -219,3 +219,14 @@ th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sortable:hover { color: var(--accent); }
 .sort-ind { margin-left: 4px; font-size: 10px; color: var(--accent); }
 .filters select { max-width: 220px; }
+/* 即時流量 */
+.live-chart { width: 100%; height: auto; display: block; }
+.live-grid { stroke: var(--border); stroke-width: 1; }
+.live-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.live-rx { fill: none; stroke: #0d9488; stroke-width: 2; stroke-linejoin: round; }
+.live-tx { fill: none; stroke: #d97706; stroke-width: 2; stroke-linejoin: round; }
+@media (prefers-color-scheme: dark) { .live-rx { stroke: #2dd4bf; } .live-tx { stroke: #fbbf24; } }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; }
+.dot.rx { background: #0d9488; }
+.dot.tx { background: #d97706; }
+.seg { display: inline-flex; gap: 4px; }

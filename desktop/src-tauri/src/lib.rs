@@ -29,6 +29,7 @@ use tokio::sync::Mutex;
 
 mod ai_auth;
 mod lan;
+mod live;
 mod updates;
 
 type CmdResult<T> = Result<T, String>;
@@ -609,6 +610,7 @@ pub fn run(start_in_tray: bool) {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::Updates::default())
+        .manage(live::Live::default())
         .manage(AppState {
             config_dir,
             intel: Mutex::new(None),
@@ -695,6 +697,7 @@ pub fn run(start_in_tray: bool) {
             desktop_autostart_status,
             set_desktop_autostart,
             metrics_now,
+            live::traffic_live,
             set_performance,
             open_url,
             updates::update_status,

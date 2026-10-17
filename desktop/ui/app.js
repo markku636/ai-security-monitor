@@ -870,9 +870,166 @@ async function pageSettings(opts = {}) {
   };
 }
 
+// ---------------- 即時流量 ----------------
+const liveState = { points: [], window: 60, total: { rx: 0, tx: 0 }, since: null, timer: null, last: null, lastAt: 0 };
+const LIVE_MAX = 300;
+
+/** 位元速率（網路業者常用的單位）：bytes/s → Mbps 等。 */
+const fmtBits = (bps) => {
+  const b = Math.max(0, bps) * 8;
+  if (b >= 1e9) return `${(b / 1e9).toFixed(2)} Gbps`;
+  if (b >= 1e6) return `${(b / 1e6).toFixed(b >= 1e8 ? 0 : 1)} Mbps`;
+  if (b >= 1e3) return `${(b / 1e3).toFixed(0)} Kbps`;
+  return `${Math.round(b)} bps`;
+};
+
+/** 大圖：下載（藍綠）、上傳（琥珀）兩條線，Y 軸自動縮放並標刻度。 */
+function liveChart(points, windowS) {
+  const W = 720;
+  const H = 200;
+  const PAD_L = 64;
+  const PAD_B = 18;
+  const data = points.slice(-windowS);
+  const max = Math.max(1024, ...data.map((p) => Math.max(p.rx, p.tx)));
+  const nice = (() => {
+    const steps = [1, 2, 5];
+    let unit = 1024;
+    while (true) {
+      for (const s of steps) if (s * unit >= max) return s * unit;
+      unit *= 10;
+    }
+  })();
+  const x = (i) => PAD_L + (i / Math.max(1, windowS - 1)) * (W - PAD_L - 4);
+  const offset = windowS - data.length;
+  const y = (v) => H - PAD_B - (Math.min(v, nice) / nice) * (H - PAD_B - 8);
+  const path = (key) =>
+    data.map((p, i) => `${i ? 'L' : 'M'}${x(i + offset).toFixed(1)},${y(p[key]).toFixed(1)}`).join('');
+  const grid = [0, 0.25, 0.5, 0.75, 1]
+    .map((f) => {
+      const yy = y(nice * f).toFixed(1);
+      return `<line x1="${PAD_L}" x2="${W - 4}" y1="${yy}" y2="${yy}" class="live-grid"/><text x="${PAD_L - 6}" y="${(+yy + 4).toFixed(1)}" text-anchor="end" class="live-axis">${fmtRate(nice * f)}</text>`;
+    })
+    .join('');
+  const ticks = [windowS, Math.round(windowS / 2), 0]
+    .map((s) => `<text x="${x(windowS - 1 - s).toFixed(1)}" y="${H - 4}" text-anchor="${s === windowS ? 'start' : s ? 'middle' : 'end'}" class="live-axis">${s ? `${s} 秒前` : '現在'}</text>`)
+    .join('');
+  return `<svg class="live-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="最近 ${windowS} 秒的下載與上傳速率">${grid}${ticks}
+    ${data.length > 1 ? `<path d="${path('rx')}" class="live-rx"/><path d="${path('tx')}" class="live-tx"/>` : ''}</svg>`;
+}
+
+function stopLive() {
+  clearTimeout(liveState.timer);
+  liveState.timer = null;
+}
+
+async function pageTraffic() {
+  stopLive();
+  // 離開這一頁超過 10 秒再回來：舊的線接不上，重新畫
+  if (Date.now() - liveState.lastAt > 10_000) liveState.points = [];
+  $main.innerHTML = `
+    <div class="head">
+      <div><h1>即時流量</h1><p class="sub">這台電腦現在的下載／上傳速度，每秒更新（只在這一頁開著時量，不會存起來）。</p></div>
+      <div class="row">
+        <div class="seg" id="live-win">
+          <button class="fchip ${liveState.window === 60 ? 'on' : ''}" data-w="60">60 秒</button>
+          <button class="fchip ${liveState.window === 300 ? 'on' : ''}" data-w="300">5 分鐘</button>
+        </div>
+        <button class="btn" id="live-reset" title="把「這次累計」歸零">歸零</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="stat"><div class="label"><span class="dot rx"></span> 下載</div><div class="value" id="lv-rx">—</div><div class="hint" id="lv-rxb"></div></div>
+      <div class="stat"><div class="label"><span class="dot tx"></span> 上傳</div><div class="value" id="lv-tx">—</div><div class="hint" id="lv-txb"></div></div>
+      <div class="stat"><div class="label">這次累計</div><div class="value" style="font-size:18px;padding-top:6px" id="lv-total">—</div><div class="hint" id="lv-since"></div></div>
+    </div>
+    <div class="card"><h2>速率（最近 <span id="lv-win-label">${liveState.window === 60 ? '60 秒' : '5 分鐘'}</span>）</h2><div id="lv-chart"><p class="muted small"><span class="spin"></span> 量測中…</p></div></div>
+    <div class="split" style="grid-template-columns:1fr 1fr">
+      <div class="card"><h2>各網路卡 <span class="muted small" title="虛擬網卡（VPN、Docker、WSL、Hyper-V）的流量其實也會經過實體網卡，所以不算進上面的總量">(?)</span></h2><div id="lv-ifaces" class="muted small">量測中…</div></div>
+      <div class="card"><h2>哪個程式在用網路</h2><div id="lv-procs" class="muted small">量測中…</div></div>
+    </div>`;
+  for (const b of document.querySelectorAll('#live-win [data-w]')) {
+    b.onclick = () => {
+      liveState.window = Number(b.dataset.w);
+      for (const x of document.querySelectorAll('#live-win [data-w]')) x.classList.toggle('on', x === b);
+      document.getElementById('lv-win-label').textContent = liveState.window === 60 ? '60 秒' : '5 分鐘';
+      renderLive();
+    };
+  }
+  document.getElementById('live-reset').onclick = () => {
+    liveState.total = { rx: 0, tx: 0 };
+    liveState.since = Date.now();
+    renderLive();
+  };
+  if (!liveState.since) liveState.since = Date.now();
+  tickLive();
+}
+
+async function tickLive() {
+  stopLive();
+  if (location.hash !== '#traffic') return;
+  // 視窗縮到系統匣或切到別的分頁時不量（省資源），回來再接著量
+  if (document.visibilityState === 'visible') {
+    try {
+      const r = await invoke('traffic_live');
+      if (r.ready) {
+        liveState.last = r;
+        liveState.lastAt = Date.now();
+        liveState.points.push({ rx: r.rx_rate, tx: r.tx_rate });
+        if (liveState.points.length > LIVE_MAX) liveState.points.splice(0, liveState.points.length - LIVE_MAX);
+        liveState.total.rx += r.rx_bytes;
+        liveState.total.tx += r.tx_bytes;
+        renderLive();
+      }
+    } catch (e) {
+      const el = document.getElementById('lv-chart');
+      if (el) el.innerHTML = `<p class="small" style="color:var(--danger)">${esc(e)}</p>`;
+    }
+  }
+  if (location.hash === '#traffic') liveState.timer = setTimeout(tickLive, 1000);
+}
+
+function renderLive() {
+  const r = liveState.last;
+  const chart = document.getElementById('lv-chart');
+  if (!chart || !r) return;
+  document.getElementById('lv-rx').textContent = fmtRate(r.rx_rate);
+  document.getElementById('lv-tx').textContent = fmtRate(r.tx_rate);
+  document.getElementById('lv-rxb').textContent = fmtBits(r.rx_rate);
+  document.getElementById('lv-txb').textContent = fmtBits(r.tx_rate);
+  document.getElementById('lv-total').textContent = `↓ ${fmtBytes(liveState.total.rx)} · ↑ ${fmtBytes(liveState.total.tx)}`;
+  document.getElementById('lv-since').textContent = `從 ${new Date(liveState.since).toLocaleTimeString()} 起`;
+  chart.innerHTML = liveChart(liveState.points, liveState.window);
+  const ifaces = r.interfaces ?? [];
+  document.getElementById('lv-ifaces').innerHTML = ifaces.length
+    ? `<table><thead><tr><th>網路卡</th><th style="text-align:right">下載</th><th style="text-align:right">上傳</th></tr></thead><tbody>${ifaces
+        .map(
+          (i) => `<tr><td>${esc(i.name)}${i.virtual ? ' <span class="chip neutral" title="虛擬網卡：流量其實也經過實體網卡，不算進總量">虛擬</span>' : ''}</td>
+            <td class="mono" style="text-align:right">${fmtRate(i.rx_rate)}</td><td class="mono" style="text-align:right">${fmtRate(i.tx_rate)}</td></tr>`,
+        )
+        .join('')}</tbody></table>`
+    : '<p class="muted">沒有讀到網路卡。</p>';
+  const procs = r.processes;
+  const el = document.getElementById('lv-procs');
+  if (!procs) {
+    el.innerHTML =
+      r.os === 'windows'
+        ? `<p class="small">Windows 要用<b>系統管理員</b>身分執行桌面版，才看得到每個程式的用量（系統只對系統管理員開放這項統計）。</p><p class="small muted">想知道哪個程式連到哪裡，可以看「<a class="link" href="#connections">連線</a>」頁。</p>`
+        : r.os === 'linux'
+          ? '<p class="small">Linux 沒有不裝額外工具就能讀到各程式用量的方法；想知道哪個程式連到哪裡，請看「<a class="link" href="#connections">連線</a>」頁。</p>'
+          : '<p class="small muted">這次沒有讀到各程式的用量。</p>';
+    return;
+  }
+  const active = procs.filter((p) => p.rx_rate + p.tx_rate > 0);
+  el.innerHTML = active.length
+    ? `<table><thead><tr><th>程式</th><th style="text-align:right">下載</th><th style="text-align:right">上傳</th></tr></thead><tbody>${active
+        .map((p) => `<tr><td><b>${esc(p.name)}</b></td><td class="mono" style="text-align:right">${fmtRate(p.rx_rate)}</td><td class="mono" style="text-align:right">${fmtRate(p.tx_rate)}</td></tr>`)
+        .join('')}</tbody></table><p class="small muted" style="margin-top:6px">${r.process_source === 'estats' ? '只算 TCP 連線的資料量（Windows 延伸統計）。' : '來源：macOS nettop。'}</p>`
+    : '<p class="muted">這一秒沒有程式在收發資料。</p>';
+}
+
 // ---------------- 路由 ----------------
 // 網址是 #頁面 或 #頁面/區塊（目前只有 #settings/hub：設定頁的 Hub 區塊）
-const PAGES = { overview: pageOverview, connections: pageConnections, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
+const PAGES = { overview: pageOverview, connections: pageConnections, traffic: pageTraffic, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
   let [page, section] = (location.hash || '#overview').slice(1).split('/');
   let opts = section === 'hub' ? { focus: 'hub' } : {};

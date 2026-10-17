@@ -307,6 +307,25 @@ function installMock(D) {
     background_service_status: () => D.background_service,
     desktop_autostart_status: () => true,
     metrics_now: () => D.metrics,
+    // 即時流量：每次呼叫回一個平滑變化的假樣本
+    traffic_live: () => {
+      const k = (window.__liveK = (window.__liveK ?? 0) + 1);
+      const rx = Math.round(2.4e6 + 1.6e6 * Math.sin(k / 4) + 0.5e6 * Math.sin(k / 1.7));
+      const tx = Math.round(3.2e5 + 2.4e5 * Math.sin(k / 3 + 1));
+      return {
+        ready: true, elapsed_s: 1, rx_rate: rx, tx_rate: tx, rx_bytes: rx, tx_bytes: tx, elevated: true, os: 'windows', process_source: 'estats',
+        interfaces: [
+          { name: 'Wi-Fi', virtual: false, rx_rate: rx, tx_rate: tx },
+          { name: 'vEthernet (WSL)', virtual: true, rx_rate: Math.round(rx * 0.08), tx_rate: Math.round(tx * 0.05) },
+        ],
+        processes: [
+          { name: 'msedge.exe', rx_rate: Math.round(rx * 0.55), tx_rate: Math.round(tx * 0.3) },
+          { name: 'OneDrive.exe', rx_rate: Math.round(rx * 0.05), tx_rate: Math.round(tx * 0.55) },
+          { name: 'Teams.exe', rx_rate: Math.round(rx * 0.25), tx_rate: Math.round(tx * 0.12) },
+          { name: 'svchost.exe', rx_rate: Math.round(rx * 0.1), tx_rate: Math.round(tx * 0.03) },
+        ],
+      };
+    },
     set_performance: ({ enabled }) => enabled,
     discover_hubs: async () => {
       await wait(300);
@@ -457,6 +476,18 @@ const SHOTS = [
     async () => {
       await waitFor(`document.querySelector('details')`);
       await evaluate(`document.querySelector('details').open = true`);
+    },
+  ],
+  [
+    'desktop-traffic',
+    'traffic',
+    false,
+    async () => {
+      await waitFor(`document.querySelector('.live-rx')`, 10000);
+      // 不用真的等 60 秒：直接補滿 60 個樣本再畫一次
+      await evaluate(
+        `for (let i = 0; i < 60; i++) { const k = i + 1; liveState.points.push({ rx: 2.4e6 + 1.6e6 * Math.sin(k / 4) + 0.5e6 * Math.sin(k / 1.7), tx: 3.2e5 + 2.4e5 * Math.sin(k / 3 + 1) }); } liveState.points = liveState.points.slice(-60); renderLive(); true`,
+      );
     },
   ],
   ['desktop-intel', 'intel', false, async () => waitFor(`document.querySelector('#main table')`)],
