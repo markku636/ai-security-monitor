@@ -325,6 +325,8 @@ export const en: Record<string, string> = {
   '顯示卡重設': 'GPU reset',
   '記憶體不足': 'Low memory',
   '暴力破解': 'Brute force',
+  'NTLM 驗證失敗爆量': 'NTLM failure burst',
+  '帳號被鎖定': 'Account locked out',
   '公網遠端登入': 'Remote logon from internet',
   '加入管理員群組': 'Added to admins',
   '加入群組': 'Added to group',

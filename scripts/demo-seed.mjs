@@ -1,13 +1,13 @@
-// 示範資料：四台虛構主機（文件保留網段 IP），經由正式的 ingest API 送進 Security Hub，供截圖與試玩。
-//   node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <ASA_HUB_ADMIN_SECRET>
+// 示範資料：五台虛構主機（文件保留網段 IP，RFC 5737；含一台 Windows Server 網域控制站），經由正式的 ingest API 送進 Security Hub，供截圖與試玩。
+//   node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <AI_SECURITY_MONITOR_HUB_ADMIN_SECRET>
 // Hub 要能收到過去時間的報告：會用網頁 API 建一把註冊金鑰，每台送 6 份報告（每小時一份）＋連線快照。
 import crypto from 'node:crypto';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
 );
-const HUB = (args.hub ?? process.env.ASA_HUB_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
-const ADMIN = args.admin ?? process.env.ASA_HUB_ADMIN_SECRET;
+const HUB = (args.hub ?? process.env.AI_SECURITY_MONITOR_HUB_URL ?? process.env.ASA_HUB_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
+const ADMIN = args.admin ?? process.env.AI_SECURITY_MONITOR_HUB_ADMIN_SECRET ?? process.env.ASA_HUB_ADMIN_SECRET;
 if (!ADMIN) {
   console.error('usage: node scripts/demo-seed.mjs --hub <url> --admin <admin secret>');
   process.exit(2);
@@ -15,6 +15,7 @@ if (!ADMIN) {
 
 const now = Date.now();
 const iso = (minsAgo) => new Date(now - minsAgo * 60_000).toISOString();
+const daysUntil = (d) => Math.round((Date.parse(d) - now) / 86_400_000);
 const hex = (s, n = 16) => crypto.createHash('sha256').update(s).digest('hex').slice(0, n);
 const uuid = (s) => {
   const h = hex(s, 32);
@@ -120,7 +121,7 @@ const HOSTS = [
         key: '198.51.100.23',
         evidence: { type: 'connection', remote_ip: '198.51.100.23', remote_port: 51522, local_port: 22, direction: 'inbound' },
         intel_hits: [hit('blocklistde', '198.51.100.23')],
-        recommendation: 'asa fw block 198.51.100.23 --yes',
+        recommendation: 'ai-security-monitor fw block 198.51.100.23 --yes',
         actions: [{ kind: 'block_ip', params: { ip: '198.51.100.23', direction: 'inbound' }, requires_elevation: true, destructive: false, reversible: true, description: 'Block 198.51.100.23 inbound' }],
         tags: ['inbound'],
       },
@@ -218,7 +219,7 @@ const HOSTS = [
         detail: 'postgres 綁在 0.0.0.0:5432，防火牆允許連入。',
         key: 'tcp/5432',
         evidence: { type: 'port', proto: 'tcp', port: 5432, bind: '0.0.0.0', process: 'postgres', reachability: 'open' },
-        recommendation: '只允許應用伺服器的位址連入（asa fw close-port tcp/5432 或改 listen_addresses）。',
+        recommendation: '只允許應用伺服器的位址連入（ai-security-monitor fw close-port tcp/5432 或改 listen_addresses）。',
         tags: ['exposure'],
       },
       {
@@ -367,6 +368,128 @@ const HOSTS = [
     listeners: [],
   },
   {
+    // Windows Server 2022 Datacenter（Server Core）網域控制站：RDP 對外被暴力破解；os 欄位與 0.2.0 agent 實際送的一樣
+    hostname: 'dc-01',
+    os: {
+      family: 'windows',
+      name: 'Windows',
+      version: 'Server 2022 Datacenter (Server Core, 20348)',
+      build: 'Windows Server 2022 Datacenter',
+      kernel: '20348',
+      product_type: 'domain_controller',
+      installation_type: 'Server Core',
+      edition: 'ServerDatacenter',
+    },
+    ip: '192.0.2.5',
+    elevated: true,
+    score: { overall: 64, connections: 70, exposure: 55, vulns: 92, hardening: 89 },
+    findings: [
+      {
+        scanner: 'events',
+        rule: 'events.failed_logon_burst',
+        severity: 'high',
+        title: '203.0.113.57 嘗試登入失敗 286 次（疑似暴力破解）',
+        detail: 'max 74 in 10 min · users administrator×190, admin×61, backup×35',
+        key: 'failed_logon_burst|203.0.113.57|',
+        evidence: { type: 'event', event_id: 4625, channel: 'Security', provider: 'Microsoft-Windows-Security-Auditing', time: iso(30), computer: 'dc-01.corp.example', data: { IpAddress: '203.0.113.57', LogonType: '10', TargetUserName: 'administrator' } },
+        intel_hits: [hit('cins', '203.0.113.57')],
+        recommendation: '封鎖來源 IP；關閉不需要對外的 RDP／SSH，改用 VPN 或限制來源；啟用帳號鎖定原則',
+        actions: [{ kind: 'block_ip', params: { ip: '203.0.113.57', direction: 'inbound', reason: 'failed-logon-burst' }, requires_elevation: true, destructive: false, reversible: true, description: 'Block 203.0.113.57 inbound' }],
+        tags: ['security', 'inbound'],
+        since: 300,
+      },
+      {
+        scanner: 'events',
+        rule: 'events.account_locked',
+        severity: 'medium',
+        title: '帳號被鎖定：backup（來源 KIOSK-07）',
+        key: 'account_locked||backup',
+        evidence: { type: 'event', event_id: 4740, channel: 'Security', provider: 'Microsoft-Windows-Security-Auditing', time: iso(42), computer: 'dc-01.corp.example', data: { TargetUserName: 'backup', TargetDomainName: 'KIOSK-07' } },
+        recommendation: '確認是本人打錯密碼還是有人在猜；同時段的登入失敗來源可以一起封鎖',
+        tags: ['security'],
+      },
+      {
+        scanner: 'ports',
+        rule: 'ports.exposed_open',
+        severity: 'high',
+        title: '遠端桌面（tcp 3389）可從網路連入',
+        detail: 'TermService 綁在 0.0.0.0:3389，防火牆允許連入。',
+        key: 'tcp/3389',
+        evidence: { type: 'port', proto: 'tcp', port: 3389, bind: '0.0.0.0', process: 'svchost.exe', reachability: 'open' },
+        recommendation: '只允許管理網段連入（ai-security-monitor fw close-port tcp/3389，或改走 VPN／RD 閘道）。',
+        tags: ['exposure'],
+      },
+      {
+        scanner: 'hardening',
+        rule: 'hardening.win.lsa.protection',
+        severity: 'medium',
+        title: '未通過：LSA 保護（RunAsPPL）已開啟',
+        key: 'win.lsa.protection',
+        evidence: { type: 'policy', policy_id: 'win.lsa.protection', check: 'LSA protection', observed: '', expected: 'in 1, 2', result: 'fail' },
+        recommendation: "New-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' RunAsPPL -Value 1 -PropertyType DWord -Force 後重新開機",
+        tags: ['credential'],
+      },
+    ],
+    vuln: {
+      os: { family: 'windows', name: 'Microsoft Windows Server 2022 Datacenter', version: '', build: 20348, server: true, edition: 'ServerDatacenter' },
+      support: { product: 'Windows Server 2022', eol: '2031-10-14', status: 'supported', days_left: daysUntil('2031-10-14') },
+      last_patch: { date: iso(60 * 24 * 9).slice(0, 10), id: 'KB5066782', days: 9 },
+      packages: 37,
+      by_ecosystem: { windows: 37 },
+      app_hits: [],
+      kev_count: 0,
+      notes: [],
+    },
+    hardening: {
+      os_family: 'windows',
+      editions: ['server', 'core', 'dc'],
+      pass: 12,
+      fail: 2,
+      na: 6,
+      error: 0,
+      score: 89,
+      needs_admin: [],
+      results: [
+        hardeningResult('win.lsa.protection', 'LSA 保護（RunAsPPL）已開啟', 'medium', 'fail', '', 'in 1, 2', "New-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' RunAsPPL -Value 1 -PropertyType DWord -Force 後重新開機", 'credential'),
+        hardeningResult('win.llmnr.disabled', 'LLMNR 名稱解析已關閉', 'low', 'fail', '', '= 0', '群組原則「關閉多點傳送名稱解析」', 'network'),
+        hardeningResult('win.rdp.nla', '遠端桌面要求網路層級驗證（NLA）', 'high', 'pass', '1', '= 1', '', 'remote'),
+        hardeningResult('win.defender.realtime', 'Microsoft Defender 即時保護已開啟', 'high', 'pass', 'on', '= on', '', 'malware'),
+        hardeningResult('win.smb1.server', 'SMBv1 伺服器已停用', 'high', 'pass', '0', '= 0', '', 'network'),
+        hardeningResult('win.defender.tamper', 'Defender 竄改防護已開啟', 'medium', 'not_applicable', 'server_unmanaged', '= on', 'Windows Server 的竄改防護要先加入 Microsoft Defender for Endpoint，再從 Defender 入口網站開啟', 'malware'),
+        { ...hardeningResult('win.smartscreen', 'SmartScreen 沒有被關閉', 'medium', 'not_applicable', '', '= on', '', 'malware'), note: '這個 Windows 版本不適用（server/core/dc）' },
+        hardeningResult('win.bitlocker.system', '系統磁碟已用 BitLocker／裝置加密保護', 'high', 'not_applicable', 'not_installed', '= on', 'Install-WindowsFeature BitLocker -IncludeAllSubFeature -IncludeManagementTools -Restart', 'encryption'),
+        { ...hardeningResult('win.remote_registry', '遠端登錄服務沒有自動啟動', 'low', 'not_applicable', '', 'in Disabled, Manual, none', '', 'remote'), note: '這個 Windows 版本不適用（server/core/dc）' },
+      ],
+    },
+    events: {
+      platform: 'windows',
+      days: 7,
+      events_read: 2950,
+      counts_by_level: { error: 12, warning: 96 },
+      crash_counts: {},
+      crashes: [],
+      security: [
+        { rule: 'failed_logon_burst', severity: 'high', count: 286, first: iso(300), last: iso(30), source_ip: '203.0.113.57', detail: 'max 74 in 10 min · users administrator×190, admin×61, backup×35', intel: [{ feed_id: 'cins-army', vendor: 'CINS', confidence: 75, source_url: FEEDS.cins.source_url }], samples: [] },
+        { rule: 'ntlm_failure_burst', severity: 'medium', count: 41, first: iso(80), last: iso(40), detail: 'workstation KIOSK-07 · max 18 in 10 min · users backup×41', intel: [], samples: [] },
+        { rule: 'account_locked', severity: 'medium', count: 1, first: iso(42), last: iso(42), user: 'backup', detail: 'KIOSK-07', intel: [], samples: [] },
+        { rule: 'remote_logon', severity: 'medium', count: 2, first: iso(600), last: iso(120), source_ip: '198.51.100.14', user: 'EXAMPLE\\it-admin', detail: 'RDP (1149)', intel: [], samples: [] },
+      ],
+      top_error_sources: [],
+      needs_admin: [],
+      notes: [],
+    },
+    connections: [
+      { local_ip: '192.0.2.5', local_port: 3389, remote_ip: '203.0.113.57', remote_port: 49822, direction: 'inbound', process: { pid: 1180, name: 'svchost.exe' }, geo: { country: 'BR', asn: 64512, org: 'Example Broadband' }, verdict: { level: 'suspicious', reasons: [{ type: 'intel_hit', ...hit('cins', '203.0.113.57') }] } },
+      { local_ip: '192.0.2.5', local_port: 389, remote_ip: '192.0.2.21', remote_port: 51544, direction: 'inbound', process: { pid: 712, name: 'lsass.exe' }, verdict: { level: 'safe', reasons: [{ type: 'private_network' }] } },
+      { local_ip: '192.0.2.5', local_port: 88, remote_ip: '192.0.2.77', remote_port: 50211, direction: 'inbound', process: { pid: 712, name: 'lsass.exe' }, verdict: { level: 'safe', reasons: [{ type: 'private_network' }] } },
+    ],
+    listeners: [
+      { proto: 'tcp', bind_ip: '0.0.0.0', port: 3389, process: { pid: 1180, name: 'svchost.exe' }, exposed: true, reachability: { state: 'open' } },
+      { proto: 'tcp', bind_ip: '0.0.0.0', port: 389, process: { pid: 712, name: 'lsass.exe' }, exposed: false, reachability: { state: 'filtered' } },
+      { proto: 'tcp', bind_ip: '0.0.0.0', port: 88, process: { pid: 712, name: 'lsass.exe' }, exposed: false, reachability: { state: 'filtered' } },
+    ],
+  },
+  {
     hostname: 'design-mac-03',
     os: { family: 'macos', name: 'macOS', version: '15.1', kernel: '24.1.0' },
     ip: '192.0.2.93',
@@ -443,7 +566,7 @@ for (const h of HOSTS) {
   const agentToken = `demo-${hex(h.hostname, 32)}`;
   const agent = {
     id: agentId,
-    version: '0.1.0',
+    version: '0.2.0',
     hostname: h.hostname,
     os: h.os,
     arch: h.os.family === 'macos' ? 'aarch64' : 'x86_64',

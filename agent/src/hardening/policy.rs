@@ -19,6 +19,9 @@ pub struct Check {
     pub rationale: Localized,
     #[serde(default)]
     pub remediation: Localized,
+    /// Windows Server 上改顯示這段修法（Install-WindowsFeature、sconfig、伺服器管理員…）；空白就用 remediation。
+    #[serde(default)]
+    pub remediation_server: Localized,
     #[serde(default)]
     pub references: Vec<String>,
     pub probe: Probe,
@@ -35,6 +38,10 @@ pub struct Check {
     /// 這個檔案不存在就不適用（例：沒裝 sshd 就不檢查暴力破解防護）。
     #[serde(default)]
     pub only_if_exists: Option<String>,
+    /// Windows 版本篩選（不符合就算不適用）：`client`、`server`、`core`（Server Core）、`desktop`（有桌面體驗的 Server）、
+    /// `dc`（網域控制站）；`not_<標籤>` 表示排除。例：`[client]`、`[not_core]`、`[server, not_dc]`。
+    #[serde(default)]
+    pub editions: Vec<String>,
     #[serde(default)]
     pub disabled: bool,
 }
@@ -177,8 +184,34 @@ pub fn parse(text: &str) -> Result<Vec<Check>, String> {
         if let Some(r) = &c.probe.regex {
             regex::Regex::new(r).map_err(|e| format!("{}: {e}", c.id))?;
         }
+        for e in &c.editions {
+            if !EDITION_TAGS.contains(&e.strip_prefix("not_").unwrap_or(e)) {
+                return Err(format!(
+                    "{}: unknown edition '{e}' (use {} or not_<tag>)",
+                    c.id,
+                    EDITION_TAGS.join(", ")
+                ));
+            }
+        }
     }
     Ok(checks)
+}
+
+/// `editions` 可用的標籤（見 `util::winver::WinEdition::tags`）。
+pub const EDITION_TAGS: [&str; 5] = ["client", "server", "core", "desktop", "dc"];
+
+impl Check {
+    /// 這台的版本標籤符不符合 `editions`。讀不到版本（標籤為空）時一律適用，寧可多檢查也不要漏。
+    pub fn applies_to_edition(&self, host: &[String]) -> bool {
+        if self.editions.is_empty() || host.is_empty() {
+            return true;
+        }
+        let has = |t: &str| host.iter().any(|h| h == t);
+        let (neg, pos): (Vec<&String>, Vec<&String>) = self.editions.iter().partition(|e| e.starts_with("not_"));
+        let excluded = neg.iter().any(|e| has(&e["not_".len()..]));
+        let included = pos.is_empty() || pos.iter().any(|e| has(e));
+        included && !excluded
+    }
 }
 
 /// 這個作業系統要跑的檢查（內建＋自訂，已套用 disabled 與發行版篩選）；第二個值是自訂檔的錯誤。
@@ -255,6 +288,48 @@ mod tests {
                 assert!(!c.references.is_empty(), "{}", c.id);
             }
         }
+    }
+
+    #[test]
+    fn edition_filter() {
+        let mk = |eds: &[&str]| {
+            let yml = format!(
+                "- id: win.x
+  severity: low
+  title: {{zh: a, en: a}}
+  probe: {{powershell: '1'}}
+  expect: {{op: eq, value: 1}}
+  editions: [{}]
+",
+                eds.join(", ")
+            );
+            parse(&yml).unwrap().remove(0)
+        };
+        let tags = |t: &[&str]| t.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let client = tags(&["client"]);
+        let core = tags(&["server", "core"]);
+        let gui = tags(&["server", "desktop"]);
+        let dc = tags(&["server", "desktop", "dc"]);
+        assert!(mk(&["client"]).applies_to_edition(&client));
+        assert!(!mk(&["client"]).applies_to_edition(&core));
+        assert!(mk(&["not_core"]).applies_to_edition(&client));
+        assert!(mk(&["not_core"]).applies_to_edition(&gui));
+        assert!(!mk(&["not_core"]).applies_to_edition(&core));
+        assert!(mk(&["server", "not_dc"]).applies_to_edition(&gui));
+        assert!(!mk(&["server", "not_dc"]).applies_to_edition(&dc));
+        assert!(!mk(&["server", "not_dc"]).applies_to_edition(&client));
+        // 讀不到版本 → 照樣檢查
+        assert!(mk(&["client"]).applies_to_edition(&[]));
+        assert!(parse(
+            "- id: win.y
+  severity: low
+  title: {zh: a, en: a}
+  probe: {powershell: '1'}
+  expect: {op: eq, value: 1}
+  editions: [workstation]
+"
+        )
+        .is_err());
     }
 
     #[test]

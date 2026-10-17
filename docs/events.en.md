@@ -19,7 +19,7 @@ asa events analyze x.evtx  # analyze an exported file (.evtx, journalctl -o json
 
 | Platform | Sources | Needs administrator |
 |---|---|---|
-| Windows | System, Application (errors and selected IDs), Security (4625, 4624, 4720, 4722, 4728, 4732, 4756, 4698, 1102), Defender Operational; headers of `%SystemRoot%\Minidump\*.dmp` | The Security log and Minidump do; without rights everything else still runs and the report lists `needs_admin` |
+| Windows | System, Application (errors and selected IDs), Security (4625, 4624, 4720, 4722, 4728, 4732, 4756, 4698, 1102; plus 4740, 4771, 4776 for servers with their own 1000-event cap), Defender Operational, TerminalServices-RemoteConnectionManager/Operational (1149); headers of `%SystemRoot%\Minidump\*.dmp` | The Security log and Minidump do; without rights everything else still runs and the report lists `needs_admin` |
 | Linux | `journalctl -o json`: priority 0–4, sshd / sudo / useradd / usermod / gpasswd | Membership of `systemd-journal` (or `adm`), or sudo |
 | macOS | `/Library/Logs/DiagnosticReports`, `~/Library/Logs/DiagnosticReports` (.panic, .ips) | No |
 
@@ -38,8 +38,10 @@ asa events analyze x.evtx  # analyze an exported file (.evtx, journalctl -o json
 
 | Rule | Description |
 |---|---|
-| Brute force | ≥ 10 failed logons from one source within 10 minutes, or ≥ 30 in total (Windows 4625, sshd); public sources carry intel hits and a "block IP" proposed action |
-| Remote logon from the internet | 4624 LogonType 10/3 or sshd "Accepted" from a public IP |
+| Brute force | ≥ 10 failed logons from one source within 10 minutes, or ≥ 30 in total (Windows 4625, Kerberos pre-authentication failures 4771 on domain controllers, sshd); public sources carry intel hits and a "block IP" proposed action |
+| NTLM failure burst | failed 4776 (Status ≠ 0x0) counted per source workstation with the same thresholds; there is no IP, so no block is proposed |
+| Account locked out | 4740 (with the caller computer that triggered the lockout) |
+| Remote logon from the internet | 4624 LogonType 10/3, Remote Desktop 1149 (readable without administrator) or sshd "Accepted" from a public IP |
 | Accounts and groups | new account (4720, useradd), account enabled (4722), added to an administrators group (4728/4732/4756, sudo/wheel) |
 | Persistence | new service (7045; severity from the executable's location: temp or user folders and script hosts → high, system or Program Files → low), scheduled task (4698) |
 | Covering tracks | audit log cleared (1102), event log cleared (104) |

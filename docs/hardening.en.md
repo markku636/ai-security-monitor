@@ -31,6 +31,22 @@ Whether the firewall is on is checked by the firewall engine (`asa fw audit`), n
 - Score = passes × 2 ÷ (passes × 2 + failure weight), weighted by severity: critical 4, high 3, medium 2, low 1. The report's "hardening" score uses the same formula; allowlisted failures do not count.
 - Every failure becomes a `hardening.<id>` finding with the fix and references.
 
+## Windows Server
+
+The same Windows policy runs on Windows Server 2016 / 2019 / 2022 / 2025, including Server Core and domain controllers.
+The edition comes from the registry: `ProductOptions\ProductType` (WinNT workstation / ServerNT server / LanmanNT domain controller) and
+`CurrentVersion\InstallationType` (Client / Server / Server Core); `ai-security-monitor --json harden` reports it as `editions`
+(e.g. `["server", "core", "dc"]`). What changes on a server:
+
+| Check | On Windows Server |
+|---|---|
+| Defender real-time / signatures / tamper protection | N/A instead of an error when the Defender feature is removed (`Uninstall-WindowsFeature Windows-Defender`); tamper protection needs Defender for Endpoint onboarding, so a server without it is N/A |
+| SmartScreen | Server Core has no File Explorer or SmartScreen → N/A |
+| BitLocker | Server Core falls back to `Get-BitLockerVolume` (needs administrator); N/A when the BitLocker feature is not installed |
+| Remote Registry | Clients only: servers start it by default and Server Manager / remote management depend on it |
+| Built-in Administrator | Often kept as the recovery account on servers: a renamed account passes too (CIS asks member servers to rename it); domain controllers have no local accounts → N/A (Guest as well) |
+| Fix text | Server-specific instructions: `Install-WindowsFeature` / `Uninstall-WindowsFeature` (`FS-SMB1`, `PowerShell-V2`, `BitLocker`), sconfig, Server Manager |
+
 ## Custom checks
 
 Drop `.yml` files into `<config dir>/policies/` (see `asa config path`): the same id replaces a built-in check, `disabled: true` turns one off.
@@ -63,6 +79,8 @@ Fields:
   `command` / `file` accept `regex` (first capture group) and `stderr: true`.
 - `expect.op`: `eq` `ne` `gte` `lte` `contains` `not_contains` `matches` `in` `not_in` `empty` `not_empty`; comparisons ignore case and `"1"` equals `1`.
 - `missing`: result when no value can be read, `pass` / `fail` / `na` (default `na`); `na_values`: values meaning not applicable; `distros`: only on these Linux distributions; `only_if_exists`: N/A when the file is absent.
+- `editions`: Windows edition filter with the tags `client`, `server`, `core` (Server Core), `desktop` (Server with Desktop Experience), `dc` (domain controller);
+  `not_<tag>` excludes (e.g. `[client]`, `[not_core]`, `[server, not_dc]`). `remediation_server`: fix text shown on Windows Server instead.
 
 ## References
 

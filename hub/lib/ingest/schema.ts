@@ -19,6 +19,10 @@ export const OsInfo = z
     version: shortText(128).nullish(),
     build: shortText(128).nullish(),
     kernel: shortText(128).nullish(),
+    // Windows（0.2.0 起）：workstation | server | domain_controller；Client | Server | Server Core；EditionID
+    product_type: shortText(32).nullish(),
+    installation_type: shortText(32).nullish(),
+    edition: shortText(64).nullish(),
   })
   .passthrough();
 

@@ -37,6 +37,9 @@ pub struct Outcome {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HardeningReport {
     pub os_family: String,
+    /// Windows 版本標籤（client／server／core／desktop／dc）；舊版 agent 沒有這欄。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub editions: Vec<String>,
     pub pass: u32,
     pub fail: u32,
     pub na: u32,
@@ -201,6 +204,7 @@ pub async fn run_checks(
     let observed = probe::observe(&checks, runner, env).await;
     let mut r = HardeningReport {
         os_family: env.family.clone(),
+        editions: env.editions.clone(),
         warnings,
         ..Default::default()
     };
@@ -227,7 +231,11 @@ pub async fn run_checks(
             result,
             observed: obs,
             expected: expected_text(c),
-            remediation: c.remediation.get(),
+            remediation: if env.is_server() && !c.remediation_server.en.is_empty() {
+                c.remediation_server.get()
+            } else {
+                c.remediation.get()
+            },
             rationale: c.rationale.get(),
             references: c.references.clone(),
             note,
@@ -397,6 +405,7 @@ mod tests {
             family: "windows".into(),
             root: d.path().to_path_buf(),
             path_var: None,
+            editions: Vec::new(),
         };
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -433,6 +442,51 @@ mod tests {
                 .into_iter()
             )
         );
+    }
+
+    #[test]
+    fn windows_server_core_skips_client_only_checks() {
+        let d = tempfile::tempdir().unwrap();
+        // Defender 功能已移除、BitLocker 沒裝；SmartScreen 與遠端登錄不會被查（版本篩選）
+        let runner = FakeRunner::new().on(
+            "powershell",
+            CmdOutput::success(r#"{"win.uac.enabled":1,"win.uac.admin_prompt":5,"win.defender.realtime":"no_defender","win.defender.signatures":"no_defender","win.defender.tamper":"no_defender","win.smb1.client":4,"win.smb1.server":0,"win.rdp.nla":1,"win.bitlocker.system":"not_installed","win.secureboot":1,"win.lsa.protection":1,"win.wdigest":null,"win.account.guest":"disabled","win.account.builtin_admin":"renamed","win.update.not_disabled":null,"win.autorun.disabled":"off","win.llmnr.disabled":0,"win.powershell_v2.removed":"5.1"}"#),
+        );
+        let env = ProbeEnv {
+            family: "windows".into(),
+            root: d.path().to_path_buf(),
+            path_var: None,
+            editions: vec!["server".into(), "core".into()],
+        };
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let r = rt.block_on(run_checks(d.path(), &runner, &env, &[]));
+        assert_eq!(r.error, 0, "{:?}", r.results);
+        assert_eq!(r.editions, vec!["server".to_string(), "core".to_string()]);
+        let get = |id: &str| r.results.iter().find(|o| o.id == id).unwrap();
+        for id in [
+            "win.smartscreen",
+            "win.remote_registry",
+            "win.defender.realtime",
+            "win.defender.tamper",
+            "win.bitlocker.system",
+        ] {
+            assert_eq!(get(id).result, CheckResult::NotApplicable, "{id}");
+        }
+        assert!(get("win.smartscreen")
+            .note
+            .as_deref()
+            .unwrap_or("")
+            .contains("server/core"));
+        assert_eq!(get("win.account.builtin_admin").result, CheckResult::Pass);
+        // 伺服器上顯示伺服器的修法
+        assert!(get("win.powershell_v2.removed").remediation.contains("PowerShell-V2"));
+        assert!(get("win.smb1.client").remediation.contains("FS-SMB1"));
+        let script = runner.calls()[0].script.clone().unwrap_or_default();
+        assert!(!script.contains("win.smartscreen") && !script.contains("win.remote_registry"));
+        assert_eq!(r.fail, 0);
     }
 
     #[test]

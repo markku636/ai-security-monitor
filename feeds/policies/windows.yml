@@ -1,8 +1,11 @@
-# Windows 系統硬化檢查（asa harden）。
+# Windows 系統硬化檢查（ai-security-monitor harden）。用戶端（Windows 10／11）與 Windows Server 共用這份。
 # probe 種類：registry {path,name}、powershell（腳本，回傳單一值）；全部合併成一次 PowerShell 呼叫。
 # expect.op：eq ne gte lte contains not_contains matches in not_in empty not_empty
 # missing：讀不到值時的結果（pass｜fail｜na，預設 na）；na_values：這些值代表「不適用」。
-# 防火牆設定檔由 fw 引擎檢查（asa fw audit），這裡不重複。
+# editions：Windows 版本篩選，不符合就算不適用。標籤 client／server／core（Server Core）／desktop（有桌面體驗的 Server）／
+#   dc（網域控制站），not_<標籤> 表示排除。版本從登錄的 ProductType 與 InstallationType 判斷；讀不到就全部照常檢查。
+# remediation_server：Windows Server 上改顯示的修法（Install-WindowsFeature、sconfig、伺服器管理員），沒寫就用 remediation。
+# 防火牆設定檔由 fw 引擎檢查（ai-security-monitor fw audit），這裡不重複。
 
 - id: win.uac.enabled
   category: account
@@ -32,13 +35,17 @@
   title: { zh: "Microsoft Defender 即時保護已開啟", en: "Microsoft Defender real-time protection is on" }
   rationale: { zh: "即時保護在檔案寫入或執行時就攔截惡意程式。", en: "Real-time protection blocks malware as files are written or run." }
   remediation: { zh: "Windows 安全性 → 病毒與威脅防護 → 管理設定 → 開啟即時保護。", en: "Windows Security → Virus & threat protection → Manage settings → turn on Real-time protection." }
-  references: [ "https://learn.microsoft.com/defender-endpoint/configure-real-time-protection-microsoft-defender-antivirus" ]
+  remediation_server: { zh: "Set-MpPreference -DisableRealtimeMonitoring $false（系統管理員 PowerShell）；Defender 功能被移除時先 Install-WindowsFeature Windows-Defender 並重新開機。", en: "Set-MpPreference -DisableRealtimeMonitoring $false (admin PowerShell); if the Defender feature was removed, Install-WindowsFeature Windows-Defender and reboot first." }
+  references: [ "https://learn.microsoft.com/defender-endpoint/configure-real-time-protection-microsoft-defender-antivirus", "https://learn.microsoft.com/defender-endpoint/microsoft-defender-antivirus-on-windows-server" ]
+  # Windows Server 可以移除 Defender 功能（Uninstall-WindowsFeature Windows-Defender），這時 Get-MpComputerStatus 不存在或
+  # 會丟錯：回報 no_defender（不適用），由別家防毒或 EDR 負責，而不是記成檢查錯誤。
   probe:
     powershell: |
-      $s = Get-MpComputerStatus
-      if (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.RealTimeProtectionEnabled) { 'on' } else { 'off' }
+      $s = $null
+      if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) { try { $s = Get-MpComputerStatus -ErrorAction Stop } catch {} }
+      if ($null -eq $s) { 'no_defender' } elseif (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.RealTimeProtectionEnabled) { 'on' } else { 'off' }
   expect: { op: eq, value: "on" }
-  na_values: [ "other_av" ]
+  na_values: [ "other_av", "no_defender" ]
 
 - id: win.defender.signatures
   category: malware
@@ -49,10 +56,11 @@
   references: [ "https://learn.microsoft.com/defender-endpoint/manage-updates-baselines-microsoft-defender-antivirus" ]
   probe:
     powershell: |
-      $s = Get-MpComputerStatus
-      if (-not $s.AntivirusEnabled) { 'other_av' } else { $s.AntivirusSignatureAge }
+      $s = $null
+      if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) { try { $s = Get-MpComputerStatus -ErrorAction Stop } catch {} }
+      if ($null -eq $s) { 'no_defender' } elseif (-not $s.AntivirusEnabled) { 'other_av' } else { $s.AntivirusSignatureAge }
   expect: { op: lte, value: 7 }
-  na_values: [ "other_av" ]
+  na_values: [ "other_av", "no_defender" ]
 
 - id: win.defender.tamper
   category: malware
@@ -60,13 +68,18 @@
   title: { zh: "Defender 竄改防護已開啟", en: "Defender tamper protection is on" }
   rationale: { zh: "惡意程式常先關掉防毒；竄改防護讓設定無法被程式改掉。", en: "Malware often disables antivirus first; tamper protection blocks that." }
   remediation: { zh: "Windows 安全性 → 病毒與威脅防護設定 → 開啟竄改防護。", en: "Windows Security → Virus & threat protection settings → turn on Tamper Protection." }
+  remediation_server: { zh: "Windows Server 的竄改防護要先加入 Microsoft Defender for Endpoint，再從 Defender 入口網站（或 Intune）開啟；本機無法直接開。", en: "On Windows Server, tamper protection requires onboarding to Microsoft Defender for Endpoint and is turned on from the Defender portal (or Intune); it cannot be enabled locally." }
   references: [ "https://learn.microsoft.com/defender-endpoint/prevent-changes-to-security-settings-with-tamper-protection" ]
+  # Windows Server：竄改防護只有加入 Defender for Endpoint 才能開，沒有這個屬性（Server 2016）或伺服器沒開都算不適用
+  # （server_unmanaged），避免每台沒買 MDE 的伺服器都被扣分；有開就照樣算通過。
   probe:
     powershell: |
-      $s = Get-MpComputerStatus
-      if (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.IsTamperProtected) { 'on' } else { 'off' }
+      $s = $null
+      if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) { try { $s = Get-MpComputerStatus -ErrorAction Stop } catch {} }
+      $srv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\ProductOptions' -ErrorAction SilentlyContinue).ProductType -in @('ServerNT', 'LanmanNT')
+      if ($null -eq $s) { 'no_defender' } elseif (-not $s.AntivirusEnabled) { 'other_av' } elseif ($s.IsTamperProtected) { 'on' } elseif ($srv) { 'server_unmanaged' } elseif ($null -eq $s.IsTamperProtected) { 'unsupported' } else { 'off' }
   expect: { op: eq, value: "on" }
-  na_values: [ "other_av" ]
+  na_values: [ "other_av", "no_defender", "server_unmanaged", "unsupported" ]
 
 - id: win.smartscreen
   category: malware
@@ -74,7 +87,10 @@
   title: { zh: "SmartScreen 沒有被關閉", en: "SmartScreen is not turned off" }
   rationale: { zh: "SmartScreen 會擋下已知惡意或來路不明的下載與程式。", en: "SmartScreen blocks known-bad and unrecognized downloads and apps." }
   remediation: { zh: "Windows 安全性 → 應用程式與瀏覽器控制 → 開啟「檢查應用程式和檔案」。", en: "Windows Security → App & browser control → turn on \"Check apps and files\"." }
+  remediation_server: { zh: "群組原則：電腦設定 → 系統管理範本 → Windows 元件 → 檔案總管 → 設定 Windows Defender SmartScreen → 已啟用；或移除 EnableSmartScreen=0。", en: "Group Policy: Computer Configuration → Administrative Templates → Windows Components → File Explorer → Configure Windows Defender SmartScreen → Enabled; or remove EnableSmartScreen=0." }
   references: [ "https://learn.microsoft.com/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/" ]
+  # Server Core 沒有檔案總管與 SmartScreen，不適用。
+  editions: [ not_core ]
   probe:
     powershell: |
       $p = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -ErrorAction SilentlyContinue).EnableSmartScreen
@@ -88,6 +104,7 @@
   title: { zh: "SMBv1 用戶端已停用", en: "SMBv1 client is disabled" }
   rationale: { zh: "SMBv1 是 WannaCry／NotPetya 利用的舊協定，沒有現代加密與完整性保護。", en: "SMBv1 is the legacy protocol abused by WannaCry/NotPetya and lacks modern protections." }
   remediation: { zh: "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol（系統管理員）。", en: "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol (admin)." }
+  remediation_server: { zh: "Uninstall-WindowsFeature FS-SMB1（系統管理員 PowerShell，或伺服器管理員 → 移除角色及功能 → SMB 1.0/CIFS 檔案共用支援），然後重新開機。", en: "Uninstall-WindowsFeature FS-SMB1 (admin PowerShell, or Server Manager → Remove Roles and Features → SMB 1.0/CIFS File Sharing Support), then reboot." }
   references: [ "https://learn.microsoft.com/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3" ]
   probe:
     powershell: |
@@ -112,6 +129,7 @@
   title: { zh: "遠端桌面要求網路層級驗證（NLA）", en: "Remote Desktop requires Network Level Authentication" }
   rationale: { zh: "沒有 NLA 時，未登入的人就能連到登入畫面，暴露在 BlueKeep 這類漏洞與暴力破解之下。", en: "Without NLA anyone reaches the logon screen unauthenticated, exposing BlueKeep-class bugs and brute force." }
   remediation: { zh: "系統 → 遠端桌面 → 勾選「要求電腦使用網路層級驗證來連線」。", en: "System → Remote Desktop → require devices to use Network Level Authentication." }
+  remediation_server: { zh: "伺服器管理員 → 本機伺服器 → 遠端桌面 → 勾選「只允許執行含網路層級驗證之遠端桌面的電腦連線」；Server Core 用 sconfig 的「遠端桌面」選項，或 Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' UserAuthentication 1。", en: "Server Manager → Local Server → Remote Desktop → allow connections only from computers running Remote Desktop with Network Level Authentication; on Server Core use the Remote Desktop option in sconfig, or Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' UserAuthentication 1." }
   references: [ "https://learn.microsoft.com/windows-server/remote/remote-desktop-services/clients/remote-desktop-allow-access" ]
   probe:
     powershell: |
@@ -126,13 +144,23 @@
   title: { zh: "系統磁碟已用 BitLocker／裝置加密保護", en: "System drive is protected by BitLocker / Device Encryption" }
   rationale: { zh: "筆電遺失或硬碟被拆走時，沒加密的資料可以直接讀出。", en: "If a laptop or disk is stolen, unencrypted data can simply be read." }
   remediation: { zh: "設定 → 隱私權與安全性 → 裝置加密，或控制台 → BitLocker 磁碟機加密。", en: "Settings → Privacy & security → Device encryption, or Control Panel → BitLocker Drive Encryption." }
-  references: [ "https://learn.microsoft.com/windows/security/operating-system-security/data-protection/bitlocker/" ]
+  remediation_server: { zh: "Install-WindowsFeature BitLocker -IncludeAllSubFeature -IncludeManagementTools -Restart，重新開機後 Enable-BitLocker -MountPoint C: -TpmProtector（或 manage-bde -on C:）。", en: "Install-WindowsFeature BitLocker -IncludeAllSubFeature -IncludeManagementTools -Restart, then after the reboot Enable-BitLocker -MountPoint C: -TpmProtector (or manage-bde -on C:)." }
+  references: [ "https://learn.microsoft.com/windows/security/operating-system-security/data-protection/bitlocker/", "https://learn.microsoft.com/windows-server/administration/windows-commands/manage-bde" ]
+  # 先用 Shell.Application（不需要系統管理員）；Server Core 沒有這個 COM 物件，改用 Get-BitLockerVolume（需要系統管理員）。
+  # Windows Server 預設沒裝 BitLocker 功能：沒有 Get-BitLockerVolume 也沒有 manage-bde 時回報 not_installed（不適用）。
   probe:
     powershell: |
-      $v = (New-Object -ComObject Shell.Application).NameSpace($env:SystemDrive + '\').Self.ExtendedProperty('System.Volume.BitLockerProtection')
-      if ($null -eq $v -or $v -eq 0) { 'unavailable' } elseif (@(1, 3, 5, 6) -contains $v) { 'on' } else { 'off' }
+      $v = $null
+      try { $v = (New-Object -ComObject Shell.Application).NameSpace($env:SystemDrive + '\').Self.ExtendedProperty('System.Volume.BitLockerProtection') } catch {}
+      if ($v -eq 0) { 'unavailable' }
+      elseif ($null -ne $v) { if (@(1, 3, 5, 6) -contains $v) { 'on' } else { 'off' } }
+      elseif (Get-Command Get-BitLockerVolume -ErrorAction SilentlyContinue) {
+        try { $b = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop; if ([string]$b.ProtectionStatus -eq 'On') { 'on' } else { 'off' } } catch { 'unavailable' }
+      }
+      elseif (Test-Path (Join-Path $env:SystemRoot 'System32\manage-bde.exe')) { 'unavailable' }
+      else { 'not_installed' }
   expect: { op: eq, value: "on" }
-  na_values: [ "unavailable" ]
+  na_values: [ "unavailable", "not_installed" ]
 
 - id: win.secureboot
   category: boot
@@ -150,6 +178,7 @@
   title: { zh: "LSA 保護（RunAsPPL）已開啟", en: "LSA protection (RunAsPPL) is on" }
   rationale: { zh: "防止 Mimikatz 之類的工具從 LSASS 記憶體偷出密碼雜湊。", en: "Stops tools like Mimikatz from reading credentials out of LSASS memory." }
   remediation: { zh: "Windows 安全性 → 裝置安全性 → 核心隔離 → 本機安全性授權保護。", en: "Windows Security → Device security → Core isolation → Local Security Authority protection." }
+  remediation_server: { zh: "New-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' RunAsPPL -Value 1 -PropertyType DWord -Force 後重新開機（或群組原則「將 LSASS 設定為以受保護的處理序執行」）；先確認備份、監控代理程式相容。", en: "New-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' RunAsPPL -Value 1 -PropertyType DWord -Force and reboot (or the Group Policy \"Configure LSASS to run as a protected process\"); check backup and monitoring agents for compatibility first." }
   references: [ "https://learn.microsoft.com/windows-server/security/credentials-protection-and-management/configuring-additional-lsa-protection" ]
   probe: { registry: { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa', name: RunAsPPL } }
   expect: { op: in, value: [1, 2] }
@@ -173,6 +202,8 @@
   rationale: { zh: "Guest 帳戶不需要密碼就能登入。", en: "The Guest account allows logon without a password." }
   remediation: { zh: "Disable-LocalUser -SID （結尾 -501 的帳戶）（系統管理員）。", en: "Disable-LocalUser on the account whose SID ends in -501 (admin)." }
   references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/accounts-guest-account-status" ]
+  # 網域控制站沒有本機帳戶（Get-LocalUser 不能用），Guest 由網域原則管理。
+  editions: [ not_dc ]
   probe:
     powershell: |
       $u = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }
@@ -185,12 +216,17 @@
   title: { zh: "內建 Administrator 帳戶已停用", en: "Built-in Administrator account is disabled" }
   rationale: { zh: "內建 Administrator 名稱固定、不受帳戶鎖定限制，是暴力破解的首選目標。", en: "The built-in Administrator has a well-known name and is exempt from lockout, a favorite brute-force target." }
   remediation: { zh: "改用一般帳戶＋系統管理員群組；停用 SID 結尾 -500 的帳戶。", en: "Use named admin accounts and disable the account whose SID ends in -500." }
-  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/accounts-administrator-account-status" ]
+  remediation_server: { zh: "伺服器常需要內建 Administrator 做復原：至少改名（Rename-LocalUser Administrator -NewName <新名稱>）並設長密碼，最好改用 LAPS 管理；平常用具名的管理員帳戶。", en: "Servers often keep the built-in Administrator for recovery: at least rename it (Rename-LocalUser Administrator -NewName <new name>) with a long password, ideally managed by LAPS, and use named admin accounts day to day." }
+  references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/accounts-administrator-account-status", "https://learn.microsoft.com/windows-server/identity/laps/laps-overview" ]
+  # Windows Server：內建 Administrator 常是唯一的復原帳戶，CIS 對成員伺服器要求「改名」而不是停用 → 已改名也算通過（renamed）。
+  # 網域控制站沒有本機帳戶，不適用。
+  editions: [ not_dc ]
   probe:
     powershell: |
       $u = Get-LocalUser | Where-Object { $_.SID.Value -like '*-500' }
-      if ($null -eq $u) { 'none' } elseif ($u.Enabled) { 'enabled' } else { 'disabled' }
-  expect: { op: in, value: [ "disabled", "none" ] }
+      $srv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\ProductOptions' -ErrorAction SilentlyContinue).ProductType -in @('ServerNT', 'LanmanNT')
+      if ($null -eq $u) { 'none' } elseif (-not $u.Enabled) { 'disabled' } elseif ($srv -and $u.Name -ne 'Administrator') { 'renamed' } else { 'enabled' }
+  expect: { op: in, value: [ "disabled", "none", "renamed" ] }
 
 - id: win.update.not_disabled
   category: update
@@ -234,6 +270,7 @@
   title: { zh: "PowerShell 2.0 引擎已移除", en: "PowerShell 2.0 engine is removed" }
   rationale: { zh: "PowerShell 2.0 沒有腳本記錄與 AMSI，攻擊者會降版本躲偵測。", en: "PowerShell 2.0 lacks script logging and AMSI; attackers downgrade to evade detection." }
   remediation: { zh: "Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root（系統管理員）。", en: "Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root (admin)." }
+  remediation_server: { zh: "Uninstall-WindowsFeature PowerShell-V2（系統管理員 PowerShell，或伺服器管理員 → 移除角色及功能 → Windows PowerShell 2.0 引擎）。", en: "Uninstall-WindowsFeature PowerShell-V2 (admin PowerShell, or Server Manager → Remove Roles and Features → Windows PowerShell 2.0 Engine)." }
   references: [ "https://learn.microsoft.com/powershell/scripting/windows-powershell/install/windows-powershell-system-requirements" ]
   probe: { registry: { path: 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\PowerShellEngine', name: PowerShellVersion } }
   expect: { op: ne, value: "2.0" }
@@ -246,6 +283,9 @@
   rationale: { zh: "遠端登錄讓網路上的人讀寫這台的登錄檔。", en: "Remote Registry lets others on the network read and write this machine's registry." }
   remediation: { zh: "Set-Service RemoteRegistry -StartupType Disabled（系統管理員）。", en: "Set-Service RemoteRegistry -StartupType Disabled (admin)." }
   references: [ "https://learn.microsoft.com/windows/security/threat-protection/security-policy-settings/" ]
+  # 只檢查用戶端：Windows Server 預設就是自動（觸發）啟動，伺服器管理員、遠端管理與不少監控工具都靠它；
+  # 伺服器上要限制的是誰能連（防火牆、winreg 權限），不是把服務關掉。
+  editions: [ client ]
   probe:
     powershell: |
       $s = Get-Service RemoteRegistry -ErrorAction SilentlyContinue

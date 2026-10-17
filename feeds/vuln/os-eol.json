@@ -1,10 +1,12 @@
 {
   "schema_version": 1,
-  "_comment": "作業系統支援期限（停止安全性更新的日期）。資料來源見 refs；自寫整理，MIT。macOS 沒有官方公告的期限，只列出已確定不再更新的版本。",
+  "_comment": "作業系統支援期限（停止安全性更新的日期）。資料來源見 refs；自寫整理，MIT。windows_server 先用組建編號（builds）比對，再用產品名稱（match，R2 要排在前面）；Annual Channel 的名稱沒有年份，只能靠組建編號。macOS 沒有官方公告的期限，只列出已確定不再更新的版本。",
   "refs": [
     "https://learn.microsoft.com/windows/release-health/windows11-release-information",
     "https://learn.microsoft.com/lifecycle/products/windows-10-home-and-pro",
     "https://learn.microsoft.com/lifecycle/products/?products=windows-server",
+    "https://learn.microsoft.com/windows/release-health/windows-server-release-info",
+    "https://learn.microsoft.com/lifecycle/products/windows-server-annual-channel",
     "https://ubuntu.com/about/release-cycle",
     "https://wiki.debian.org/DebianReleases",
     "https://access.redhat.com/support/policy/updates/errata",
@@ -20,11 +22,15 @@
     { "name": "Windows 11 25H2", "min_build": 26200, "max_build": 26200, "eol": "2027-10-12", "enterprise_eol": "2028-10-10" }
   ],
   "windows_server": [
-    { "name": "Windows Server 2012 R2", "match": "2012", "eol": "2023-10-10" },
-    { "name": "Windows Server 2016", "match": "2016", "eol": "2027-01-12" },
-    { "name": "Windows Server 2019", "match": "2019", "eol": "2029-01-09" },
-    { "name": "Windows Server 2022", "match": "2022", "eol": "2031-10-14" },
-    { "name": "Windows Server 2025", "match": "2025", "eol": "2034-10-10" }
+    { "name": "Windows Server 2008 R2", "match": "2008 R2", "builds": [7600, 7601], "eol": "2020-01-14", "note": "ESU 已於 2023-01-10 結束（Azure 上延長到 2024-01-09）" },
+    { "name": "Windows Server 2008", "match": "2008", "builds": [6001, 6002, 6003], "eol": "2020-01-14", "note": "ESU 已於 2023-01-10 結束（Azure 上延長到 2024-01-09）" },
+    { "name": "Windows Server 2012 R2", "match": "2012 R2", "builds": [9600], "eol": "2023-10-10", "note": "ESU（延伸安全性更新）需另外付費註冊" },
+    { "name": "Windows Server 2012", "match": "2012", "builds": [9200], "eol": "2023-10-10", "note": "ESU（延伸安全性更新）需另外付費註冊" },
+    { "name": "Windows Server 2016", "match": "2016", "builds": [14393], "eol": "2027-01-12" },
+    { "name": "Windows Server 2019", "match": "2019", "builds": [17763], "eol": "2029-01-09" },
+    { "name": "Windows Server 2022", "match": "2022", "builds": [20348], "eol": "2031-10-14" },
+    { "name": "Windows Server 2025", "match": "2025", "builds": [26100], "eol": "2034-11-14" },
+    { "name": "Windows Server, version 23H2 (Annual Channel)", "builds": [25398], "eol": "2025-10-24", "note": "Annual Channel 每版支援 24 個月；請換到下一版或 LTSC（2025）" }
   ],
   "linux": [
     { "id": "ubuntu", "version": "18.04", "eol": "2023-05-31", "note": "ESM 需 Ubuntu Pro" },

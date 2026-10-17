@@ -19,6 +19,15 @@ pub struct OsInfo {
     pub build: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+    /// Windows：`workstation` | `server` | `domain_controller`（ProductType）。舊版 agent 不送。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product_type: Option<String>,
+    /// Windows：`Client` | `Server` | `Server Core`（InstallationType）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installation_type: Option<String>,
+    /// Windows EditionID（例：`Professional`、`ServerDatacenter`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edition: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

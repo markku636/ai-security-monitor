@@ -26,7 +26,8 @@ Everything is read-only and needs no administrator rights.
 ## Rules
 
 - **OS support lifetime** (`feeds/vuln/os-eol.json`): Windows 10/11 by build, with separate dates for Home/Pro and Enterprise/Education;
-  Windows Server 2012 R2–2025; Ubuntu, Debian, RHEL, Rocky, AlmaLinux, CentOS, Alpine; macOS 13 and earlier (Apple does not publish end dates, so newer versions show as "unknown").
+  Windows Server 2008 / 2008 R2 through 2025 matched by build (2008 / 2008 R2 ended on 2020-01-14, 2025 runs until 2034-11-14),
+  including Annual Channel releases whose name has no year (e.g. 23H2, build 25398); servers are recognised by `Win32_OperatingSystem.ProductType`, Server Core included; Ubuntu, Debian, RHEL, Rocky, AlmaLinux, CentOS, Alpine; macOS 13 and earlier (Apple does not publish end dates, so newer versions show as "unknown").
   Expired → `vuln.os_eol` (high); ending within 90 days → `vuln.os_eol_soon` (medium).
 - **Stale Windows updates**: last update older than 45 days → `vuln.updates_stale` (medium), older than 90 days is high.
 - **Pending Linux security updates** → `vuln.pending_security_updates` (medium).

@@ -10,7 +10,10 @@
       "name": "Windows",
       "version": "11 (26200)",
       "build": "Windows 11 Pro",
-      "kernel": "26200"
+      "kernel": "26200",
+      "product_type": "workstation",
+      "installation_type": "Client",
+      "edition": "Professional"
     },
     "arch": "x86_64",
     "ips": [

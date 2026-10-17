@@ -19,7 +19,7 @@ asa events analyze x.evtx  # 分析匯出的檔案（.evtx、journalctl -o json�
 
 | 平台 | 來源 | 需要系統管理員 |
 |---|---|---|
-| Windows | System、Application（錯誤與指定 ID）、Security（4625、4624、4720、4722、4728、4732、4756、4698、1102）、Defender Operational；`%SystemRoot%\Minidump\*.dmp` 檔頭 | Security 記錄與 Minidump 需要；沒有權限時其他部分照跑，報告列出 `needs_admin` |
+| Windows | System、Application（錯誤與指定 ID）、Security（4625、4624、4720、4722、4728、4732、4756、4698、1102；伺服器另讀 4740、4771、4776，獨立上限 1000 筆）、Defender Operational、TerminalServices-RemoteConnectionManager/Operational（1149）；`%SystemRoot%\Minidump\*.dmp` 檔頭 | Security 記錄與 Minidump 需要；沒有權限時其他部分照跑，報告列出 `needs_admin` |
 | Linux | `journalctl -o json`：priority 0–4、sshd／sudo／useradd／usermod／gpasswd | 要在 `systemd-journal`（或 `adm`）群組，或用 sudo |
 | macOS | `/Library/Logs/DiagnosticReports`、`~/Library/Logs/DiagnosticReports`（.panic、.ips） | 否 |
 
@@ -38,8 +38,10 @@ asa events analyze x.evtx  # 分析匯出的檔案（.evtx、journalctl -o json�
 
 | 規則 | 說明 |
 |---|---|
-| 暴力破解 | 同一來源 10 分鐘內 ≥ 10 次或總共 ≥ 30 次失敗登入（Windows 4625、sshd）；公網來源附情資命中與「封鎖 IP」建議動作 |
-| 公網遠端登入 | 4624 LogonType 10／3、sshd Accepted 來自公網 IP |
+| 暴力破解 | 同一來源 10 分鐘內 ≥ 10 次或總共 ≥ 30 次失敗登入（Windows 4625、網域控制站的 Kerberos 預先驗證失敗 4771、sshd）；公網來源附情資命中與「封鎖 IP」建議動作 |
+| NTLM 驗證失敗爆量 | 4776 失敗（Status ≠ 0x0）依來源工作站計算，門檻同上；沒有 IP，所以不建議封鎖 |
+| 帳號被鎖定 | 4740（附鎖定來源的電腦名稱） |
+| 公網遠端登入 | 4624 LogonType 10／3、遠端桌面 1149（不需要系統管理員也讀得到）、sshd Accepted 來自公網 IP |
 | 帳號與群組 | 新帳號（4720、useradd）、啟用帳號（4722）、加入管理員群組（4728／4732／4756、sudo／wheel） |
 | 常駐手法 | 新服務（7045，依執行檔位置判斷嚴重度：暫存或使用者資料夾、script host → 高；系統或 Program Files → 低）、排程工作（4698） |
 | 湮滅證據 | 稽核紀錄被清除（1102）、事件記錄被清除（104） |

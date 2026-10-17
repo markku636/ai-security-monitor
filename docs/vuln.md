@@ -26,7 +26,8 @@ asa scan --scanners vuln         # 進完整報告（summaries.vuln），asa wat
 ## 判斷規則
 
 - **作業系統支援期限**（`feeds/vuln/os-eol.json`）：Windows 10／11 依 build 判版本，家用／專業版與企業／教育版的期限不同；
-  Windows Server 2012 R2–2025；Ubuntu、Debian、RHEL、Rocky、AlmaLinux、CentOS、Alpine；macOS 13 以前（Apple 不公布支援期限，較新的版本顯示「未知」）。
+  Windows Server 2008／2008 R2–2025 依組建編號判斷（2008／2008 R2 已於 2020-01-14 停止支援，2025 到 2034-11-14），
+  名稱沒有年份的 Annual Channel（例：23H2，組建 25398）也靠組建編號；Server 判斷看 `Win32_OperatingSystem.ProductType`，Server Core 一樣適用；Ubuntu、Debian、RHEL、Rocky、AlmaLinux、CentOS、Alpine；macOS 13 以前（Apple 不公布支援期限，較新的版本顯示「未知」）。
   已過期 → `vuln.os_eol`（高）；90 天內到期 → `vuln.os_eol_soon`（中）。
 - **Windows 更新過舊**：最近一次安裝更新超過 45 天 → `vuln.updates_stale`（中），超過 90 天為高。
 - **Linux 待安裝的安全性更新** → `vuln.pending_security_updates`（中）。

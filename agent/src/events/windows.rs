@@ -42,6 +42,21 @@ fn queries(days: u32) -> Vec<(&'static str, String, u32)> {
             format!("LogName='Security'; Id=4625,4624,4720,4722,4728,4732,4756,4698,1102; {since}"),
             3000,
         ),
+        // 伺服器／網域控制站：帳號鎖定、Kerberos 預先驗證失敗、NTLM 驗證。DC 上 4776 量很大（成功也記），
+        // 獨立一組並設上限，才不會把上面的 4625 擠掉。
+        (
+            "Security",
+            format!("LogName='Security'; Id=4740,4771,4776; {since}"),
+            1000,
+        ),
+        // 遠端桌面連線（1149：通過網路層級驗證）；非系統管理員也讀得到
+        (
+            "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational",
+            format!(
+                "LogName='Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational'; Id=1149; {since}"
+            ),
+            300,
+        ),
         (
             "Microsoft-Windows-Windows Defender/Operational",
             format!("LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1116,1117,5001; {since}"),
@@ -195,7 +210,7 @@ mod tests {
         let s = script(&[("evtx", format!("Path={}", ps_quote("C:\\it's\\x.evtx")), 10)]);
         assert!(s.contains("Q 'evtx' @{ Path='C:\\it''s\\x.evtx' } 10"));
         assert!(s.contains("ConvertTo-Json"));
-        assert_eq!(queries(7).len(), 6);
+        assert_eq!(queries(7).len(), 8);
     }
 
     #[test]

@@ -368,9 +368,55 @@ fn service_severity(image: &str) -> Severity {
     }
 }
 
+fn push_failed(failed: &mut BTreeMap<String, Group>, key: String, user: &str, e: &NormEvent) {
+    let g = failed.entry(key).or_insert(Group {
+        times: Vec::new(),
+        users: BTreeMap::new(),
+        samples: Vec::new(),
+    });
+    g.times.push(e.time);
+    *g.users.entry(user.to_string()).or_default() += 1;
+    if g.samples.len() < 3 {
+        g.samples.push(e.clone());
+    }
+}
+
+/// Kerberos 事件的來源寫成 `::ffff:198.51.100.7`。
+fn strip_v4_mapped(ip: &str) -> &str {
+    ip.strip_prefix("::ffff:").unwrap_or(ip)
+}
+
+/// 同一個鍵在 10 分鐘內 ≥ 10 次或總數 ≥ 30 次才算爆量；回傳 (總數, 時間窗內最多次數)。
+fn burst(g: &mut Group) -> Option<(usize, usize)> {
+    g.times.sort();
+    let total = g.times.len();
+    let window = Duration::minutes(BURST_WINDOW_MIN);
+    let mut max_in_window = 0usize;
+    let mut j = 0usize;
+    for i in 0..total {
+        while g.times[i] - g.times[j] > window {
+            j += 1;
+        }
+        max_in_window = max_in_window.max(i - j + 1);
+    }
+    (max_in_window >= BURST_IN_WINDOW || total >= BURST_TOTAL).then_some((total, max_in_window))
+}
+
+fn top_users(users: &BTreeMap<String, u32>) -> String {
+    let mut u: Vec<(&String, &u32)> = users.iter().collect();
+    u.sort_by_key(|x| std::cmp::Reverse(*x.1));
+    u.into_iter()
+        .take(5)
+        .map(|(n, c)| format!("{n}×{c}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 pub fn security_hits(events: &[NormEvent], intel: Option<&IntelDb>) -> Vec<SecurityHit> {
     let mut out: Vec<SecurityHit> = Vec::new();
     let mut failed: BTreeMap<String, Group> = BTreeMap::new();
+    // NTLM 驗證失敗（4776）沒有來源 IP，以來源工作站名稱分組
+    let mut ntlm: BTreeMap<String, Group> = BTreeMap::new();
     for e in events {
         let win = e.source == "windows";
         let ch = e.channel.as_str();
@@ -380,17 +426,49 @@ pub fn security_hits(events: &[NormEvent], intel: Option<&IntelDb>) -> Vec<Secur
                 if is_local_ip(&ip) {
                     continue;
                 }
-                let g = failed.entry(ip).or_insert(Group {
-                    times: Vec::new(),
-                    users: BTreeMap::new(),
-                    samples: Vec::new(),
-                });
-                g.times.push(e.time);
-                *g.users
-                    .entry(e.get("TargetUserName").unwrap_or("?").to_string())
-                    .or_default() += 1;
-                if g.samples.len() < 3 {
-                    g.samples.push(e.clone());
+                push_failed(&mut failed, ip, e.get("TargetUserName").unwrap_or("?"), e);
+            }
+            // 網域控制站：Kerberos 預先驗證失敗（0x18 密碼錯誤等），和 4625 一起算暴力破解
+            (true, "Security", 4771) => {
+                let ip = strip_v4_mapped(e.get("IpAddress").unwrap_or("")).to_string();
+                if is_local_ip(&ip) {
+                    continue;
+                }
+                push_failed(&mut failed, ip, e.get("TargetUserName").unwrap_or("?"), e);
+            }
+            (true, "Security", 4776) => {
+                let status = e.get("Status").unwrap_or("0x0").to_ascii_lowercase();
+                if status == "0x0" || status == "0" {
+                    continue;
+                }
+                let ws = e.get("Workstation").unwrap_or("").trim().to_string();
+                let ws = if ws.is_empty() { "?".to_string() } else { ws };
+                push_failed(&mut ntlm, ws, e.get("TargetUserName").unwrap_or("?"), e);
+            }
+            (true, "Security", 4740) => {
+                // TargetDomainName 在 4740 是「呼叫端電腦名稱」（鎖定來源）
+                let caller = e.get("TargetDomainName").unwrap_or("").to_string();
+                let mut h = hit("account_locked", Severity::Medium, e, caller);
+                h.user = e.get("TargetUserName").map(str::to_string);
+                merge(&mut out, h);
+            }
+            (true, _, 1149) if e.provider.contains("RemoteConnectionManager") => {
+                // 遠端桌面通過網路層級驗證：Param1 使用者、Param2 網域、Param3 來源 IP；只看公網來源
+                let ip = e.get("Param3").unwrap_or("").trim().to_string();
+                let public = ip.parse::<IpAddr>().map(|a| classify(a).is_public()).unwrap_or(false);
+                if public {
+                    let mut h = hit("remote_logon", Severity::Medium, e, "RDP (1149)".into());
+                    let user = e.get("Param1").unwrap_or("");
+                    h.user = Some(match e.get("Param2").filter(|d| !d.is_empty()) {
+                        Some(d) => format!("{d}\\{user}"),
+                        None => user.to_string(),
+                    });
+                    h.intel = intel_for(&ip, intel);
+                    if !h.intel.is_empty() {
+                        h.severity = Severity::Critical;
+                    }
+                    h.source_ip = Some(ip);
+                    merge(&mut out, h);
                 }
             }
             (true, "Security", 4624) => {
@@ -515,16 +593,7 @@ pub fn security_hits(events: &[NormEvent], intel: Option<&IntelDb>) -> Vec<Secur
                         merge(&mut out, h);
                     }
                 } else {
-                    let g = failed.entry(ip).or_insert(Group {
-                        times: Vec::new(),
-                        users: BTreeMap::new(),
-                        samples: Vec::new(),
-                    });
-                    g.times.push(e.time);
-                    *g.users.entry(user).or_default() += 1;
-                    if g.samples.len() < 3 {
-                        g.samples.push(e.clone());
-                    }
+                    push_failed(&mut failed, ip, &user, e);
                 }
             }
             (false, _, _) if matches!(e.provider.as_str(), "useradd" | "usermod" | "gpasswd") => {
@@ -554,27 +623,11 @@ pub fn security_hits(events: &[NormEvent], intel: Option<&IntelDb>) -> Vec<Secur
 
     // 失敗登入：同來源 10 分鐘內 ≥ 10 次或總數 ≥ 30 次才算爆量
     for (ip, mut g) in failed {
-        g.times.sort();
-        let total = g.times.len();
-        let window = Duration::minutes(BURST_WINDOW_MIN);
-        let mut max_in_window = 0usize;
-        let mut j = 0usize;
-        for i in 0..total {
-            while g.times[i] - g.times[j] > window {
-                j += 1;
-            }
-            max_in_window = max_in_window.max(i - j + 1);
-        }
-        if max_in_window < BURST_IN_WINDOW && total < BURST_TOTAL {
+        let Some((total, max_in_window)) = burst(&mut g) else {
             continue;
-        }
+        };
         let public = ip.parse::<IpAddr>().map(|a| classify(a).is_public()).unwrap_or(false);
         let intel_refs = intel_for(&ip, intel);
-        let top_users: Vec<String> = {
-            let mut u: Vec<(String, u32)> = g.users.into_iter().collect();
-            u.sort_by_key(|x| std::cmp::Reverse(x.1));
-            u.into_iter().take(5).map(|(n, c)| format!("{n}×{c}")).collect()
-        };
         out.push(SecurityHit {
             rule: "failed_logon_burst".into(),
             severity: if !intel_refs.is_empty() || public {
@@ -589,9 +642,30 @@ pub fn security_hits(events: &[NormEvent], intel: Option<&IntelDb>) -> Vec<Secur
             user: None,
             detail: format!(
                 "max {max_in_window} in {BURST_WINDOW_MIN} min · users {}",
-                top_users.join(", ")
+                top_users(&g.users)
             ),
             intel: intel_refs,
+            samples: g.samples,
+        });
+    }
+    // NTLM 驗證失敗爆量（網域控制站／檔案伺服器）：沒有 IP 可封鎖，只標出來源工作站
+    for (ws, mut g) in ntlm {
+        let Some((total, max_in_window)) = burst(&mut g) else {
+            continue;
+        };
+        out.push(SecurityHit {
+            rule: "ntlm_failure_burst".into(),
+            severity: Severity::Medium,
+            count: total as u32,
+            first: g.times[0],
+            last: g.times[total - 1],
+            source_ip: None,
+            user: None,
+            detail: format!(
+                "workstation {ws} · max {max_in_window} in {BURST_WINDOW_MIN} min · users {}",
+                top_users(&g.users)
+            ),
+            intel: Vec::new(),
             samples: g.samples,
         });
     }
@@ -928,5 +1002,94 @@ mod tests {
             hits.iter().find(|h| h.rule == "remote_logon").unwrap().user.as_deref(),
             Some("deploy")
         );
+    }
+
+    #[test]
+    fn windows_server_auth_events() {
+        let mut ev = Vec::new();
+        // DC：Kerberos 預先驗證失敗（IPv4-mapped 位址）爆量 → 與 4625 同一個來源合併（文件用位址不算公網 → 中）
+        for i in 0..8 {
+            ev.push(win(
+                "Microsoft-Windows-Security-Auditing",
+                4771,
+                "Security",
+                &format!("2026-10-10T03:00:{:02}Z", i * 5),
+                &[
+                    ("TargetUserName", "svc-backup"),
+                    ("IpAddress", "::ffff:203.0.113.45"),
+                    ("Status", "0x18"),
+                ],
+            ));
+        }
+        for i in 0..3 {
+            ev.push(win(
+                "Microsoft-Windows-Security-Auditing",
+                4625,
+                "Security",
+                &format!("2026-10-10T03:01:{:02}Z", i * 5),
+                &[("IpAddress", "203.0.113.45"), ("TargetUserName", "administrator")],
+            ));
+        }
+        // NTLM：失敗 12 次＋成功 50 次（成功不算）
+        for i in 0..12 {
+            ev.push(win(
+                "Microsoft-Windows-Security-Auditing",
+                4776,
+                "Security",
+                &format!("2026-10-10T04:00:{:02}Z", i * 4),
+                &[
+                    ("TargetUserName", "j.doe"),
+                    ("Workstation", "KIOSK-07"),
+                    ("Status", "0xC000006A"),
+                ],
+            ));
+        }
+        for i in 0..50 {
+            ev.push(win(
+                "Microsoft-Windows-Security-Auditing",
+                4776,
+                "Security",
+                &format!("2026-10-10T05:00:{:02}Z", i % 60),
+                &[("TargetUserName", "j.doe"), ("Workstation", "PC-01"), ("Status", "0x0")],
+            ));
+        }
+        ev.push(win(
+            "Microsoft-Windows-Security-Auditing",
+            4740,
+            "Security",
+            "2026-10-10T04:01:00Z",
+            &[("TargetUserName", "j.doe"), ("TargetDomainName", "KIOSK-07")],
+        ));
+        // 遠端桌面 1149（UserData）：公網來源才記
+        let rdp = |ip: &str| {
+            parse_event(
+                &format!(
+                    "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-TerminalServices-RemoteConnectionManager'/><EventID>1149</EventID><Level>4</Level><TimeCreated SystemTime='2026-10-10T06:00:00.000Z'/><Channel>Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational</Channel><Computer>dc-01</Computer></System><UserData><EventXML xmlns='Event_NS'><Param1>administrator</Param1><Param2>EXAMPLE</Param2><Param3>{ip}</Param3></EventXML></UserData></Event>"
+                ),
+                "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational",
+            )
+            .unwrap()
+        };
+        ev.push(rdp("185.199.108.9"));
+        ev.push(rdp("10.0.0.8"));
+        let hits = security_hits(&ev, None);
+        let burst = hits.iter().find(|h| h.rule == "failed_logon_burst").unwrap();
+        assert_eq!(
+            (burst.source_ip.as_deref(), burst.count, burst.severity),
+            (Some("203.0.113.45"), 11, Severity::Medium)
+        );
+        assert!(burst.detail.contains("svc-backup×8"), "{}", burst.detail);
+        let ntlm = hits.iter().find(|h| h.rule == "ntlm_failure_burst").unwrap();
+        assert_eq!((ntlm.count, ntlm.source_ip.as_deref()), (12, None));
+        assert!(ntlm.detail.contains("KIOSK-07"));
+        let lock = hits.iter().find(|h| h.rule == "account_locked").unwrap();
+        assert_eq!(
+            (lock.user.as_deref(), lock.detail.as_str()),
+            (Some("j.doe"), "KIOSK-07")
+        );
+        let rdp_hits: Vec<_> = hits.iter().filter(|h| h.rule == "remote_logon").collect();
+        assert_eq!(rdp_hits.len(), 1);
+        assert_eq!(rdp_hits[0].source_ip.as_deref(), Some("185.199.108.9"));
+        assert_eq!(rdp_hits[0].user.as_deref(), Some("EXAMPLE\\administrator"));
     }
 }

@@ -26,6 +26,8 @@ pub struct ProbeEnv {
     /// 檔案類檢查的根目錄（正式為 `/`，測試指向暫存目錄）。
     pub root: PathBuf,
     pub path_var: Option<String>,
+    /// Windows 版本標籤（client／server／core／desktop／dc），給策略的 `editions` 篩選；空＝不篩選。
+    pub editions: Vec<String>,
 }
 
 impl ProbeEnv {
@@ -34,7 +36,16 @@ impl ProbeEnv {
             family: family.to_string(),
             root: PathBuf::from("/"),
             path_var: std::env::var("PATH").ok(),
+            editions: if family == "windows" {
+                crate::util::winver::WinEdition::current().tags()
+            } else {
+                Vec::new()
+            },
         }
+    }
+
+    pub fn is_server(&self) -> bool {
+        self.editions.iter().any(|t| t == "server")
     }
 
     fn path(&self, p: &str) -> PathBuf {
@@ -54,6 +65,13 @@ pub async fn observe(checks: &[Check], runner: &dyn CmdRunner, env: &ProbeEnv) -
     let mut out = HashMap::new();
     let mut todo = Vec::new();
     for c in checks {
+        if !c.applies_to_edition(&env.editions) {
+            out.insert(
+                c.id.clone(),
+                Observed::NotApplicable(tf!("這個 Windows 版本不適用（{e}）", e = env.editions.join("/"))),
+            );
+            continue;
+        }
         match &c.only_if_exists {
             Some(p) if !env.path(p).exists() => {
                 out.insert(c.id.clone(), Observed::NotApplicable(format!("{p} not found")));
@@ -417,6 +435,7 @@ mod tests {
             family: family.into(),
             root: root.to_path_buf(),
             path_var: None,
+            editions: Vec::new(),
         }
     }
 

@@ -90,7 +90,7 @@ impl CrashRecord {
 /// 資安事件規則的彙總結果（同一規則＋同一來源合併成一筆）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SecurityHit {
-    /// failed_logon_burst | remote_logon | user_created | user_enabled | group_member_added | admin_member_added |
+    /// failed_logon_burst | ntlm_failure_burst | account_locked | remote_logon | user_created | user_enabled | group_member_added | admin_member_added |
     /// service_installed | task_created | audit_log_cleared | log_cleared | defender_detection | defender_disabled
     pub rule: String,
     pub severity: Severity,

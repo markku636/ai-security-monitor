@@ -15,7 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # windows-latest＝Windows Server 2025；windows-2022 確認 Server 2022 的硬化／版本判斷
+        os: [ubuntu-latest, windows-latest, windows-2022, macos-latest]
     defaults:
       run:
         working-directory: agent
@@ -48,6 +49,22 @@ jobs:
           grep -q list_connections mcp.jsonl
           grep -q WHEA_UNCORRECTABLE_ERROR mcp.jsonl
           cargo run -q -- --json ai status > ai.json
+
+      - name: Windows Server hardening and edition smoke
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run -q -- --json harden > harden.json
+          jq '{editions, pass, fail, na, error}' harden.json
+          # GitHub 的 Windows runner 是 Windows Server：要判斷成 server，且沒有任何一條檢查出錯
+          jq -e '.editions | index("server")' harden.json > /dev/null
+          if ! jq -e '.error == 0' harden.json > /dev/null; then jq '.results[] | select(.result == "error")' harden.json; exit 1; fi
+          jq -e '[.results[] | select(.id | startswith("win.defender")) | select(.result == "error" or .result == null)] | length == 0' harden.json > /dev/null
+          jq -e '.results[] | select(.id == "win.remote_registry") | .result == "not_applicable"' harden.json > /dev/null
+          cargo run -q -- --json vuln --no-online > vuln.json
+          jq '{os, support}' vuln.json
+          jq -e '.os.server == true and .support.status != "unknown"' vuln.json > /dev/null
 
       - name: Firewall E2E (live, ephemeral runner)
         shell: bash

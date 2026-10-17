@@ -101,13 +101,9 @@ fn capture_check() -> Check {
                 true,
                 t!("Npcap 已安裝：可用 Wireshark 擷取後 ai-security-monitor traffic analyze <檔案>").to_string(),
             )
-        } else if find_in_path("pktmon").is_some() {
-            (
-                true,
-                t!("可用內建 pktmon：pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl（需系統管理員）").to_string(),
-            )
         } else {
-            (false, t!("沒有擷取工具；即時模式（ai-security-monitor traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com").to_string())
+            let build = crate::util::winver::WinEdition::current().build.unwrap_or(0);
+            windows_capture_hint(build, find_in_path("pktmon").is_some())
         }
     } else if find_in_path("tcpdump").is_some() {
         (
@@ -124,6 +120,32 @@ fn capture_check() -> Check {
         name: t!("封包擷取").into(),
         ok,
         detail,
+    }
+}
+
+/// 沒有 Npcap 時的 Windows 擷取建議（依組建編號）：
+/// - 19041 起（Windows 10 2004／Server 2022）：pktmon 能直接轉 pcapng；
+/// - 17763–19040（Windows 10 1809／Server 2019）：有 pktmon 但沒有 etl2pcap，ETL 要拿到新版 Windows 轉；
+/// - 更舊（Server 2016）：沒有 pktmon，用 netsh trace＋etl2pcapng，或裝 Npcap／Wireshark。
+pub fn windows_capture_hint(build: u32, has_pktmon: bool) -> (bool, String) {
+    if has_pktmon && build >= 19041 {
+        (
+            true,
+            t!("可用內建 pktmon：pktmon start --capture → pktmon stop → pktmon etl2pcap PktMon.etl（需系統管理員）")
+                .to_string(),
+        )
+    } else if has_pktmon && build >= 17763 {
+        (
+            true,
+            t!("這版 pktmon 不能轉 pcapng：pktmon start --capture → pktmon stop，再把 PktMon.etl 拿到 Windows 10 2004／Server 2022 以上用 pktmon etl2pcap 轉檔；或安裝 Npcap／Wireshark：https://npcap.com").to_string(),
+        )
+    } else if build > 0 && build < 17763 {
+        (
+            false,
+            t!("這版 Windows 沒有 pktmon：netsh trace start capture=yes tracefile=cap.etl → netsh trace stop，再用 etl2pcapng（https://github.com/microsoft/etl2pcapng）轉檔；或安裝 Npcap／Wireshark：https://npcap.com").to_string(),
+        )
+    } else {
+        (false, t!("沒有擷取工具；即時模式（ai-security-monitor traffic）仍可用。要逐封包分析請安裝 Npcap／Wireshark：https://npcap.com").to_string())
     }
 }
 
@@ -277,4 +299,21 @@ pub async fn run(env: &Env) -> AppResult<()> {
         .collect();
     println!("{}", table(&["", t!("外部工具"), t!("路徑"), t!("用途")], rows));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_hint_by_windows_build() {
+        let (ok, d) = windows_capture_hint(20348, true);
+        assert!(ok && d.contains("etl2pcap"));
+        let (ok, d) = windows_capture_hint(17763, true);
+        assert!(ok && d.contains("2004"));
+        let (ok, d) = windows_capture_hint(14393, false);
+        assert!(!ok && d.contains("netsh trace"));
+        let (ok, d) = windows_capture_hint(0, false);
+        assert!(!ok && d.contains("npcap.com"));
+    }
 }

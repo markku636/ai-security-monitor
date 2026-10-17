@@ -41,6 +41,8 @@ pub fn kind_label(k: &str) -> String {
 fn rule_label(r: &str) -> String {
     match r {
         "failed_logon_burst" => t!("暴力破解").into(),
+        "ntlm_failure_burst" => t!("NTLM 驗證失敗爆量").into(),
+        "account_locked" => t!("帳號被鎖定").into(),
         "remote_logon" => t!("公網遠端登入").into(),
         "admin_member_added" => t!("加入管理員群組").into(),
         "group_member_added" => t!("加入群組").into(),

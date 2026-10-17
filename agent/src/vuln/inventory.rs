@@ -85,6 +85,8 @@ $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
   ubr = [string]$cv.UBR
   edition = [string]$cv.EditionID
   display = [string]$cv.DisplayVersion
+  product_type = [string]$os.ProductType
+  install = [string]$cv.InstallationType
 } | ConvertTo-Json -Depth 3 -Compress
 "#;
 
@@ -116,9 +118,20 @@ pub fn parse_windows(stdout: &str) -> Inventory {
         inv.last_patch = Some((d.to_string(), id.to_string()));
     }
     let caption = v["caption"].as_str().unwrap_or("").to_string();
+    // ProductType：1 工作站、2 網域控制站、3 伺服器；舊輸出沒有這欄就看名稱
+    let server = match v["product_type"].as_str().unwrap_or("") {
+        "2" | "3" => true,
+        "1" => false,
+        _ => {
+            caption.to_ascii_lowercase().contains("server")
+                || v["install"]
+                    .as_str()
+                    .is_some_and(|i| i.to_ascii_lowercase().contains("server"))
+        }
+    };
     inv.os = OsInfo {
         family: "windows".into(),
-        server: caption.to_ascii_lowercase().contains("server"),
+        server,
         name: if caption.is_empty() { "Windows".into() } else { caption },
         version: v["display"].as_str().unwrap_or("").to_string(),
         build: v["build"].as_str().and_then(|b| b.parse().ok()),
@@ -381,6 +394,15 @@ mod tests {
         );
         assert_eq!(one.packages.len(), 1);
         assert!(one.os.server);
+        // Annual Channel 的名稱沒有年份、Server Core：靠 ProductType 判斷
+        let ac = parse_windows(
+            r#"{"apps":[],"caption":"Microsoft Windows Server Datacenter","build":"25398","product_type":"3","install":"Server Core"}"#,
+        );
+        assert!(ac.os.server);
+        assert_eq!(ac.os.build, Some(25398));
+        let client =
+            parse_windows(r#"{"apps":[],"caption":"Microsoft Windows 11 Pro","build":"26200","product_type":"1"}"#);
+        assert!(!client.os.server);
         assert!(parse_windows("garbage").packages.is_empty());
     }
 

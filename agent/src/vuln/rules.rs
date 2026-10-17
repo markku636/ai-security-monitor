@@ -147,9 +147,15 @@ struct WinEol {
 #[derive(Deserialize)]
 struct ServerEol {
     name: String,
-    #[serde(rename = "match")]
+    /// 產品名稱比對（Caption 含這段）；Annual Channel 的名稱沒有年份，留空。
+    #[serde(rename = "match", default)]
     m: String,
+    /// 組建編號比對（優先）。
+    #[serde(default)]
+    builds: Vec<u32>,
     eol: String,
+    #[serde(default)]
+    note: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -219,10 +225,23 @@ pub fn os_support(os: &OsInfo, today: NaiveDate) -> OsSupport {
         }
     };
     match os.family.as_str() {
-        "windows" if os.server => match f.windows_server.iter().find(|s| os.name.contains(&s.m)) {
-            Some(s) => make(s.name.clone(), s.eol.clone(), None),
-            None => unknown(os.name.clone()),
-        },
+        "windows" if os.server => {
+            let by_build = os
+                .build
+                .and_then(|b| f.windows_server.iter().find(|s| s.builds.contains(&b)));
+            let by_name = || {
+                f.windows_server
+                    .iter()
+                    .find(|s| !s.m.is_empty() && os.name.contains(&s.m))
+            };
+            match by_build.or_else(by_name) {
+                Some(s) => make(s.name.clone(), s.eol.clone(), s.note.clone()),
+                None => unknown(match os.build {
+                    Some(b) => format!("{} (build {b})", os.name),
+                    None => os.name.clone(),
+                }),
+            }
+        }
         "windows" => {
             let Some(build) = os.build else {
                 return unknown(os.name.clone());
@@ -349,6 +368,59 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(os_support(&server, d).product, "Windows Server 2016");
+        let srv = |name: &str, build: Option<u32>| OsInfo {
+            family: "windows".into(),
+            name: name.into(),
+            build,
+            server: true,
+            ..Default::default()
+        };
+        let r2 = os_support(&srv("Microsoft Windows Server 2008 R2 Enterprise", Some(7601)), d);
+        assert_eq!(
+            (r2.product.as_str(), r2.status.as_str()),
+            ("Windows Server 2008 R2", "eol")
+        );
+        assert_eq!(r2.eol.as_deref(), Some("2020-01-14"));
+        // 沒有組建編號時靠名稱，R2 不會被當成 2008／2012
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server 2008 R2 Standard", None), d).product,
+            "Windows Server 2008 R2"
+        );
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server 2008 Standard", None), d).product,
+            "Windows Server 2008"
+        );
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server 2012 R2 Datacenter", None), d).product,
+            "Windows Server 2012 R2"
+        );
+        let s25 = os_support(&srv("Microsoft Windows Server 2025 Datacenter", Some(26100)), d);
+        assert_eq!(
+            (s25.eol.as_deref(), s25.status.as_str()),
+            (Some("2034-11-14"), "supported")
+        );
+        let s22 = os_support(&srv("Microsoft Windows Server 2022 Standard", Some(20348)), d);
+        assert_eq!(s22.eol.as_deref(), Some("2031-10-14"));
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server 2019 Datacenter", Some(17763)), d)
+                .eol
+                .as_deref(),
+            Some("2029-01-09")
+        );
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server 2016 Standard", Some(14393)), d).status,
+            "ending_soon"
+        );
+        // Annual Channel：名稱沒有年份，靠組建編號
+        let ac = os_support(&srv("Microsoft Windows Server Datacenter", Some(25398)), d);
+        assert_eq!(
+            (ac.product.as_str(), ac.status.as_str()),
+            ("Windows Server, version 23H2 (Annual Channel)", "eol")
+        );
+        assert_eq!(
+            os_support(&srv("Microsoft Windows Server Datacenter", Some(99999)), d).status,
+            "unknown"
+        );
         let linux = |id: &str, ver: &str| OsInfo {
             family: "linux".into(),
             name: format!("{id} {ver}"),

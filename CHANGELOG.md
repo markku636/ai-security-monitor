@@ -15,6 +15,15 @@
 - Hub 映像：`ghcr.io/markku636/ai-security-monitor-hub`（`docker/compose*.yml` 已改用新名）；過渡期同時推舊名 `ghcr.io/markku636/ai-security-agent-hub`。compose 專案名與 volume 不變，資料庫沿用。
 - 不變（相容與安全考量）：通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、防火牆物件名（Windows 群組 `ASA`、`ASA: …` 規則、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`）、`fw unblock --all-asa`。
 
+**支援 Windows Server**（2016／2019／2022／2025，含 Server Core 與網域控制站）：
+- 版本判斷：從登錄讀 ProductType（工作站／伺服器／網域控制站）、InstallationType（Client／Server／Server Core）與 EditionID，隨主機資訊送到 Hub（`os.product_type`、`os.installation_type`、`os.edition`，選填欄位，舊 Hub 照收）。伺服器的版本字串改用產品名稱，Hub 顯示「Windows Server 2022 Datacenter (Server Core, 20348)」，不再誤顯示成「Windows 10／11」。
+- 系統硬化：策略新增 `editions` 篩選（`client`／`server`／`core`／`desktop`／`dc`，`not_<標籤>` 排除）與 `remediation_server`（伺服器上改顯示 `Install-WindowsFeature`／`Uninstall-WindowsFeature`、sconfig、伺服器管理員的修法）。Defender 功能被移除時 Defender 三條改為不適用（以前是錯誤）；竄改防護在沒加入 Defender for Endpoint 的伺服器不適用；SmartScreen 在 Server Core 不適用；BitLocker 在 Server Core 改用 `Get-BitLockerVolume`，沒裝 BitLocker 功能時不適用；遠端登錄服務只檢查用戶端；內建 Administrator 在伺服器已改名也算通過，網域控制站上 Guest／內建 Administrator 不適用。`harden --json` 多了 `editions`。
+- 作業系統支援期限：補上 Windows Server 2008／2008 R2（2020-01-14），Server 2025 改為官方的 2034-11-14；伺服器先用組建編號比對（名稱沒有年份的 Annual Channel 23H2＝25398 也認得，2025-10-24 停止支援），Server 判斷改看 `Win32_OperatingSystem.ProductType`。
+- 事件：另讀 Security 4740（帳號被鎖定）、4771（Kerberos 預先驗證失敗，併入暴力破解）、4776（NTLM 驗證失敗，依工作站計算爆量），獨立上限 1000 筆不擠掉 4625；遠端桌面 1149（RemoteConnectionManager/Operational）從公網登入記為「公網遠端登入」。新規則 `account_locked`、`ntlm_failure_burst`（Hub 事件頁有對應名稱）。
+- `doctor`：封包擷取建議依組建編號：19041 起用 `pktmon etl2pcap`，Server 2019（17763）的 pktmon 不能轉檔改提示到新版轉換或裝 Npcap，Server 2016 改提示 `netsh trace`＋etl2pcapng。
+- CI：agent 多跑 `windows-2022`（`windows-latest` 是 Server 2025），兩台 Windows Server runner 都驗證 `harden` 判斷成 server、沒有任何檢查出錯，`vuln` 認得作業系統支援期限。
+- 示範資料（`scripts/demo-seed.mjs`）新增 Windows Server 2022 Datacenter（Server Core）網域控制站 `dc-01`（RDP 暴力破解、帳號鎖定、NTLM 失敗爆量、伺服器硬化結果），agent 版本改 0.2.0。
+
 改進：
 - Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。

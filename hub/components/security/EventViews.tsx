@@ -32,6 +32,8 @@ export function securityRuleLabel(t: TFn, r: string): string {
   return (
     {
       failed_logon_burst: t('暴力破解'),
+      ntlm_failure_burst: t('NTLM 驗證失敗爆量'),
+      account_locked: t('帳號被鎖定'),
       remote_logon: t('公網遠端登入'),
       admin_member_added: t('加入管理員群組'),
       group_member_added: t('加入群組'),

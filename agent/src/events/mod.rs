@@ -382,6 +382,18 @@ pub fn findings_from(s: &EventsSummary) -> Vec<Finding> {
                 ),
                 t!("封鎖來源 IP；關閉不需要對外的 RDP／SSH，改用 VPN 或限制來源；啟用帳號鎖定原則"),
             ),
+            "ntlm_failure_burst" => (
+                tf!("NTLM 驗證失敗 {n} 次（{detail}）", n = h.count, detail = h.detail),
+                t!("找出該工作站上用舊密碼或錯誤密碼的程式、服務或對應磁碟機；不是的話視為密碼噴灑並調查"),
+            ),
+            "account_locked" => (
+                tf!(
+                    "帳號被鎖定：{user}（來源 {detail}）",
+                    user = h.user.clone().unwrap_or_default(),
+                    detail = h.detail
+                ),
+                t!("確認是本人打錯密碼還是有人在猜；同時段的登入失敗來源可以一起封鎖"),
+            ),
             "remote_logon" => (
                 tf!(
                     "從公網 {ip} 遠端登入成功（{user}）",
