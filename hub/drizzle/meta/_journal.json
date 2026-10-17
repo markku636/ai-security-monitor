@@ -57,6 +57,13 @@
       "when": 1792206874587,
       "tag": "0007_intel_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792212112476,
+      "tag": "0008_ip_notes",
+      "breakpoints": true
     }
   ]
 }

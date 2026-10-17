@@ -14,6 +14,7 @@
 - 修正：常駐的 `asa watch` 以前從不自動更新情資（只有手動 `asa intel update`），現在每 30 分鐘檢查一次，更新後立即重新載入。
 - IP 分析頁新增「外部威脅情資」（參考 at-integration-tools 的 IP 威脅情資）：按「查詢外部情資」才會把 IP 送給 AbuseIPDB、GreyNoise、IPinfo、proxycheck.io，加上 hub 自己的 DNS 反解；算出 0–100 風險分數與等級（低／中／高／極高）、每個理由的加減分、各來源命中 x/N、國家／ASN／用途類型／資料中心／Proxy／VPN／Tor／反解／FCrDNS 明細與原始回應。asa agent 同步的黑名單命中（Spamhaus DROP、FireHOL、IPsum、Tor 出口…）也算進分數。結果快取（各來源 1–30 天），每日額度自我節流，私有／保留位址一律不送出；金鑰在「設定與金鑰 → 外部情資來源」貼上（只寫不讀，稽核不記金鑰）或用 `ASA_HUB_ABUSEIPDB_KEY` 等環境變數；`ASA_HUB_IP_LOOKUPS=off` 可整個關掉。
 - 連線頁上方新增「可疑 IP 排名」：曾被判定可疑或危險的遠端 IP 跨主機、跨 port 彙總，依危險程度與累計次數（每次連線快照看到一次加 1）排序，並列出目前快照裡還在連的條數、主機數、方向與 port、行程、國家／組織、最後看到時間；預設前 10 名，可展開到前 50 名，跟著裝置篩選走。
+- IP 人工備註：IP 分析頁可以替遠端 IP 寫一則備註（例如「公司 VPN 出口，已確認安全」），可疑 IP 排名多一欄備註、連線表有備註的 IP 旁標 📝（滑過看全文）；只有管理員能讀寫，每次修改記在稽核紀錄（`ip_note.set`／`ip_note.delete`）。API：`GET /api/v1/ip-notes?ip=`、`POST /api/v1/ip-notes`（`note` 空字串即刪除）。新增資料表 `ip_notes`（migration 0008，Hub 啟動時自動套用）。
 
 ## v0.1.0 — 2026-10-17
 

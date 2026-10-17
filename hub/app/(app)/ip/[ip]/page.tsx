@@ -3,11 +3,13 @@ import { notFound } from 'next/navigation';
 import { isIP } from 'node:net';
 import { GeoAttribution } from '@/components/security/ConnectionsTable';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
+import { IpNoteEditor } from '@/components/security/IpNoteEditor';
 import { IpThreatIntel } from '@/components/security/IpThreatIntel';
 import { Card } from '@/components/ui/Card';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
 import { getIpIntelView } from '@/lib/ipintel/service';
+import { getIpNote } from '@/lib/queries/ipnotes';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +32,7 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
   const { t } = await getT();
   const ip = decodeURIComponent((await params).ip).trim();
   if (!isIP(ip)) notFound();
+  const note = await getIpNote(ip);
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
@@ -54,6 +57,14 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
           </Link>
         </div>
       </header>
+      <Card title={t('人工備註')}>
+        <IpNoteEditor
+          ip={ip}
+          initial={note?.note ?? ''}
+          updatedAt={note?.updatedAt?.toISOString() ?? null}
+          updatedBy={note?.updatedBy ?? null}
+        />
+      </Card>
       <Card title={t('外部威脅情資')}>
         <IpThreatIntel view={await getIpIntelView(ip)} />
       </Card>

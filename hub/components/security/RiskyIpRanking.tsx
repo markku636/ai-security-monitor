@@ -1,7 +1,7 @@
 // 可疑／危險 IP 排名（連線頁上方；server component）。
 import Link from 'next/link';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
-import { IpLink } from '@/components/security/IpLink';
+import { IpLink, ipHref } from '@/components/security/IpLink';
 import { Card } from '@/components/ui/Card';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
@@ -37,7 +37,7 @@ export function RiskyIpRanking({
     >
       {items.length ? (
         <div className="-mx-2 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className={TH}>#</th>
@@ -53,6 +53,7 @@ export function RiskyIpRanking({
                 <th className={TH}>{t('方向／port')}</th>
                 <th className={TH}>{t('行程')}</th>
                 <th className={TH}>{t('國家／組織')}</th>
+                <th className={TH}>{t('備註')}</th>
                 <th className={TH}>{t('最後看到')}</th>
               </tr>
             </thead>
@@ -84,6 +85,17 @@ export function RiskyIpRanking({
                   <td className={`${TD} text-xs`}>{r.processes.length ? r.processes.join('、') : '—'}</td>
                   <td className={`${TD} text-xs text-slate-500`}>
                     {[r.country, r.org].filter(Boolean).join(' · ') || '—'}
+                  </td>
+                  <td className={`${TD} max-w-[16rem] text-xs`}>
+                    {r.note ? (
+                      <span className="line-clamp-2" title={r.note}>
+                        📝 {r.note}
+                      </span>
+                    ) : (
+                      <Link href={ipHref(r.remoteIp)} className="text-slate-400 hover:text-teal-700 hover:underline">
+                        {t('加備註')}
+                      </Link>
+                    )}
                   </td>
                   <td className={`${TD} whitespace-nowrap text-xs text-slate-500`} title={t('第一次看到：{at}', { at: since(r.firstSeenAt, t) })}>
                     {since(r.lastSeenAt, t)}

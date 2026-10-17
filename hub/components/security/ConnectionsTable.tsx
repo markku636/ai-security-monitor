@@ -6,7 +6,18 @@ import type { ConnectionRow } from '@/lib/queries/connections';
 import { IpLink } from './IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
 
-export function ConnectionsTable({ rows, t, showHost = true }: { rows: ConnectionRow[]; t: TFn; showHost?: boolean }) {
+export function ConnectionsTable({
+  rows,
+  t,
+  showHost = true,
+  notes = {},
+}: {
+  rows: ConnectionRow[];
+  t: TFn;
+  showHost?: boolean;
+  /** 遠端 IP → 人工備註（有備註的 IP 旁邊顯示 📝，滑過看全文）。 */
+  notes?: Record<string, string>;
+}) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <table className="w-full text-left text-sm">
@@ -47,6 +58,11 @@ export function ConnectionsTable({ rows, t, showHost = true }: { rows: Connectio
                   <>
                     <div>
                       <IpLink ip={c.remoteIp}>{endpoint(c.remoteIp, c.remotePort)}</IpLink>
+                      {c.remoteIp && notes[c.remoteIp] ? (
+                        <span className="ml-1 cursor-help font-sans" title={t('備註：{note}', { note: notes[c.remoteIp] })}>
+                          📝
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-slate-500">{t('本機 {ep}', { ep: endpoint(c.localIp, c.localPort) })}</div>
                   </>

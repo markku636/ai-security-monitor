@@ -2,6 +2,7 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { agents, connections, destinations } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
+import { ipNoteMap } from './ipnotes';
 import { clampInt, listParam, strParam, type Params } from './params';
 
 export const DIRECTIONS = ['outbound', 'inbound', 'listening', 'local'] as const;
@@ -231,6 +232,7 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
         .groupBy(connections.remoteIp)
     : [];
   const liveBy = new Map(live.map((r) => [r.ip, Number(r.n)]));
+  const notes = await ipNoteMap(ips);
   return {
     total: Number(total[0]?.n ?? 0),
     items: rows.map((r, i) => ({
@@ -247,6 +249,7 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
       org: r.org,
       firstSeenAt: r.firstSeenAt,
       lastSeenAt: r.lastSeenAt,
+      note: notes.get(r.remoteIp) ?? null,
     })),
   };
 }

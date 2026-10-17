@@ -426,3 +426,11 @@ export const ipReputation = pgTable(
   },
   (t) => [index('ip_reputation_queried_idx').on(t.queriedAt)],
 );
+
+/** 管理員對遠端 IP 的人工備註（例如「公司 VPN，已確認」）；一個 IP 一則，清空即刪除。 */
+export const ipNotes = pgTable('ip_notes', {
+  ip: text('ip').primaryKey(),
+  note: text('note').notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
