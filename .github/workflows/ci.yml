@@ -161,6 +161,31 @@ jobs:
           fi
           echo "install script e2e ok on $RUNNER_OS"
 
+  desktop:
+    name: desktop (windows-latest)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - run: cargo fmt --check
+      - run: cargo clippy --locked -- -D warnings
+      - name: CLI passthrough (the GUI exe doubles as asa for the AI's MCP server)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -q --locked
+          ./target/debug/asa-desktop.exe --lang en --help | grep -q "Usage"
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | ./target/debug/asa-desktop.exe mcp > mcp.jsonl
+          grep -q list_connections mcp.jsonl
+
   hub:
     name: hub
     runs-on: ubuntu-latest

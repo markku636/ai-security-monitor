@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主視窗：事件訂閱（AI 串流）與自訂指令",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

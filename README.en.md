@@ -31,6 +31,7 @@ Client Agent → periodic reports → Server analysis → AI risk assessment →
 | | |
 |---|---|
 | **asa** (agent) | Runs on the computer or server you want to protect. Scans connections, intel, firewall, ports, vulnerabilities, hardening, events and traffic. Use it on its own (CLI, MCP, AI analysis) or enroll it with a Hub to report periodically and accept approved remote blocks. Starts at boot (system service or at user login). |
+| **Desktop app** (optional) | A windowed client: lives in the system tray and shows this computer's connection verdicts (click an IP to analyze it), scan results and intel status, with one-click scan / intel update and AI analysis through the Claude Code / Codex CLI you are signed in to. Shares the config directory with the CLI and background service. See [docs/desktop.en.md](docs/desktop.en.md). |
 | **Security Hub** | One place for every host: connection verdicts, findings, vulnerabilities, hardening scores, crashes and security events, threat-intel hits, remote action review, AI analysis and MCP. Standalone (local only) or server (the whole fleet), deployed with Docker. |
 
 ## Screenshots
@@ -118,7 +119,7 @@ Run `asa --help` or `asa <command> --help` for every option; `--lang en` for Eng
 
 ## Docs
 
-[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Start at boot](docs/service.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
+[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
 ## Build from source
@@ -130,6 +131,9 @@ cd agent && cargo build --release && ./target/release/asa doctor
 # Hub (Node 22+)
 cd hub && npm ci && npm run dev:db && npm run dev    # http://localhost:3000
 npm run verify                                        # typecheck, i18n, tests, build
+
+# Desktop app (Tauri 2; the UI in desktop/ui is plain HTML/JS)
+cd desktop && npm ci && npx tauri build              # builds the NSIS installer
 ```
 
 Demo data: `node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <admin secret>`.

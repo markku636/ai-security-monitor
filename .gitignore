@@ -1,5 +1,7 @@
 # Rust
 agent/target/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
 **/*.rs.bk
 
 # Node / Next.js

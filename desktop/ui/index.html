@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Security Agent</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="side">
+        <div class="brand">
+          <img src="icon.png" alt="" width="28" height="28" />
+          <div>
+            <div class="brand-name">AI Security Agent</div>
+            <div class="brand-sub" id="brand-host">本機</div>
+          </div>
+        </div>
+        <nav id="nav">
+          <div class="nav-group">要看的事</div>
+          <a href="#overview" data-page="overview"><span class="ic">◎</span><span><b>總覽</b><small>分數、問題數、情資新舊</small></span></a>
+          <a href="#connections" data-page="connections"><span class="ic">⇄</span><span><b>連線</b><small>這台電腦正在連哪裡、哪些可疑</small></span></a>
+          <a href="#findings" data-page="findings"><span class="ic">!</span><span><b>掃描結果</b><small>漏洞、設定、事件找到的問題</small></span></a>
+          <div class="nav-group">工具</div>
+          <a href="#intel" data-page="intel"><span class="ic">⛨</span><span><b>威脅情資</b><small>情資來源與更新</small></span></a>
+          <a href="#ai" data-page="ai"><span class="ic">✦</span><span><b>AI 分析</b><small>用本機的 Claude Code／Codex 解讀</small></span></a>
+          <a href="#settings" data-page="settings"><span class="ic">⚙</span><span><b>設定</b><small>Hub、背景服務、設定目錄</small></span></a>
+        </nav>
+        <div class="side-foot" id="side-foot"></div>
+      </aside>
+      <main id="main"></main>
+    </div>
+    <div id="toast" class="toast" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>

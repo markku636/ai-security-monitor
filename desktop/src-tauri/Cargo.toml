@@ -1,0 +1,35 @@
+[package]
+name = "asa-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "AI Security Agent desktop app (GUI for asa)"
+license = "MIT"
+default-run = "asa-desktop"
+
+[lib]
+name = "asa_desktop_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "asa-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 同一份 asa 程式庫：GUI 直接呼叫掃描、連線、情資、AI；帶命令列參數啟動時就當 asa CLI 用（AI 的 MCP server 走這條）
+asa = { path = "../../agent", default-features = false, features = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"] }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

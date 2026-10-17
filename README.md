@@ -31,6 +31,7 @@ Client Agent → 定時回報 → Server 分析 → AI 判斷風險 → Dashboar
 | | |
 |---|---|
 | **asa**（agent） | 裝在要保護的電腦或伺服器上。掃描連線、情資、防火牆、port、漏洞、硬化、事件與流量；可以單獨用（CLI、MCP、AI 分析），也可以註冊到 Hub 定期回報、接受核准過的遠端封鎖。開機自動啟動（系統服務或使用者登入時）。 |
+| **桌面版**（選用） | 用戶端的視窗介面：系統匣常駐，看這台電腦的連線判定（點 IP 分析）、掃描結果、情資狀態，一鍵掃描／更新情資，並用本機已登入的 Claude Code／Codex 做 AI 分析。和命令列、背景服務共用同一個設定目錄。見 [docs/desktop.md](docs/desktop.md)。 |
 | **Security Hub** | 集中看所有主機：連線判定、發現、漏洞、硬化分數、當機與資安事件、情資來源命中、遠端動作審核、AI 分析與 MCP。單機版（只綁本機）或伺服器版（整個車隊），Docker 部署。 |
 
 ## 畫面預覽
@@ -118,7 +119,7 @@ asa service install --yes        # 開機／登入後自動回報（伺服器加
 
 ## 文件
 
-[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [開機自動啟動](docs/service.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
+[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
 ## 從原始碼建置
@@ -130,6 +131,9 @@ cd agent && cargo build --release && ./target/release/asa doctor
 # Hub（Node 22+）
 cd hub && npm ci && npm run dev:db && npm run dev    # http://localhost:3000
 npm run verify                                        # typecheck、i18n、測試、build
+
+# 桌面版（Tauri 2，介面是 desktop/ui 的純 HTML／JS）
+cd desktop && npm ci && npx tauri build              # 產生 NSIS 安裝檔
 ```
 
 示範資料：`node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`。
