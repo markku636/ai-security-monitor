@@ -55,7 +55,7 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
     fleetSummary(),
     listAgents(),
     topIntelFeeds(7, 8),
-    isAdmin ? listConnections({ verdict: ['dangerous', 'suspicious'], limit: 8, offset: 0 }) : null,
+    isAdmin ? listConnections({ verdict: ['dangerous', 'suspicious'], limit: 100, offset: 0 }) : null,
     isAdmin ? inboundAttackers(5) : [],
   ]);
   if (!fleet.agents.total) return <NoAgents t={t} />;

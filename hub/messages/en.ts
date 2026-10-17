@@ -520,4 +520,11 @@ export const en: Record<string, string> = {
   // ---- navigation ----
   '問題': 'Issue',
   '查看全部待處理問題 →': 'See all open issues →',
+
+  // ---- plain wording ----
+  '× {n} 條連線': '× {n} connections',
+  '在 hub 主機上用 Claude Code 或 Codex 分析所有主機；AI 透過唯讀的 hub 工具查資料，引用情資時會附來源，不會改動任何設定。': 'Analyze all hosts with Claude Code or Codex on the hub host; the AI reads data through read-only hub tools, cites intel sources and changes nothing.',
+  '安全分數（所有主機平均）': 'Security score (average of all hosts)',
+  '所有主機': 'All hosts',
+  '沒有任何主機連過這個位址，也沒有情資命中紀錄。': 'No host has connected to this address and there are no intel hits for it.',
 };

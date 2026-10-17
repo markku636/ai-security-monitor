@@ -95,7 +95,7 @@ async function Lookup({ t, q }: { t: TFn; q: string }) {
   const empty = !r.hits.length && !r.connections.length && !r.destinations.length;
   return (
     <Card title={t('查詢結果：{q}', { q })}>
-      {empty ? <p className="text-sm text-slate-500">{t('車隊裡沒有任何主機連過這個位址，也沒有情資命中紀錄。')}</p> : null}
+      {empty ? <p className="text-sm text-slate-500">{t('沒有任何主機連過這個位址，也沒有情資命中紀錄。')}</p> : null}
       {r.hits.length ? (
         <div className="mb-4">
           <h3 className="mb-1 text-xs font-semibold text-slate-500">{t('列名的情資來源')}</h3>

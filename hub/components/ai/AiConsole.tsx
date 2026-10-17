@@ -45,7 +45,7 @@ export function AiConsole({
   const busy = status === 'running';
 
   const scopes: [string, string][] = [
-    ['fleet', t('整個車隊')],
+    ['fleet', t('所有主機')],
     ['agent', t('單一主機')],
     ['traffic', t('解讀流量')],
     ['events', t('分析當機與資安事件')],

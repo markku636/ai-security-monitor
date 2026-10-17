@@ -15,7 +15,7 @@ const MORE = 'mt-2 inline-block text-sm text-teal-700 hover:underline dark:text-
 
 export function ScoreCard({ t, score }: { t: TFn; score: Scores | null }) {
   return (
-    <Card title={t('安全分數（車隊平均）')} className="lg:col-span-2">
+    <Card title={t('安全分數（所有主機平均）')} className="lg:col-span-2">
       <div className="flex flex-wrap justify-around gap-4">
         <Gauge score={score?.overall} label={t('總分')} size={120} />
         <Gauge score={score?.connections} label={t('連線')} />
@@ -29,13 +29,26 @@ export function ScoreCard({ t, score }: { t: TFn; score: Scores | null }) {
 
 type RiskyResult = Awaited<ReturnType<typeof listConnections>>;
 
+/** 同一台主機、同一個行程連到同一個遠端（同判定）只列一次，標出條數。 */
+function groupRisky(items: RiskyResult['items'], max: number) {
+  const groups = new Map<string, { c: RiskyResult['items'][number]; n: number }>();
+  for (const c of items) {
+    const k = [c.agentId, c.verdict, c.direction, c.remoteIp ?? c.localIp, c.remotePort ?? c.localPort, c.processName ?? ''].join('|');
+    const g = groups.get(k);
+    if (g) g.n += 1;
+    else groups.set(k, { c, n: 1 });
+  }
+  return [...groups.values()].slice(0, max);
+}
+
 export function RiskyConnectionsCard({ t, risky }: { t: TFn; risky: RiskyResult }) {
   const empty = <p className="text-sm text-slate-500">{t('目前沒有可疑或危險的連線。')}</p>;
+  const rows = groupRisky(risky.items, 8);
   return (
     <Card title={t('危險與可疑連線')}>
       {risky.items.length === 0 ? empty : null}
       <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-        {risky.items.map((c) => (
+        {rows.map(({ c, n }) => (
           <li key={c.id} className="flex flex-col gap-1 py-2 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <VerdictChip verdict={c.verdict} t={t} />
@@ -44,12 +57,13 @@ export function RiskyConnectionsCard({ t, risky }: { t: TFn; risky: RiskyResult 
               <span className="text-xs text-slate-500">
                 {c.hostname} · {c.processName ?? '—'}
               </span>
+              {n > 1 ? <span className="text-xs text-slate-500">{t('× {n} 條連線', { n })}</span> : null}
             </div>
             <ReasonList reasons={c.reasons} t={t} max={4} />
           </li>
         ))}
       </ul>
-      {risky.total > risky.items.length ? (
+      {risky.total > rows.length ? (
         <Link href="/connections?verdict=dangerous,suspicious" className={MORE}>
           {t('查看全部 {n} 條 →', { n: risky.total })}
         </Link>
