@@ -30,6 +30,10 @@ The UI itself is in Traditional Chinese.
 | ![AI analysis](images/desktop-ai.png) AI analysis: tool calls and the answer stream in live | ![Settings](images/desktop-settings.png) Settings: agent id, config directory, Hub, background service |
 | ![Dark mode](images/desktop-overview-dark.png) Dark mode follows the Windows color setting | |
 
+With `--frame windows` the script instead writes versions wrapped in a Windows 11-style window frame (`windows-desktop-*.png`), plus a hero shot with the window on a desktop above a taskbar showing the tray icon (`windows-desktop-hero.png` / `windows-desktop-hero-dark.png`). The frame, wallpaper and taskbar are drawn by the script as an illustration; they are not real screen captures.
+
+![AI Security Monitor on Windows](images/windows-desktop-hero.png)
+
 ## Pages
 
 | Page | What it shows |

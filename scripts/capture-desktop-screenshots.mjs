@@ -1,6 +1,10 @@
 // README 截圖（桌面版）：在本機用靜態伺服器提供 desktop/ui，注入假的 window.__TAURI__（示範資料），
 // 再用無頭 Chrome／Edge（CDP）擷取各頁。完全不碰真實設定目錄、不跑真的掃描、不呼叫 AI。
-//   node scripts/capture-desktop-screenshots.mjs [--out docs/images] [--browser <path>]
+//   node scripts/capture-desktop-screenshots.mjs [--out docs/images] [--browser <path>] [--only desktop-overview,…]
+//   node scripts/capture-desktop-screenshots.mjs --frame windows
+//     → 改輸出 windows-desktop-*.png：把畫面套上 Windows 11 風格的視窗外框（標題列、最小化／最大化／關閉、圓角、陰影），
+//       另外產生 windows-desktop-hero(-dark).png：視窗放在純漸層桌布上，下方有工作列與系統匣圖示。
+//       外框、工作列、圖示全部用 HTML／SVG 自己畫（沒有 Windows 標誌、沒有微軟桌布）。
 // 示範資料和 scripts/demo-seed.mjs 的 fin-laptop-07 一致：虛構主機、文件保留網段 IP（RFC 5737）、example.com 網域。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -8,6 +12,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { framedPage, heroPage } from './windows-frame.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const UI = path.join(ROOT, 'desktop', 'ui');
@@ -15,6 +20,11 @@ const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
 );
 const OUT = path.resolve(args.out ?? path.join(ROOT, 'docs', 'images'));
+const FRAME = args.frame ?? null;
+if (FRAME && FRAME !== 'windows') {
+  console.error(`unknown --frame ${FRAME} (supported: windows)`);
+  process.exit(1);
+}
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'desktop', 'src-tauri', 'tauri.conf.json'), 'utf8')).version;
 
 // ---------------- 示範資料 ----------------
@@ -231,10 +241,16 @@ function installMock(D) {
   };
 }
 
+let FRAME_PAGE = '';
+
 // ---------------- 靜態伺服器（只綁 127.0.0.1） ----------------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
 const server = http.createServer((req, res) => {
   const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';
+  if (rel === '__frame.html') {
+    res.writeHead(200, { 'content-type': MIME['.html'] }).end(FRAME_PAGE);
+    return;
+  }
   const file = path.resolve(UI, rel);
   if (!file.startsWith(UI + path.sep) || !fs.existsSync(file)) {
     res.writeHead(404).end();
@@ -355,6 +371,7 @@ const SHOTS = [
 ];
 
 const only = args.only ? new Set(args.only.split(',')) : null;
+const captured = [];
 for (const [name, page, dark, prepare] of SHOTS) {
   if (only && !only.has(name)) continue;
   // 桌面版視窗預設 1200×780（tauri.conf.json）；連線頁右邊有 IP 分析欄，用放大後的視窗
@@ -372,8 +389,28 @@ for (const [name, page, dark, prepare] of SHOTS) {
   await evaluate(`document.getElementById('main').scrollTop = 0`);
   await sleep(400);
   const shot = await send('Page.captureScreenshot', { format: 'png' });
+  if (FRAME) {
+    captured.push({ name, dark, width, height, img: `data:image/png;base64,${shot.result.data}` });
+    continue;
+  }
   fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(shot.result.data, 'base64'));
   console.log(`${name}.png`);
+}
+
+// --frame windows：把剛拍好的畫面放進自己畫的視窗外框，再拍一次
+async function renderFrame(file, { W, H, html }) {
+  FRAME_PAGE = html;
+  await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
+  await send('Page.navigate', { url: BASE.replace('index.html', `__frame.html?${file}`) });
+  await waitFor(`document.readyState === 'complete' && [...document.images].every((i) => i.complete && i.naturalWidth > 0)`);
+  await sleep(200);
+  const shot = await send('Page.captureScreenshot', { format: 'png' });
+  fs.writeFileSync(path.join(OUT, file), Buffer.from(shot.result.data, 'base64'));
+  console.log(file);
+}
+for (const c of captured) await renderFrame(`windows-${c.name}.png`, framedPage(c.img, c.width, c.height, c.dark));
+for (const c of captured.filter((x) => x.name === 'desktop-overview' || x.name === 'desktop-overview-dark')) {
+  await renderFrame(c.dark ? 'windows-desktop-hero-dark.png' : 'windows-desktop-hero.png', heroPage(c.img, c.width, c.height, c.dark));
 }
 ws.close();
 proc.kill();

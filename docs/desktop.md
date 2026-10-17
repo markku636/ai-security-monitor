@@ -29,6 +29,10 @@
 | ![AI 分析](images/desktop-ai.png) AI 分析：工具呼叫與回答即時顯示 | ![設定](images/desktop-settings.png) 設定：agent id、設定目錄、Hub、背景服務 |
 | ![深色模式](images/desktop-overview-dark.png) 深色模式：跟著 Windows 的深色設定 | |
 
+加上 `--frame windows` 會改輸出套上 Windows 11 風格視窗外框的版本（`windows-desktop-*.png`），以及放在桌面上、下方有工作列與系統匣圖示的主視覺 `windows-desktop-hero.png`／`windows-desktop-hero-dark.png`。外框、桌布和工作列都是腳本自己畫的示意圖，不是真的螢幕截圖。
+
+![Windows 上的 AI Security Monitor](images/windows-desktop-hero.png)
+
 ## 功能
 
 | 頁面 | 內容 |
