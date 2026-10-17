@@ -12,7 +12,7 @@ import { GET as lookupRoute } from '@/app/api/v1/intel/lookup/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
 import { POST as report } from '@/app/api/v1/ingest/report/route';
 import { POST as snapshot } from '@/app/api/v1/ingest/snapshot/route';
-import { agents, auditLog, destinations, findings } from '@/drizzle/schema';
+import { agents, auditLog, destinations, findings, ipReputation } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
@@ -24,6 +24,7 @@ import {
   parseRankSort,
   parseRankWindow,
   riskyIpRanking,
+  unanalyzedRiskyIps,
   type RankSortKey,
 } from '@/lib/queries/connections';
 import { listFindings, parseFindingFilter } from '@/lib/queries/findings';
@@ -222,6 +223,24 @@ describe('connection queries', () => {
     expect(await ips('port', 'asc')).toEqual(['203.0.113.66', '198.51.100.23']);
     // 名次跟著目前的排序走
     expect((await riskyIpRanking(10, undefined, { key: 'ip', dir: 'desc' })).items.map((x) => x.rank)).toEqual([1, 2]);
+  });
+
+  it('pages the ranking with offset and lists IPs not yet looked up', async () => {
+    const asc = { key: 'ip', dir: 'asc' } as const;
+    const page2 = await riskyIpRanking(1, undefined, asc, 'all', { offset: 1 });
+    expect(page2.items.map((x) => [x.rank, x.remoteIp])).toEqual([[2, '203.0.113.66']]);
+    expect(page2.total).toBe(2);
+    // 依外部風險排序時是在記憶體排完再切頁
+    expect((await riskyIpRanking(1, undefined, { key: 'risk', dir: 'desc' }, 'all', { offset: 1 })).items[0].rank).toBe(2);
+
+    expect(await unanalyzedRiskyIps(undefined, 'all')).toEqual({ ips: expect.arrayContaining(['198.51.100.23', '203.0.113.66']), total: 2 });
+    // 查過外部情資（有快取）的就不算未分析
+    await db.insert(ipReputation).values({ ip: '203.0.113.66', results: {} });
+    expect(await unanalyzedRiskyIps(undefined, 'all')).toEqual({ ips: ['198.51.100.23'], total: 1 });
+    expect((await riskyIpRanking(10, undefined, asc, 'all', { unanalyzed: true })).items.map((x) => x.remoteIp)).toEqual(['198.51.100.23']);
+    expect((await unanalyzedRiskyIps(undefined, 'all', 0)).ips).toEqual([]);
+    expect((await unanalyzedRiskyIps('no-such-agent', 'all')).total).toBe(0);
+    await db.delete(ipReputation).where(eq(ipReputation.ip, '203.0.113.66'));
   });
 
   it('summarises intel hits by feed and indicator with sources', async () => {

@@ -5,6 +5,7 @@ import { IpLink } from '@/components/security/IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from '@/components/security/Verdict';
 import { Card } from '@/components/ui/Card';
 import { Gauge } from '@/components/ui/Gauge';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { Hint } from '@/components/ui/Hint';
 import { ScorePill } from '@/components/ui/Severity';
 import { endpoint, since } from '@/lib/format';
@@ -168,8 +169,9 @@ export function AttackersCard({ t, attackers, risks = {} }: { t: TFn; attackers:
             </IpLink>
             <span className="text-xs text-slate-500">
               {t('{hosts} 台主機、{conns} 條連線', { hosts: a.hosts, conns: a.conns })}
-              {a.country ? ` · ${a.country}` : ''}
+              {a.country ? ' · ' : ''}
             </span>
+            {a.country ? <CountryFlag code={a.country} t={t} /> : null}
           </li>
         ))}
       </ul>

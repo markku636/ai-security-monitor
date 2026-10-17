@@ -30,5 +30,11 @@ export function resolveLang(cookie: string | undefined, acceptLanguage: string |
 export type TFn = (zh: string, params?: Params) => string;
 
 export function makeT(lang: Lang): TFn {
-  return (zh, params) => translate(zh, params, lang);
+  // 附上語言，讓只拿到 t 的元件也能用 Intl（例如國名）
+  return Object.assign((zh: string, params?: Params) => translate(zh, params, lang), { lang });
+}
+
+/** t 是用哪個語言建的（makeT 附上的；拿不到就當繁中）。 */
+export function langOf(t: TFn): Lang {
+  return (t as TFn & { lang?: Lang }).lang ?? 'zh-TW';
 }

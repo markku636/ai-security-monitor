@@ -5,6 +5,7 @@ import type { TFn } from '@/lib/i18n/core';
 import type { IpRisk } from '@/lib/ipintel/types';
 import type { ConnectionRow, ConnSortKey } from '@/lib/queries/connections';
 import { SortHeader } from '@/components/ui/SortHeader';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { IpLink } from './IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
 
@@ -97,7 +98,7 @@ export function ConnectionsTable({
               <td className="px-3 py-2 text-xs">
                 {c.country || c.org ? (
                   <>
-                    <div>{c.country ?? '—'}</div>
+                    <div>{c.country ? <CountryFlag code={c.country} t={t} /> : '—'}</div>
                     <div className="text-slate-500">
                       {c.asn ? `AS${c.asn} ` : ''}
                       {c.org ?? ''}

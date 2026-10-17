@@ -2,8 +2,8 @@ import { ConnectionsView } from '@/components/security/ConnectionsView';
 import { RiskyIpRanking } from '@/components/security/RiskyIpRanking';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
-import { parseRankSort, parseRankWindow, RANK_SORT_DEFAULT_DIR, riskyIpRanking, type RankSortKey, type RankWindow } from '@/lib/queries/connections';
-import { clampInt, strParam } from '@/lib/queries/params';
+import { parseRankSort, parseRankWindow, RANK_SORT_DEFAULT_DIR, riskyIpRanking, unanalyzedRiskyIps, type RankSortKey, type RankWindow } from '@/lib/queries/connections';
+import { clampInt, strParam, toQuery } from '@/lib/queries/params';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const rank = clampInt(params, 'rank', 10, 5, 50);
   const sort = parseRankSort(params);
   const rankWindow = parseRankWindow(params);
-  const ranking = await riskyIpRanking(rank, agentId, sort, rankWindow);
+  const [ranking, unanalyzed] = await Promise.all([riskyIpRanking(rank, agentId, sort, rankWindow), unanalyzedRiskyIps(agentId, rankWindow)]);
   // 預設 30 天：網址不帶 rwin
   const windowHref = (w: RankWindow) => withParams(params, { rwin: w === '30' ? undefined : w });
   // 同一欄再點一次反向；換欄位用該欄的預設方向
@@ -63,6 +63,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         sortHref={sortHref}
         rankWindow={rankWindow}
         windowHref={windowHref}
+        unanalyzed={unanalyzed}
+        fullListHref={'/connections/ips' + toQuery({ agent_id: agentId, rwin: strParam(params, 'rwin', 8) })}
       />
       <ConnectionsView base="/connections" params={params} />
     </div>

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Gauge } from '@/components/ui/Gauge';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { Hint } from '@/components/ui/Hint';
 import { SCORE_KEYS, scoreHints, scoreLabels } from '@/components/overview/scoreHints';
 import { ScorePill, SevCountsRow } from '@/components/ui/Severity';
@@ -160,9 +161,9 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
                 </IpLink>
                 <span className="text-xs text-slate-500">
                   {d.processName ?? '—'}
-                  {d.country ? ` · ${d.country}` : ''}
                   {d.org ? ` · ${d.org}` : ''} · {t('看到 {n} 次，最後 {at}', { n: d.seenCount, at: since(d.lastSeenAt, t) })}
                 </span>
+                {d.country ? <CountryFlag code={d.country} t={t} /> : null}
               </li>
             ))}
           </ul>

@@ -1,6 +1,7 @@
 'use client';
 
-// 可疑 IP 排名的批次操作：每列勾選、全選本頁、操作列（批次查外部情資／請 AI 分析／清除選取）。
+// 可疑 IP 排名的批次操作：每列勾選、全選本頁、操作列（批次查外部情資／查全部未分析／請 AI 分析／清除選取）。
+// 完整清單頁（persistKey）勾選會跨頁保留在 sessionStorage。
 // 表格本身仍是 server component，這裡只管勾選狀態與按鈕；查完 router.refresh() 讓「外部風險」欄更新。
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -18,6 +19,10 @@ interface Row {
 
 interface Ctx {
   rows: Row[];
+  /** 勾選的列（跨頁模式下也包含不在這一頁的 IP） */
+  pickedRows: Row[];
+  /** 跨頁保留勾選 */
+  persistent: boolean;
   selected: Set<string>;
   toggle: (ip: string) => void;
   setAll: (on: boolean) => void;
@@ -32,20 +37,49 @@ function useSelection(): Ctx {
   return c;
 }
 
-export function IpSelectionProvider({ rows, children }: { rows: Row[]; children: ReactNode }) {
+const STORE_MAX = 500;
+
+function loadStored(key?: string): Set<string> {
+  if (!key) return new Set();
+  try {
+    const v = JSON.parse(sessionStorage.getItem(key) ?? '[]') as unknown;
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, STORE_MAX) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function IpSelectionProvider({ rows, children, persistKey }: { rows: Row[]; children: ReactNode; persistKey?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // 換頁／換排序後只保留還在畫面上的 IP
+  const persistent = !!persistKey;
+  // 跨頁模式：從 sessionStorage 接回上一頁勾的（第一次 render 後才讀，避免 SSR 不一致）
+  useEffect(() => {
+    if (persistKey) setSelected(loadStored(persistKey));
+  }, [persistKey]);
+  useEffect(() => {
+    if (!persistKey) return;
+    try {
+      sessionStorage.setItem(persistKey, JSON.stringify([...selected].slice(0, STORE_MAX)));
+    } catch {
+      // 私密瀏覽等存不了就算了
+    }
+  }, [persistKey, selected]);
+  // 一般模式：換頁／換排序後只保留還在畫面上的 IP
   const key = rows.map((r) => r.ip).join(',');
   useEffect(() => {
+    if (persistent) return;
     const visible = new Set(key.split(','));
     setSelected((s) => {
       const kept = [...s].filter((ip) => visible.has(ip));
       return kept.length === s.size ? s : new Set(kept);
     });
-  }, [key]);
+  }, [key, persistent]);
   const value = useMemo<Ctx>(
     () => ({
       rows,
+      persistent,
+      // 不在這一頁的 IP 不知道是不是公網：當作公網送出，伺服器會略過內網位址
+      pickedRows: [...selected].map((ip) => rows.find((r) => r.ip === ip) ?? { ip, isPublic: true }),
       selected,
       toggle: (ip) =>
         setSelected((s) => {
@@ -54,10 +88,19 @@ export function IpSelectionProvider({ rows, children }: { rows: Row[]; children:
           else n.add(ip);
           return n;
         }),
-      setAll: (on) => setSelected(on ? new Set(rows.map((r) => r.ip)) : new Set()),
+      // 全選／取消只動這一頁的列（跨頁模式下其他頁的勾選保留）
+      setAll: (on) =>
+        setSelected((s) => {
+          const n = new Set(s);
+          for (const r of rows) {
+            if (on) n.add(r.ip);
+            else n.delete(r.ip);
+          }
+          return n;
+        }),
       clear: () => setSelected(new Set()),
     }),
-    [rows, selected],
+    [rows, selected, persistent],
   );
   return <SelectionContext.Provider value={value}>{children}</SelectionContext.Provider>;
 }
@@ -74,8 +117,9 @@ export function IpSelectAll() {
   const { t } = useT();
   const { rows, selected, setAll } = useSelection();
   const ref = useRef<HTMLInputElement>(null);
-  const all = rows.length > 0 && selected.size === rows.length;
-  const some = selected.size > 0 && !all;
+  const onPage = rows.filter((r) => selected.has(r.ip)).length;
+  const all = rows.length > 0 && onPage === rows.length;
+  const some = onPage > 0 && !all;
   useEffect(() => {
     if (ref.current) ref.current.indeterminate = some;
   }, [some]);
@@ -116,17 +160,18 @@ const PRIMARY = `${BTN} border-teal-700 bg-teal-700 text-white hover:bg-teal-800
 const SECONDARY = `${BTN} border-teal-600 text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950`;
 const PLAIN = `${BTN} border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800`;
 
-/** 操作列：沒勾時只有「全部查詢」，勾了之後出現批次動作。 */
-export function IpBatchBar() {
+/** 操作列：沒勾時有「全部查詢（這一頁）」與「查詢全部未分析」，勾了之後出現批次動作。 */
+export function IpBatchBar({ unanalyzed, unanalyzedTotal }: { unanalyzed?: string[]; unanalyzedTotal?: number } = {}) {
   const { t } = useT();
   const router = useRouter();
-  const { rows, selected, clear } = useSelection();
+  const { rows, pickedRows, persistent, selected, clear } = useSelection();
+  const stopRef = useRef(false);
   const [force, setForce] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const busy = progress !== null;
-  const picked = rows.filter((r) => selected.has(r.ip));
+  const picked = persistent ? pickedRows : rows.filter((r) => selected.has(r.ip));
   const n = picked.length;
 
   async function run(list: Row[]) {
@@ -139,9 +184,14 @@ export function IpBatchBar() {
       return;
     }
     const acc: Outcome = { queried: 0, cached: 0, skipped: privateCount, errors: 0 };
+    stopRef.current = false;
     setProgress({ done: 0, total: pub.length });
     try {
       for (let i = 0; i < pub.length; i += CHUNK) {
+        if (stopRef.current) {
+          setMessage(t('已停止；已查的結果都保留。'));
+          break;
+        }
         const chunk = pub.slice(i, i + CHUNK);
         const res = await fetch('/api/v1/ip-intel/batch', {
           method: 'POST',
@@ -157,13 +207,21 @@ export function IpBatchBar() {
           );
           break;
         }
+        let failed = 0;
         for (const it of j.items ?? []) {
           if (it.skipped) acc.skipped += 1;
-          else if (it.error) acc.errors += 1;
-          else if (it.cached) acc.cached += 1;
+          else if (it.error) {
+            acc.errors += 1;
+            failed += 1;
+          } else if (it.cached) acc.cached += 1;
           else acc.queried += 1;
         }
         setProgress({ done: Math.min(pub.length, i + chunk.length), total: pub.length });
+        // 一整批全失敗：多半是今天的免費額度用完了或外部服務連不上，別把剩下的也白跑一遍
+        if (failed > 0 && failed === (j.items ?? []).length) {
+          setMessage(t('這一批全部查詢失敗，可能是外部服務今天的額度用完了或暫時連不上，已停止；明天或稍後再試。'));
+          break;
+        }
       }
     } catch (e) {
       setMessage(t('查詢失敗：{error}', { error: e instanceof Error ? e.message : String(e) }));
@@ -182,6 +240,21 @@ export function IpBatchBar() {
     }
     if (!window.confirm(t('要把這一頁 {n} 個公網 IP 送給已啟用的外部情資來源查詢嗎？會用掉各來源的每日免費額度（查過、還在快取內的不會重打）。', { n: pub }))) return;
     void run(rows);
+  }
+
+  function runUnanalyzed() {
+    const list = unanalyzed ?? [];
+    if (!list.length) return;
+    const more = (unanalyzedTotal ?? list.length) > list.length;
+    if (
+      !window.confirm(
+        more
+          ? t('排名裡有 {total} 個公網 IP 還沒查過外部情資，這次先查前 {n} 個（依嚴重度、次數）。會用掉各來源的每日免費額度，要繼續嗎？', { total: unanalyzedTotal ?? list.length, n: list.length })
+          : t('要查排名裡全部 {n} 個還沒分析過的公網 IP 嗎？會用掉各來源的每日免費額度，可以隨時按「停止」。', { n: list.length }),
+      )
+    )
+      return;
+    void run(list.map((ip) => ({ ip, isPublic: true })));
   }
 
   const aiHref = `/ai?scope=ips&ips=${encodeURIComponent(picked.map((r) => r.ip).join(','))}`;
@@ -222,10 +295,34 @@ export function IpBatchBar() {
           <>
             <span className="text-slate-500">{t('勾選左邊的方框可以一次查多個 IP，或：')}</span>
             <button type="button" className={SECONDARY} disabled={busy || !rows.length} onClick={runAll}>
-              {t('全部查詢（前 {n} 名）', { n: rows.length })}
+              {persistent ? t('這一頁全部查詢（{n} 個）', { n: rows.length }) : t('全部查詢（前 {n} 名）', { n: rows.length })}
             </button>
+            {unanalyzed?.length ? (
+              <button
+                type="button"
+                className={PRIMARY}
+                disabled={busy}
+                onClick={runUnanalyzed}
+                title={t('不限這一頁：把排名裡所有還沒查過外部情資的公網 IP 依序查完（每 5 個一批，顯示進度，可以停止）。')}
+              >
+                {t('查詢全部未分析（{n} 個）', { n: unanalyzedTotal ?? unanalyzed.length })}
+              </button>
+            ) : unanalyzed ? (
+              <span className="text-slate-500">{t('排名裡的公網 IP 都查過了')}</span>
+            ) : null}
           </>
         )}
+        {busy ? (
+          <button
+            type="button"
+            className={PLAIN}
+            onClick={() => {
+              stopRef.current = true;
+            }}
+          >
+            {t('停止')}
+          </button>
+        ) : null}
         <label
           className="ml-auto inline-flex cursor-pointer items-center gap-1 text-slate-500"
           title={t('平常查過的 IP 在快取有效期間（約一天）不會重打外部來源；勾這個會強制重新查詢，會多用額度。')}

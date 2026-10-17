@@ -22,3 +22,5 @@
 | AbuseIPDB / GreyNoise / CrowdSec CTI / AlienVault OTX | IP reputation (API key, opt-in) | each vendor's ToS; community tiers are non-commercial | disabled by default |
 
 Optional rule sets the user may add (not bundled): SigmaHQ (DRL 1.1), Neo23x0 signature-base (DRL), Emerging Threats Suricata rules (BSD). Keep their attribution when importing.
+
+Bundled code in the Hub: country flag SVGs from [`country-flag-icons`](https://gitlab.com/catamphetamine/country-flag-icons) (MIT, © 2020 @catamphetamine).

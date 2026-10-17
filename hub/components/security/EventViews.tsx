@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { IpLink, ipHref } from '@/components/security/IpLink';
 import { IpRiskIcon } from '@/components/security/IpRisk';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { DirectionBadge, SourceBadge, VerdictChip } from '@/components/security/Verdict';
 import { since } from '@/lib/format';
 import type { IpRisk } from '@/lib/ipintel/types';
@@ -207,7 +208,7 @@ export function DestinationTable({ t, rows, showHost = true, risks = {} }: { t: 
               {showHost ? <td className="px-3 py-2 whitespace-nowrap">{d.hostname}</td> : null}
               <td className="px-3 py-2 text-xs">{d.processName ?? '—'}</td>
               <td className="px-3 py-2 text-xs">
-                {d.country ?? ''} {d.org ? <span className="text-slate-500">{d.org}</span> : null}
+                {d.country ? <CountryFlag code={d.country} t={t} /> : null} {d.org ? <span className="text-slate-500">{d.org}</span> : null}
               </td>
               <td className="px-3 py-2 tabular-nums">{d.seenCount}</td>
               <td className="px-3 py-2 whitespace-nowrap text-slate-500">{since(d.lastSeenAt, t)}</td>

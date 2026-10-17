@@ -6,6 +6,7 @@ import { IpBatchBar, IpSelectAll, IpSelectCheckbox, IpSelectionProvider } from '
 import { IpLink, ipHref } from '@/components/security/IpLink';
 import { IpRiskBadge, IpRiskLegend } from '@/components/security/IpRisk';
 import { Card } from '@/components/ui/Card';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import type { RankSort, RankSortKey, RiskyIpRanking as Ranking, RankWindow } from '@/lib/queries/connections';
@@ -54,9 +55,27 @@ export function RiskyIpRanking({
   windowHref,
   sort,
   sortHref,
+  unanalyzed,
+  persistKey,
+  fullListHref,
+  toolbar,
+  footer,
+  emptyText,
 }: {
   t: TFn;
   ranking: Ranking;
+  /** 排名裡還沒查過外部情資的公網 IP（給了就顯示「查詢全部未分析」）。 */
+  unanalyzed?: { ips: string[]; total: number };
+  /** 完整清單頁：勾選跨頁保留在 sessionStorage 的 key。 */
+  persistKey?: string;
+  /** 「看完整清單 →」的連結。 */
+  fullListHref?: string;
+  /** 標題列下方的額外篩選（完整清單頁用）。 */
+  toolbar?: ReactNode;
+  /** 表格下方（分頁）。 */
+  footer?: ReactNode;
+  /** 沒有任何列時的說明。 */
+  emptyText?: string;
   /** 目前的排序與換排序的連結（保留其他篩選）。 */
   sort: RankSort;
   sortHref: (k: RankSortKey) => string;
@@ -103,9 +122,10 @@ export function RiskyIpRanking({
         </span>
       }
     >
+      {toolbar ? <div className="mb-3">{toolbar}</div> : null}
       {items.length ? (
-        <IpSelectionProvider rows={items.map((r) => ({ ip: r.remoteIp, isPublic: r.risk.kind !== 'private' }))}>
-        <IpBatchBar />
+        <IpSelectionProvider rows={items.map((r) => ({ ip: r.remoteIp, isPublic: r.risk.kind !== 'private' }))} persistKey={persistKey}>
+        <IpBatchBar unanalyzed={unanalyzed?.ips} unanalyzedTotal={unanalyzed?.total} />
         <div className="mb-2">
           <IpRiskLegend t={t} />
         </div>
@@ -190,7 +210,14 @@ export function RiskyIpRanking({
                   </td>
                   <td className={`${TD} text-xs`}>{r.processes.length ? r.processes.join('、') : '—'}</td>
                   <td className={`${TD} text-xs text-slate-500`}>
-                    {[r.country, r.org].filter(Boolean).join(' · ') || '—'}
+                    {r.country || r.org ? (
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        {r.country ? <CountryFlag code={r.country} t={t} /> : null}
+                        {r.org ? <span>{r.org}</span> : null}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className={`${TD} max-w-[16rem] text-xs`}>
                     {r.note ? (
@@ -213,9 +240,10 @@ export function RiskyIpRanking({
         </div>
         </IpSelectionProvider>
       ) : (
-        <p className="text-sm text-slate-500">{t('目前沒有被判定可疑或危險的遠端 IP。')}</p>
+        <p className="text-sm text-slate-500">{emptyText ?? t('目前沒有被判定可疑或危險的遠端 IP。')}</p>
       )}
-      {moreHref || lessHref ? (
+      {footer ? <div className="mt-3">{footer}</div> : null}
+      {moreHref || lessHref || fullListHref ? (
         <div className="mt-2 flex gap-4 text-sm">
           {moreHref ? (
             <Link href={moreHref} className="text-teal-700 hover:underline dark:text-teal-400">
@@ -225,6 +253,11 @@ export function RiskyIpRanking({
           {lessHref ? (
             <Link href={lessHref} className="text-teal-700 hover:underline dark:text-teal-400">
               {t('只看前 10 名')}
+            </Link>
+          ) : null}
+          {fullListHref ? (
+            <Link href={fullListHref} className="ml-auto text-teal-700 hover:underline dark:text-teal-400">
+              {t('看完整清單（{n} 個）→', { n: total })}
             </Link>
           ) : null}
         </div>

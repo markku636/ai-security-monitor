@@ -1,6 +1,6 @@
 // 連線查詢（每個 agent 最新快照）：車隊級篩選、對內攻擊來源、危險目的地。
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { agents, connections, destinations, ipNotes } from '@/drizzle/schema';
+import { agents, connections, destinations, ipNotes, ipReputation } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 import { cachedRiskMap } from '@/lib/ipintel/service';
 import type { IpRisk } from '@/lib/ipintel/types';
@@ -76,14 +76,18 @@ const HAS_INTEL = sql`${connections.reasons} @> '[{"type":"intel_hit"}]'::jsonb`
 const HAS_ANOMALY = sql`${connections.reasons} @> '[{"type":"anomaly"}]'::jsonb`;
 /** 理由類型（SQL）：有情資就算情資，否則有行為異常算行為，都沒有算 none。 */
 export const REASON_KIND_SQL = sql<string>`case when ${HAS_INTEL} then 'intel' when ${HAS_ANOMALY} then 'behavior' else 'none' end`;
-/** 公網位址：排除私有、本機、連結本地、CGNAT、多播與未指定位址。 */
-const PUBLIC_IP = sql`(${connections.remoteIp} is not null and not (
-  ${connections.remoteIp}::inet << '10.0.0.0/8' or ${connections.remoteIp}::inet << '172.16.0.0/12' or ${connections.remoteIp}::inet << '192.168.0.0/16'
-  or ${connections.remoteIp}::inet << '127.0.0.0/8' or ${connections.remoteIp}::inet << '169.254.0.0/16' or ${connections.remoteIp}::inet << '100.64.0.0/10'
-  or ${connections.remoteIp}::inet << '224.0.0.0/3' or ${connections.remoteIp}::inet <<= '0.0.0.0/32'
-  or ${connections.remoteIp}::inet << 'fc00::/7' or ${connections.remoteIp}::inet << 'fe80::/10' or ${connections.remoteIp}::inet << 'ff00::/8'
-  or ${connections.remoteIp}::inet <<= '::1/128' or ${connections.remoteIp}::inet <<= '::/128' or ${connections.remoteIp}::inet << '::ffff:0:0/96'
+/** 公網位址：排除私有、本機、連結本地、CGNAT、多播與未指定位址（欄位存的是 IP 文字）。 */
+function publicIpSql(col: typeof connections.remoteIp | typeof destinations.remoteIp): SQL {
+  const ip = sql`${col}::inet`;
+  return sql`(${col} is not null and not (
+  ${ip} << '10.0.0.0/8' or ${ip} << '172.16.0.0/12' or ${ip} << '192.168.0.0/16'
+  or ${ip} << '127.0.0.0/8' or ${ip} << '169.254.0.0/16' or ${ip} << '100.64.0.0/10'
+  or ${ip} << '224.0.0.0/3' or ${ip} <<= '0.0.0.0/32'
+  or ${ip} << 'fc00::/7' or ${ip} << 'fe80::/10' or ${ip} << 'ff00::/8'
+  or ${ip} <<= '::1/128' or ${ip} <<= '::/128' or ${ip} << '::ffff:0:0/96'
 ))`;
+}
+const PUBLIC_IP = publicIpSql(connections.remoteIp);
 
 type Skip = { verdict?: boolean; direction?: boolean; proto?: boolean; state?: boolean; reason?: boolean };
 
@@ -310,16 +314,49 @@ const RISK_SORT_CAP = 2000;
  * 可疑／危險 IP 排名：長期目的地表依遠端 IP 跨主機、跨 port 彙總。
  * seen＝被快照看到的累計次數（每次快照每個 ip:port:方向 算一次），live＝最新快照裡仍判定可疑／危險的條數。
  */
+/** 公網、而且還沒查過外部情資（沒有快取）的目的地。 */
+const DEST_UNANALYZED = sql`(${publicIpSql(destinations.remoteIp)} and not exists (select 1 from ${ipReputation} where ${ipReputation.ip} = ${destinations.remoteIp}))`;
+
+function rankConds(agentId: string | undefined, window: RankWindow, unanalyzed = false): SQL[] {
+  const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];
+  if (agentId) conds.push(eq(destinations.agentId, agentId));
+  if (window !== 'all') conds.push(sql`${destinations.lastRiskyAt} >= now() - (${Number(window)} * interval '1 day')`);
+  if (unanalyzed) conds.push(DEST_UNANALYZED);
+  return conds;
+}
+
+/** 排名裡還沒查過外部情資的公網 IP（「查詢全部未分析」用；依嚴重度、次數排，最多 cap 個）。 */
+export async function unanalyzedRiskyIps(agentId?: string, window: RankWindow = 'all', cap = 500): Promise<{ ips: string[]; total: number }> {
+  const db = getDb();
+  const conds = rankConds(agentId, window, true);
+  const [rows, total] = await Promise.all([
+    db
+      .select({ ip: destinations.remoteIp })
+      .from(destinations)
+      .innerJoin(agents, eq(agents.id, destinations.agentId))
+      .where(and(...conds))
+      .groupBy(destinations.remoteIp)
+      .orderBy(DEST_WORST, desc(sql`sum(${destinations.seenCount})`), destinations.remoteIp)
+      .limit(cap),
+    db
+      .select({ n: sql<number>`count(distinct ${destinations.remoteIp})::int` })
+      .from(destinations)
+      .innerJoin(agents, eq(agents.id, destinations.agentId))
+      .where(and(...conds)),
+  ]);
+  return { ips: rows.map((r) => r.ip), total: Number(total[0]?.n ?? 0) };
+}
+
 export async function riskyIpRanking(
   limit = 10,
   agentId?: string,
   sort: RankSort = { key: 'verdict', dir: 'desc' },
   window: RankWindow = 'all',
+  opts: { offset?: number; unanalyzed?: boolean } = {},
 ) {
   const db = getDb();
-  const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];
-  if (agentId) conds.push(eq(destinations.agentId, agentId));
-  if (window !== 'all') conds.push(sql`${destinations.lastRiskyAt} >= now() - (${Number(window)} * interval '1 day')`);
+  const offset = Math.max(0, opts.offset ?? 0);
+  const conds = rankConds(agentId, window, opts.unanalyzed);
   // 目前條數用相關子查詢算，才能拿來排序（同一層的 agents 會被子查詢自己的 agents 遮住）
   const live = sql<number>`(select count(*) from ${connections} inner join ${agents} on ${agents.id} = ${connections.agentId}
     where ${agents.deletedAt} is null and ${connections.remoteIp} = ${destinations.remoteIp}
@@ -368,7 +405,8 @@ export async function riskyIpRanking(
       .where(and(...conds))
       .groupBy(destinations.remoteIp)
       .orderBy(primary, DEST_WORST, desc(seen), desc(sql`max(${destinations.lastSeenAt})`), destinations.remoteIp)
-      .limit(byRisk ? RISK_SORT_CAP : limit),
+      .limit(byRisk ? RISK_SORT_CAP : limit)
+      .offset(byRisk ? 0 : offset),
     db
       .select({ n: sql<number>`count(distinct ${destinations.remoteIp})::int` })
       .from(destinations)
@@ -393,12 +431,12 @@ export async function riskyIpRanking(
         if (y === null) return -1;
         return sort.dir === 'asc' ? x - y : y - x;
       })
-      .slice(0, limit);
+      .slice(offset, offset + limit);
   }
   return {
     total: Number(total[0]?.n ?? 0),
     items: picked.map((r, i) => ({
-      rank: i + 1,
+      rank: offset + i + 1,
       remoteIp: r.remoteIp,
       risk: riskOf(r.remoteIp),
       worst: (r.worst === 0 ? 'dangerous' : 'suspicious') as VerdictLevel,

@@ -6,6 +6,7 @@ import type { TFn } from '@/lib/i18n/core';
 import { lookupIndicator } from '@/lib/queries/intel';
 import type { Reason } from '@/lib/queries/connections';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 
 export async function IndicatorDetails({ t, q, title }: { t: TFn; q: string; title?: string }) {
   const r = await lookupIndicator(q);
@@ -43,7 +44,8 @@ export async function IndicatorDetails({ t, q, title }: { t: TFn; q: string; tit
                 </Link>
                 <span className="text-xs text-slate-500">
                   {c.processName ?? '—'} · {c.direction === 'inbound' ? `:${c.localPort}` : `:${c.remotePort ?? ''}`} · {c.state}
-                  {c.country ? ` · ${c.country}` : ''}
+                  {c.country ? ' · ' : ''}
+                  {c.country ? <CountryFlag code={c.country} t={t} /> : null}
                   {c.asn ? ` · AS${c.asn}` : ''}
                   {c.org ? ` ${c.org}` : ''}
                 </span>
