@@ -156,8 +156,8 @@ export const en: Record<string, string> = {
   '對內攻擊來源': 'Inbound attack sources',
   // ---- 可疑 IP 排名（連線頁） ----
   '可疑 IP 排名': 'Suspicious IP ranking',
-  '曾被判定可疑或危險的遠端 IP，共 {n} 個；依危險程度與累計次數排序':
-    '{n} remote IPs ever rated suspicious or dangerous, ranked by severity and times seen',
+  '曾被判定可疑或危險的遠端 IP，共 {n} 個；點表頭可以換排序':
+    '{n} remote IPs ever rated suspicious or dangerous; click a column header to sort',
   '遠端 IP': 'Remote IP',
   '每次連線快照看到一次就加 1（同一個 IP 的不同 port、不同主機會加總）':
     'Adds 1 each time a connection snapshot sees it (summed across ports and hosts for the same IP)',

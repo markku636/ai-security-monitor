@@ -17,7 +17,14 @@ import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
 import { resetThrottleForTests } from '@/lib/ingest/route';
-import { inboundAttackers, listConnections, parseConnectionFilter, riskyIpRanking } from '@/lib/queries/connections';
+import {
+  inboundAttackers,
+  listConnections,
+  parseConnectionFilter,
+  parseRankSort,
+  riskyIpRanking,
+  type RankSortKey,
+} from '@/lib/queries/connections';
 import { listFindings, parseFindingFilter } from '@/lib/queries/findings';
 import { topIndicators, topIntelFeeds } from '@/lib/queries/intel';
 import { toQuery } from '@/lib/queries/params';
@@ -150,6 +157,22 @@ describe('connection queries', () => {
     });
 
     expect((await riskyIpRanking(10, 'no-such-agent')).items).toEqual([]);
+  });
+
+  it('sorts the ranking by any column and parses rsort/rdir', async () => {
+    expect(parseRankSort({})).toEqual({ key: 'verdict', dir: 'desc' });
+    expect(parseRankSort({ rsort: 'ip' })).toEqual({ key: 'ip', dir: 'asc' });
+    expect(parseRankSort({ rsort: 'seen', rdir: 'asc' })).toEqual({ key: 'seen', dir: 'asc' });
+    expect(parseRankSort({ rsort: 'bogus', rdir: 'sideways' })).toEqual({ key: 'verdict', dir: 'desc' });
+
+    const ips = async (key: RankSortKey, dir: 'asc' | 'desc') => (await riskyIpRanking(10, undefined, { key, dir })).items.map((x) => x.remoteIp);
+    // IP 依位址數值排序，不是字串（198 < 203）
+    expect(await ips('ip', 'asc')).toEqual(['198.51.100.23', '203.0.113.66']);
+    expect(await ips('ip', 'desc')).toEqual(['203.0.113.66', '198.51.100.23']);
+    // 方向／port：對內那筆打的是 50123，對外是契約裡的 443
+    expect(await ips('port', 'asc')).toEqual(['203.0.113.66', '198.51.100.23']);
+    // 名次跟著目前的排序走
+    expect((await riskyIpRanking(10, undefined, { key: 'ip', dir: 'desc' })).items.map((x) => x.rank)).toEqual([1, 2]);
   });
 
   it('summarises intel hits by feed and indicator with sources', async () => {

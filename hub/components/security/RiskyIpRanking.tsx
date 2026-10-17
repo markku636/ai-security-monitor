@@ -1,23 +1,60 @@
 // 可疑／危險 IP 排名（連線頁上方；server component）。
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
 import { IpLink, ipHref } from '@/components/security/IpLink';
 import { Card } from '@/components/ui/Card';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
-import type { RiskyIpRanking as Ranking } from '@/lib/queries/connections';
+import type { RankSort, RankSortKey, RiskyIpRanking as Ranking } from '@/lib/queries/connections';
 
 const TH = 'whitespace-nowrap px-2 py-1.5 text-left text-xs font-medium text-slate-500';
 const TD = 'px-2 py-2 align-top';
+
+/** 可點的表頭：目前排序的欄位標 ▲／▼，再點一次反向。 */
+function SortTh({
+  k,
+  sort,
+  hrefFor,
+  right,
+  title,
+  children,
+}: {
+  k: RankSortKey;
+  sort: RankSort;
+  hrefFor: (k: RankSortKey) => string;
+  right?: boolean;
+  title?: string;
+  children: ReactNode;
+}) {
+  const active = sort.key === k;
+  return (
+    <th className={`${TH} ${right ? 'text-right' : ''}`} title={title} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <Link
+        href={hrefFor(k)}
+        scroll={false}
+        className={`inline-flex items-center gap-1 hover:text-teal-700 dark:hover:text-teal-300 ${active ? 'text-slate-800 dark:text-slate-100' : ''}`}
+      >
+        {children}
+        <span className={active ? '' : 'opacity-30'}>{active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+      </Link>
+    </th>
+  );
+}
 
 export function RiskyIpRanking({
   t,
   ranking,
   moreHref,
   lessHref,
+  sort,
+  sortHref,
 }: {
   t: TFn;
   ranking: Ranking;
+  /** 目前的排序與換排序的連結（保留其他篩選）。 */
+  sort: RankSort;
+  sortHref: (k: RankSortKey) => string;
   /** 顯示更多名次的連結（已全部列出時不給）。 */
   moreHref?: string;
   /** 收合回前幾名的連結（目前是展開狀態時才給）。 */
@@ -30,7 +67,7 @@ export function RiskyIpRanking({
         <span className="flex flex-wrap items-baseline gap-x-2">
           {t('可疑 IP 排名')}
           <span className="text-xs font-normal text-slate-500">
-            {t('曾被判定可疑或危險的遠端 IP，共 {n} 個；依危險程度與累計次數排序', { n: total })}
+            {t('曾被判定可疑或危險的遠端 IP，共 {n} 個；點表頭可以換排序', { n: total })}
           </span>
         </span>
       }
@@ -41,20 +78,36 @@ export function RiskyIpRanking({
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className={TH}>#</th>
-                <th className={TH}>{t('判定')}</th>
-                <th className={TH}>{t('遠端 IP')}</th>
-                <th className={`${TH} text-right`} title={t('每次連線快照看到一次就加 1（同一個 IP 的不同 port、不同主機會加總）')}>
+                <SortTh k="verdict" sort={sort} hrefFor={sortHref}>
+                  {t('判定')}
+                </SortTh>
+                <SortTh k="ip" sort={sort} hrefFor={sortHref}>
+                  {t('遠端 IP')}
+                </SortTh>
+                <SortTh k="seen" sort={sort} hrefFor={sortHref} right title={t('每次連線快照看到一次就加 1（同一個 IP 的不同 port、不同主機會加總）')}>
                   {t('累計次數')} ⓘ
-                </th>
-                <th className={`${TH} text-right`} title={t('最新快照裡仍判定可疑或危險的連線條數；0 代表目前沒有在連')}>
+                </SortTh>
+                <SortTh k="live" sort={sort} hrefFor={sortHref} right title={t('最新快照裡仍判定可疑或危險的連線條數；0 代表目前沒有在連')}>
                   {t('目前')} ⓘ
-                </th>
-                <th className={`${TH} text-right`}>{t('主機')}</th>
-                <th className={TH}>{t('方向／port')}</th>
-                <th className={TH}>{t('行程')}</th>
-                <th className={TH}>{t('國家／組織')}</th>
-                <th className={TH}>{t('備註')}</th>
-                <th className={TH}>{t('最後看到')}</th>
+                </SortTh>
+                <SortTh k="hosts" sort={sort} hrefFor={sortHref} right>
+                  {t('主機')}
+                </SortTh>
+                <SortTh k="port" sort={sort} hrefFor={sortHref}>
+                  {t('方向／port')}
+                </SortTh>
+                <SortTh k="process" sort={sort} hrefFor={sortHref}>
+                  {t('行程')}
+                </SortTh>
+                <SortTh k="geo" sort={sort} hrefFor={sortHref}>
+                  {t('國家／組織')}
+                </SortTh>
+                <SortTh k="note" sort={sort} hrefFor={sortHref}>
+                  {t('備註')}
+                </SortTh>
+                <SortTh k="last" sort={sort} hrefFor={sortHref}>
+                  {t('最後看到')}
+                </SortTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

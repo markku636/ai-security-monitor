@@ -1,8 +1,7 @@
 // 連線查詢（每個 agent 最新快照）：車隊級篩選、對內攻擊來源、危險目的地。
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { agents, connections, destinations } from '@/drizzle/schema';
+import { agents, connections, destinations, ipNotes } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
-import { ipNoteMap } from './ipnotes';
 import { clampInt, listParam, strParam, type Params } from './params';
 
 export const DIRECTIONS = ['outbound', 'inbound', 'listening', 'local'] as const;
@@ -180,14 +179,60 @@ export async function inboundAttackers(limit = 20) {
 
 const DEST_WORST = sql`min(case ${destinations.worstVerdict} when 'dangerous' then 0 else 1 end)`;
 
+/** 排名表可排序的欄位（表頭點了就換）。 */
+export const RANK_SORT_KEYS = ['verdict', 'ip', 'seen', 'live', 'hosts', 'port', 'process', 'geo', 'note', 'last'] as const;
+export type RankSortKey = (typeof RANK_SORT_KEYS)[number];
+export interface RankSort {
+  key: RankSortKey;
+  dir: 'asc' | 'desc';
+}
+/** 文字欄位第一次點是 A→Z，數字與時間是大→小。 */
+export const RANK_SORT_DEFAULT_DIR: Record<RankSortKey, 'asc' | 'desc'> = {
+  verdict: 'desc',
+  ip: 'asc',
+  seen: 'desc',
+  live: 'desc',
+  hosts: 'desc',
+  port: 'asc',
+  process: 'asc',
+  geo: 'asc',
+  note: 'asc',
+  last: 'desc',
+};
+
+/** 查詢字串 rsort／rdir → 排序；沒給或不認得就是預設（危險程度，再看累計次數）。 */
+export function parseRankSort(p: Params): RankSort {
+  const key = listParam(p, 'rsort', RANK_SORT_KEYS)[0] ?? 'verdict';
+  const dir = listParam(p, 'rdir', ['asc', 'desc'] as const)[0] ?? RANK_SORT_DEFAULT_DIR[key];
+  return { key, dir };
+}
+
 /**
  * 可疑／危險 IP 排名：長期目的地表依遠端 IP 跨主機、跨 port 彙總。
  * seen＝被快照看到的累計次數（每次快照每個 ip:port:方向 算一次），live＝最新快照裡仍判定可疑／危險的條數。
  */
-export async function riskyIpRanking(limit = 10, agentId?: string) {
+export async function riskyIpRanking(limit = 10, agentId?: string, sort: RankSort = { key: 'verdict', dir: 'desc' }) {
   const db = getDb();
   const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];
   if (agentId) conds.push(eq(destinations.agentId, agentId));
+  // 目前條數用相關子查詢算，才能拿來排序（同一層的 agents 會被子查詢自己的 agents 遮住）
+  const live = sql<number>`(select count(*) from ${connections} inner join ${agents} on ${agents.id} = ${connections.agentId}
+    where ${agents.deletedAt} is null and ${connections.remoteIp} = ${destinations.remoteIp}
+    and ${connections.verdict} in ('dangerous', 'suspicious')${agentId ? sql` and ${connections.agentId} = ${agentId}` : sql``})::int`;
+  const seen = sql`sum(${destinations.seenCount})`;
+  const sortExpr: Record<RankSortKey, SQL> = {
+    verdict: sql`(1 - ${DEST_WORST})`,
+    ip: sql`${destinations.remoteIp}::inet`,
+    seen,
+    live,
+    hosts: sql`count(distinct ${destinations.agentId})`,
+    port: sql`min(${destinations.remotePort})`,
+    process: sql`min(${destinations.processName})`,
+    geo: sql`max(${destinations.country}) || ' ' || coalesce(max(${destinations.org}), '')`,
+    note: sql`max(${ipNotes.note})`,
+    last: sql`max(${destinations.lastSeenAt})`,
+  };
+  const primary = sort.dir === 'asc' ? sql`${sortExpr[sort.key]} asc nulls last` : sql`${sortExpr[sort.key]} desc nulls last`;
   const [rows, total] = await Promise.all([
     db
       .select({
@@ -202,12 +247,15 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
         org: sql<string | null>`max(${destinations.org})`,
         firstSeenAt: sql<string>`min(${destinations.firstSeenAt})`,
         lastSeenAt: sql<string>`max(${destinations.lastSeenAt})`,
+        live,
+        note: sql<string | null>`max(${ipNotes.note})`,
       })
       .from(destinations)
       .innerJoin(agents, eq(agents.id, destinations.agentId))
+      .leftJoin(ipNotes, eq(ipNotes.ip, destinations.remoteIp))
       .where(and(...conds))
       .groupBy(destinations.remoteIp)
-      .orderBy(DEST_WORST, desc(sql`sum(${destinations.seenCount})`), desc(sql`max(${destinations.lastSeenAt})`))
+      .orderBy(primary, DEST_WORST, desc(seen), desc(sql`max(${destinations.lastSeenAt})`), destinations.remoteIp)
       .limit(limit),
     db
       .select({ n: sql<number>`count(distinct ${destinations.remoteIp})::int` })
@@ -215,24 +263,6 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
       .innerJoin(agents, eq(agents.id, destinations.agentId))
       .where(and(...conds)),
   ]);
-  const ips = rows.map((r) => r.remoteIp);
-  const live = ips.length
-    ? await db
-        .select({ ip: sql<string>`${connections.remoteIp}`, n: count() })
-        .from(connections)
-        .innerJoin(agents, eq(agents.id, connections.agentId))
-        .where(
-          and(
-            isNull(agents.deletedAt),
-            inArray(connections.remoteIp, ips),
-            inArray(connections.verdict, ['dangerous', 'suspicious']),
-            agentId ? eq(connections.agentId, agentId) : undefined,
-          ),
-        )
-        .groupBy(connections.remoteIp)
-    : [];
-  const liveBy = new Map(live.map((r) => [r.ip, Number(r.n)]));
-  const notes = await ipNoteMap(ips);
   return {
     total: Number(total[0]?.n ?? 0),
     items: rows.map((r, i) => ({
@@ -240,7 +270,7 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
       remoteIp: r.remoteIp,
       worst: (r.worst === 0 ? 'dangerous' : 'suspicious') as VerdictLevel,
       seen: Number(r.seen),
-      live: liveBy.get(r.remoteIp) ?? 0,
+      live: Number(r.live ?? 0),
       hosts: Number(r.hosts),
       ports: [...(r.ports ?? [])].sort((a, b) => a - b).slice(0, 8),
       directions: r.directions ?? [],
@@ -249,7 +279,7 @@ export async function riskyIpRanking(limit = 10, agentId?: string) {
       org: r.org,
       firstSeenAt: r.firstSeenAt,
       lastSeenAt: r.lastSeenAt,
-      note: notes.get(r.remoteIp) ?? null,
+      note: r.note ?? null,
     })),
   };
 }
