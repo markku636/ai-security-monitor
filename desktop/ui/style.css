@@ -167,3 +167,5 @@ details summary { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .splash { display: none; }
 }
+a.btn { text-decoration: none; display: inline-block; }
+details > summary { cursor: pointer; }

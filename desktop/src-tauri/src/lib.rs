@@ -13,7 +13,7 @@ use asa_lib::cli::Env;
 use asa_lib::config;
 use asa_lib::connections::{beacon, history, Classifier};
 use asa_lib::error::AppError;
-use asa_lib::hub::watch;
+use asa_lib::hub::{discover, enroll as keyless, identity, watch};
 use asa_lib::intel::fetch::{self, FeedMeta, UpdateOpts};
 use asa_lib::intel::geo::GeoDb;
 use asa_lib::intel::registry::Registry;
@@ -96,6 +96,7 @@ async fn overview(state: State<'_, AppState>) -> CmdResult<Value> {
         "hostname": hostname(),
         "config_dir": dir.display().to_string(),
         "hub_url": hub_url,
+        "hub_fingerprint": cfg.hub.as_ref().and_then(|h| h.fingerprint.clone()),
         "report": report,
         "intel": {
             "checked_at": intel.checked_at,
@@ -302,6 +303,199 @@ async fn ai_ask(
     result
 }
 
+// ---------------- 加入公司的 Security Hub（免金鑰）----------------
+
+fn pending_json(p: &keyless::PendingEnroll) -> Value {
+    json!({
+        "hub_url": p.hub_url,
+        "hub_name": p.hub_name,
+        "hub_fingerprint": p.hub_fingerprint,
+        "request_code": p.request_code,
+        "created_at": p.created_at,
+        "expires_at": p.expires_at,
+        "status": p.status,
+    })
+}
+
+/// 目前的 Hub 狀態：已加入（含釘選的指紋）、等候核准中、或都沒有。
+#[tauri::command]
+async fn hub_status(state: State<'_, AppState>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let cfg = config::load_or_init(dir).map_err(err)?;
+    Ok(json!({
+        "hub_url": cfg.hub.as_ref().map(|h| h.url.clone()),
+        "hub_fingerprint": cfg.hub.as_ref().and_then(|h| h.fingerprint.clone()),
+        "pending": keyless::load_pending(dir).as_ref().map(pending_json),
+    }))
+}
+
+/// 尋找 Hub：環境變數 AI_SECURITY_MONITOR_HUB_URL、公司 DNS（SRV）、區網廣播（mDNS）；每個都驗過身分簽章。
+#[tauri::command]
+async fn discover_hubs(state: State<'_, AppState>, url: Option<String>) -> CmdResult<Value> {
+    let cfg = config::load_or_init(&state.config_dir).map_err(err)?;
+    let opts = discover::Opts {
+        explicit: url.filter(|u| !u.trim().is_empty()),
+        config_url: cfg.hub.as_ref().map(|h| h.url.clone()),
+        all: true,
+        ..discover::Opts::default()
+    };
+    let found = discover::find(&opts).await.map_err(err)?;
+    Ok(json!({ "hubs": found, "pinned_fingerprint": cfg.hub.and_then(|h| h.fingerprint) }))
+}
+
+/// 對指定的 Hub 送出加入申請（再驗一次身分：指紋要和使用者在畫面上看到的一樣；
+/// 和這台電腦目前加入的 Hub 指紋不同時，要使用者明確確認 `confirmed`）。
+#[tauri::command]
+async fn request_join(
+    state: State<'_, AppState>,
+    url: String,
+    fingerprint: String,
+    confirmed: Option<bool>,
+) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let check = discover::check_hub(&url, false, pinned_fingerprint(dir).as_deref())
+        .await
+        .map_err(err)?;
+    let id = check
+        .identity
+        .clone()
+        .ok_or_else(|| "這個 Hub 版本太舊，不支援免金鑰加入".to_string())?;
+    if !identity::same_fingerprint(&id.fingerprint, &fingerprint) {
+        return Err(format!(
+            "Hub 的指紋變了（畫面上是 {fingerprint}，現在是 {}），已停止",
+            id.fingerprint
+        ));
+    }
+    require_same_hub(&check, confirmed.unwrap_or(false))?;
+    let (p, _) = asa_lib::cli::hub_cmd::start_enroll_request(dir, &check.url, &id, false)
+        .await
+        .map_err(err)?;
+    Ok(pending_json(&p))
+}
+
+// ---------------- 設定頁：Hub 網址、開機自動啟動 ----------------
+
+fn pinned_fingerprint(dir: &std::path::Path) -> Option<String> {
+    config::load_or_init(dir)
+        .ok()
+        .and_then(|c| c.hub)
+        .and_then(|h| h.fingerprint)
+}
+
+/// 要換到別的 Hub（指紋和這台記得的不同）時，前端要先讓使用者明確確認。
+const NEEDS_CONFIRM: &str = "needs_confirm:";
+
+fn require_same_hub(check: &discover::HubCheck, confirmed: bool) -> CmdResult<()> {
+    if check.fingerprint_changed && !confirmed {
+        return Err(format!(
+            "{NEEDS_CONFIRM}這個 Hub 的指紋（{}）和這台電腦目前加入的 Hub（{}）不同。換過去之後，這台電腦會改回報到新的 Hub。",
+            check
+                .identity
+                .as_ref()
+                .map(|i| i.fingerprint.as_str())
+                .unwrap_or("—"),
+            check.pinned_fingerprint.as_deref().unwrap_or("—")
+        ));
+    }
+    Ok(())
+}
+
+/// 測試連線：網址規則、/api/health、Hub 身分（驗章），並和這台釘選的指紋比對。
+#[tauri::command]
+async fn hub_check(state: State<'_, AppState>, url: String) -> CmdResult<Value> {
+    let pinned = pinned_fingerprint(&state.config_dir);
+    let c = discover::check_hub(&url, false, pinned.as_deref()).await.map_err(err)?;
+    serde_json::to_value(c).map_err(|e| e.to_string())
+}
+
+/// 用管理員給的註冊金鑰加入（原本的 enroll --key 流程）。
+#[tauri::command]
+async fn enroll_with_key(state: State<'_, AppState>, url: String, key: String, confirmed: bool) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let check = discover::check_hub(&url, false, pinned_fingerprint(dir).as_deref())
+        .await
+        .map_err(err)?;
+    require_same_hub(&check, confirmed)?;
+    let mut env = state.env();
+    env.global.json = true;
+    asa_lib::cli::hub_cmd::enroll(&env, &check.url, key.trim(), false, false)
+        .await
+        .map_err(err)?;
+    hub_status(state).await
+}
+
+/// 離開目前的 Hub（只刪這台的設定與金鑰；Hub 上的主機紀錄要管理員自己刪）。
+#[tauri::command]
+async fn leave_hub(state: State<'_, AppState>) -> CmdResult<()> {
+    asa_lib::cli::hub_cmd::unenroll(&state.env()).await.map_err(err)
+}
+
+/// 背景自動回報（使用者層服務）的狀態。
+#[tauri::command]
+async fn background_service_status(state: State<'_, AppState>) -> CmdResult<Value> {
+    asa_lib::cli::service_cmd::user_service_status(&state.config_dir)
+        .await
+        .map_err(err)
+}
+
+/// 開／關背景自動回報（等同 service install|uninstall --yes，只裝使用者層、不跳 UAC）。
+#[tauri::command]
+async fn set_background_service(state: State<'_, AppState>, enabled: bool) -> CmdResult<Value> {
+    let lines = asa_lib::cli::service_cmd::set_user_service(&state.config_dir, enabled)
+        .await
+        .map_err(err)?;
+    let status = background_service_status(state).await?;
+    Ok(json!({ "lines": lines, "status": status }))
+}
+
+/// 登入時開啟桌面版（常駐系統匣、不跳視窗）。
+#[tauri::command]
+fn desktop_autostart_status(app: AppHandle) -> CmdResult<bool> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_desktop_autostart(app: AppHandle, enabled: bool) -> CmdResult<bool> {
+    use tauri_plugin_autostart::ManagerExt;
+    let a = app.autolaunch();
+    if enabled {
+        a.enable().map_err(|e| e.to_string())?;
+    } else {
+        a.disable().map_err(|e| e.to_string())?;
+    }
+    a.is_enabled().map_err(|e| e.to_string())
+}
+
+/// 問一次核准狀態；核准了就完成註冊（存金鑰、釘選 Hub 指紋）。
+#[tauri::command]
+async fn join_poll(state: State<'_, AppState>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let mut cfg = config::load_or_init(dir).map_err(err)?;
+    let agent = asa_lib::cli::hub_cmd::agent_info(&cfg);
+    match keyless::step(dir, &mut cfg, &agent, false).await.map_err(err)? {
+        None => Ok(json!({ "status": "none" })),
+        Some(keyless::Step::Waiting(st)) => Ok(json!({
+            "status": "pending",
+            "poll_interval_s": keyless::poll_delay(None, Some(&st)).as_secs(),
+            "pending": keyless::load_pending(dir).as_ref().map(pending_json),
+        })),
+        Some(keyless::Step::Done(r)) => Ok(json!({
+            "status": "approved",
+            "hub_url": cfg.hub.as_ref().map(|h| h.url.clone()),
+            "hub_name": r.hub.name,
+        })),
+        Some(keyless::Step::Rejected(reason)) => Ok(json!({ "status": "rejected", "reason": reason })),
+        Some(keyless::Step::Expired) => Ok(json!({ "status": "expired" })),
+    }
+}
+
+/// 取消等候中的申請（Hub 上的申請會自己過期）。
+#[tauri::command]
+async fn cancel_join(state: State<'_, AppState>) -> CmdResult<()> {
+    keyless::clear_pending(&state.config_dir).map_err(err)
+}
+
 /// 用預設瀏覽器開網址（只接受 http/https）。
 #[tauri::command]
 fn open_url(url: String) -> CmdResult<()> {
@@ -325,16 +519,23 @@ fn show_main(app: &AppHandle) {
     }
 }
 
-pub fn run() {
+/// 登入時自動啟動桌面版用的參數：常駐系統匣、不跳視窗。
+pub const TRAY_ARG: &str = "--tray";
+
+pub fn run(start_in_tray: bool) {
     let config_dir = config::config_dir(None).expect("config dir");
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![TRAY_ARG]),
+        ))
         .manage(AppState {
             config_dir,
             intel: Mutex::new(None),
             ai_running: AtomicBool::new(false),
         })
-        .setup(|app| {
+        .setup(move |app| {
             let show = MenuItem::with_id(app, "show", "開啟主視窗", true, None::<&str>)?;
             let hub = MenuItem::with_id(app, "hub", "開啟 Security Hub", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "結束", true, None::<&str>)?;
@@ -368,7 +569,9 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
-            show_main(app.handle());
+            if !start_in_tray {
+                show_main(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|w, e| {
@@ -388,6 +591,18 @@ pub fn run() {
             intel_update,
             ai_providers,
             ai_ask,
+            hub_status,
+            discover_hubs,
+            request_join,
+            join_poll,
+            cancel_join,
+            hub_check,
+            enroll_with_key,
+            leave_hub,
+            background_service_status,
+            set_background_service,
+            desktop_autostart_status,
+            set_desktop_autostart,
             open_url
         ])
         .run(tauri::generate_context!())

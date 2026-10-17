@@ -196,6 +196,14 @@ const DATA = {
     '198.51.100.23': { ip: '198.51.100.23', hits: [hit('blocklistde', '198.51.100.23')], geo: { country: 'RU', asn: 64503, org: 'Example Transit' }, class: 'Public' },
   },
   ai: { answer: AI_ANSWER, tools: AI_TOOLS },
+  hub_status: { hub_url: 'https://hub.example.com', hub_fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', pending: null },
+  background_service: {
+    status: { scope: 'user', manager: 'windows_run', installed: true, legacy: false },
+    exe: 'C:\Users\demo\AppData\Local\AI Security Monitor\ai-security-monitor-desktop.exe',
+    config_dir: 'C:\Users\demo\AppData\Roaming\ai-security-monitor',
+    running: 1,
+    legacy_running: false,
+  },
 };
 
 // 在頁面裡執行：模擬 Tauri 2 的 window.__TAURI__.core.invoke 與 event.listen（withGlobalTauri）
@@ -213,6 +221,10 @@ function installMock(D) {
     scan_now: () => D.latest_report,
     intel_update: () => [],
     open_url: () => null,
+    hub_status: () => D.hub_status,
+    background_service_status: () => D.background_service,
+    desktop_autostart_status: () => true,
+    discover_hubs: () => ({ hubs: [], pinned_fingerprint: D.hub_status.hub_fingerprint }),
     ai_ask: async ({ provider }) => {
       emit('ai-event', { type: 'start', provider: provider === 'codex' ? 'Codex CLI' : 'Claude Code' });
       for (const [name, input] of D.ai.tools) {
@@ -366,7 +378,7 @@ const SHOTS = [
       await waitFor(`/完成/.test(document.getElementById('status').textContent)`);
     },
   ],
-  ['desktop-settings', 'settings', false, async () => waitFor(`document.querySelector('.kv')`)],
+  ['desktop-settings', 'settings', false, async () => waitFor(`document.getElementById('auto-bg') && !document.getElementById('auto-bg').disabled && !document.getElementById('auto-tray').disabled`)],
   ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table')`)],
 ];
 

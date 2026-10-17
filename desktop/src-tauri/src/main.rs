@@ -1,8 +1,14 @@
-//! 桌面版入口：沒有參數就開視窗；帶命令列參數（例如 AI 掛的 `mcp --tools …`）就當 ai-security-monitor CLI 執行。
+//! 桌面版入口：沒有參數就開視窗；`--tray`（登入時自動啟動）只放到系統匣、不跳視窗；
+//! 其他命令列參數（例如 AI 掛的 `mcp --tools …`、背景服務的 `watch --service`）就當 ai-security-monitor CLI 執行。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    if std::env::args().nth(1).is_some_and(|a| !a.starts_with("-psn")) {
+    let first = std::env::args().nth(1);
+    if first.as_deref() == Some(ai_security_monitor_desktop_lib::TRAY_ARG) {
+        ai_security_monitor_desktop_lib::run(true);
+        return;
+    }
+    if first.is_some_and(|a| !a.starts_with("-psn")) {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -10,5 +16,5 @@ fn main() {
         let code = rt.block_on(asa_lib::cli::run());
         std::process::exit(code);
     }
-    ai_security_monitor_desktop_lib::run();
+    ai_security_monitor_desktop_lib::run(false);
 }

@@ -22,6 +22,8 @@ tauri-build = { version = "2", features = [] }
 ai-security-monitor = { path = "../../agent", default-features = false, features = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"
+# 「登入時開啟桌面版」（Windows Run 機碼／macOS LaunchAgent／Linux XDG autostart），帶 --tray 只放系統匣
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
