@@ -285,6 +285,33 @@ export const MetricsBatch = z
   })
   .passthrough();
 
+/** DNS 查詢紀錄（agent 每分鐘聚合；`contract/dns.v1.json`）。 */
+export const DnsRecordIn = z
+  .object({
+    ts: isoDate,
+    name: shortText(253).min(1),
+    registrable: shortText(253).nullish(),
+    qtype: z.number().int().min(0).max(65_535),
+    rcode: shortText(16),
+    process: shortText(260).nullish(),
+    exe: shortText(1024).nullish(),
+    pid: z.number().int().nonnegative().nullish(),
+    count: z.number().int().min(1).max(10_000_000),
+    answers: z.array(shortText(64)).max(16).default([]),
+    cnames: z.array(shortText(253)).max(8).default([]),
+    source: shortText(16),
+  })
+  .passthrough();
+/** 一次最多幾列（agent 每批送 500 列）。 */
+export const MAX_DNS_RECORDS = 1000;
+export const DnsBatch = z
+  .object({
+    agent_id: AgentInfo.shape.id,
+    records: z.array(DnsRecordIn).min(1).max(MAX_DNS_RECORDS),
+  })
+  .passthrough();
+export type DnsBatchT = z.infer<typeof DnsBatch>;
+
 export type ReportT = z.infer<typeof Report>;
 export type MetricsBatchT = z.infer<typeof MetricsBatch>;
 export type MetricSampleT = z.infer<typeof MetricSample>;

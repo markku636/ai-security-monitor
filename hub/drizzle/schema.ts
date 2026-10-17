@@ -616,3 +616,75 @@ export const hostMetricsHourly = pgTable(
   },
   (t) => [primaryKey({ columns: [t.agentId, t.hour] }), index('host_metrics_hourly_hour_idx').on(t.hour)],
 );
+
+/**
+ * DNS 查詢紀錄（agent 每分鐘聚合後上傳；保留 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS` 天，預設 7）。
+ * 同一列重送（agent 的離線佇列）以唯一鍵覆蓋，不會重複計算。`process` 沒有時是空字串（唯一鍵不能有 null）。
+ */
+export const dnsQueries = pgTable(
+  'dns_queries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    /** 這一分鐘的開始。 */
+    ts: ts('ts').notNull(),
+    name: text('name').notNull(),
+    /** 可註冊網域（eTLD+1；Hub 端簡化計算，見 lib/dns/domain.ts）。 */
+    registrable: text('registrable').notNull(),
+    qtype: integer('qtype').notNull(),
+    rcode: text('rcode').notNull(),
+    process: text('process').notNull().default(''),
+    exe: text('exe'),
+    count: integer('count').notNull(),
+    answers: jsonb('answers').$type<string[]>().notNull().default([]),
+    cnames: jsonb('cnames').$type<string[]>().notNull().default([]),
+    /** etw／eventlog／cache／packet／resolved。 */
+    source: text('source').notNull(),
+    receivedAt: ts('received_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('dns_queries_uq').on(t.agentId, t.ts, t.name, t.qtype, t.rcode, t.process, t.source),
+    index('dns_queries_agent_ts_idx').on(t.agentId, t.ts),
+    index('dns_queries_reg_ts_idx').on(t.registrable, t.ts),
+    index('dns_queries_name_idx').on(t.name),
+    index('dns_queries_ts_idx').on(t.ts),
+    index('dns_queries_received_idx').on(t.receivedAt),
+  ],
+);
+
+/** 每小時、每台主機、每個可註冊網域的彙總（保留 `AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS` 天，預設 90）。 */
+export const dnsQueriesHourly = pgTable(
+  'dns_queries_hourly',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    hour: ts('hour').notNull(),
+    registrable: text('registrable').notNull(),
+    queries: integer('queries').notNull().default(0),
+    nxdomain: integer('nxdomain').notNull().default(0),
+    names: integer('names').notNull().default(0),
+    processes: jsonb('processes').$type<string[]>().notNull().default([]),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.agentId, t.hour, t.registrable] }),
+    index('dns_hourly_reg_idx').on(t.registrable, t.hour),
+    index('dns_hourly_hour_idx').on(t.hour),
+  ],
+);
+
+/** 全部主機看過的可註冊網域：第一次／最後一次出現（「新出現的網域」）。 */
+export const dnsDomains = pgTable(
+  'dns_domains',
+  {
+    registrable: text('registrable').primaryKey(),
+    firstSeenAt: ts('first_seen_at').notNull(),
+    lastSeenAt: ts('last_seen_at').notNull(),
+    firstAgentId: text('first_agent_id'),
+    firstProcess: text('first_process'),
+  },
+  (t) => [index('dns_domains_first_idx').on(t.firstSeenAt), index('dns_domains_last_idx').on(t.lastSeenAt)],
+);
