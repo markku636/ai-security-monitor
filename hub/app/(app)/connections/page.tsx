@@ -2,7 +2,7 @@ import { ConnectionsView } from '@/components/security/ConnectionsView';
 import { RiskyIpRanking } from '@/components/security/RiskyIpRanking';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
-import { parseRankSort, RANK_SORT_DEFAULT_DIR, riskyIpRanking, type RankSortKey } from '@/lib/queries/connections';
+import { parseRankSort, parseRankWindow, RANK_SORT_DEFAULT_DIR, riskyIpRanking, type RankSortKey, type RankWindow } from '@/lib/queries/connections';
 import { clampInt, strParam } from '@/lib/queries/params';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const agentId = strParam(params, 'agent_id', 64);
   const rank = clampInt(params, 'rank', 10, 5, 50);
   const sort = parseRankSort(params);
-  const ranking = await riskyIpRanking(rank, agentId, sort);
+  const rankWindow = parseRankWindow(params);
+  const ranking = await riskyIpRanking(rank, agentId, sort, rankWindow);
+  // 預設 30 天：網址不帶 rwin
+  const windowHref = (w: RankWindow) => withParams(params, { rwin: w === '30' ? undefined : w });
   // 同一欄再點一次反向；換欄位用該欄的預設方向
   const sortHref = (k: RankSortKey) =>
     withParams(params, {
@@ -58,6 +61,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         lessHref={rank > 10 ? withParams(params, { rank: undefined }) : undefined}
         sort={sort}
         sortHref={sortHref}
+        rankWindow={rankWindow}
+        windowHref={windowHref}
       />
       <ConnectionsView base="/connections" params={params} />
     </div>

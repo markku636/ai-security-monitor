@@ -170,6 +170,10 @@ export const en: Record<string, string> = {
   '目前沒有被判定可疑或危險的遠端 IP。': 'No remote IP has been rated suspicious or dangerous.',
   '顯示前 50 名 →': 'Show top 50 →',
   '只看前 10 名': 'Top 10 only',
+  '最近 7 天': 'Last 7 days',
+  '最近 30 天': 'Last 30 days',
+  '全部時間': 'All time',
+  '依「最後一次被判可疑」的時間篩選：之後判定變好的 IP（例如舊的誤報）過了這段時間就不再列出': 'Filters by when an IP was last rated suspicious: IPs whose verdict improved later (e.g. old false positives) drop off after this period',
   // ---- IP 人工備註 ----
   '人工備註': 'Notes',
   '備註': 'Note',

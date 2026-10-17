@@ -12,7 +12,7 @@ import { GET as lookupRoute } from '@/app/api/v1/intel/lookup/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
 import { POST as report } from '@/app/api/v1/ingest/report/route';
 import { POST as snapshot } from '@/app/api/v1/ingest/snapshot/route';
-import { agents, auditLog, findings } from '@/drizzle/schema';
+import { agents, auditLog, destinations, findings } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
@@ -22,6 +22,7 @@ import {
   listConnections,
   parseConnectionFilter,
   parseRankSort,
+  parseRankWindow,
   riskyIpRanking,
   type RankSortKey,
 } from '@/lib/queries/connections';
@@ -157,6 +158,30 @@ describe('connection queries', () => {
     });
 
     expect((await riskyIpRanking(10, 'no-such-agent')).items).toEqual([]);
+  });
+
+  it('records when a destination was last risky and filters the ranking by time window', async () => {
+    const rows = await db.select().from(destinations);
+    const risky = rows.filter((r) => r.worstVerdict === 'dangerous' || r.worstVerdict === 'suspicious');
+    expect(risky.length).toBeGreaterThan(0);
+    expect(risky.every((r) => r.lastRiskyAt instanceof Date)).toBe(true);
+    expect(rows.filter((r) => r.worstVerdict === 'safe').every((r) => r.lastRiskyAt === null)).toBe(true);
+
+    expect(parseRankWindow({})).toBe('30');
+    expect(parseRankWindow({ rwin: '7' })).toBe('7');
+    expect(parseRankWindow({ rwin: 'forever' })).toBe('30');
+
+    // 對內那個 IP 最後一次被判可疑是 60 天前：30 天內不列，全部時間才列
+    await db
+      .update(destinations)
+      .set({ lastRiskyAt: new Date(Date.now() - 60 * 86_400_000) })
+      .where(eq(destinations.remoteIp, '198.51.100.23'));
+    const ips = async (w: '7' | '30' | 'all') =>
+      (await riskyIpRanking(10, undefined, undefined, w)).items.map((x) => x.remoteIp).sort();
+    expect(await ips('all')).toEqual(['198.51.100.23', '203.0.113.66']);
+    expect(await ips('30')).toEqual(['203.0.113.66']);
+    expect((await riskyIpRanking(10, undefined, undefined, '30')).total).toBe(1);
+    await db.update(destinations).set({ lastRiskyAt: new Date() }).where(eq(destinations.remoteIp, '198.51.100.23'));
   });
 
   it('sorts the ranking by any column and parses rsort/rdir', async () => {

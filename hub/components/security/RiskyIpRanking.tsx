@@ -8,7 +8,8 @@ import { IpRiskBadge, IpRiskLegend } from '@/components/security/IpRisk';
 import { Card } from '@/components/ui/Card';
 import { since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
-import type { RankSort, RankSortKey, RiskyIpRanking as Ranking } from '@/lib/queries/connections';
+import type { RankSort, RankSortKey, RiskyIpRanking as Ranking, RankWindow } from '@/lib/queries/connections';
+import { RANK_WINDOWS } from '@/lib/queries/connections';
 
 const TH = 'whitespace-nowrap px-2 py-1.5 text-left text-xs font-medium text-slate-500';
 const TD = 'px-2 py-2 align-top';
@@ -49,6 +50,8 @@ export function RiskyIpRanking({
   ranking,
   moreHref,
   lessHref,
+  rankWindow,
+  windowHref,
   sort,
   sortHref,
 }: {
@@ -61,8 +64,12 @@ export function RiskyIpRanking({
   moreHref?: string;
   /** 收合回前幾名的連結（目前是展開狀態時才給）。 */
   lessHref?: string;
+  /** 時間範圍（依最後一次被判可疑）與切換連結；沒給就不顯示切換。 */
+  rankWindow?: RankWindow;
+  windowHref?: (w: RankWindow) => string;
 }) {
   const { items, total } = ranking;
+  const windowLabel: Record<RankWindow, string> = { '7': t('最近 7 天'), '30': t('最近 30 天'), all: t('全部時間') };
   return (
     <Card
       title={
@@ -71,6 +78,28 @@ export function RiskyIpRanking({
           <span className="text-xs font-normal text-slate-500">
             {t('曾被判定可疑或危險的遠端 IP，共 {n} 個；點表頭可以換排序', { n: total })}
           </span>
+          {rankWindow && windowHref ? (
+            <span
+              className="ml-auto flex gap-1 text-xs font-normal"
+              title={t('依「最後一次被判可疑」的時間篩選：之後判定變好的 IP（例如舊的誤報）過了這段時間就不再列出')}
+            >
+              {RANK_WINDOWS.map((w) => (
+                <Link
+                  key={w}
+                  href={windowHref(w)}
+                  scroll={false}
+                  aria-current={w === rankWindow ? 'true' : undefined}
+                  className={`rounded-full border px-2 py-0.5 ${
+                    w === rankWindow
+                      ? 'border-teal-600 bg-teal-600 text-white'
+                      : 'border-slate-300 text-slate-600 hover:border-teal-500 dark:border-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {windowLabel[w]}
+                </Link>
+              ))}
+            </span>
+          ) : null}
         </span>
       }
     >

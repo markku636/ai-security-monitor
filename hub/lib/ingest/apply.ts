@@ -316,6 +316,7 @@ export async function applySnapshot(db: DB, s: SnapshotT): Promise<SnapshotResul
       firstSeenAt: at,
       lastSeenAt: at,
       worstVerdict: r.verdict,
+      lastRiskyAt: r.verdict === 'dangerous' || r.verdict === 'suspicious' ? at : null,
       processName: r.processName,
       country: r.country,
       asn: r.asn,
@@ -334,6 +335,7 @@ export async function applySnapshot(db: DB, s: SnapshotT): Promise<SnapshotResul
             country: sql`coalesce(excluded.country, ${destinations.country})`,
             asn: sql`coalesce(excluded.asn, ${destinations.asn})`,
             org: sql`coalesce(excluded.org, ${destinations.org})`,
+            lastRiskyAt: sql`coalesce(excluded.last_risky_at, ${destinations.lastRiskyAt})`,
             worstVerdict: sql`case when ${verdictRankSql(sql`excluded.worst_verdict`)} > ${verdictRankSql(destinations.worstVerdict)} then excluded.worst_verdict else ${destinations.worstVerdict} end`,
           },
         });

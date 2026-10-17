@@ -210,6 +210,15 @@ export function parseRankSort(p: Params): RankSort {
   return { key, dir };
 }
 
+/** 排名的時間範圍：依「最後一次被判可疑」篩（舊的誤報會自然消失）。 */
+export const RANK_WINDOWS = ['7', '30', 'all'] as const;
+export type RankWindow = (typeof RANK_WINDOWS)[number];
+
+/** 查詢字串 rwin；沒給就是最近 30 天。 */
+export function parseRankWindow(p: Params): RankWindow {
+  return listParam(p, 'rwin', RANK_WINDOWS)[0] ?? '30';
+}
+
 /** 依外部風險排序時最多先撈幾個 IP 在記憶體裡排（分數是用快取的外部情資即時算的，SQL 排不了）。 */
 const RISK_SORT_CAP = 2000;
 
@@ -217,10 +226,16 @@ const RISK_SORT_CAP = 2000;
  * 可疑／危險 IP 排名：長期目的地表依遠端 IP 跨主機、跨 port 彙總。
  * seen＝被快照看到的累計次數（每次快照每個 ip:port:方向 算一次），live＝最新快照裡仍判定可疑／危險的條數。
  */
-export async function riskyIpRanking(limit = 10, agentId?: string, sort: RankSort = { key: 'verdict', dir: 'desc' }) {
+export async function riskyIpRanking(
+  limit = 10,
+  agentId?: string,
+  sort: RankSort = { key: 'verdict', dir: 'desc' },
+  window: RankWindow = 'all',
+) {
   const db = getDb();
   const conds: SQL[] = [isNull(agents.deletedAt), inArray(destinations.worstVerdict, ['dangerous', 'suspicious'])];
   if (agentId) conds.push(eq(destinations.agentId, agentId));
+  if (window !== 'all') conds.push(sql`${destinations.lastRiskyAt} >= now() - (${Number(window)} * interval '1 day')`);
   // 目前條數用相關子查詢算，才能拿來排序（同一層的 agents 會被子查詢自己的 agents 遮住）
   const live = sql<number>`(select count(*) from ${connections} inner join ${agents} on ${agents.id} = ${connections.agentId}
     where ${agents.deletedAt} is null and ${connections.remoteIp} = ${destinations.remoteIp}

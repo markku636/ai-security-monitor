@@ -71,6 +71,13 @@
       "when": 1792226174283,
       "tag": "0009_enrollment_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792252541520,
+      "tag": "0010_destinations_last_risky",
+      "breakpoints": true
     }
   ]
 }

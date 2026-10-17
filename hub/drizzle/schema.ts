@@ -271,6 +271,8 @@ export const destinations = pgTable(
     firstSeenAt: ts('first_seen_at').notNull(),
     lastSeenAt: ts('last_seen_at').notNull(),
     worstVerdict: text('worst_verdict').notNull(),
+    /** 最後一次被判可疑／危險的時間（之後判定變好就不再更新），可疑 IP 排名依它篩時間範圍。 */
+    lastRiskyAt: ts('last_risky_at'),
     processName: text('process_name'),
     country: text('country'),
     asn: integer('asn'),
