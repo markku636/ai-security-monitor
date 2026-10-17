@@ -62,6 +62,13 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 - 回應：`{ ok, stored, duplicate, stale, performance, server_time }`。舊版 Hub 沒有這個端點（404）時，agent 保留樣本、30 分鐘後再試。
 - 細節與保留期限見 [metrics.md](metrics.md)。
 
+### `POST /api/v1/ingest/dns`
+
+內容：`contract/dns.v1.json` `{ agent_id, records: [{ ts, name, registrable?, qtype, rcode, process?, exe?, pid?, count, answers[], cnames[], source }] }`，一批 1–1000 列、壓縮後 ≤ 2 MB。每列是背景 DNS 蒐集每分鐘依（網域, 類型, 結果, 程式）聚合的結果；只有 `dns.upload = all` 的主機會送。
+- (agent, `ts`, `name`, `qtype`, `rcode`, `process`, `source`) 唯一：重送以新值覆蓋、不重複計算；比 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS`（預設 7 天）舊的列略過；每小時彙總保留 `AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS`（預設 90 天）。
+- `registrable` 是 agent 依 Public Suffix List 算的可註冊網域（沒有時 Hub 取最後兩段）。
+- 回應：`{ ok, stored, stale, domains, server_time }`。舊版 Hub 沒有這個端點（404）時，agent 保留紀錄、30 分鐘後再試。
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`。未知 agent 回 404。

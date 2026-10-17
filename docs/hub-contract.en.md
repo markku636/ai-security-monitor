@@ -63,6 +63,13 @@ Body: `contract/metrics.v1.json` `{ agent_id, performance, samples: [{ ts, inter
 - Response: `{ ok, stored, duplicate, stale, performance, server_time }`. When an older Hub does not have the endpoint (404), the agent keeps the samples and retries after 30 minutes.
 - Details and retention: [metrics.en.md](metrics.en.md).
 
+### `POST /api/v1/ingest/dns`
+
+Body: `contract/dns.v1.json` `{ agent_id, records: [{ ts, name, registrable?, qtype, rcode, process?, exe?, pid?, count, answers[], cnames[], source }] }`, 1–1000 records per batch, ≤ 2 MB compressed. Each record is the background DNS collector's per-minute aggregate by (domain, type, result, program); only hosts with `dns.upload = all` send them.
+- (agent, `ts`, `name`, `qtype`, `rcode`, `process`, `source`) is unique: re-sending overwrites instead of double counting; records older than `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS` (default 7 days) are ignored; hourly rollups are kept for `AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS` (default 90 days).
+- `registrable` is the registrable domain the agent computed from the Public Suffix List (the Hub falls back to the last two labels).
+- Response: `{ ok, stored, stale, domains, server_time }`. When an older Hub does not have the endpoint (404), the agent keeps the records and retries after 30 minutes.
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 Body: `{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`. Unknown agents get 404.

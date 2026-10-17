@@ -21,7 +21,7 @@ export const maxDuration = 900;
 
 const Body = z.object({
   provider: z.enum(['claude', 'codex']).optional(),
-  scope: z.enum(['fleet', 'connections', 'indicator', 'ips', 'traffic', 'events', 'agent']).default('fleet'),
+  scope: z.enum(['fleet', 'connections', 'indicator', 'ips', 'traffic', 'dns', 'events', 'agent']).default('fleet'),
   indicator: z.string().max(64).refine((s) => isIP(s) > 0).optional(),
   /** scope=ips：多個 IP（最多 AI_MAX_IPS 個）。 */
   ips: z.array(z.string().trim().max(64).refine((s) => isIP(s) > 0)).min(1).max(AI_MAX_IPS).optional(),
@@ -51,9 +51,12 @@ export async function POST(req: Request): Promise<Response> {
   if (body.scope === 'ips' && !body.ips?.length) return error(400, 'bad_request', { rule: 'ips' });
 
   const lang = resolveLang(parseCookies(req)[LANG_COOKIE], req.headers.get('accept-language'));
-  const base = body.prompt?.trim() || (lang === 'en' ? SCOPE_PROMPTS[body.scope].en : SCOPE_PROMPTS[body.scope].zh);
+  // 單一指標可以是 IP 或網域：網域用網域版的提示
+  const isDomain = body.scope === 'indicator' && !!body.indicator && !isIP(body.indicator);
+  const preset = isDomain ? SCOPE_PROMPTS.domain : SCOPE_PROMPTS[body.scope];
+  const base = body.prompt?.trim() || (lang === 'en' ? preset.en : preset.zh);
   // 指定裝置時只看那一台（每種範圍都適用）
-  let prompt = body.indicator ? `${base}\n\nIP: ${body.indicator}` : base;
+  let prompt = body.indicator ? `${base}\n\n${isDomain ? (lang === 'en' ? 'Domain' : '網域') : 'IP'}: ${body.indicator}` : base;
   if (body.scope === 'ips' && body.ips?.length) {
     const ips = [...new Set(body.ips)];
     prompt += `\n\nIPs (${ips.length}): ${ips.join(', ')}\n\n${await buildIpsContext(ips, lang)}`;

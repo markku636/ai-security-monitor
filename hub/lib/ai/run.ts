@@ -231,6 +231,14 @@ export const SCOPE_PROMPTS: Record<string, { zh: string; en: string }> = {
     zh: '解讀網路流量：哪些目的地或行程可疑？哪些看起來正常？也用 fleet_traffic 看各主機與各程式的上傳／下載量，找出異常的大量上傳、流量突增或在非上班時間傳很多資料的主機。',
     en: 'Interpret the traffic: which destinations or processes look suspicious, which look normal? Also use fleet_traffic to check upload/download volume per host and per process and point out unusual large uploads, spikes, or hosts moving a lot of data off-hours.',
   },
+  dns: {
+    zh: '解讀 DNS 監看：先用 dns_overview 看查詢量、熱門網域、新出現的網域與未處理的 DNS 告警；對可疑的網域用 domain_summary 與 lookup_indicator 看是哪些主機、哪個程式查的、解析到哪些 IP、情資有沒有列名（附來源）。分辨誤報（CDN、更新、遙測的亂數子網域）與真的要處理的（情資網域、DNS 通道、DGA、程式自己走加密 DNS），依急迫程度給出處置。',
+    en: 'Interpret DNS monitoring: start with dns_overview (lookup volume, top domains, newly seen domains, open DNS findings); for suspicious domains use domain_summary and lookup_indicator to see which hosts and processes looked them up, which IPs they resolved to and whether threat intel lists them (cite sources). Separate false positives (random subdomains of CDNs, updaters, telemetry) from real problems (intel-listed domains, DNS tunneling, DGA, programs using their own encrypted DNS) and give next steps by urgency.',
+  },
+  domain: {
+    zh: '分析這個網域（見下方）：用 domain_summary 看哪些主機的哪個程式查過、結果、解析到的 IP、第一次出現時間與相關告警；用 lookup_indicator 查情資命中（附來源）。判斷它大概是什麼服務、是不是誤報，最後給出建議（放著、加白名單、或在防護 DNS 封鎖）。',
+    en: 'Analyze this domain (below): use domain_summary for which hosts and processes looked it up, result codes, resolved IPs, first seen and related findings; use lookup_indicator for threat-intel hits (cite sources). Work out what service it probably is and whether it is a false positive, then recommend what to do (leave it, allowlist it, or block it on the protective DNS).',
+  },
   events: { zh: '分析各主機的當機原因（藍屏代碼、模組、時間模式），並評估資安事件是否需要處理。', en: 'Analyze crash root causes on each host (bugcheck codes, modules, timing patterns) and assess whether the security events need action.' },
   agent: { zh: '檢查這台主機（agent_id 見下方）：連線、發現、當機與資安事件，給出結論與處置。', en: 'Review this host (agent_id below): connections, findings, crashes and security events; give a verdict and next steps.' },
 };

@@ -14,6 +14,7 @@ export const TACTICS = [
   { id: 'lateral-movement', zh: '橫向移動', en: 'Lateral Movement' },
   { id: 'collection', zh: '蒐集資料', en: 'Collection' },
   { id: 'command-and-control', zh: '遠端控制', en: 'Command and Control' },
+  { id: 'exfiltration', zh: '資料外洩', en: 'Exfiltration' },
   { id: 'impact', zh: '破壞', en: 'Impact' },
 ] as const;
 export type TacticId = (typeof TACTICS)[number]['id'];
@@ -42,6 +43,12 @@ export const TECHNIQUES: Record<string, Technique> = {
   T1070: { en: 'Indicator Removal', zh: '湮滅證據', tactics: ['defense-evasion'], hint: '刪除紀錄掩蓋行蹤' },
   'T1070.001': { en: 'Clear Windows Event Logs', zh: '清除事件記錄', tactics: ['defense-evasion'], hint: '清空 Windows 事件記錄' },
   T1071: { en: 'Application Layer Protocol', zh: '透過一般協定遠端控制', tactics: ['command-and-control'], hint: '把控制指令藏在 HTTP、DNS 等一般流量裡' },
+  'T1071.004': { en: 'DNS', zh: '透過 DNS 遠端控制', tactics: ['command-and-control'], hint: '把控制指令藏在 DNS 查詢與回應裡' },
+  T1572: { en: 'Protocol Tunneling', zh: '協定通道', tactics: ['command-and-control'], hint: '把流量包在 DNS、加密 DNS 或反向通道服務裡，繞過防火牆與監看' },
+  T1568: { en: 'Dynamic Resolution', zh: '動態解析', tactics: ['command-and-control'], hint: '用會變動的網域或位址找控制伺服器' },
+  'T1568.002': { en: 'Domain Generation Algorithms', zh: '亂數產生網域（DGA）', tactics: ['command-and-control'], hint: '惡意程式用演算法每天產生大量網域，找到哪個能連就用哪個' },
+  T1048: { en: 'Exfiltration Over Alternative Protocol', zh: '透過其他協定偷傳資料', tactics: ['exfiltration'], hint: '不走一般上傳，改用 DNS 等協定把資料送出去' },
+  'T1048.003': { en: 'Exfiltration Over Unencrypted Non-C2 Protocol', zh: '透過 DNS 等明文協定偷傳資料', tactics: ['exfiltration'], hint: '把資料編碼進 DNS 查詢之類的明文協定送出去' },
   T1078: { en: 'Valid Accounts', zh: '使用合法帳號', tactics: ['initial-access', 'persistence', 'privilege-escalation', 'defense-evasion'], hint: '用偷來或預設的帳號登入' },
   'T1078.001': { en: 'Default Accounts', zh: '預設帳號', tactics: ['initial-access', 'persistence', 'privilege-escalation', 'defense-evasion'], hint: '用系統內建的 Guest、Administrator 等帳號' },
   'T1078.003': { en: 'Local Accounts', zh: '本機帳號', tactics: ['initial-access', 'persistence', 'privilege-escalation', 'defense-evasion'], hint: '用這台電腦上的本機帳號（含 root）' },

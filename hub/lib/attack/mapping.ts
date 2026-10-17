@@ -32,6 +32,13 @@ export interface Mapping {
 
 /** 規則樣式：完整名稱，或結尾 `*` 的前綴。 */
 export const RULE_MAP: Record<string, Mapping> = {
+  // ---- DNS ----
+  'dns.intel_domain': { mitre: ['T1071.004'], compliance: C.monitoring },
+  'dns.tunnel': { mitre: ['T1572', 'T1048.003'], compliance: C.monitoring },
+  'dns.dga': { mitre: ['T1568.002'], compliance: [...C.malware.slice(0, 2), ...C.monitoring.slice(0, 2)] },
+  'dns.nxdomain_burst': { mitre: ['T1568.002'], compliance: C.monitoring },
+  'dns.doh_bypass': { mitre: ['T1572'], compliance: C.monitoring },
+  'dns.tunnel_service': { mitre: ['T1572'], compliance: C.monitoring },
   // ---- 連線 ----
   'connections.beaconing': { mitre: ['T1071'], compliance: C.monitoring },
   'connections.shell_with_network': { mitre: ['T1059'], compliance: C.monitoring },

@@ -15,6 +15,7 @@ import { agentHardening, agentVuln, hardeningOverview, vulnOverview } from '@/li
 import { bandwidthSeries, hostPerfSeries, hostTrafficRanking, interfaceBreakdown, latestPerf, parseRange, perfAlerts, processTraffic, trafficSummary } from '@/lib/queries/metrics';
 import { getAgent } from '@/lib/queries/agents';
 import { processActivity, topDestinations } from '@/lib/queries/traffic';
+import { dnsDigest, domainDetail, normalizeDomain, recentQueries } from '@/lib/queries/dns';
 
 export interface ToolDef {
   name: string;
@@ -82,6 +83,24 @@ export const TOOLS: ToolDef[] = [
     description:
       'Performance metrics (CPU, memory, disk usage and I/O, network rate, top processes by CPU/memory, battery) for one host over a range; only available when the host itself turned performance collection on (the hub cannot enable it). Without agent_id: hosts whose latest CPU, memory or disk usage is at or above 90%.',
     inputSchema: obj({ agent_id: agent, range: { type: 'string', enum: ['1h', '24h', '7d', '30d'] } }),
+  },
+  {
+    name: 'dns_overview',
+    description:
+      'DNS monitoring across the fleet (or one agent): lookup totals and NXDOMAIN share for the range, most-queried registrable domains, domains first seen in the fleet in the last 24 h, and open DNS findings (threat-intel domains, DNS tunneling, DGA, NXDOMAIN bursts, DoH bypass, reverse tunnel services).',
+    inputSchema: obj({ days, agent_id: agent }),
+  },
+  {
+    name: 'dns_queries',
+    description:
+      'Recent DNS lookups (raw per-minute records, newest first, kept about 7 days): host, process, name, type, result (NOERROR/NXDOMAIN/…), count and resolved IPs. Filter by agent_id, a substring of the domain or process (q) and nxdomain_only.',
+    inputSchema: obj({ agent_id: agent, q: { type: 'string' }, nxdomain_only: { type: 'boolean' }, limit: { type: 'integer', minimum: 1, maximum: 200 } }),
+  },
+  {
+    name: 'domain_summary',
+    description:
+      'One domain (or registrable domain) across the fleet: which hosts and processes looked it up, result codes, resolved IPs, full names seen, hourly counts for 7 days, first/last seen in the fleet and related DNS findings. Use lookup_indicator for threat-intel hits on the domain.',
+    inputSchema: obj({ domain: { type: 'string' } }, ['domain']),
   },
   { name: 'intel_feeds', description: 'Threat-intel sources used by the agents: vendor, license (commercial use, attribution), confidence and 7-day hits.', inputSchema: obj({}) },
 ];
@@ -252,6 +271,22 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
         },
         latest,
       });
+    }
+    case 'dns_overview':
+      return toText(await dnsDigest(num(args, 'days', 1, 90), str(args, 'agent_id')));
+    case 'dns_queries':
+      return toText(
+        await recentQueries({
+          agentId: str(args, 'agent_id'),
+          q: str(args, 'q'),
+          nx: args.nxdomain_only === true,
+          limit: num(args, 'limit', 50, 200),
+        }),
+      );
+    case 'domain_summary': {
+      const d = normalizeDomain(str(args, 'domain') ?? '');
+      if (!d) return toText({ error: 'invalid domain' });
+      return toText({ query: d, ...(await domainDetail(d)) });
     }
     case 'intel_feeds': {
       const stats = await feedHitStats(7);

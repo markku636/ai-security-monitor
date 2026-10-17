@@ -61,6 +61,7 @@ export function AiConsole({
     ['ips', t('一次分析多個 IP')],
     ['agent', t('單一主機完整檢查')],
     ['traffic', t('解讀流量')],
+    ['dns', t('解讀 DNS')],
     ['events', t('分析當機與資安事件')],
   ];
 

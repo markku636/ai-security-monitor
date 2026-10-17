@@ -70,6 +70,8 @@ function indicatorOf(f: FindingT): string | null {
       return typeof ev.name === 'string' ? ev.name : null;
     case 'flow':
       return typeof ev.remote === 'string' ? ev.remote : null;
+    case 'dns':
+      return typeof ev.registrable === 'string' && ev.registrable ? ev.registrable : typeof ev.name === 'string' ? ev.name : null;
     default:
       return null;
   }

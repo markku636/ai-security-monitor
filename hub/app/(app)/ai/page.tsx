@@ -20,7 +20,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
   await requireAdmin();
   const { t } = await getT();
   const sp = await searchParams;
-  const scope = ['fleet', 'connections', 'indicator', 'ips', 'agent', 'traffic', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
+  const scope = ['fleet', 'connections', 'indicator', 'ips', 'agent', 'traffic', 'dns', 'events'].includes(strParam(sp, 'scope', 20) ?? '') ? (strParam(sp, 'scope', 20) as string) : 'fleet';
   const [agents, recent] = await Promise.all([
     listAgents(),
     getDb().select().from(aiAnalyses).orderBy(desc(aiAnalyses.createdAt)).limit(20),

@@ -51,6 +51,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             items: [
               { href: '/connections', label: t('連線'), hint: t('誰連到哪裡、安全還是危險'), icon: 'network' },
               { href: '/traffic', label: t('流量'), hint: t('頻寬、哪台與哪個程式用最多、常連的目的地'), icon: 'traffic' },
+              { href: '/dns', label: t('DNS'), hint: t('查了哪些網域、哪個程式查的、哪些可疑'), icon: 'dns' },
               { href: '/intel', label: t('威脅情資'), hint: t('判斷危險用的黑名單來源'), icon: 'intel' },
             ],
           },
