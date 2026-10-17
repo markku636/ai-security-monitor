@@ -73,11 +73,12 @@ jobs:
             # Linux 沒有 eBPF 就沒有各程式用量；Windows runner 是系統管理員，要讀得到 TCP 延伸統計，數字要合理
             Linux) jq -e '.sample.net.processes == null' m-on.json > /dev/null ;;
             Windows) jq -e '.elevated and .sample.net.process_source == "estats" and all(.sample.net.processes[]; .rx_bytes < 10000000000 and .tx_bytes < 10000000000)' m-on.json > /dev/null ;;
+            # macOS：nettop 的各程式累計量要解析得到（失敗時印出原始輸出方便排查）
             macOS)
               if ! jq -e '.sample.net.process_source == "nettop"' m-on.json > /dev/null; then
-                echo "::warning::nettop per-process bytes unavailable on this runner"
                 perl -e 'alarm 15; exec @ARGV' nettop -P -L 1 -x -J bytes_in,bytes_out > nettop.txt 2>&1 || echo "nettop exit $?"
                 head -5 nettop.txt; wc -l < nettop.txt
+                exit 1
               fi ;;
           esac
           cargo run -q -- metrics --duration 1s

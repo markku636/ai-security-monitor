@@ -110,6 +110,6 @@ The MCP tool `get_metrics` returns the same plus a summary of the last hour (pea
 
 - Linux has no per-program network usage (not without eBPF); the Hub's traffic page shows "Current connections per process" instead.
 - Per-program usage on Windows needs administrator rights and counts TCP payload bytes only; the per-user sign-in variant does not have it.
-- macOS `nettop` may be unavailable on some managed machines (MDM restrictions, CI machines); only the per-program figures are missing then.
+- macOS `nettop` may be unavailable on some managed machines (MDM restrictions); only the per-program figures are missing then.
 - Disk I/O depends on the platform: Windows has none when disk performance counters are off (`diskperf -n`); network drives and tmpfs are not listed.
 - If the computer sleeps or shuts down within an interval, that time's bytes are counted in the first sample after waking (rates use the real elapsed time).

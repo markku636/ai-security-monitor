@@ -67,22 +67,38 @@ pub fn cumulative_deltas<K: std::hash::Hash + Eq + Clone>(
 }
 
 /// `nettop -P -L 1 -x -J bytes_in,bytes_out` 的 CSV → (程式名稱, pid) → (收, 送) 累計值。
+/// 欄位位置看表頭（`bytes_in`、`bytes_out`；程式欄在 `bytes_in` 前一欄）：實際輸出沒有時間欄
+/// （`,bytes_in,bytes_out,` ／ `launchd.1,0,0,`），有些版本有（`time,,bytes_in,…`），兩種都認。
 pub fn parse_nettop(out: &str) -> HashMap<(String, u32), (u64, u64)> {
     let mut m = HashMap::new();
+    let (mut rx_i, mut tx_i) = (1usize, 2usize);
     for line in out.lines() {
-        let f: Vec<&str> = line.split(',').collect();
-        if f.len() < 4 || f[1].is_empty() {
+        let f: Vec<&str> = line.split(',').map(str::trim).collect();
+        if let (Some(r), Some(t)) = (
+            f.iter().position(|c| *c == "bytes_in"),
+            f.iter().position(|c| *c == "bytes_out"),
+        ) {
+            if r >= 1 {
+                (rx_i, tx_i) = (r, t);
+            }
             continue;
         }
-        let (Ok(rx), Ok(tx)) = (f[2].trim().parse::<u64>(), f[3].trim().parse::<u64>()) else {
+        let name_i = rx_i - 1;
+        let (Some(proc_col), Some(rx), Some(tx)) = (f.get(name_i), f.get(rx_i), f.get(tx_i)) else {
             continue;
         };
+        let (Ok(rx), Ok(tx)) = (rx.parse::<u64>(), tx.parse::<u64>()) else {
+            continue;
+        };
+        if proc_col.is_empty() {
+            continue;
+        }
         // 「程式名稱.pid」；名稱本身可能有點
-        let (name, pid) = match f[1].rsplit_once('.') {
+        let (name, pid) = match proc_col.rsplit_once('.') {
             Some((n, p)) if p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty() => {
                 (n.to_string(), p.parse::<u32>().unwrap_or(0))
             }
-            _ => (f[1].to_string(), 0),
+            _ => (proc_col.to_string(), 0),
         };
         let e: &mut (u64, u64) = m.entry((name, pid)).or_insert((0, 0));
         e.0 = e.0.saturating_add(rx);
@@ -337,6 +353,13 @@ mod tests {
         assert_eq!(m.get(&("Google Chrome He".to_string(), 912)), Some(&(1_048_576, 2_048)));
         assert_eq!(m.get(&("com.apple.WebKit.Networking".to_string(), 77)), Some(&(5, 6)));
         assert_eq!(m.len(), 4);
+
+        // macOS 實際的輸出（GitHub 的 macOS runner）：沒有時間欄
+        let real = ",bytes_in,bytes_out,\nlaunchd.1,0,0,\nsyslogd.121,0,23680,\ntrustd.162,19498,8219,\n";
+        let m = parse_nettop(real);
+        assert_eq!(m.get(&("trustd".to_string(), 162)), Some(&(19_498, 8_219)));
+        assert_eq!(m.get(&("syslogd".to_string(), 121)), Some(&(0, 23_680)));
+        assert_eq!(m.len(), 3);
     }
 
     #[test]
