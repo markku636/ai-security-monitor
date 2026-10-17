@@ -194,6 +194,11 @@ export function RiskyIpRanking({
                     <IpLink ip={r.remoteIp} className="font-mono text-xs" risk={r.risk} t={t}>
                       {r.remoteIp}
                     </IpLink>
+                    {r.domain ? (
+                      <div className="max-w-[14rem] truncate text-xs text-slate-500" title={t('主機連線時解析出的網域：{d}', { d: r.domain })}>
+                        {r.domain}
+                      </div>
+                    ) : null}
                   </td>
                   <td className={`${TD} text-right font-semibold tabular-nums`}>{r.seen}</td>
                   <td className={`${TD} text-right tabular-nums ${r.live ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>

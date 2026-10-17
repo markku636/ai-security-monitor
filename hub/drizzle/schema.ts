@@ -462,6 +462,36 @@ export const ipReputation = pgTable(
   (t) => [index('ip_reputation_queried_idx').on(t.queriedAt)],
 );
 
+/**
+ * IP 上的網域（外部被動 DNS 反查：HackerTarget、VirusTotal、AlienVault OTX）：只有管理員在 IP 分析頁按「查詢網域」才會打外部 API。
+ * 跟 ip_reputation 分開存，免得「查過網域」被當成「查過外部情資」。results：provider id → 該來源最近一次的結果。
+ */
+export const ipDomainLookups = pgTable(
+  'ip_domain_lookups',
+  {
+    ip: text('ip').primaryKey(),
+    results: jsonb('results').$type<Record<string, unknown>>().notNull().default({}),
+    queriedAt: ts('queried_at').notNull().defaultNow(),
+    queriedBy: text('queried_by'),
+  },
+  (t) => [index('ip_domain_lookups_queried_idx').on(t.queriedAt)],
+);
+
+/** 主機自己解析過的網域（agent 快照的 dns_names：Windows DNS 快取裡對到目前連線 IP 的名稱），保留 30 天。 */
+export const ipDomains = pgTable(
+  'ip_domains',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    ip: text('ip').notNull(),
+    domain: text('domain').notNull(),
+    firstSeenAt: ts('first_seen_at').notNull(),
+    lastSeenAt: ts('last_seen_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.ip, t.domain] }), index('ip_domains_ip_idx').on(t.ip), index('ip_domains_seen_idx').on(t.lastSeenAt)],
+);
+
 /** 管理員對遠端 IP 的人工備註（例如「公司 VPN，已確認」）；一個 IP 一則，清空即刪除。 */
 export const ipNotes = pgTable('ip_notes', {
   ip: text('ip').primaryKey(),

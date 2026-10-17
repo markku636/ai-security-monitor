@@ -229,15 +229,14 @@ mod tests {
 
     #[test]
     fn contract_snapshot_v1() {
-        check(
-            "snapshot.v1.json",
-            json!({
-                "agent_id": sample_agent().id,
-                "ts": t(9, 31),
-                "connections": [sample_connection()],
-                "listeners": [sample_listener()],
-            }),
-        );
+        let payload = crate::hub::contract::SnapshotPayload {
+            agent_id: sample_agent().id,
+            ts: t(9, 31),
+            connections: vec![sample_connection()],
+            listeners: vec![sample_listener()],
+            dns_names: [("203.0.113.66".to_string(), vec!["updates.example.net".to_string()])].into(),
+        };
+        check("snapshot.v1.json", serde_json::to_value(payload).unwrap());
     }
 
     #[test]

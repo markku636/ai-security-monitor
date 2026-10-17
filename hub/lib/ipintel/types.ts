@@ -1,7 +1,10 @@
 // IP 外部情資的共用型別（server／client 都會 import，這裡只放型別與常數）。
 
-export const PROVIDER_IDS = ['abuseipdb', 'greynoise', 'ipinfo', 'proxycheck', 'rdns'] as const;
+export const PROVIDER_IDS = ['abuseipdb', 'greynoise', 'ipinfo', 'proxycheck', 'rdns', 'hackertarget', 'virustotal', 'otx'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
+
+/** reputation＝算風險分數用（批次查詢會打）；domains＝只在「這個 IP 上的網域」按「查詢網域」才打。 */
+export type ProviderPurpose = 'reputation' | 'domains';
 
 export type SkipReason =
   | 'no-api-key'
@@ -49,7 +52,38 @@ export interface ProviderResult {
   detail?: string;
   fetchedAt: string;
   data?: Profile;
+  /** 被動 DNS 來源（purpose=domains）：這個 IP 上看過的網域。 */
+  domains?: DomainList;
   raw?: unknown;
+}
+
+export interface DomainItem {
+  name: string;
+  /** 來源最後一次看到這個網域解析到這個 IP（ISO；來源沒給就是 null）。 */
+  lastSeen: string | null;
+}
+
+export interface DomainList {
+  /** 來源報的總數（可能比 items 多，items 只存前 200 個）；來源沒給總數時＝items 數。 */
+  total: number;
+  items: DomainItem[];
+}
+
+/** IP 分析頁「這個 IP 上的網域」。 */
+export interface IpDomainsView {
+  ip: string;
+  isPublic: boolean;
+  lookupsEnabled: boolean;
+  queriedAt: string | null;
+  /** 主機自己解析過的（agent 快照的 DNS 快取）。 */
+  local: { domain: string; hosts: string[]; lastSeenAt: string }[];
+  /** 反解（PTR，來自外部情資的 DNS 來源快取）。 */
+  ptr: string | null;
+  providers: ProviderView[];
+  /** 各外部來源合併、去重後的網域（最多 200 個；最近看到的在前）。 */
+  merged: { name: string; sources: ProviderId[]; lastSeen: string | null }[];
+  /** 外部來源報的最大總數（不同來源各算各的，取最大）。 */
+  total: number;
 }
 
 /** ai-security-monitor agent 的黑名單在這個 IP 上的命中（intel_hits）。 */
@@ -107,6 +141,7 @@ export interface IpIntelView {
 export interface SourceStatus {
   id: ProviderId;
   name: string;
+  purpose: ProviderPurpose;
   key: 'required' | 'optional' | 'none';
   env: string | null;
   keySource: 'env' | 'settings' | null;

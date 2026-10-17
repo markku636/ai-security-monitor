@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { and, count, eq, lt, min, ne, type SQL } from 'drizzle-orm';
-import { aiAnalyses, destinations, ipReputation } from '@/drizzle/schema';
+import { aiAnalyses, destinations, ipDomainLookups, ipDomains, ipReputation } from '@/drizzle/schema';
+import { pruneLocalDomains } from '@/lib/ipintel/domains';
 import type { DB } from '@/lib/db';
 import { env } from '@/lib/env';
 
@@ -47,8 +48,11 @@ export async function clearAiAnalyses(db: DB, opts: { before?: Date; id?: string
   return rows.length;
 }
 
-/** 連線歷史（看過的目的地＝可疑 IP 排名的累計）；可只清某台主機、或某天以前沒再看到的。 */
+/** 連線歷史（看過的目的地＝可疑 IP 排名的累計，連同主機解析過的網域）；可只清某台主機、或某天以前沒再看到的。 */
 export async function clearConnectionHistory(db: DB, opts: { before?: Date; agentId?: string } = {}): Promise<number> {
+  await db
+    .delete(ipDomains)
+    .where(andAll([opts.before ? lt(ipDomains.lastSeenAt, opts.before) : undefined, opts.agentId ? eq(ipDomains.agentId, opts.agentId) : undefined]));
   const rows = await db
     .delete(destinations)
     .where(andAll([opts.before ? lt(destinations.lastSeenAt, opts.before) : undefined, opts.agentId ? eq(destinations.agentId, opts.agentId) : undefined]))
@@ -56,8 +60,9 @@ export async function clearConnectionHistory(db: DB, opts: { before?: Date; agen
   return rows.length;
 }
 
-/** 外部情資查詢快取（AbuseIPDB、GreyNoise…的結果）；清掉後 IP 分析頁要重新按查詢。 */
+/** 外部情資查詢快取（AbuseIPDB、GreyNoise…的結果，連同網域反查的結果）；清掉後 IP 分析頁要重新按查詢。 */
 export async function clearIpIntelCache(db: DB, opts: { before?: Date } = {}): Promise<number> {
+  await db.delete(ipDomainLookups).where(opts.before ? lt(ipDomainLookups.queriedAt, opts.before) : undefined);
   const rows = await db
     .delete(ipReputation)
     .where(opts.before ? lt(ipReputation.queriedAt, opts.before) : undefined)
@@ -101,11 +106,12 @@ function safeList(dir: string): string[] {
   }
 }
 
-/** 保留期限（排程每 10 分鐘跟 metrics 彙總一起跑）：AI 分析預設 90 天、外部情資快取預設 30 天；0＝不自動清。 */
-export async function pruneHistory(db: DB, now = new Date()): Promise<{ ai: number; ipintel: number }> {
+/** 保留期限（排程每 10 分鐘跟 metrics 彙總一起跑）：AI 分析預設 90 天、外部情資快取預設 30 天（0＝不自動清）；主機解析過的網域固定 30 天。 */
+export async function pruneHistory(db: DB, now = new Date()): Promise<{ ai: number; ipintel: number; domains: number }> {
   const e = env();
   const day = 86_400_000;
   const ai = e.aiRetentionDays > 0 ? await clearAiAnalyses(db, { before: new Date(now.getTime() - e.aiRetentionDays * day) }) : 0;
   const ipintel = e.ipIntelCacheDays > 0 ? await clearIpIntelCache(db, { before: new Date(now.getTime() - e.ipIntelCacheDays * day) }) : 0;
-  return { ai, ipintel };
+  const domains = await pruneLocalDomains(db, now);
+  return { ai, ipintel, domains };
 }

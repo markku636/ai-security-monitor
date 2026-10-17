@@ -15,6 +15,7 @@ export function ConnectionsTable({
   showHost = true,
   notes = {},
   risks = {},
+  domains = {},
   sort,
   sortHref,
 }: {
@@ -28,6 +29,8 @@ export function ConnectionsTable({
   notes?: Record<string, string>;
   /** 遠端 IP → 快取的外部風險（IP 前面顯示圖示）。 */
   risks?: Record<string, IpRisk>;
+  /** IP → 主機解析出的網域（最近一次）。 */
+  domains?: Record<string, string>;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -91,6 +94,11 @@ export function ConnectionsTable({
                         </span>
                       ) : null}
                     </div>
+                    {c.remoteIp && domains[c.remoteIp] ? (
+                      <div className="max-w-[16rem] truncate text-slate-500" title={t('主機連線時解析出的網域：{d}', { d: domains[c.remoteIp] })}>
+                        {domains[c.remoteIp]}
+                      </div>
+                    ) : null}
                     <div className="text-slate-500">{t('本機 {ep}', { ep: endpoint(c.localIp, c.localPort) })}</div>
                   </>
                 )}

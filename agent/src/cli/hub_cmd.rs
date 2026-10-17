@@ -1341,7 +1341,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                 intel = watch::load_intel(&env.config_dir).await;
                 intel_loaded = std::time::Instant::now();
             }
-            match watch::snapshot(&env.config_dir, &cfg.agent_id, intel.clone()).await {
+            match watch::snapshot(&env.config_dir, &cfg.agent_id, intel.clone(), cfg.scan.dns_names).await {
                 Ok(s) => {
                     let bad = s.connections.iter().filter(|c| c.verdict.is_bad()).count();
                     if let Some(c) = &client {

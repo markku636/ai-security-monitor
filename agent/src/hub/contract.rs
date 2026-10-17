@@ -19,6 +19,9 @@ pub struct SnapshotPayload {
     pub ts: DateTime<Utc>,
     pub connections: Vec<Connection>,
     pub listeners: Vec<Listener>,
+    /// 目前連線的公網 IP → 這台電腦解析過的網域名稱（Windows DNS 快取；`scan.dns_names = false` 時不送）。
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dns_names: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

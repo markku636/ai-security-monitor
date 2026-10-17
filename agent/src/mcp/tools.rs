@@ -280,7 +280,7 @@ fn direction_of(s: &str) -> Option<Direction> {
 
 async fn snapshot(ctx: &ToolCtx) -> Result<crate::hub::contract::SnapshotPayload, String> {
     let cfg = crate::config::load_or_init(&ctx.config_dir).map_err(|e| e.message())?;
-    crate::hub::watch::snapshot(&ctx.config_dir, &cfg.agent_id, ctx.intel().await)
+    crate::hub::watch::snapshot(&ctx.config_dir, &cfg.agent_id, ctx.intel().await, cfg.scan.dns_names)
         .await
         .map_err(|e| e.message())
 }

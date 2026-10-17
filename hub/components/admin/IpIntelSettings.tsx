@@ -63,6 +63,9 @@ export function IpIntelSettings({ status }: { status: SourcesConfigStatus }) {
                   <div className="font-medium">{p.name}</div>
                   <div className="text-xs text-slate-500">{keyText(p.key)}</div>
                   {p.id === 'rdns' ? <div className="text-xs text-slate-500">{t('用 hub 主機自己的 DNS 反查，不經第三方網站')}</div> : null}
+                  {p.purpose === 'domains' ? (
+                    <div className="max-w-xs text-xs text-slate-500">{t('查這個 IP 上有哪些網域：只在 IP 分析頁按「查詢網域」才送出，不算進風險分數，批次查詢也不會用到')}</div>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2">
                   <input

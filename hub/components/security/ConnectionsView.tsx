@@ -3,6 +3,7 @@ import { directionLabel, verdictLabel } from '@/components/security/Verdict';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip, FilterRow, Pager, SearchBox, toggled } from '@/components/ui/Filters';
 import { HostFilter } from '@/components/ui/HostFilter';
+import { localDomainMap } from '@/lib/ipintel/domains';
 import { getT } from '@/lib/i18n/server';
 import { DIRECTIONS, listConnections, parseConnectionFilter, PROTOS, REASON_KINDS, VERDICTS, type ConnectionFilter, type ConnSortKey } from '@/lib/queries/connections';
 import { cachedRisks } from '@/lib/ipintel/service';
@@ -63,8 +64,9 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
   const f = { ...parseConnectionFilter(params), ...(agentId ? { agentId } : {}) };
   const r = await listConnections(f);
   const ips = r.items.map((c) => c.remoteIp);
-  const [noteMap, risks] = await Promise.all([ipNoteMap(ips), cachedRisks(ips)]);
+  const [noteMap, risks, domainMap] = await Promise.all([ipNoteMap(ips), cachedRisks(ips), localDomainMap(ips.filter((x): x is string => !!x))]);
   const notes = Object.fromEntries(noteMap);
+  const domains = Object.fromEntries(domainMap);
   const showHost = !agentId;
   return (
     <div className="space-y-3">
@@ -182,6 +184,7 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
           showHost={showHost}
           notes={notes}
           risks={risks}
+          domains={domains}
           sort={{ key: f.sort ?? 'verdict', dir: f.dir ?? 'asc' }}
           sortHref={(k: ConnSortKey) =>
             href(base, f, { sort: k, dir: (f.sort ?? 'verdict') === k && (f.dir ?? 'asc') === 'asc' ? 'desc' : 'asc', offset: 0 })

@@ -3,6 +3,7 @@
 
 pub mod beacon;
 pub mod classify;
+pub mod dnsnames;
 pub mod hashcache;
 pub mod history;
 pub mod snapshot;

@@ -92,6 +92,13 @@
       "when": 1792259472678,
       "tag": "0012_agent_update_advertise",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792266650359,
+      "tag": "0013_ip_domains",
+      "breakpoints": true
     }
   ]
 }

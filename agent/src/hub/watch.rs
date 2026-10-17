@@ -62,13 +62,18 @@ pub fn save_action_key(config_dir: &Path, accept: bool, key: Option<&str>) -> Ap
     }
 }
 
-/// 拍一次連線快照：socket＋行程、方向、異常旗標、beacon、情資判定、地理。
-pub async fn snapshot(config_dir: &Path, agent_id: &str, intel: Option<Arc<IntelDb>>) -> AppResult<SnapshotPayload> {
+/// 拍一次連線快照：socket＋行程、方向、異常旗標、beacon、情資判定、地理；`dns_names` 時附上連線 IP 對應的網域（Windows）。
+pub async fn snapshot(
+    config_dir: &Path,
+    agent_id: &str,
+    intel: Option<Arc<IntelDb>>,
+    dns_names: bool,
+) -> AppResult<SnapshotPayload> {
     let dir = config_dir.to_path_buf();
     let allowlist = Allowlist::load(&dir)?;
     let baseline = Baseline::load(&dir)?;
     let agent_id = agent_id.to_string();
-    tokio::task::spawn_blocking(move || -> AppResult<SnapshotPayload> {
+    let mut payload = tokio::task::spawn_blocking(move || -> AppResult<SnapshotPayload> {
         let mut snap = crate::connections::take(&dir)?;
         let now = Utc::now().timestamp() as u64;
         history::append(&dir, now, &history::pairs_of(&snap.connections))?;
@@ -83,10 +88,16 @@ pub async fn snapshot(config_dir: &Path, agent_id: &str, intel: Option<Arc<Intel
             ts: Utc::now(),
             connections: snap.connections,
             listeners: snap.listeners,
+            dns_names: Default::default(),
         })
     })
     .await
-    .map_err(|e| AppError::Scan(e.to_string()))?
+    .map_err(|e| AppError::Scan(e.to_string()))??;
+    if dns_names {
+        let ips = crate::connections::dnsnames::public_remote_ips(&payload.connections);
+        payload.dns_names = crate::connections::dnsnames::collect(config_dir, &ips).await;
+    }
+    Ok(payload)
 }
 
 /// 載入情資（沒下載過回 None）。

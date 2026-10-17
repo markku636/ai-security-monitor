@@ -2,6 +2,8 @@
 
 ## 未發佈
 
+- **IP 反查網域**：IP 分析頁新增「這個 IP 上的網域」。一、主機連線時解析過的名稱：Windows 電腦上傳連線快照時，順便讀 DNS 快取，附上**目前有連線**的公網 IP 是從哪個網域解析來的（只送這些、不送整份快取；名稱在電腦上記 24 小時，Hub 保留 30 天）；`ai-security-monitor config set scan.dns_names false` 可關掉。可疑 IP 排名與連線表的 IP 底下也會顯示這個網域。二、反解（PTR）。三、外部被動 DNS 反查：按「查詢網域」才把 IP 送給 HackerTarget（免金鑰，每天次數少）、VirusTotal（要金鑰）、AlienVault OTX（金鑰選填），顯示看過的網域總數與清單（最多 200 個、最後看到時間）。這三個來源不算進風險分數、批次查詢與「查詢全部未分析」不會用到，結果存在自己的快取（清除「外部情資查詢快取」時一起清）。金鑰可在「設定與金鑰 → 外部情資來源」貼上或用 `AI_SECURITY_MONITOR_HUB_VIRUSTOTAL_KEY`／`…_OTX_KEY`／`…_HACKERTARGET_KEY`。資料庫 migration 0013（`ip_domains`、`ip_domain_lookups`）。
+
 ## v0.5.0 — 2026-10-18
 
 **桌面版「流量與效能」圖表頁（即時／1 小時／24 小時，含各程式流量與 CPU、記憶體、磁碟）、Hub 各程式的網路流量圖；「加入公司 Hub」併進桌面版設定頁；Hub 加入模式（預設自動允許加入）、在網頁上登入 Claude Code／Codex、清除歷史、可疑 IP 國旗與完整清單、更多網域情資；連線表可排序篩選；立即上傳碰上限流會自動重試。** 一般使用者請下載 `AI-Security-Monitor-0.5.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.4.0 的桌面版會自動提示更新。**升級注意**：沒設定過加入模式的 Hub 升級後會變成自動允許加入，要維持人工核准請到「新增主機 → 加入模式」選「審核加入」。

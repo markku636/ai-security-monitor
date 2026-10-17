@@ -51,7 +51,7 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 
 ### `POST /api/v1/ingest/snapshot`
 
-內容：`contract/snapshot.v1.json`（目前連線與 listener，每條連線帶方向與判定）。整批替換該 agent 的最新連線，並彙總目的地（保留最嚴重的判定）。
+內容：`contract/snapshot.v1.json`（目前連線與 listener，每條連線帶方向與判定）。整批替換該 agent 的最新連線，並彙總目的地（保留最嚴重的判定）。選用欄位 `dns_names`（公網遠端 IP → 這台電腦解析過的網域，每個 IP 最多 20 個；只收快照裡真的有連線的 IP）存進 `ip_domains`，IP 分析頁「這個 IP 上的網域」用。
 最短間隔 `AI_SECURITY_MONITOR_HUB_SNAPSHOT_MIN_INTERVAL_MS`（預設 10 秒）。未註冊的 agent 回 409。
 
 ### `POST /api/v1/ingest/metrics`

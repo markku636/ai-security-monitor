@@ -1,5 +1,6 @@
 // 連線查詢（每個 agent 最新快照）：車隊級篩選、對內攻擊來源、危險目的地。
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { localDomainMap } from '@/lib/ipintel/domains';
 import { agents, connections, destinations, ipNotes, ipReputation } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
 import { cachedRiskMap } from '@/lib/ipintel/service';
@@ -433,6 +434,7 @@ export async function riskyIpRanking(
       })
       .slice(offset, offset + limit);
   }
+  const domains = await localDomainMap(picked.map((r) => r.remoteIp));
   return {
     total: Number(total[0]?.n ?? 0),
     items: picked.map((r, i) => ({
@@ -451,6 +453,8 @@ export async function riskyIpRanking(
       firstSeenAt: r.firstSeenAt,
       lastSeenAt: r.lastSeenAt,
       note: r.note ?? null,
+      /** 主機解析出這個 IP 的網域（最近一次；沒有就 null）。 */
+      domain: domains.get(r.remoteIp) ?? null,
     })),
   };
 }

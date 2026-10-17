@@ -150,6 +150,8 @@ pub struct ScanConfig {
     pub scanners: Vec<String>,
     /// 允許線上查詢（OSV / EPSS / NVD / keyed 名譽查詢）。
     pub online: bool,
+    /// 上傳快照時附上連線 IP 對應的網域名稱（讀 Windows DNS 快取；其他平台沒有作用）。
+    pub dns_names: bool,
 }
 
 impl Default for ScanConfig {
@@ -159,6 +161,7 @@ impl Default for ScanConfig {
             snapshot_interval: "1m".into(),
             scanners: Vec::new(),
             online: true,
+            dns_names: true,
         }
     }
 }
@@ -574,6 +577,7 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "scan.snapshot_interval",
     "scan.scanners",
     "scan.online",
+    "scan.dns_names",
     "intel.allow_noncommercial",
     "intel.online_lookups",
     "intel.refresh_on_scan",
@@ -620,6 +624,7 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "scan.snapshot_interval" => cfg.scan.snapshot_interval = parse_duration_str(key, value)?,
         "scan.scanners" => cfg.scan.scanners = parse_list(value),
         "scan.online" => cfg.scan.online = parse_bool(key, value)?,
+        "scan.dns_names" => cfg.scan.dns_names = parse_bool(key, value)?,
         "intel.allow_noncommercial" => cfg.intel.allow_noncommercial = parse_bool(key, value)?,
         "intel.online_lookups" => cfg.intel.online_lookups = parse_bool(key, value)?,
         "intel.refresh_on_scan" => cfg.intel.refresh_on_scan = parse_bool(key, value)?,

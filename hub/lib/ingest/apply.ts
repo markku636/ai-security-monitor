@@ -6,6 +6,8 @@ import type { DB } from '@/lib/db';
 import { recountAgent } from '@/lib/queries/findings';
 import { IngestRejected } from './guard';
 import { applySummaries } from './summaries';
+import { recordLocalDomains } from '@/lib/ipintel/domains';
+import { normalizeIp } from '@/lib/ipintel/ip';
 import type { FindingT, HeartbeatT, RegisterT, ReportT, SnapshotT } from './schema';
 
 const SEV_RANK: Record<string, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
@@ -264,6 +266,8 @@ export interface SnapshotResult {
   dangerous: number;
   suspicious: number;
   destinations: number;
+  /** 這次記下的（IP, 網域）組數。 */
+  domains: number;
 }
 
 export async function applySnapshot(db: DB, s: SnapshotT): Promise<SnapshotResult> {
@@ -340,8 +344,11 @@ export async function applySnapshot(db: DB, s: SnapshotT): Promise<SnapshotResul
           },
         });
     }
+    const remoteIps = new Set(rows.flatMap((r) => (r.remoteIp ? [normalizeIp(r.remoteIp)] : [])));
+    const domains = await recordLocalDomains(t, s.agent_id, s.dns_names, remoteIps, at);
     await t.update(agents).set({ lastSnapshotAt: at, lastSeenAt: new Date() }).where(eq(agents.id, s.agent_id));
     return {
+      domains,
       stored: rows.length,
       dangerous: rows.filter((r) => r.verdict === 'dangerous').length,
       suspicious: rows.filter((r) => r.verdict === 'suspicious').length,

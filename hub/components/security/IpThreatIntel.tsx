@@ -68,7 +68,7 @@ function reasonText(t: TFn, r: ScoreReason): string {
   }
 }
 
-function skipText(t: TFn, r: SkipReason | undefined): string {
+export function skipText(t: TFn, r: SkipReason | undefined): string {
   switch (r) {
     case 'no-api-key':
       return t('沒有設定金鑰');

@@ -107,7 +107,7 @@ pub async fn upload_now(env: &Env, progress: Progress<'_>) -> AppResult<UploadSu
 
     progress(t!("拍連線快照並上傳…"));
     let intel = watch::load_intel(dir).await;
-    match watch::snapshot(dir, &cfg.agent_id, intel).await {
+    match watch::snapshot(dir, &cfg.agent_id, intel, cfg.scan.dns_names).await {
         Ok(s) => {
             let mut sent = SnapshotSent {
                 connections: s.connections.len(),

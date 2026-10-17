@@ -53,7 +53,7 @@ Body: `contract/report.v1.json` (a full scan report).
 ### `POST /api/v1/ingest/snapshot`
 
 Body: `contract/snapshot.v1.json` (current connections and listeners, each connection with direction and verdict). Replaces the agent's latest
-connections and aggregates destinations (keeping the worst verdict). Minimum interval `AI_SECURITY_MONITOR_HUB_SNAPSHOT_MIN_INTERVAL_MS` (default 10 s). Unregistered agents get 409.
+connections and aggregates destinations (keeping the worst verdict). Optional `dns_names` (public remote IP → domains this computer resolved, up to 20 per IP; only IPs present in the snapshot are kept) is stored in `ip_domains` for "Domains on this IP" on the IP page. Minimum interval `AI_SECURITY_MONITOR_HUB_SNAPSHOT_MIN_INTERVAL_MS` (default 10 s). Unregistered agents get 409.
 
 ### `POST /api/v1/ingest/metrics`
 

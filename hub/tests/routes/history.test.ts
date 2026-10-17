@@ -125,11 +125,11 @@ describe('history cleanup', () => {
   });
 
   it('prunes by retention days (0 keeps everything)', async () => {
-    expect(await pruneHistory(db)).toEqual({ ai: 1, ipintel: 1 });
+    expect(await pruneHistory(db)).toEqual({ ai: 1, ipintel: 1, domains: 0 });
     await seed();
     process.env.ASA_HUB_AI_RETENTION_DAYS = '0';
     process.env.ASA_HUB_IPINTEL_CACHE_DAYS = '0';
     resetEnvForTests();
-    expect(await pruneHistory(db)).toEqual({ ai: 0, ipintel: 0 });
+    expect(await pruneHistory(db)).toEqual({ ai: 0, ipintel: 0, domains: 0 });
   });
 });

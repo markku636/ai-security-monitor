@@ -166,6 +166,11 @@ export const Snapshot = z
     ts: isoDate,
     connections: z.array(Connection).max(5000),
     listeners: z.array(Listener).max(2000).default([]),
+    // 連線 IP → 主機解析過的網域（Windows DNS 快取；舊版 agent 不送）
+    dns_names: z
+      .record(shortText(64), z.array(shortText(253)).max(20))
+      .refine((v) => Object.keys(v).length <= 5000, { message: 'too many dns_names' })
+      .optional(),
   })
   .passthrough();
 

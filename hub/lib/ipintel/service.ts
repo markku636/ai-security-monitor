@@ -9,6 +9,7 @@ import { readEnv } from '@/lib/env';
 import { isPublicIp, normalizeIp } from './ip';
 import {
   PROVIDERS,
+  REPUTATION_PROVIDERS,
   callAbuseipdb,
   callGreynoise,
   callIpinfo,
@@ -78,6 +79,7 @@ export async function configStatus(): Promise<SourcesConfigStatus> {
       return {
         id: p.id,
         name: p.name,
+        purpose: p.purpose,
         key: p.key,
         env: p.env,
         keySource: k.source,
@@ -112,7 +114,7 @@ async function writeQuota(q: { date: string; used: Partial<Record<ProviderId, nu
 let quotaChain: Promise<unknown> = Promise.resolve();
 
 /** 預留這些來源各 1 次額度；回傳拿到額度的來源（→ 預留後的已用次數），額度用完的不在裡面。 */
-async function reserveQuota(want: ProviderMeta[], cfg: IpIntelConfig): Promise<Map<ProviderId, number>> {
+export async function reserveQuota(want: ProviderMeta[], cfg: IpIntelConfig): Promise<Map<ProviderId, number>> {
   const run = quotaChain.then(async () => {
     const quota = await readQuota();
     const granted = new Map<ProviderId, number>();
@@ -166,7 +168,7 @@ export async function lookupIp(
   const results = { ...((row?.results ?? {}) as Partial<Record<ProviderId, ProviderResult>>) };
   // 先決定要打哪些來源，再一次預留額度（批次查詢會同時跑好幾個 IP，額度的讀改寫要排隊才不會少算）
   const want: ProviderMeta[] = [];
-  for (const p of PROVIDERS) {
+  for (const p of REPUTATION_PROVIDERS) {
     if (cfg.disabled.includes(p.id) || (v6 && !p.ipv6)) continue;
     const { key } = keyFor(p, cfg);
     if (p.key === 'required' && !key) continue;
@@ -293,7 +295,7 @@ export async function getIpIntelView(input: string): Promise<IpIntelView> {
     localGeo(ip),
   ]);
   const results = (row?.results ?? {}) as Partial<Record<ProviderId, ProviderResult>>;
-  const providers: ProviderView[] = PROVIDERS.map((p) => {
+  const providers: ProviderView[] = REPUTATION_PROVIDERS.map((p) => {
     const configured = Boolean(keyFor(p, cfg).key);
     const on = !cfg.disabled.includes(p.id);
     const result = results[p.id] ?? null;

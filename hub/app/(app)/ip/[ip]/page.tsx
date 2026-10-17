@@ -3,12 +3,14 @@ import { notFound } from 'next/navigation';
 import { isIP } from 'node:net';
 import { GeoAttribution } from '@/components/security/ConnectionsTable';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
+import { IpDomains } from '@/components/security/IpDomains';
 import { IpNoteEditor } from '@/components/security/IpNoteEditor';
 import { IpRiskBadge, IpRiskIcon } from '@/components/security/IpRisk';
 import { IpThreatIntel } from '@/components/security/IpThreatIntel';
 import { Card } from '@/components/ui/Card';
 import { requireAdmin } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
+import { getIpDomainsView } from '@/lib/ipintel/domains';
 import { cachedRiskMap, getIpIntelView } from '@/lib/ipintel/service';
 import { getIpNote } from '@/lib/queries/ipnotes';
 
@@ -77,6 +79,9 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
       </Card>
       <Card title={t('外部威脅情資')}>
         <IpThreatIntel view={await getIpIntelView(ip)} />
+      </Card>
+      <Card title={t('這個 IP 上的網域')}>
+        <IpDomains view={await getIpDomainsView(ip)} />
       </Card>
       <IndicatorDetails t={t} q={ip} title={t('情資與連線紀錄')} />
       <Card title={t('外部查詢')}>

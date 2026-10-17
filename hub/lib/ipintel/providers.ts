@@ -1,9 +1,10 @@
 // 外部 IP 情資來源：端點、金鑰、額度、快取時間，以及把回應正規化成 Profile 的純函式。
-import type { Profile, ProviderId, ProviderResult, SkipReason, UsageType } from './types';
+import type { Profile, ProviderId, ProviderPurpose, ProviderResult, SkipReason, UsageType } from './types';
 
 export interface ProviderMeta {
   id: ProviderId;
   name: string;
+  purpose: ProviderPurpose;
   key: 'required' | 'optional' | 'none';
   /** 設定金鑰用的環境變數（優先於網頁上存的）。 */
   env: string | null;
@@ -23,6 +24,7 @@ export const PROVIDERS: ProviderMeta[] = [
   {
     id: 'abuseipdb',
     name: 'AbuseIPDB',
+    purpose: 'reputation',
     key: 'required',
     env: 'ASA_HUB_ABUSEIPDB_KEY',
     quota: 1000,
@@ -34,6 +36,7 @@ export const PROVIDERS: ProviderMeta[] = [
   {
     id: 'greynoise',
     name: 'GreyNoise',
+    purpose: 'reputation',
     key: 'optional',
     env: 'ASA_HUB_GREYNOISE_KEY',
     quota: 50,
@@ -46,6 +49,7 @@ export const PROVIDERS: ProviderMeta[] = [
   {
     id: 'ipinfo',
     name: 'IPinfo',
+    purpose: 'reputation',
     key: 'required',
     env: 'ASA_HUB_IPINFO_TOKEN',
     quota: 50_000,
@@ -57,6 +61,7 @@ export const PROVIDERS: ProviderMeta[] = [
   {
     id: 'proxycheck',
     name: 'proxycheck.io',
+    purpose: 'reputation',
     key: 'optional',
     env: 'ASA_HUB_PROXYCHECK_KEY',
     quota: 100,
@@ -69,6 +74,7 @@ export const PROVIDERS: ProviderMeta[] = [
   {
     id: 'rdns',
     name: 'DNS',
+    purpose: 'reputation',
     key: 'none',
     env: null,
     quota: 100_000,
@@ -77,7 +83,50 @@ export const PROVIDERS: ProviderMeta[] = [
     link: (ip) => `https://mxtoolbox.com/SuperTool.aspx?action=ptr%3a${encodeURIComponent(ip)}&run=toolpage`,
     signup: null,
   },
+  // ---- IP 上的網域（被動 DNS）：只在 IP 分析頁按「查詢網域」才打，不算風險分數、不參與批次查詢 ----
+  {
+    id: 'hackertarget',
+    name: 'HackerTarget',
+    purpose: 'domains',
+    key: 'optional',
+    env: 'ASA_HUB_HACKERTARGET_KEY',
+    // 免金鑰的每日次數很少，自己再壓低一點
+    quota: 20,
+    quotaWithKey: 500,
+    ttlMs: 7 * DAY,
+    ipv6: false,
+    link: (ip) => `https://hackertarget.com/reverse-ip-lookup/?q=${encodeURIComponent(ip)}`,
+    signup: 'https://hackertarget.com/scan-membership/',
+  },
+  {
+    id: 'virustotal',
+    name: 'VirusTotal',
+    purpose: 'domains',
+    key: 'required',
+    env: 'ASA_HUB_VIRUSTOTAL_KEY',
+    quota: 400,
+    ttlMs: 7 * DAY,
+    ipv6: true,
+    link: (ip) => `https://www.virustotal.com/gui/ip-address/${encodeURIComponent(ip)}/relations`,
+    signup: 'https://www.virustotal.com/gui/join-us',
+  },
+  {
+    id: 'otx',
+    name: 'AlienVault OTX',
+    purpose: 'domains',
+    key: 'optional',
+    env: 'ASA_HUB_OTX_KEY',
+    quota: 100,
+    quotaWithKey: 1000,
+    ttlMs: 7 * DAY,
+    ipv6: true,
+    link: (ip) => `https://otx.alienvault.com/indicator/ip/${encodeURIComponent(ip)}`,
+    signup: 'https://otx.alienvault.com/accounts/signup',
+  },
 ];
+
+export const REPUTATION_PROVIDERS = PROVIDERS.filter((p) => p.purpose === 'reputation');
+export const DOMAIN_PROVIDERS = PROVIDERS.filter((p) => p.purpose === 'domains');
 
 export function providerMeta(id: ProviderId): ProviderMeta {
   return PROVIDERS.find((p) => p.id === id)!;
