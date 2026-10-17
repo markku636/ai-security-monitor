@@ -109,7 +109,9 @@ async function pageOverview() {
       <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : '<a class="link" href="#join">尋找公司的 Hub</a>'}</div></div>
     </div>
     <div class="grid" id="ov-metrics"><div class="stat"><div class="label">網路</div><div class="hint">載入中…</div></div></div>
+    <div class="card" id="ov-upload" hidden></div>
     <div class="card"><h2>危險與可疑連線</h2><div id="ov-conn" class="muted">載入中…</div></div>`;
+  renderUploadCard(document.getElementById('ov-upload'));
   document.getElementById('scan').onclick = () => scanNow();
   document.getElementById('upd').onclick = () => updateIntel(false);
   loadMetrics();
@@ -554,11 +556,15 @@ async function pageSettings() {
         <div class="row"><input type="text" id="hub-key" placeholder="asa_ek_…" style="flex:1;min-width:260px" autocomplete="off" spellcheck="false" /><button class="btn" id="hub-key-go">用金鑰加入</button></div>
       </details>
     </div>
-    <div class="card"><h2>開機自動啟動</h2>
+    <div class="card" id="set-lan" hidden></div>
+    <div class="card"><h2>背景自動回報與自動更新</h2>
       <label class="row" title="${esc(BG_HINT)}"><input type="checkbox" id="auto-bg" disabled /> <b>開機／登入後在背景自動回報</b> <span class="small muted">(?)</span></label>
-      <p class="small muted" id="auto-bg-state" style="margin:4px 0 10px 24px">讀取中…</p>
+      <p class="small muted" id="auto-bg-state" style="margin:4px 0 0 24px">讀取中…</p>
+      <div id="set-update"><p class="small muted">讀取更新設定中…</p></div>
+    </div>
+    <div class="card"><h2>開機自動啟動</h2>
       <label class="row" title="${esc(TRAY_HINT)}"><input type="checkbox" id="auto-tray" disabled /> <b>登入時開啟桌面版（常駐系統匣、不跳視窗）</b> <span class="small muted">(?)</span></label>
-      <p class="small muted" style="margin:4px 0 0 24px">關閉這個視窗只會縮到系統匣；從系統匣選「結束」才會離開。</p>
+      <p class="small muted" style="margin:4px 0 0 24px">關閉這個視窗只會縮到系統匣；從系統匣選「結束」才會離開（自動更新下載好的新版會在這時安裝）。</p>
     </div>
     <div class="card"><h2>網路流量與效能</h2>
       <p class="small muted" style="margin:0 0 8px">網路流量（各網卡、各程式的上傳／下載量）一律統計，有加入公司 Hub 時每分鐘回報。</p>
@@ -573,6 +579,8 @@ async function pageSettings() {
       <div>系統管理員權限</div><div>${o.elevated ? '是' : '否（部分檢查需要系統管理員才讀得到）'}</div>
     </div></div>`;
 
+  renderUpdateSection(document.getElementById('set-update'));
+  renderLanSection(document.getElementById('set-lan'));
   const $res = document.getElementById('hub-result');
   const url = () => document.getElementById('hub-url').value.trim();
   const busy = (b, on, label) => {
@@ -668,6 +676,8 @@ async function pageSettings() {
       bg.checked = !!r.status?.status?.installed;
       bgState.textContent = serviceText(r.status);
       toast(want ? '已開啟背景自動回報' : '已關閉背景自動回報');
+      renderUpdateSection(document.getElementById('set-update'));
+      renderLanSection(document.getElementById('set-lan'));
     } catch (e) {
       bg.checked = !want;
       bgState.textContent = `失敗：${e}`;
@@ -713,6 +723,13 @@ async function pageSettings() {
 
 // ---------------- 加入公司的 Security Hub ----------------
 const SOURCE = { explicit: '指定的網址', env: '環境變數', config: '設定檔', dns_srv: '公司 DNS', mdns: '區網廣播' };
+const SOURCE_HINT = {
+  explicit: '你輸入的網址',
+  env: '環境變數 AI_SECURITY_MONITOR_HUB_URL 指定的網址',
+  config: '這台電腦已經加入的 Hub（記在設定檔）',
+  dns_srv: '公司 DNS 的 _aisecmon._tcp SRV 紀錄（跨網段也找得到）',
+  mdns: '同一個網路裡的區網廣播（mDNS）',
+};
 const FP_HINT = '指紋是 Hub 的身分證號碼。請和管理員在 Hub「新增主機」頁看到的指紋比對，一樣才是公司的 Hub。';
 const CODE_HINT = '管理員在「待核准的主機」清單上會看到同一組核對碼，用來確認是這台電腦。';
 const SKIP_KEY = 'asm.join.skipped';
@@ -778,9 +795,10 @@ function hubRows(list, pinned) {
       const why = h.error ?? (id && !id.enrollment?.keyless ? '這個 Hub 不接受免金鑰加入' : '無法使用');
       return `<tr>
         <td><b>${esc(id?.name ?? '—')}</b><div class="small muted mono">${esc(h.url)}</div></td>
-        <td><span class="chip neutral">${esc(SOURCE[h.source] ?? h.source)}</span>${h.detail ? `<div class="small muted">${esc(h.detail)}</div>` : ''}</td>
+        <td><span class="chip neutral" title="${esc(SOURCE_HINT[h.source] ?? '')}">${esc(SOURCE[h.source] ?? h.source)}</span>${h.detail ? `<div class="small muted">${esc(h.detail)}</div>` : ''}</td>
+        <td>${hubReach(h)}</td>
         <td class="mono" title="${esc(FP_HINT)}">${esc(id?.fingerprint ?? '—')}${pin ? ' <span class="chip ok">這台記得的</span>' : ''}</td>
-        <td>${ok ? `<button class="btn primary" data-join="${i}">申請加入</button>` : `<span class="small muted">${esc(why)}</span>`}</td>
+        <td>${ok ? `<button class="btn primary" data-join="${i}">申請加入</button>` : h.error ? '' : `<span class="small muted">${esc(why)}</span>`}</td>
       </tr>`;
     })
     .join('');
@@ -792,11 +810,12 @@ async function searchHubs(url) {
   try {
     const r = await invoke('discover_hubs', { url: url || null });
     if (!r.hubs.length) {
-      box.innerHTML = '<p class="small">沒有找到 Security Hub。請管理員在公司 DNS 加 <span class="mono">_aisecmon._tcp</span> 的 SRV 紀錄、或在區網開啟 Hub 廣播；也可以在下面直接輸入管理員給的 Hub 網址。</p>';
+      box.innerHTML = NO_HUB_HELP;
       return;
     }
-    box.innerHTML = `<table><thead><tr><th>Hub</th><th>找到的方式</th><th title="${esc(FP_HINT)}">指紋 (?)</th><th></th></tr></thead><tbody>${hubRows(r.hubs, r.pinned_fingerprint)}</tbody></table>
-      <p class="small muted">找到好幾個時，請先問管理員公司的 Hub 指紋是哪一個。</p>`;
+    const onlyConfig = r.hubs.every((h) => h.source === 'config');
+    box.innerHTML = `<table><thead><tr><th>Hub</th><th>找到的方式</th><th>連線</th><th title="${esc(FP_HINT)}">指紋 (?)</th><th></th></tr></thead><tbody>${hubRows(r.hubs, r.pinned_fingerprint)}</tbody></table>
+      <p class="small muted">找到好幾個時，請先問管理員公司的 Hub 指紋是哪一個。</p>${onlyConfig ? ONLY_CONFIG_HELP : ''}${r.hubs.some((h) => h.identity && !h.error) ? '' : NO_HUB_HELP}`;
     for (const b of box.querySelectorAll('[data-join]')) {
       b.onclick = async () => {
         const h = r.hubs[Number(b.dataset.join)];
@@ -834,7 +853,7 @@ async function pageJoin(search = true) {
     <h1>尋找公司的 Security Hub</h1>
     <p class="sub">不需要金鑰：找到公司的 Hub 後按「申請加入」，等管理員核准就完成。${st.hub_url ? `（這台電腦目前已加入 <span class="mono">${esc(st.hub_url)}</span>）` : ''}</p>
     <div class="card"><h2>找到的 Hub</h2><div id="join-found"></div>
-      <div class="row" style="margin-top:10px"><button class="btn" id="join-search">重新尋找</button></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="join-search" title="再查一次公司 DNS 與區網廣播（約 3–10 秒）">重新尋找</button></div></div>
     <div class="card"><h2>或輸入管理員給的 Hub 網址</h2>
       <div class="row"><input type="text" id="join-url" placeholder="https://hub.example.com" style="flex:1;min-width:240px" /><button class="btn" id="join-url-go">查詢這個網址</button></div>
     </div>

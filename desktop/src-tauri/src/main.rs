@@ -3,6 +3,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // 這個執行檔是桌面版：內建的 agent（背景自動回報、AI 的 MCP server）不自我更新，交給桌面版的更新器
+    asa_lib::update::auto::set_embedded_in_desktop();
     let first = std::env::args().nth(1);
     if first.as_deref() == Some(ai_security_monitor_desktop_lib::TRAY_ARG) {
         ai_security_monitor_desktop_lib::run(true);

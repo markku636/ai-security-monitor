@@ -242,6 +242,17 @@ const DATA = {
   ai: { answer: AI_ANSWER, tools: AI_TOOLS },
   hub_status: { hub_url: 'https://hub.example.com', hub_fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', pending: null },
   metrics: METRICS,
+  update_status: {
+    mode: 'notify',
+    current: VERSION,
+    desktop: { checked_at: iso(95), latest: VERSION, available: false, notes: null, notes_url: null, error: null, ready: false },
+    blocker: null,
+    auto_install_ok: true,
+    releases_url: 'https://github.com/markku636/ai-security-monitor/releases',
+    background: { running: 1, uses_desktop: true, cli: [] },
+  },
+  upload_status: { enrolled: true, last_upload_at: iso(4), last_report_at: iso(4), last_error: null, last_error_at: null, pending: 0 },
+  local_hub_status: { found: false, advertise_url: null, lan_ips: ['192.0.2.24'], advertising: null, background_running: true },
   background_service: {
     status: { scope: 'user', manager: 'windows_run', installed: true, legacy: false },
     exe: 'C:\Users\demo\AppData\Local\AI Security Monitor\ai-security-monitor-desktop.exe',
@@ -272,6 +283,11 @@ function installMock(D) {
     metrics_now: () => D.metrics,
     set_performance: ({ enabled }) => enabled,
     discover_hubs: () => ({ hubs: [], pinned_fingerprint: D.hub_status.hub_fingerprint }),
+    update_status: () => D.update_status,
+    check_updates: () => ({ ...D.update_status, desktop: { ...D.update_status.desktop, checked_at: new Date().toISOString() } }),
+    set_update_mode: ({ mode }) => ((D.update_status.mode = mode), D.update_status),
+    upload_status: () => D.upload_status,
+    local_hub_status: () => D.local_hub_status,
     ai_ask: async ({ provider }) => {
       emit('ai-event', { type: 'start', provider: provider === 'codex' ? 'Codex CLI' : 'Claude Code' });
       for (const [name, input] of D.ai.tools) {
@@ -426,6 +442,15 @@ const SHOTS = [
     },
   ],
   ['desktop-settings', 'settings', false, async () => waitFor(`document.getElementById('auto-bg') && !document.getElementById('auto-bg').disabled && !document.getElementById('auto-tray').disabled`)],
+  [
+    'desktop-settings-update',
+    'settings',
+    false,
+    async () => {
+      await waitFor(`document.getElementById('upd-check') && !document.getElementById('auto-bg').disabled`);
+      await evaluate(`document.getElementById('auto-bg').closest('.card').scrollIntoView()`);
+    },
+  ],
   ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table') && document.querySelector('#ov-metrics .spark')`)],
 ];
 
@@ -450,8 +475,9 @@ for (const [name, page, dark, prepare] of SHOTS) {
     await evaluate(`location.hash = '#${page}'`);
     await waitFor(`document.querySelector('#nav a.active')?.dataset.page === '${page}' && !/載入中/.test(document.querySelector('#main .sub')?.textContent ?? '')`);
   }
-  await prepare();
+  // 先回到頁首（prepare 裡要拍下面某一段的自己捲過去）
   await evaluate(`document.getElementById('main').scrollTop = 0`);
+  await prepare();
   await sleep(400);
   const shot = await send('Page.captureScreenshot', { format: 'png' });
   if (FRAME) {

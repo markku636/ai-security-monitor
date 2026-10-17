@@ -27,6 +27,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tokio::sync::Mutex;
 
+mod lan;
+mod updates;
+
 type CmdResult<T> = Result<T, String>;
 
 fn err(e: AppError) -> String {
@@ -582,6 +585,9 @@ fn open_url(url: String) -> CmdResult<()> {
 }
 
 fn show_main(app: &AppHandle) {
+    app.state::<updates::Updates>()
+        .window_shown
+        .store(true, Ordering::SeqCst);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
@@ -600,6 +606,8 @@ pub fn run(start_in_tray: bool) {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![TRAY_ARG]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::Updates::default())
         .manage(AppState {
             config_dir,
             intel: Mutex::new(None),
@@ -627,7 +635,8 @@ pub fn run(start_in_tray: bool) {
                             show_main(app);
                         }
                     }
-                    "quit" => app.exit(0),
+                    // auto 模式下載好的更新在這時安裝
+                    "quit" => updates::quit(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, e| {
@@ -644,6 +653,12 @@ pub fn run(start_in_tray: bool) {
             if !start_in_tray {
                 show_main(app.handle());
             }
+            updates::spawn_background(app.handle().clone(), start_in_tray);
+            // 有開「背景自動回報」卻沒在跑（例如更新安裝時被結束）：把它啟動起來
+            let dir = app.state::<AppState>().config_dir.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = asa_lib::cli::service_cmd::ensure_user_service_running(&dir).await;
+            });
             Ok(())
         })
         .on_window_event(|w, e| {
@@ -677,7 +692,16 @@ pub fn run(start_in_tray: bool) {
             set_desktop_autostart,
             metrics_now,
             set_performance,
-            open_url
+            open_url,
+            updates::update_status,
+            updates::set_update_mode,
+            updates::check_updates,
+            updates::install_update,
+            updates::update_cli_agent,
+            lan::local_hub_status,
+            lan::set_hub_advertise,
+            lan::upload_status,
+            lan::upload_now
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
