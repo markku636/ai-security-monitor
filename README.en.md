@@ -12,6 +12,20 @@ checks the firewall, open ports, vulnerabilities and system hardening, summarize
 
 ![Security Hub overview](docs/images/overview.png)
 
+## Why
+
+Last night before bed I had AI build a fun little project:
+a Rust app that collects and analyzes unusual connections on client machines and assesses threats.
+Since AI arrived, system vulnerabilities have become very visible; if the attackers are AI, AI also knows a lot about defending.
+
+**Architecture**
+
+```
+Client Agent → periodic reports → Server analysis → AI risk assessment → Dashboard
+```
+
+`#cross-platform` (Windows / macOS / Linux)
+
 ## What it is
 
 | | |

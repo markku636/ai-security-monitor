@@ -12,6 +12,20 @@
 
 ![Security Hub 總覽](docs/images/overview.png)
 
+## 緣起
+
+昨天睡前，讓 AI 做了一個有趣的小專案：
+用 Rust 寫的應用，蒐集並分析用戶端的異常連線，做威脅分析。
+AI 出現後，系統漏洞變得很明顯；既然攻擊者是 AI，AI 也很懂得怎麼防禦。
+
+**架構**
+
+```
+Client Agent → 定時回報 → Server 分析 → AI 判斷風險 → Dashboard 呈現
+```
+
+`#支援跨平台`（Windows／macOS／Linux）
+
 ## 這是什麼
 
 | | |
