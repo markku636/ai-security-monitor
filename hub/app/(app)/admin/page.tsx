@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
+import { HistoryCleaner } from '@/components/admin/HistoryCleaner';
 import { IpIntelSettings } from '@/components/admin/IpIntelSettings';
 import { EnrollKeyManager, TokenManager, type EnrollRow, type TokenRow } from '@/components/admin/KeyManagers';
 import { Card } from '@/components/ui/Card';
@@ -12,13 +13,15 @@ import { env } from '@/lib/env';
 import { utc } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { hubPublicUrl } from '@/lib/install';
+import { historyStats } from '@/lib/history';
 import { configStatus } from '@/lib/ipintel/service';
+import { listAgents } from '@/lib/queries/agents';
 import { listAudit } from '@/lib/queries/admin';
 import { strParam } from '@/lib/queries/params';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['keys', 'tokens', 'intel', 'audit', 'export'] as const;
+const TABS = ['keys', 'tokens', 'intel', 'data', 'audit', 'export'] as const;
 type Tab = (typeof TABS)[number];
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
@@ -29,12 +32,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const raw = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'keys';
-  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), intel: t('外部情資來源'), audit: t('稽核紀錄'), export: t('匯出') };
+  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), intel: t('外部情資來源'), data: t('資料清除'), audit: t('稽核紀錄'), export: t('匯出') };
   return (
     <div className="space-y-4">
       <header>
         <h1 className="text-xl font-semibold">{t('設定與金鑰')}</h1>
-        <p className="text-sm text-slate-500">{t('主機的註冊金鑰、唯讀 API token、稽核紀錄與 CSV 匯出。')}</p>
+        <p className="text-sm text-slate-500">{t('主機的註冊金鑰、唯讀 API token、外部情資來源、資料清除、稽核紀錄與 CSV 匯出。')}</p>
       </header>
       <nav className="flex flex-wrap gap-1 border-b border-slate-200 text-sm dark:border-slate-800" aria-label={t('分頁')}>
         {TABS.map((k) => (
@@ -51,8 +54,25 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {tab === 'keys' ? <KeysTab /> : null}
       {tab === 'tokens' ? <TokensTab /> : null}
       {tab === 'intel' ? <IntelTab /> : null}
+      {tab === 'data' ? <DataTab /> : null}
       {tab === 'audit' ? <AuditTab action={strParam(sp, 'action', 64)} /> : null}
       {tab === 'export' ? <ExportTab /> : null}
+    </div>
+  );
+}
+
+async function DataTab() {
+  const { t } = await getT();
+  const [stats, agents] = await Promise.all([historyStats(getDb()), listAgents()]);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-600 dark:text-slate-300">
+        {t('清掉不再需要的歷史資料。主機、待處理問題、IP 備註與稽核紀錄不會被清；每次清除都會記在稽核紀錄。')}
+      </p>
+      <HistoryCleaner initial={stats} agents={agents.map((a) => ({ id: a.id, hostname: a.hostname }))} />
+      <p className="text-xs text-slate-500">
+        {t('自動保留天數用環境變數設定：AI_SECURITY_MONITOR_HUB_AI_RETENTION_DAYS（預設 90）、AI_SECURITY_MONITOR_HUB_IPINTEL_CACHE_DAYS（預設 30），0＝不自動清。')}
+      </p>
     </div>
   );
 }

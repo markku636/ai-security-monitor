@@ -1,6 +1,7 @@
 import { desc } from 'drizzle-orm';
 import { AiAccounts } from '@/components/ai/AiAccounts';
 import { AiConsole } from '@/components/ai/AiConsole';
+import { DeleteAnalysisButton } from '@/components/admin/HistoryCleaner';
 import { Card } from '@/components/ui/Card';
 import { Markdown } from '@/components/ui/Markdown';
 import { aiAnalyses } from '@/drizzle/schema';
@@ -43,7 +44,16 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
         initialIps={splitIpList(strParam(sp, 'ips', 2000)).slice(0, AI_MAX_IPS).join(', ')}
       />
       {recent.length ? (
-        <Card title={t('最近的分析')}>
+        <Card
+          title={
+            <span className="flex flex-wrap items-baseline justify-between gap-2">
+              {t('最近的分析')}
+              <a href="/admin?tab=data" className="text-xs font-normal text-teal-700 hover:underline dark:text-teal-400">
+                {t('清除全部歷史 →')}
+              </a>
+            </span>
+          }
+        >
           <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
             {recent.map((r) => (
               <li key={r.id} className="py-2">
@@ -52,7 +62,8 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
                     <span className="font-medium">{r.prompt.split('\n')[0].slice(0, 80)}</span>{' '}
                     <span className="text-xs text-slate-500">
                       {r.provider} · {r.status} · {t('{n} 次工具呼叫', { n: r.toolsCalled })} · {since(r.createdAt, t)}
-                    </span>
+                    </span>{' '}
+                    {r.status === 'running' ? null : <DeleteAnalysisButton id={r.id} />}
                   </summary>
                   {r.resultText ? <Markdown text={r.resultText} className="mt-2" /> : null}
                   {r.error ? <pre className="mt-2 whitespace-pre-wrap text-xs text-red-700 dark:text-red-400">{r.error}</pre> : null}

@@ -21,6 +21,10 @@ export interface HubEnv {
   metricsRawDays: number;
   /** 流量／效能每小時彙總保留天數。 */
   metricsHourlyDays: number;
+  /** AI 分析紀錄保留天數（0＝不自動清）。 */
+  aiRetentionDays: number;
+  /** 外部情資查詢快取保留天數（0＝不自動清）。 */
+  ipIntelCacheDays: number;
 }
 
 /** 改名後的新前綴：ASA_X 也接受 AI_SECURITY_MONITOR_X，新名優先（舊名繼續有效）。 */
@@ -93,6 +97,8 @@ export function loadEnv(): HubEnv {
     staleAfterMs: num('ASA_HUB_STALE_AFTER_MS', 30 * 60_000),
     metricsRawDays: Math.min(90, Math.max(1, num('ASA_HUB_METRICS_RAW_DAYS', 7))),
     metricsHourlyDays: Math.min(3650, Math.max(1, num('ASA_HUB_METRICS_HOURLY_DAYS', 90))),
+    aiRetentionDays: Math.min(3650, num('ASA_HUB_AI_RETENTION_DAYS', 90)),
+    ipIntelCacheDays: Math.min(3650, num('ASA_HUB_IPINTEL_CACHE_DAYS', 30)),
   };
 }
 
