@@ -95,8 +95,7 @@ pub async fn snapshot(
     .await
     .map_err(|e| AppError::Scan(e.to_string()))??;
     if dns_names {
-        let ips = crate::connections::dnsnames::public_remote_ips(&payload.connections);
-        payload.dns_names = crate::connections::dnsnames::collect(config_dir, &ips).await;
+        payload.dns_names = crate::connections::dnsnames::collect(config_dir, &payload.connections).await;
     }
     Ok(payload)
 }

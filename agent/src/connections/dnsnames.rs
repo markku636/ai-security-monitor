@@ -142,13 +142,27 @@ pub fn public_remote_ips(conns: &[crate::model::connection::Connection]) -> Vec<
     v
 }
 
+/// 連線上已經有的網域（背景 DNS 監看補的），只取公網 IP、像樣的名稱。
+pub fn known_from_connections(conns: &[crate::model::connection::Connection]) -> Vec<(String, String)> {
+    conns
+        .iter()
+        .filter_map(|c| Some((c.remote_ip?, normalize_name(c.domain.as_deref()?)?)))
+        .filter(|(ip, _)| crate::util::net::classify(*ip).is_public())
+        .map(|(ip, n)| (ip.to_string(), n))
+        .collect()
+}
+
 /// 讀（必要時更新）存檔，回傳這些 IP 的名稱。非 Windows 回空的；讀快取失敗就用存檔裡已有的。
-pub async fn collect(dir: &Path, ips: &[String]) -> BTreeMap<String, Vec<String>> {
+pub async fn collect(dir: &Path, conns: &[crate::model::connection::Connection]) -> BTreeMap<String, Vec<String>> {
+    let ips = public_remote_ips(conns);
     if !cfg!(windows) || ips.is_empty() {
         return BTreeMap::new();
     }
+    let ips = &ips;
     let now = chrono::Utc::now().timestamp().max(0) as u64;
     let mut db = DnsNames::load(dir);
+    // 背景 DNS 監看（ETW）已經替連線補上網域的，直接記下；剩下對不到的才去讀 DNS 快取
+    db.merge(&known_from_connections(conns), now);
     if db.needs_probe(ips, now) {
         db.last_probe = now;
         let spec = crate::util::cmd::powershell(WINDOWS_CACHE_SCRIPT).timeout(15_000);
@@ -231,6 +245,22 @@ mod tests {
         let total: usize = db.entries.values().map(BTreeMap::len).sum();
         assert_eq!(total, MAX_PAIRS);
         assert!(!db.entries.values().any(|n| n.contains_key("n0.example.com")));
+    }
+
+    #[test]
+    fn takes_domains_already_on_connections_for_public_ips_only() {
+        let mut public = crate::model::contract::sample_connection();
+        public.remote_ip = Some("8.8.8.8".parse().unwrap());
+        public.domain = Some("DNS.Google.".into());
+        let mut private = public.clone();
+        private.remote_ip = Some("10.0.0.5".parse().unwrap());
+        private.domain = Some("nas.lan.example".into());
+        let mut none = public.clone();
+        none.domain = None;
+        assert_eq!(
+            known_from_connections(&[public, private, none]),
+            vec![("8.8.8.8".to_string(), "dns.google".to_string())]
+        );
     }
 
     #[test]
