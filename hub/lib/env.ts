@@ -31,6 +31,11 @@ function raw(name: string): string {
   return (process.env[name] ?? '').trim();
 }
 
+/** 給其他模組讀選用設定（同樣支援 _FILE）。 */
+export function readEnv(name: string): string {
+  return raw(name);
+}
+
 function flag(name: string): boolean {
   return ['1', 'true', 'yes', 'on'].includes(raw(name).toLowerCase());
 }

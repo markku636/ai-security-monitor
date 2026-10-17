@@ -2,6 +2,7 @@ import { FindingsTable } from '@/components/security/FindingsTable';
 import { statusText } from '@/components/security/Verdict';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip, FilterRow, Pager, SearchBox, toggled } from '@/components/ui/Filters';
+import { HostFilter } from '@/components/ui/HostFilter';
 import { sevLabel } from '@/components/ui/Severity';
 import { getT } from '@/lib/i18n/server';
 import { listFindings, parseFindingFilter, SEVERITIES, STATUSES, toFindingView, type FindingFilter } from '@/lib/queries/findings';
@@ -31,6 +32,14 @@ export async function FindingsView({ base, params, agentId }: { base: string; pa
   return (
     <div className="space-y-3">
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        {agentId ? null : (
+          <HostFilter
+            t={t}
+            action={base}
+            current={f.agentId}
+            keep={{ status: f.status.join(','), severity: f.severity.join(','), scanner: f.scanner.join(','), q: f.q }}
+          />
+        )}
         <FilterRow label={t('狀態')}>
           {STATUSES.map((s) => (
             <FilterChip key={s} href={href(base, f, { status: toggled(f.status, s), offset: 0 })} active={f.status.includes(s)}>
@@ -52,6 +61,7 @@ export async function FindingsView({ base, params, agentId }: { base: string; pa
           placeholder={t('標題、指標、規則或主機')}
           keep={{
             tab: agentId ? 'findings' : undefined,
+            agent_id: agentId ? undefined : f.agentId,
             status: f.status.join(','),
             severity: f.severity.join(','),
             scanner: f.scanner.join(','),

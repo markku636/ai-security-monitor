@@ -42,7 +42,7 @@ export async function recentCrashes(o: { days?: number; agentId?: string; kinds?
 }
 
 /** 最常見的藍屏代碼（附名稱、次數、影響主機數、最近一次）。 */
-export async function topBugchecks(days = 30, limit = 10) {
+export async function topBugchecks(days = 30, limit = 10, agentId?: string) {
   const rows = await getDb()
     .select({
       code: crashRecords.code,
@@ -53,7 +53,7 @@ export async function topBugchecks(days = 30, limit = 10) {
     })
     .from(crashRecords)
     .innerJoin(agents, and(eq(agents.id, crashRecords.agentId), isNull(agents.deletedAt)))
-    .where(and(eq(crashRecords.kind, 'bugcheck'), gte(crashRecords.time, since(days))))
+    .where(and(eq(crashRecords.kind, 'bugcheck'), gte(crashRecords.time, since(days)), agentId ? eq(crashRecords.agentId, agentId) : undefined))
     .groupBy(crashRecords.code)
     .orderBy(desc(sql`count(*)`))
     .limit(limit);
@@ -93,7 +93,7 @@ export async function securityHits(o: { days?: number; agentId?: string; rules?:
 }
 
 /** 暴力破解來源：跨主機彙總同一個來源 IP。 */
-export async function bruteForceSources(days = 30, limit = 20) {
+export async function bruteForceSources(days = 30, limit = 20, agentId?: string) {
   const rows = await getDb()
     .select({
       sourceIp: sql<string>`${securityEvents.sourceIp}`,
@@ -104,7 +104,14 @@ export async function bruteForceSources(days = 30, limit = 20) {
     })
     .from(securityEvents)
     .innerJoin(agents, and(eq(agents.id, securityEvents.agentId), isNull(agents.deletedAt)))
-    .where(and(eq(securityEvents.rule, 'failed_logon_burst'), gte(securityEvents.lastAt, since(days)), sql`${securityEvents.sourceIp} is not null`))
+    .where(
+      and(
+        eq(securityEvents.rule, 'failed_logon_burst'),
+        gte(securityEvents.lastAt, since(days)),
+        sql`${securityEvents.sourceIp} is not null`,
+        agentId ? eq(securityEvents.agentId, agentId) : undefined,
+      ),
+    )
     .groupBy(securityEvents.sourceIp)
     .orderBy(desc(sql`sum(${securityEvents.count})`))
     .limit(limit);

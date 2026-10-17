@@ -547,4 +547,7 @@ export const en: Record<string, string> = {
   '情資': 'Intel',
   'asa 自己的行為判斷，不是情資來源': 'asa\'s own behavior heuristic, not an intel source',
   '行為': 'Behavior',
+
+  // ---- host filter ----
+  '套用': 'Apply',
 };

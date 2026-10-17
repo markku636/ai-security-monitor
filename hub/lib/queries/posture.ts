@@ -114,8 +114,8 @@ export interface HostRef {
 }
 
 /** 車隊的漏洞概況：作業系統支援、更新、已知漏洞軟體（依規則彙總）、OSV。 */
-export async function vulnOverview() {
-  const rows = (await summaries('vuln')).map((r) => ({ ...r, s: VulnSummary.parse(r.summary) }));
+export async function vulnOverview(agentId?: string) {
+  const rows = (await summaries('vuln')).filter((r) => !agentId || r.agentId === agentId).map((r) => ({ ...r, s: VulnSummary.parse(r.summary) }));
   const os = rows
     .map((r) => ({ agentId: r.agentId, hostname: r.hostname, name: [r.s.os.name, r.s.os.version].filter(Boolean).join(' '), support: r.s.support, at: r.at }))
     .sort((a, b) => statusRank(b.support?.status) - statusRank(a.support?.status) || a.hostname.localeCompare(b.hostname));
@@ -167,8 +167,8 @@ function statusRank(s: string | undefined) {
 }
 
 /** 車隊的硬化概況：每台分數、最常沒通過的檢查。 */
-export async function hardeningOverview() {
-  const rows = (await summaries('hardening')).map((r) => ({ ...r, s: HardeningSummary.parse(r.summary) }));
+export async function hardeningOverview(agentId?: string) {
+  const rows = (await summaries('hardening')).filter((r) => !agentId || r.agentId === agentId).map((r) => ({ ...r, s: HardeningSummary.parse(r.summary) }));
   const hosts = rows
     .map((r) => ({ agentId: r.agentId, hostname: r.hostname, osFamily: r.s.os_family || r.osFamily, at: r.at, score: r.s.score ?? null, pass: r.s.pass, fail: r.s.fail, na: r.s.na, needsAdmin: r.s.needs_admin.length }))
     .sort((a, b) => (a.score ?? 101) - (b.score ?? 101) || a.hostname.localeCompare(b.hostname));

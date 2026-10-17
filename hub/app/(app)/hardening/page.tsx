@@ -4,6 +4,8 @@ import { Card, Stat } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ScorePill } from '@/components/ui/Severity';
 import { requireAdmin } from '@/lib/auth/require';
+import { HostFilter } from '@/components/ui/HostFilter';
+import { strParam } from '@/lib/queries/params';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { hardeningOverview } from '@/lib/queries/posture';
@@ -14,10 +16,11 @@ const TABLE = 'overflow-x-auto rounded-xl border border-slate-200 bg-white dark:
 const HEAD = 'border-b border-slate-200 text-xs text-slate-500 dark:border-slate-800 [&_th]:whitespace-nowrap';
 const ROW = 'border-b border-slate-100 last:border-0 dark:border-slate-800';
 
-export default async function HardeningPage() {
+export default async function HardeningPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireAdmin();
   const { t } = await getT();
-  const h = await hardeningOverview();
+  const agentId = strParam(await searchParams, 'agent_id', 64);
+  const h = await hardeningOverview(agentId);
   const failing = h.hosts.filter((x) => x.fail > 0).length;
   return (
     <div className="space-y-4">
@@ -25,6 +28,7 @@ export default async function HardeningPage() {
         <h1 className="text-xl font-semibold">{t('安全設定')}</h1>
         <p className="text-sm text-slate-500">{t('各主機的安全設定檢查：UAC、防毒、磁碟加密、SSH、核心參數、自動更新等，分數依嚴重度加權。')}</p>
       </header>
+      <HostFilter t={t} action="/hardening" current={agentId} />
       {!h.hosts.length ? (
         <EmptyState title={t('還沒有硬化檢查資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報；本機可用 asa harden 先看結果。')}</EmptyState>
       ) : (

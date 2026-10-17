@@ -2,6 +2,7 @@ import { ConnectionsTable, GeoAttribution } from '@/components/security/Connecti
 import { directionLabel, verdictLabel } from '@/components/security/Verdict';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip, FilterRow, Pager, SearchBox, toggled } from '@/components/ui/Filters';
+import { HostFilter } from '@/components/ui/HostFilter';
 import { getT } from '@/lib/i18n/server';
 import { DIRECTIONS, listConnections, parseConnectionFilter, VERDICTS, type ConnectionFilter } from '@/lib/queries/connections';
 import { toQuery } from '@/lib/queries/params';
@@ -32,6 +33,14 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
   return (
     <div className="space-y-3">
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        {agentId ? null : (
+          <HostFilter
+            t={t}
+            action={base}
+            current={f.agentId}
+            keep={{ direction: f.direction?.join(','), verdict: f.verdict?.join(','), feed: f.feed, country: f.country, q: f.q }}
+          />
+        )}
         <FilterRow label={t('判定')}>
           {VERDICTS.map((v) => (
             <FilterChip key={v} href={href(base, f, { verdict: toggled(f.verdict ?? [], v), offset: 0 })} active={!!f.verdict?.includes(v)}>
@@ -54,6 +63,7 @@ export async function ConnectionsView({ base, params, agentId }: { base: string;
             placeholder={t('IP、行程、組織或主機')}
             keep={{
               tab: agentId ? 'connections' : undefined,
+              agent_id: agentId ? undefined : f.agentId,
               direction: f.direction?.join(','),
               verdict: f.verdict?.join(','),
               feed: f.feed,

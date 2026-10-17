@@ -3,6 +3,8 @@ import { FleetAppsTable, SupportBadge } from '@/components/security/PostureViews
 import { Card, Stat } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { requireAdmin } from '@/lib/auth/require';
+import { HostFilter } from '@/components/ui/HostFilter';
+import { strParam } from '@/lib/queries/params';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { vulnOverview } from '@/lib/queries/posture';
@@ -13,16 +15,18 @@ const TABLE = 'overflow-x-auto rounded-xl border border-slate-200 bg-white dark:
 const HEAD = 'border-b border-slate-200 text-xs text-slate-500 dark:border-slate-800 [&_th]:whitespace-nowrap';
 const ROW = 'border-b border-slate-100 last:border-0 dark:border-slate-800';
 
-export default async function VulnsPage() {
+export default async function VulnsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireAdmin();
   const { t } = await getT();
-  const v = await vulnOverview();
+  const agentId = strParam(await searchParams, 'agent_id', 64);
+  const v = await vulnOverview(agentId);
   return (
     <div className="space-y-4">
       <header>
         <h1 className="text-xl font-semibold">{t('漏洞與更新')}</h1>
         <p className="text-sm text-slate-500">{t('各主機的作業系統支援期限、更新狀態、已知漏洞版本的軟體，以及 Linux 套件的 OSV 查詢結果。')}</p>
       </header>
+      <HostFilter t={t} action="/vulns" current={agentId} />
       {!v.hosts ? (
         <EmptyState title={t('還沒有漏洞資料')}>{t('代理程式執行 asa scan 或 asa watch 時會一併回報（需要 asa 0.1 以上）。')}</EmptyState>
       ) : (
