@@ -10,6 +10,9 @@
 - 開機自動啟動：Windows 服務 `ai-security-monitor`（顯示名稱 AI Security Monitor）、HKCU Run 值 `ai-security-monitor`、`ai-security-monitor.service`（系統／--user）、`ai-security-monitor.desktop`、launchd `dev.ai-security-monitor.agent`。`service install` 會先偵測並移除舊的 `asa` 服務／Run 值／unit／plist（並結束舊的常駐行程），`service status` 會標出「舊版 asa」，`uninstall`／`restart` 也處理舊安裝；常駐行程偵測同時認 `asa(.exe)` 與 `ai-security-monitor(.exe)`。
 - MCP：伺服器名 `asa` → `ai-security-monitor`（工具變成 `mcp__ai-security-monitor__*`）；`mcp install` 寫入新項目並刪掉舊的 `asa` 項目，`mcp uninstall` 兩個都刪。
 - 自我更新：查 `markku636/ai-security-monitor` 的 Release，資產名 `ai-security-monitor-<版本>-<平台>`（找不到時退回舊名 `asa-…`）；一律原地替換正在執行的檔案，所以從 0.1.x 更新上來、檔名還是 `asa.exe` 的安裝照樣能用（之後執行 `service install` 換成新的服務名）。
+- Release 資產：`ai-security-monitor-<版本>-<平台>`，另附內容相同的 `asa-<版本>-<平台>`（列在 SHA256SUMS）讓 0.1.x 的 `asa self-update` 能升上來。
+- 安裝腳本（`install.sh`／`install.ps1`）：下載新檔名、裝成 `ai-security-monitor`；Windows 預設 `%LOCALAPPDATA%\ai-security-monitor\bin`，系統服務（`AI_SECURITY_MONITOR_SERVICE=system`）改裝到 `%ProgramFiles%\ai-security-monitor`（需系統管理員 PowerShell）；Linux／macOS 仍是 `/usr/local/bin` 或 `~/.local/bin`。環境變數 `AI_SECURITY_MONITOR_{VERSION,INSTALL_DIR,HUB_URL,ENROLL_KEY,SERVICE,DOWNLOAD_BASE,NO_MODIFY_PATH}`，舊的 `ASA_*` 照樣有效。找到舊版 `asa` 會提示，系統服務安裝前先把舊的系統設定目錄複製到新位置；舊的開機自動啟動由新版的 `service install` 移除。Hub「新增主機」頁產生的 Windows 指令改用新環境變數名。
+- Hub 映像：`ghcr.io/markku636/ai-security-monitor-hub`（`docker/compose*.yml` 已改用新名）；過渡期同時推舊名 `ghcr.io/markku636/ai-security-agent-hub`。compose 專案名與 volume 不變，資料庫沿用。
 - 不變（相容與安全考量）：通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、防火牆物件名（Windows 群組 `ASA`、`ASA: …` 規則、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`）、`fw unblock --all-asa`。
 
 改進：

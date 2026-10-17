@@ -1,7 +1,7 @@
-# 單機版：Hub＋PostgreSQL 只給這台電腦用（只綁 127.0.0.1），本機的 asa 回報到 http://127.0.0.1:8088。
+# 單機版：Hub＋PostgreSQL 只給這台電腦用（只綁 127.0.0.1），本機的 ai-security-monitor 回報到 http://127.0.0.1:8088。
 #   cp .env.example .env   # 填好 ASA_HUB_ADMIN_SECRET、ASA_HUB_DB_PASSWORD
 #   docker compose -f docker/compose.standalone.yml --env-file .env up -d
-#   asa enroll http://127.0.0.1:8088 --key <在 Hub「安裝代理程式」頁建立的註冊金鑰>
+#   ai-security-monitor enroll http://127.0.0.1:8088 --key <在 Hub「安裝代理程式」頁建立的註冊金鑰>
 name: asa-hub-standalone
 
 services:
@@ -21,7 +21,7 @@ services:
       retries: 30
 
   hub:
-    image: ghcr.io/markku636/ai-security-agent-hub:${ASA_HUB_IMAGE_TAG:-latest}
+    image: ghcr.io/markku636/ai-security-monitor-hub:${ASA_HUB_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile

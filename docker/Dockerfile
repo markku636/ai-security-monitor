@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Security Hub（Next.js standalone）映像。建置環境是 repo 根目錄：
-#   docker build -f docker/Dockerfile -t ai-security-agent-hub .
+#   docker build -f docker/Dockerfile -t ai-security-monitor-hub .
+# 發佈為 ghcr.io/markku636/ai-security-monitor-hub（過渡期也推舊名 ghcr.io/markku636/ai-security-agent-hub）
 # 預設內含 Claude Code 與 Codex CLI（給 /ai 頁用）；不要的話 --build-arg AI_CLIS=
 ARG NODE_VERSION=22
 
@@ -26,8 +27,8 @@ RUN cd hub && npx next build \
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 ARG ASA_HUB_VERSION=0.1.0
 ARG AI_CLIS="@anthropic-ai/claude-code@2.1.302 @openai/codex@0.163.0"
-LABEL org.opencontainers.image.title="ai-security-agent Security Hub" \
-      org.opencontainers.image.source="https://github.com/markku636/ai-security-agent" \
+LABEL org.opencontainers.image.title="AI Security Monitor Security Hub" \
+      org.opencontainers.image.source="https://github.com/markku636/ai-security-monitor" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${ASA_HUB_VERSION}"
 RUN apt-get update \

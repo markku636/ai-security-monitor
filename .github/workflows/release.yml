@@ -1,6 +1,7 @@
 name: release
 
-# 打 tag v* 就發版：六個平台的 asa 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim）。
+# 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim）。
+# 改名過渡：另附同內容的 asa-<ver>-<平台> 給 0.1.x 的 asa self-update；映像同時推新名與舊名 ai-security-agent-hub。
 # 手動執行（workflow_dispatch）預設 dry_run：全部建置但不推映像、不建立 Release。
 on:
   push:
@@ -17,7 +18,8 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/markku636/ai-security-agent-hub
+  IMAGE: ghcr.io/markku636/ai-security-monitor-hub
+  LEGACY_IMAGE: ghcr.io/markku636/ai-security-agent-hub
   DOCKER_BUILD_RECORD_UPLOAD: false
   PUBLISH: ${{ github.event_name == 'push' || !inputs.dry_run }}
 
@@ -72,18 +74,20 @@ jobs:
         run: |
           set -euo pipefail
           EXT=""; case "${{ matrix.target }}" in *windows*) EXT=".exe" ;; esac
-          OUT="../dist/asa-${{ needs.verify.outputs.version }}-${{ matrix.asset }}"
+          OUT="../dist/ai-security-monitor-${{ needs.verify.outputs.version }}-${{ matrix.asset }}"
           mkdir -p ../dist
-          cp "target/${{ matrix.target }}/release/asa$EXT" "$OUT"
+          cp "target/${{ matrix.target }}/release/ai-security-monitor$EXT" "$OUT"
+          # 0.1.x 的 asa self-update 找 asa-<ver>-<平台>：附一份同內容的別名
+          cp "$OUT" "../dist/asa-${{ needs.verify.outputs.version }}-${{ matrix.asset }}"
           HOST=$(rustc -vV | sed -n 's/^host: //p')
           if [ "$HOST" = "${{ matrix.target }}" ] || [ "${{ matrix.musl }}" = "true" ]; then
-            "$OUT" version
+            "$OUT" version | grep -q "^ai-security-monitor ${{ needs.verify.outputs.version }} "
             "$OUT" --json version | grep -Eq '"version": ?"${{ needs.verify.outputs.version }}"'
           fi
           ls -l ../dist
       - uses: actions/upload-artifact@v4
         with:
-          name: asa-${{ matrix.asset }}
+          name: agent-${{ matrix.asset }}
           path: dist/*
           if-no-files-found: error
 
@@ -111,6 +115,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}
             ${{ env.IMAGE }}:latest
+            ${{ env.LEGACY_IMAGE }}:${{ needs.verify.outputs.version }}
+            ${{ env.LEGACY_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Hub image (slim, no AI CLIs)
@@ -126,6 +132,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}-slim
             ${{ env.IMAGE }}:slim
+            ${{ env.LEGACY_IMAGE }}:${{ needs.verify.outputs.version }}-slim
+            ${{ env.LEGACY_IMAGE }}:slim
           cache-from: type=gha
 
   release:
@@ -136,14 +144,18 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-          # 只拿 asa 執行檔（build-push-action 另外會上傳 .dockerbuild 紀錄）
-          pattern: asa-*
+          # 只拿 agent 執行檔（build-push-action 另外會上傳 .dockerbuild 紀錄）
+          pattern: agent-*
           merge-multiple: true
       - name: Checksums and notes
         run: |
           set -euo pipefail
           cp scripts/install.sh scripts/install.ps1 dist/
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+          # 新名與舊名別名各六個，內容相同
+          test "$(ls dist/ai-security-monitor-* | wc -l)" = 6
+          test "$(ls dist/asa-* | wc -l)" = 6
+          for f in dist/asa-*; do cmp "$f" "dist/ai-security-monitor-${f#dist/asa-}"; done
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             node scripts/changelog-section.mjs "${{ needs.verify.outputs.version }}" > notes.md
           else

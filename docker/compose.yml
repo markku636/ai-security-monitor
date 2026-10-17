@@ -21,7 +21,7 @@ services:
       retries: 30
 
   hub:
-    image: ghcr.io/markku636/ai-security-agent-hub:${ASA_HUB_IMAGE_TAG:-latest}
+    image: ghcr.io/markku636/ai-security-monitor-hub:${ASA_HUB_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile

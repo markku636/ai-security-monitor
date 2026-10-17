@@ -54,10 +54,10 @@ jobs:
         run: |
           set -euo pipefail
           cargo build -q
-          BIN=./target/debug/asa; SUDO="sudo -E"
-          if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/asa.exe; SUDO=""; fi
+          BIN=./target/debug/ai-security-monitor; SUDO="sudo -E"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/ai-security-monitor.exe; SUDO=""; fi
           if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get install -y nftables >/dev/null; fi
-          CFG="$RUNNER_TEMP/asa-e2e"
+          CFG="$RUNNER_TEMP/asm-e2e"
           $SUDO $BIN --config-dir "$CFG" fw block 198.51.100.77 --reason e2e --yes
           $SUDO $BIN --config-dir "$CFG" fw close-port tcp/65000 --yes
           $SUDO $BIN --config-dir "$CFG" --json fw list --ours > ours.json
@@ -79,14 +79,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BIN="$PWD/target/debug/asa"; SUDO="sudo -E"
-          if [ "$RUNNER_OS" = "Windows" ]; then BIN="$PWD/target/debug/asa.exe"; SUDO=""; fi
-          export ASA_SECRETS_BACKEND=file
+          BIN="$PWD/target/debug/ai-security-monitor"; SUDO="sudo -E"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="$PWD/target/debug/ai-security-monitor.exe"; SUDO=""; fi
+          export AI_SECURITY_MONITOR_SECRETS_BACKEND=file
           st() { $SUDO "$BIN" --json service status; }
           case "$RUNNER_OS" in
-            Windows) SYSDIR='C:\ProgramData\ai-security-agent' ;;
-            Linux) SYSDIR=/var/lib/asa; sudo apt-get install -y nftables >/dev/null ;;
-            macOS) SYSDIR='/Library/Application Support/ai-security-agent' ;;
+            Windows) SYSDIR='C:\ProgramData\ai-security-monitor' ;;
+            Linux) SYSDIR=/var/lib/ai-security-monitor; sudo apt-get install -y nftables >/dev/null ;;
+            macOS) SYSDIR='/Library/Application Support/ai-security-monitor' ;;
           esac
           # 先在系統設定目錄封鎖一個 IP：服務啟動時要依期望狀態重新套用
           $SUDO "$BIN" --config-dir "$SYSDIR" fw block 198.51.100.99 --reason service-e2e --yes
@@ -97,7 +97,7 @@ jobs:
           done
           st; test -n "$ok"
           ok=""; for i in $(seq 1 45); do
-            if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q 'asa 0\.'; then ok=1; break; fi; sleep 2
+            if $SUDO "$BIN" service logs --system --tail 50 2>/dev/null | grep -q 'ai-security-monitor 0\.'; then ok=1; break; fi; sleep 2
           done
           $SUDO "$BIN" service logs --system --tail 20 || true; test -n "$ok"
           ok=""; for i in $(seq 1 30); do
@@ -131,29 +131,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BIN=./target/debug/asa; if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/asa.exe; fi
+          BIN=./target/debug/ai-security-monitor; if [ "$RUNNER_OS" = "Windows" ]; then BIN=./target/debug/ai-security-monitor.exe; fi
           VER=$("$BIN" --json version | tr -d '\r' | jq -r .version)
           case "$RUNNER_OS" in
-            Windows) SUF=windows-x64.exe; SRC=target/debug/asa.exe ;;
-            Linux) SUF=linux-x64; SRC=target/debug/asa ;;
-            macOS) if [ "$(uname -m)" = arm64 ]; then SUF=macos-arm64; else SUF=macos-x64; fi; SRC=target/debug/asa ;;
+            Windows) SUF=windows-x64.exe; SRC=target/debug/ai-security-monitor.exe ;;
+            Linux) SUF=linux-x64; SRC=target/debug/ai-security-monitor ;;
+            macOS) if [ "$(uname -m)" = arm64 ]; then SUF=macos-arm64; else SUF=macos-x64; fi; SRC=target/debug/ai-security-monitor ;;
           esac
-          REL="$RUNNER_TEMP/rel"; mkdir -p "$REL"; cp "$SRC" "$REL/asa-$VER-$SUF"
-          (cd "$REL" && { sha256sum "asa-$VER-$SUF" 2>/dev/null || shasum -a 256 "asa-$VER-$SUF"; } > SHA256SUMS)
+          A="ai-security-monitor-$VER-$SUF"
+          REL="$RUNNER_TEMP/rel"; mkdir -p "$REL"; cp "$SRC" "$REL/$A"
+          (cd "$REL" && { sha256sum "$A" 2>/dev/null || shasum -a 256 "$A"; } > SHA256SUMS)
           PY=$(command -v python3 || command -v python)
           (cd "$REL" && nohup "$PY" -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/http.log" 2>&1 &)
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:8765/SHA256SUMS > /dev/null && break; sleep 1; done
-          export ASA_DOWNLOAD_BASE=http://127.0.0.1:8765 ASA_VERSION="$VER" ASA_INSTALL_DIR="$RUNNER_TEMP/asa-bin" ASA_NO_MODIFY_PATH=1
+          export AI_SECURITY_MONITOR_DOWNLOAD_BASE=http://127.0.0.1:8765 AI_SECURITY_MONITOR_VERSION="$VER" AI_SECURITY_MONITOR_INSTALL_DIR="$RUNNER_TEMP/asm-bin" AI_SECURITY_MONITOR_NO_MODIFY_PATH=1
+          D="$AI_SECURITY_MONITOR_INSTALL_DIR"
           if [ "$RUNNER_OS" = "Windows" ]; then
             powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
-            "$ASA_INSTALL_DIR/asa.exe" version | grep -q "asa $VER"
+            "$D/ai-security-monitor.exe" version | grep -q "ai-security-monitor $VER"
             powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
-            ls "$ASA_INSTALL_DIR" | grep -q 'asa.exe.old-'
+            ls "$D" | grep -q 'ai-security-monitor.exe.old-'
           else
             sh ../scripts/install.sh
-            "$ASA_INSTALL_DIR/asa" version | grep -q "asa $VER"
+            "$D/ai-security-monitor" version | grep -q "ai-security-monitor $VER"
           fi
-          echo "0000000000000000000000000000000000000000000000000000000000000000  asa-$VER-$SUF" > "$REL/SHA256SUMS"
+          # 舊的 ASA_* 環境變數照樣有效
+          unset AI_SECURITY_MONITOR_DOWNLOAD_BASE AI_SECURITY_MONITOR_VERSION AI_SECURITY_MONITOR_INSTALL_DIR AI_SECURITY_MONITOR_NO_MODIFY_PATH
+          export ASA_DOWNLOAD_BASE=http://127.0.0.1:8765 ASA_VERSION="$VER" ASA_INSTALL_DIR="$RUNNER_TEMP/asm-legacy-env" ASA_NO_MODIFY_PATH=1
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
+            test -f "$ASA_INSTALL_DIR/ai-security-monitor.exe"
+          else
+            sh ../scripts/install.sh
+            test -x "$ASA_INSTALL_DIR/ai-security-monitor"
+          fi
+          echo "0000000000000000000000000000000000000000000000000000000000000000  $A" > "$REL/SHA256SUMS"
           if [ "$RUNNER_OS" = "Windows" ]; then
             ! powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install.ps1
           else
@@ -177,7 +189,7 @@ jobs:
           workspaces: desktop/src-tauri
       - run: cargo fmt --check
       - run: cargo clippy --locked -- -D warnings
-      - name: CLI passthrough (the GUI exe doubles as asa for the AI's MCP server)
+      - name: CLI passthrough (the GUI exe doubles as ai-security-monitor for the AI's MCP server)
         shell: bash
         run: |
           set -euo pipefail
@@ -261,7 +273,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Build slim image
-        run: docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ghcr.io/markku636/ai-security-agent-hub:ci .
+        run: docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ghcr.io/markku636/ai-security-monitor-hub:ci .
       - name: Standalone compose smoke
         run: |
           set -euo pipefail
@@ -275,7 +287,7 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' $B/api/v1/fleet/summary)" = "401"
           docker compose -f docker/compose.standalone.yml --env-file ci.env exec -T hub sh -c 'test "$(id -un)" = node'
           # 沒有管理員金鑰的容器要拒絕啟動
-          ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-agent-hub:ci
+          ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
           docker compose -f docker/compose.standalone.yml --env-file ci.env down -v
           echo "docker smoke ok"
 
@@ -298,6 +310,7 @@ jobs:
       ASA_HUB_DATABASE_URL: postgres://asa_hub:ci_only@127.0.0.1:5432/asa_hub
       ASA_HUB_ADMIN_SECRET: ci-admin-secret
       ASA_HUB_CLIENT_SECRETS: ci-client-key
+      # 舊名：確認 ASA_* 仍然有效（新名 AI_SECURITY_MONITOR_SECRETS_BACKEND）
       ASA_SECRETS_BACKEND: file
     steps:
       - uses: actions/checkout@v5
@@ -320,7 +333,7 @@ jobs:
           set -euo pipefail
           (cd hub && nohup npx next start -p 3911 -H 127.0.0.1 > "$RUNNER_TEMP/hub.log" 2>&1 &)
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:3911/api/health > /dev/null && break; sleep 1; done
-          BIN="$PWD/agent/target/debug/asa"; CFG="$RUNNER_TEMP/asa"; B=http://127.0.0.1:3911; A='authorization: Bearer ci-admin-secret'
+          BIN="$PWD/agent/target/debug/ai-security-monitor"; CFG="$RUNNER_TEMP/asm"; B=http://127.0.0.1:3911; A='authorization: Bearer ci-admin-secret'
           $BIN --config-dir "$CFG" --json enroll $B --key ci-client-key --accept-remote-actions | tee enroll.json
           jq -e '.remote_actions == true and .pinned == true' enroll.json > /dev/null
           AID=$(jq -r .agent_id enroll.json)

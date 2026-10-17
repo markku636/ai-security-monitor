@@ -303,8 +303,8 @@ export function InstallCommandsView({ hub, keyValue }: { hub: string; keyValue: 
     <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
       <CmdBlock label={t('Linux／macOS 伺服器（開機就啟動，需要 sudo）')} cmd={`curl -fsSL ${hub}/install.sh | sh -s -- --key ${keyValue} --service system`} />
       <CmdBlock label={t('Linux／macOS 個人電腦（登入時啟動）')} cmd={`curl -fsSL ${hub}/install.sh | sh -s -- --key ${keyValue} --service user`} />
-      <CmdBlock label={t('Windows 伺服器（系統管理員 PowerShell）')} cmd={`$env:ASA_ENROLL_KEY='${keyValue}'; $env:ASA_SERVICE='system'; irm ${hub}/install.ps1 | iex`} />
-      <CmdBlock label={t('Windows 個人電腦（PowerShell）')} cmd={`$env:ASA_ENROLL_KEY='${keyValue}'; $env:ASA_SERVICE='user'; irm ${hub}/install.ps1 | iex`} />
+      <CmdBlock label={t('Windows 伺服器（系統管理員 PowerShell）')} cmd={`$env:AI_SECURITY_MONITOR_ENROLL_KEY='${keyValue}'; $env:AI_SECURITY_MONITOR_SERVICE='system'; irm ${hub}/install.ps1 | iex`} />
+      <CmdBlock label={t('Windows 個人電腦（PowerShell）')} cmd={`$env:AI_SECURITY_MONITOR_ENROLL_KEY='${keyValue}'; $env:AI_SECURITY_MONITOR_SERVICE='user'; irm ${hub}/install.ps1 | iex`} />
       <CmdBlock label={t('已經裝好 ai-security-monitor')} cmd={`ai-security-monitor enroll ${hub} --key ${keyValue}`} />
     </div>
   );
