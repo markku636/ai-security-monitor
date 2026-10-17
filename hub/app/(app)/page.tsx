@@ -3,6 +3,7 @@ import { AttackersCard, IntelFeedsCard, RiskyConnectionsCard, ScoreCard, WorstHo
 import { Badge } from '@/components/ui/Badge';
 import { Card, Stat } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Hint } from '@/components/ui/Hint';
 import { SevCountsRow } from '@/components/ui/Severity';
 import { getViewer } from '@/lib/auth/require';
 import { pingDb, type DbHealth } from '@/lib/db';
@@ -33,11 +34,13 @@ function HubFooter({ t, db }: { t: TFn; db: DbHealth }) {
         {t('資料庫')} <DbBadge t={t} db={db} />
       </span>
       <span className="inline-flex items-center gap-2">
-        {t('存取模式')}{' '}
+        {t('存取模式')}
+        <Hint text={t('需要金鑰＝要登入或帶 API 金鑰才看得到資料；開放模式＝沒設管理員金鑰，只允許本機連線。')} />{' '}
         {isOpenMode() ? <Badge tone="warn">{t('開放模式（僅本機）')}</Badge> : <Badge tone="ok">{t('需要金鑰')}</Badge>}
       </span>
       <span>
         {e.version} · {e.edition === 'server' ? t('伺服器版') : t('單機版')}
+        <Hint text={t('單機版＝只看這台電腦（Hub 跑在本機）；伺服器版＝集中管理多台電腦。')} />
       </span>
     </div>
   );
@@ -71,9 +74,23 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <ScoreCard t={t} score={averageScore(list)} />
         <div className="grid gap-4">
-          <Stat label={t('主機')} value={fleet.agents.total} hint={t('線上 {online}、延遲 {stale}、離線 {offline}', fleet.agents)} />
           <Stat
-            label={t('危險連線')}
+            label={
+              <>
+                {t('主機')}
+                <Hint text={t('線上＝最近幾分鐘內有回報；延遲＝超過預期時間沒回報（可能關機、休眠或網路斷了）；離線＝很久沒回報。')} />
+              </>
+            }
+            value={fleet.agents.total}
+            hint={t('線上 {online}、延遲 {stale}、離線 {offline}', fleet.agents)}
+          />
+          <Stat
+            label={
+              <>
+                {t('危險連線')}
+                <Hint text={t('目前連到威脅情資高信心列名位址的連線數，例如惡意程式的控制伺服器；應該優先處理。')} />
+              </>
+            }
             value={<span className={fleet.connections.dangerous ? 'text-verdict-dangerous' : ''}>{fleet.connections.dangerous}</span>}
             hint={t('另有 {n} 條可疑', { n: fleet.connections.suspicious })}
           />
@@ -90,7 +107,14 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
           ) : null}
         </div>
       </div>
-      <Card title={t('待處理問題')}>
+      <Card
+        title={
+          <>
+            {t('待處理問題')}
+            <Hint text={t('各主機掃描找到、還沒處理的問題，依嚴重度分：嚴重與高要盡快處理，中可以排時間，低與資訊多半只是提醒。')} />
+          </>
+        }
+      >
         <SevCountsRow counts={fleet.severities} t={t} />
         {isAdmin ? (
           <Link href="/findings" className="mt-3 inline-block text-sm text-teal-700 hover:underline dark:text-teal-400">

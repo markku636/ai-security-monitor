@@ -5,6 +5,7 @@ import { IpLink } from '@/components/security/IpLink';
 import { DirectionBadge, ReasonList, VerdictChip } from '@/components/security/Verdict';
 import { Card } from '@/components/ui/Card';
 import { Gauge } from '@/components/ui/Gauge';
+import { Hint } from '@/components/ui/Hint';
 import { ScorePill } from '@/components/ui/Severity';
 import { endpoint, since } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
@@ -12,18 +13,27 @@ import type { IpRisk } from '@/lib/ipintel/types';
 import type { listAgents } from '@/lib/queries/agents';
 import type { inboundAttackers, listConnections } from '@/lib/queries/connections';
 import type { topIntelFeeds } from '@/lib/queries/intel';
+import { SCORE_KEYS, scoreHints, scoreLabels } from './scoreHints';
 
 const MORE = 'mt-2 inline-block text-sm text-teal-700 hover:underline dark:text-teal-400';
 
 export function ScoreCard({ t, score }: { t: TFn; score: Scores | null }) {
+  const labels = scoreLabels(t);
+  const hints = scoreHints(t);
   return (
-    <Card title={t('安全分數（所有主機平均）')} className="lg:col-span-2">
+    <Card
+      title={
+        <>
+          {t('安全分數（所有主機平均）')}
+          <Hint text={hints.card} />
+        </>
+      }
+      className="lg:col-span-2"
+    >
       <div className="flex flex-wrap justify-around gap-4">
-        <Gauge score={score?.overall} label={t('總分')} size={120} />
-        <Gauge score={score?.connections} label={t('連線')} />
-        <Gauge score={score?.exposure} label={t('曝露')} />
-        <Gauge score={score?.vulns} label={t('漏洞')} />
-        <Gauge score={score?.hardening} label={t('硬化')} />
+        {SCORE_KEYS.map((k) => (
+          <Gauge key={k} score={score?.[k]} label={labels[k]} hint={hints[k]} size={104} emphasis={k === 'overall'} />
+        ))}
       </div>
     </Card>
   );
@@ -47,7 +57,14 @@ export function RiskyConnectionsCard({ t, risky, risks = {} }: { t: TFn; risky: 
   const empty = <p className="text-sm text-slate-500">{t('目前沒有可疑或危險的連線。')}</p>;
   const rows = groupRisky(risky.items, 8);
   return (
-    <Card title={t('危險與可疑連線')}>
+    <Card
+      title={
+        <>
+          {t('危險與可疑連線')}
+          <Hint text={t('危險＝連到威脅情資高信心列名的位址（例如惡意程式的控制伺服器）；可疑＝低信心情資或行為異常，可能是誤報，值得看一下。')} />
+        </>
+      }
+    >
       {risky.items.length === 0 ? empty : null}
       <ul className="divide-y divide-slate-100 dark:divide-slate-800">
         {rows.map(({ c, n }) => (
@@ -81,13 +98,27 @@ type Feeds = Awaited<ReturnType<typeof topIntelFeeds>>;
 export function IntelFeedsCard({ t, feeds }: { t: TFn; feeds: Feeds }) {
   if (!feeds.length) {
     return (
-      <Card title={t('情資來源命中（7 天）')}>
+      <Card
+      title={
+        <>
+          {t('情資來源命中（7 天）')}
+          <Hint text={t('最近 7 天，各主機的連線對到哪些威脅情資清單（例如惡意 IP 黑名單）、對到幾個指標、影響幾台主機。')} />
+        </>
+      }
+    >
         <p className="text-sm text-slate-500">{t('最近 7 天沒有任何情資命中。')}</p>
       </Card>
     );
   }
   return (
-    <Card title={t('情資來源命中（7 天）')}>
+    <Card
+      title={
+        <>
+          {t('情資來源命中（7 天）')}
+          <Hint text={t('最近 7 天，各主機的連線對到哪些威脅情資清單（例如惡意 IP 黑名單）、對到幾個指標、影響幾台主機。')} />
+        </>
+      }
+    >
       <table className="w-full text-left text-sm">
         <thead className="text-xs text-slate-500">
           <tr>
@@ -120,7 +151,14 @@ type Attackers = Awaited<ReturnType<typeof inboundAttackers>>;
 
 export function AttackersCard({ t, attackers, risks = {} }: { t: TFn; attackers: Attackers; risks?: Record<string, IpRisk> }) {
   return (
-    <Card title={t('對內攻擊來源')}>
+    <Card
+      title={
+        <>
+          {t('對內攻擊來源')}
+          <Hint text={t('從外面主動連進你主機的可疑位址，例如一直嘗試登入（暴力破解）或被情資列為攻擊者的 IP。')} />
+        </>
+      }
+    >
       <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
         {attackers.map((a) => (
           <li key={a.remoteIp} className="flex flex-wrap items-center gap-2 py-2">

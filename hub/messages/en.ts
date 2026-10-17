@@ -1010,4 +1010,21 @@ export const en: Record<string, string> = {
 
   // ---- 流量（選單） ----
   '頻寬、哪台與哪個程式用最多、常連的目的地': 'Bandwidth, top hosts and programs, frequent destinations',
+
+  // ---- score tooltips ----
+  '0–100 分，越高越安全：90 以上綠色、70–89 黃綠、50–69 橘色、50 以下紅色。每找到一個問題就依嚴重度扣分。': '0–100, higher is safer: 90+ green, 70–89 yellow-green, 50–69 orange, below 50 red. Each problem found takes points off by severity.',
+  '作業系統與軟體有沒有已知漏洞、是否已經停止支援、多久沒更新；已被證實遭駭客利用的漏洞（CISA KEV）多扣 10 分。': 'Known vulnerabilities in the OS and software, end-of-support, and how long since the last update; vulnerabilities confirmed as exploited in the wild (CISA KEV) cost 10 extra points.',
+  '危險＝連到威脅情資高信心列名的位址（例如惡意程式的控制伺服器）；可疑＝低信心情資或行為異常，可能是誤報，值得看一下。': 'Dangerous = talking to an address listed with high confidence by threat intel (e.g. a malware command server); suspicious = low-confidence intel or unusual behavior, possibly a false positive, worth a look.',
+  '各主機掃描找到、還沒處理的問題，依嚴重度分：嚴重與高要盡快處理，中可以排時間，低與資訊多半只是提醒。': 'Problems found by scans that nobody has handled yet, by severity: fix critical and high soon, schedule medium, low and info are mostly reminders.',
+  '單機版＝只看這台電腦（Hub 跑在本機）；伺服器版＝集中管理多台電腦。': 'Standalone = just this computer (the Hub runs locally); server = manage many computers centrally.',
+  '四項分數的加權平均：連線 30%、對外曝露 20%、漏洞 25%、安全設定 25%；沒有掃描到的項目不計入。': 'Weighted average of the four scores: connections 30%, exposure 20%, vulnerabilities 25%, security settings 25%; anything not scanned is left out.',
+  '對外曝露': 'Exposure',
+  '從外面主動連進你主機的可疑位址，例如一直嘗試登入（暴力破解）或被情資列為攻擊者的 IP。': 'Suspicious addresses connecting into your hosts from outside, e.g. repeated login attempts (brute force) or IPs listed as attackers by threat intel.',
+  '最近 7 天，各主機的連線對到哪些威脅情資清單（例如惡意 IP 黑名單）、對到幾個指標、影響幾台主機。': 'Over the last 7 days: which threat intel lists (such as malicious IP blocklists) your hosts\' connections matched, how many indicators, and how many hosts.',
+  '有多少服務（port）能從網路被別人連進來，例如遠端桌面、檔案分享、資料庫。開得越多、越危險，分數越低。': 'How many services (ports) other machines can reach over the network, such as remote desktop, file sharing or databases. The more and riskier they are, the lower the score.',
+  '目前連到威脅情資高信心列名位址的連線數，例如惡意程式的控制伺服器；應該優先處理。': 'Connections currently going to addresses that threat intel lists with high confidence, such as malware command servers; handle these first.',
+  '系統安全設定檢查的通過率，例如防毒、防火牆、磁碟加密、UAC、SSH 設定；越重要的檢查佔比越高。': 'Pass rate of security settings checks such as antivirus, firewall, disk encryption, UAC and SSH; more important checks weigh more.',
+  '線上＝最近幾分鐘內有回報；延遲＝超過預期時間沒回報（可能關機、休眠或網路斷了）；離線＝很久沒回報。': 'Online = reported in the last few minutes; late = hasn\'t reported when expected (maybe off, asleep or offline); offline = no report for a long time.',
+  '這台電腦連到的地方安不安全：連到威脅情資列名的位址、或行為異常（例如定時連回同一個地方）就扣分。每個問題依嚴重度扣分：嚴重 25、高 15、中 7、低 2。': 'Whether the places this computer talks to are safe: points come off for addresses listed by threat intel or unusual behavior (such as calling home on a timer). Each problem costs by severity: critical 25, high 15, medium 7, low 2.',
+  '需要金鑰＝要登入或帶 API 金鑰才看得到資料；開放模式＝沒設管理員金鑰，只允許本機連線。': 'Key required = you must log in or use an API key to see data; open mode = no admin secret set, so only local connections are allowed.',
 };

@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Gauge } from '@/components/ui/Gauge';
+import { Hint } from '@/components/ui/Hint';
+import { SCORE_KEYS, scoreHints, scoreLabels } from '@/components/overview/scoreHints';
 import { ScorePill, SevCountsRow } from '@/components/ui/Severity';
 import { requireAdmin } from '@/lib/auth/require';
 import { bytes, since, utc } from '@/lib/format';
@@ -116,13 +118,18 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
   ];
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Card title={t('安全分數')}>
+      <Card
+        title={
+          <>
+            {t('安全分數')}
+            <Hint text={scoreHints(t).card} />
+          </>
+        }
+      >
         <div className="flex flex-wrap justify-around gap-4">
-          <Gauge score={a.score?.overall} label={t('總分')} size={104} />
-          <Gauge score={a.score?.connections} label={t('連線')} size={76} />
-          <Gauge score={a.score?.exposure} label={t('曝露')} size={76} />
-          <Gauge score={a.score?.vulns} label={t('漏洞')} size={76} />
-          <Gauge score={a.score?.hardening} label={t('硬化')} size={76} />
+          {SCORE_KEYS.map((k) => (
+            <Gauge key={k} score={a.score?.[k]} label={scoreLabels(t)[k]} hint={scoreHints(t)[k]} size={88} emphasis={k === 'overall'} />
+          ))}
         </div>
         <div className="mt-4">
           <SevCountsRow counts={a.sevCounts} t={t} />
@@ -359,7 +366,7 @@ async function HardeningTab({ t, a, sp }: { t: TFn; a: Agent; sp: Record<string,
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-6">
-        <Gauge score={s.score ?? null} label={t('硬化')} size={96} />
+        <Gauge score={s.score ?? null} label={t('安全設定')} size={96} hint={scoreHints(t).hardening} />
         <div className="text-sm">
           <div>{t('通過 {pass} · 未通過 {fail} · 不適用 {na} · 錯誤 {error}', { pass: s.pass, fail: s.fail, na: s.na, error: s.error })}</div>
           <div className="text-xs text-slate-500">{t('回報時間 {when}', { when: since(h.at, t) })}</div>
