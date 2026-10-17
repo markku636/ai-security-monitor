@@ -1,0 +1,13 @@
+{
+  "request_id": "rq_00112233445566778899aabb",
+  "status": "approved",
+  "request_code": "ENDY-Z24W",
+  "poll_interval_s": 15,
+  "expires_at": "2026-10-24T08:00:00.000Z",
+  "credentials": {
+    "agent_id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+    "client_key": "asa_ek_0a1b2c3d_5555555555555555555555555555555555555555",
+    "hub_fingerprint": "72AS-YEXT-VNGO-NLC5-W2NM",
+    "signature": "I79ZuyxGlOEVM-VVFnAX2ocYLnOONvSQr5OKnLZBZdOXAgIZ2AUpvAEt0It97E2QJwfNDD0v5ZFCYJUJQL6hCw"
+  }
+}

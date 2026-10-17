@@ -21,9 +21,16 @@ export interface Identity {
   keyIndex?: number;
   /** 網頁建立的註冊金鑰 id。 */
   enrollKeyId?: string;
+  /** 這把註冊金鑰只准哪台 agent 用（免金鑰加入核准發的金鑰）；其他 agent id 一律 403。 */
+  boundAgentId?: string;
   /** API token id 與 scope。 */
   tokenId?: string;
   scopes?: TokenScope[];
+}
+
+/** 綁定一台 agent 的金鑰被拿來替別的 agent id 用？（沒綁定 → 永遠 false） */
+export function boundToOtherAgent(id: Identity, agentId: string | null | undefined): boolean {
+  return !!id.boundAgentId && !!agentId && id.boundAgentId !== agentId;
 }
 
 /** 稽核用的 client 名稱：環境變數第幾把，或註冊金鑰 id。 */
@@ -51,7 +58,7 @@ export async function identifyByCredentials(token: string | undefined, cookieTok
     if (idx >= 0) return { role: 'client', via: 'bearer', keyIndex: idx };
     if (isEnrollKeyShape(token)) {
       const k = await verifyEnrollKey(token);
-      if (k) return { role: 'client', via: 'enroll', enrollKeyId: k.id };
+      if (k) return { role: 'client', via: 'enroll', enrollKeyId: k.id, ...(k.boundAgentId ? { boundAgentId: k.boundAgentId } : {}) };
     } else if (isApiTokenShape(token)) {
       const t = await verifyApiToken(token);
       if (t) return { role: 'reader', via: 'token', tokenId: t.id, scopes: t.scopes };

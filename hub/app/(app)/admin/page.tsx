@@ -3,8 +3,11 @@ import { headers } from 'next/headers';
 import { IpIntelSettings } from '@/components/admin/IpIntelSettings';
 import { EnrollKeyManager, TokenManager, type EnrollRow, type TokenRow } from '@/components/admin/KeyManagers';
 import { Card } from '@/components/ui/Card';
+import { Hint } from '@/components/ui/Hint';
 import { requireAdmin } from '@/lib/auth/require';
 import { listApiTokens, listEnrollKeys } from '@/lib/auth/tokens';
+import { getDb } from '@/lib/db';
+import { hubIdentity } from '@/lib/enroll/identity';
 import { env } from '@/lib/env';
 import { utc } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
@@ -59,12 +62,23 @@ async function KeysTab() {
   const h = await headers();
   const items: EnrollRow[] = (await listEnrollKeys()).map((k) => ({ ...k, createdAt: k.createdAt.toISOString(), lastUsedAt: iso(k.lastUsedAt) }));
   const envKeys = env().clientSecrets.length;
+  const fp = await Promise.resolve()
+    .then(() => hubIdentity(getDb()))
+    .then((x) => x.fingerprint)
+    .catch(() => null);
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600 dark:text-slate-300">
         {t('主機用註冊金鑰上傳報告。可以一個部門或一批機器一把；撤銷後用那把金鑰的主機會被拒絕。')}
         {envKeys ? ` ${t('另有 {n} 把來自環境變數 ASA_HUB_CLIENT_SECRETS 的金鑰（不在這裡管理）。', { n: envKeys })}` : ''}
       </p>
+      {fp ? (
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-slate-500">{t('Hub 指紋')}</span>
+          <Hint text={t('電腦端顯示的指紋要跟這裡一樣，才是公司的 Hub')} />
+          <span className="ml-2 font-mono font-semibold tracking-wider text-teal-700 dark:text-teal-400">{fp}</span>
+        </p>
+      ) : null}
       <EnrollKeyManager items={items} hub={hubPublicUrl(h)} />
       <p className="text-sm">
         <Link className="text-teal-700 hover:underline dark:text-teal-400" href="/install">

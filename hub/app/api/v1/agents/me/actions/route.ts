@@ -1,5 +1,5 @@
 // agent 領取已核准的遠端動作（附 HMAC token）。需要 client 金鑰＋已釘選的 agent token。
-import { clientLabel } from '@/lib/auth/access';
+import { boundToOtherAgent, clientLabel } from '@/lib/auth/access';
 import { eq } from 'drizzle-orm';
 import { agents } from '@/drizzle/schema';
 import { dispatchForAgent } from '@/lib/actions/store';
@@ -16,6 +16,10 @@ export async function GET(req: Request): Promise<Response> {
   if (id.role !== 'client') return error(401, 'unauthorized');
   const agentId = req.headers.get('x-asa-agent-id')?.trim() ?? '';
   if (!agentId || agentId.length > 64) return error(400, 'bad_request', { rule: 'agent_id_header' });
+  if (boundToOtherAgent(id, agentId)) {
+    await audit({ actor: clientLabel(id), actorRole: 'client', action: 'actions.poll.key_bound_to_other_agent', targetType: 'agent', targetId: agentId, sourceIp: sourceIp(req), details: { bound_agent_id: id.boundAgentId } });
+    return error(403, 'key_bound_to_other_agent');
+  }
   const db = getDb();
   const pin = await pinAgentToken(db, agentId, agentTokenOf(req));
   if (pin === 'unknown_agent') return error(404, 'unknown_agent');

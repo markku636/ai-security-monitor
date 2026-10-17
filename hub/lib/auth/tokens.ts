@@ -66,7 +66,8 @@ export async function verifyApiToken(token: string): Promise<{ id: string; scope
   return { id: row.id, scopes: (row.scopes ?? []).filter((s): s is TokenScope => (TOKEN_SCOPES as readonly string[]).includes(s)) };
 }
 
-export async function verifyEnrollKey(key: string): Promise<{ id: string } | null> {
+/** 有效的註冊金鑰 → { id, boundAgentId }（免金鑰加入核准發的金鑰只綁一台 agent）。 */
+export async function verifyEnrollKey(key: string): Promise<{ id: string; boundAgentId: string | null } | null> {
   const m = ENROLL_RE.exec(key);
   if (!m) return null;
   const [row] = await getDb().select().from(enrollKeys).where(eq(enrollKeys.id, m[1])).limit(1);
@@ -75,7 +76,7 @@ export async function verifyEnrollKey(key: string): Promise<{ id: string } | nul
   if (shouldTouch(`e:${row.id}`)) {
     await getDb().update(enrollKeys).set({ lastUsedAt: new Date() }).where(eq(enrollKeys.id, row.id));
   }
-  return { id: row.id };
+  return { id: row.id, boundAgentId: row.boundAgentId ?? null };
 }
 
 type TokenRow = typeof apiTokens.$inferSelect;

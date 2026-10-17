@@ -1,6 +1,8 @@
 import { clientLabel } from '@/lib/auth/access';
 import { actionKeyFor, signingKey } from '@/lib/actions/sign';
 import { audit } from '@/lib/audit';
+import { hubName } from '@/lib/enroll/identity';
+import { markClaimed } from '@/lib/enroll/store';
 import { env } from '@/lib/env';
 import { json } from '@/lib/http';
 import { applyRegister } from '@/lib/ingest/apply';
@@ -19,6 +21,8 @@ export async function POST(req: Request): Promise<Response> {
       const r = await applyRegister(db, body, id.keyIndex, id.enrollKeyId);
       // 新 agent：寫入後才釘選得到。
       const pin = await pinAgentToken(db, r.agent_id, agentToken);
+      // 用免金鑰加入核准發的金鑰註冊成功 → 申請標成已領取（10 分鐘後輪詢就不再回憑證）
+      if (id.enrollKeyId && id.boundAgentId) await markClaimed(db, id.enrollKeyId);
       if (r.created) {
         await audit({
           actor: clientLabel(id),
@@ -40,7 +44,7 @@ export async function POST(req: Request): Promise<Response> {
         pinned: pin === 'pinned',
         ...(actionKey ? { action_key: actionKey } : {}),
         hub: {
-          name: 'Security Hub',
+          name: hubName(),
           version: e.version,
           min_report_interval_s: Math.ceil(e.reportMinIntervalMs / 1000),
           snapshot_interval_s: Math.max(60, Math.ceil(e.snapshotMinIntervalMs / 1000)),

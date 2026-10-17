@@ -1,6 +1,6 @@
 // 鏡像的原始清單（保留檔頭）；ETag＝sha256，agent 帶 If-None-Match 沒變就 304。
 import fs from 'node:fs';
-import { identify } from '@/lib/auth/access';
+import { boundToOtherAgent, identify } from '@/lib/auth/access';
 import { error } from '@/lib/http';
 import { dataPath, mirrorable, mirrorAllowed, readMeta } from '@/lib/intel/mirror';
 import { loadRegistry } from '@/lib/intel/registry';
@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const who = await identify(req);
   if (!mirrorAllowed(who)) return error(401, 'unauthorized');
+  if (boundToOtherAgent(who, req.headers.get('x-asa-agent-id')?.trim())) return error(403, 'key_bound_to_other_agent');
   const { id } = await ctx.params;
   const feed = loadRegistry().find((f) => f.id === id);
   if (!feed || !mirrorable(feed)) return error(404, 'not_found');

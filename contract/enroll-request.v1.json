@@ -1,0 +1,32 @@
+{
+  "agent": {
+    "id": "0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee",
+    "version": "0.1.0",
+    "hostname": "demo-host",
+    "os": {
+      "family": "windows",
+      "name": "Windows",
+      "version": "11 (26200)",
+      "build": "Windows 11 Pro",
+      "kernel": "26200",
+      "product_type": "workstation",
+      "installation_type": "Client",
+      "edition": "Professional"
+    },
+    "arch": "x86_64",
+    "ips": [
+      "192.0.2.10"
+    ],
+    "uptime_s": 3600,
+    "elevated": false,
+    "scanners_available": [
+      "connections",
+      "intel",
+      "firewall",
+      "ports"
+    ]
+  },
+  "accept_remote_actions": false,
+  "request_secret": "Zm9vYmFyLXRlc3Qtb25seS1yZXF1ZXN0LXNlY3JldDE",
+  "hub_fingerprint": "72AS-YEXT-VNGO-NLC5-W2NM"
+}

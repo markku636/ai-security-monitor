@@ -64,6 +64,8 @@ export const enrollKeys = pgTable(
     createdBy: text('created_by').notNull(),
     lastUsedAt: ts('last_used_at'),
     revokedAt: ts('revoked_at'),
+    /** 免金鑰加入核准後發的金鑰只給那一台 agent 用；拿去替別的 agent id 上傳一律 403。 */
+    boundAgentId: text('bound_agent_id'),
   },
   (t) => [index('enroll_keys_created_idx').on(t.createdAt)],
 );
@@ -434,3 +436,38 @@ export const ipNotes = pgTable('ip_notes', {
   updatedAt: ts('updated_at').notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });
+
+/**
+ * 免金鑰加入申請：agent 帶一組隨機 request_secret 來申請（只存 sha256），管理員在「新增主機」頁核准／拒絕，
+ * 或來源 IP 在自動核准網段內就直接核准。核准後 agent 輪詢拿到一把只綁這台 agent 的註冊金鑰（不存明文，HMAC 衍生）。
+ * pending → approved（→ claimed_at）／rejected／expired。
+ */
+export const enrollmentRequests = pgTable(
+  'enrollment_requests',
+  {
+    id: text('id').primaryKey(),
+    agentId: text('agent_id').notNull(),
+    hostname: text('hostname').notNull(),
+    osFamily: text('os_family'),
+    osName: text('os_name'),
+    osVersion: text('os_version'),
+    arch: text('arch'),
+    agentVersion: text('agent_version'),
+    ips: jsonb('ips').$type<string[]>().notNull().default([]),
+    agent: jsonb('agent').$type<Record<string, unknown>>(),
+    acceptRemoteActions: boolean('accept_remote_actions').notNull().default(false),
+    secretHash: text('secret_hash').notNull(),
+    requestCode: text('request_code').notNull(),
+    sourceIp: text('source_ip'),
+    status: text('status').notNull().default('pending'),
+    autoApproved: boolean('auto_approved').notNull().default(false),
+    reason: text('reason'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    decidedAt: ts('decided_at'),
+    decidedBy: text('decided_by'),
+    expiresAt: ts('expires_at').notNull(),
+    claimedAt: ts('claimed_at'),
+    enrollKeyId: text('enroll_key_id'),
+  },
+  (t) => [index('enrollment_requests_status_idx').on(t.status, t.createdAt), index('enrollment_requests_agent_idx').on(t.agentId)],
+);

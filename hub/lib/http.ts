@@ -54,13 +54,55 @@ export function parseCookies(req: Request): Record<string, string> {
   return out;
 }
 
-/** 來源 IP：只有 ASA_HUB_TRUST_PROXY 時才看 X-Forwarded-For（取最後一個）。 */
-export function sourceIp(req: Request): string {
+/** instrumentation.ts 裝好「TCP 來源位址」標頭時設 true（見 installPeerIpHook）。 */
+export const PEER_IP_HEADER = 'x-asa-peer-ip';
+
+const gp = globalThis as unknown as { __asaPeerIpHook?: boolean };
+
+export function peerIpHookInstalled(): boolean {
+  return gp.__asaPeerIpHook === true;
+}
+
+export function markPeerIpHookInstalled(): void {
+  gp.__asaPeerIpHook = true;
+}
+
+/** 測試用：模擬 instrumentation 已裝／沒裝 peer IP hook。 */
+export function setPeerIpHookForTests(on: boolean): void {
+  gp.__asaPeerIpHook = on || undefined;
+}
+
+/** `::ffff:a.b.c.d` → `a.b.c.d`；去掉 IPv6 zone（fe80::1%eth0）。 */
+export function normalizeIp(ip: string): string {
+  let s = ip.trim();
+  if (s.startsWith('[') && s.endsWith(']')) s = s.slice(1, -1);
+  const pct = s.indexOf('%');
+  if (pct > 0) s = s.slice(0, pct);
+  const m = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(s);
+  return m ? m[1] : s;
+}
+
+/**
+ * 真正的連線對端：ASA_HUB_TRUST_PROXY → X-Forwarded-For 最後一個；否則只信 instrumentation 從 socket 填的
+ * x-asa-peer-ip（會覆蓋用戶端送來的同名標頭）；都沒有 → null（例如測試或沒跑 instrumentation）。
+ * Next.js 只在 X-Forwarded-For 不存在時才補，所以沒開 trust proxy 時絕不能看它。
+ */
+export function peerIp(req: Request): string | null {
   if (env().trustProxy) {
     const xff = req.headers.get('x-forwarded-for');
-    if (xff) return xff.split(',').pop()!.trim();
+    const last = xff?.split(',').pop()?.trim();
+    if (last) return normalizeIp(last);
   }
-  return req.headers.get('x-real-ip') ?? 'local';
+  if (peerIpHookInstalled()) {
+    const v = req.headers.get(PEER_IP_HEADER)?.trim();
+    if (v) return normalizeIp(v);
+  }
+  return null;
+}
+
+/** 稽核用的來源 IP：peerIp；trust proxy 時才退回 X-Real-IP；都沒有 → 'local'。 */
+export function sourceIp(req: Request): string {
+  return peerIp(req) ?? (env().trustProxy ? req.headers.get('x-real-ip')?.trim() || null : null) ?? 'local';
 }
 
 export function isHttps(req: Request): boolean {

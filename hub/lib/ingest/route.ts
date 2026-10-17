@@ -1,7 +1,7 @@
 // agent 端點共用流程：client 金鑰 → 讀 body（gzip / 上限 / 結構檢查）→ zod → 依 agent 限流 → 寫入。
 import type { z } from 'zod';
 import { audit } from '@/lib/audit';
-import { clientLabel, identify, type Identity } from '@/lib/auth/access';
+import { boundToOtherAgent, clientLabel, identify, type Identity } from '@/lib/auth/access';
 import { hit } from '@/lib/auth/ratelimit';
 import { getDb, type DB } from '@/lib/db';
 import { error, json, sourceIp } from '@/lib/http';
@@ -86,6 +86,10 @@ export async function handleIngest<S extends z.ZodTypeAny>(
   const agentId = opts.agentIdOf(body);
   const header = req.headers.get('x-asa-agent-id');
   if (header && header !== agentId) return error(400, 'bad_request', { rule: 'agent_id_mismatch' });
+  if (boundToOtherAgent(id, agentId)) {
+    await audit({ actor: clientLabel(id), actorRole: id.role, action: `ingest.${opts.kind}.key_bound_to_other_agent`, targetType: 'agent', targetId: agentId, sourceIp: ip, details: { bound_agent_id: id.boundAgentId } });
+    return error(403, 'key_bound_to_other_agent');
+  }
   const agentToken = agentTokenOf(req);
   const pin = await pinAgentToken(getDb(), agentId, agentToken);
   if (pin === 'mismatch') {

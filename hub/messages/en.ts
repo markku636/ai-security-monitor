@@ -771,4 +771,83 @@ export const en: Record<string, string> = {
   '外部威脅情資（AbuseIPDB、GreyNoise 等第三方資料庫）算出的風險分數 0–100，越高越可能是惡意來源；「—」是還沒查過，勾選後按「查詢外部情資」就會有':
     '0–100 risk score from external threat intel (third-party databases such as AbuseIPDB and GreyNoise); higher means more likely malicious. "—" means not looked up yet: tick the IP and press "Look up external intel"',
   '外部風險': 'External risk',
+
+  // ---- enrollment requests ----
+  'Hub 指紋': 'Hub fingerprint',
+  '電腦端顯示的指紋要跟這裡一樣，才是公司的 Hub': "The fingerprint shown on the computer must match this one; only then is it your company's Hub",
+  '指紋是這個 Hub 專屬的一串代碼（由 Hub 的金鑰算出來）。電腦端第一次連上時會記住它，之後如果有人假冒 Hub，指紋就會對不上。':
+    "The fingerprint is a code unique to this Hub (calculated from the Hub's key). Computers remember it the first time they connect; if someone later impersonates the Hub, the fingerprint will not match.",
+  'CIDR 是寫一段 IP 範圍的方法：192.168.1.0/24 代表 192.168.1.0～192.168.1.255；只寫一個 IP 就只算那一台。':
+    'CIDR is a way to write a range of IP addresses: 192.168.1.0/24 means 192.168.1.0 to 192.168.1.255. A single IP means just that one computer.',
+  '網段＝一段連續的 IP 位址，通常就是同一個辦公室或機房的網路。': 'A network range is a block of consecutive IP addresses, usually the network of one office or server room.',
+  'mDNS 是區網內的「廣播找人」：同一個網路裡的電腦不用輸入網址，就能自動找到 Hub（跟印表機被自動找到的原理一樣）。':
+    'mDNS is "shout and find" on the local network: computers on the same network find the Hub without typing an address (the same way printers are found automatically).',
+  'SRV 是公司 DNS 裡的一種紀錄，告訴電腦「某個服務在哪台主機、哪個 port」。加了之後，跨網段的電腦也能自動找到 Hub。':
+    'SRV is a kind of record in your company DNS that tells computers which host and port a service runs on. With it, computers on other networks can find the Hub automatically too.',
+  'TXT 紀錄是附在 DNS 名稱上的文字，這裡放 Hub 的網址與指紋，讓電腦端確認找到的是對的 Hub。':
+    "A TXT record is text attached to a DNS name. Here it holds the Hub's address and fingerprint so computers can confirm they found the right Hub.",
+  '讀不到 Hub 身分（資料庫連不上？）。': 'Cannot read the Hub identity (is the database reachable?).',
+  '待核准的主機': 'Hosts waiting for approval',
+  '免金鑰加入已被關閉（ASA_HUB_ENROLL_REQUESTS=off），電腦端無法送出申請。': 'Keyless enrollment is turned off (ASA_HUB_ENROLL_REQUESTS=off); computers cannot send requests.',
+  '免金鑰安裝指令': 'Keyless install commands',
+  '下載預填此 Hub 的安裝指令（不含金鑰）': 'Install commands pre-filled with this Hub (no key included)',
+  '：裝好後電腦端會送出加入申請，並顯示申請碼與 Hub 指紋；你在上面「待核准的主機」對照後按核准即可。':
+    '. After installing, the computer sends a join request and shows a request code and the Hub fingerprint; compare them under "Hosts waiting for approval" above and press Approve.',
+  '下載 install.ps1（Windows）': 'Download install.ps1 (Windows)',
+  '下載 install.sh（Linux／macOS）': 'Download install.sh (Linux / macOS)',
+  '自動核准的網段': 'Auto-approved networks',
+  '從這些網段送來的申請會直接核准，不用人按。一行一個': 'Requests from these networks are approved automatically, without anyone pressing a button. One',
+  '（例：192.168.10.0/24）。留空＝全部都要人工核准。只建議填公司內部、你信得過的網路。':
+    ' per line (e.g. 192.168.10.0/24). Leave empty to approve everything by hand. Only list internal company networks you trust.',
+  '用註冊金鑰安裝（另一種方式）': 'Install with an enrollment key (alternative)',
+  '不想逐台核准，或電腦連不到這個 Hub 的核准流程時：先建立一把註冊金鑰，指令裡帶著金鑰就會直接加入。':
+    'If you do not want to approve each computer, or the approval flow is not an option: create an enrollment key first; commands that carry the key join directly.',
+  '免金鑰加入：申請送到 Hub 後要管理員核准才拿得到金鑰，而且那把金鑰只能給那一台主機用。':
+    'Keyless enrollment: a computer only gets a key after an administrator approves its request, and that key works for that one host only.',
+  '關閉（ASA_HUB_MDNS=on 可開啟；伺服器版預設開）': 'Off (set ASA_HUB_MDNS=on to enable; on by default in the server edition)',
+  '廣播中（port {p}）': 'Advertising (port {p})',
+  '已開啟但沒在廣播：{e}': 'Enabled but not advertising: {e}',
+  '尚未啟動': 'not started yet',
+  '自動尋找狀態': 'Auto-discovery status',
+  '區網廣播': 'Local network advertising',
+  'Hub 跑在 Docker 裡時要注意：Docker Desktop 與預設的 bridge 網路不會把廣播送到區網。Linux 請改用 network_mode: host，或在區網裡的一台電腦執行：':
+    'If the Hub runs in Docker: Docker Desktop and the default bridge network do not pass these broadcasts to the LAN. On Linux use network_mode: host, or run this on a computer in the LAN:',
+  '公司 DNS 紀錄（跨網段也找得到）': 'Company DNS records (found across networks too)',
+  '在公司 DNS 加 SRV 與 TXT 紀錄': 'Add SRV and TXT records to your company DNS',
+  '（{d} 是範例網域，請換成公司實際的網域；目標主機要是 Hub 的 DNS 名稱）':
+    "({d} is an example domain: replace it with your real company domain; the target host must be the Hub's DNS name)",
+  'Windows DNS Server（PowerShell）': 'Windows DNS Server (PowerShell)',
+  'BIND zone 檔': 'BIND zone file',
+  '設定 ASA_HUB_PUBLIC_URL 後這裡會顯示要加的紀錄。': 'Set ASA_HUB_PUBLIC_URL and the records to add will appear here.',
+  '產生一行安裝指令、核准要加入的主機': 'One-line install commands; approve hosts that want to join',
+  '拒絕 {n} 台主機。要附上原因嗎？（選填，電腦端會看到）': 'Reject {n} host(s). Add a reason? (optional; the computer will see it)',
+  '操作失敗：{e}': 'Failed: {e}',
+  '已核准 {n} 台，電腦端下次詢問（約 15 秒內）就會完成加入。': 'Approved {n}. Each computer finishes joining the next time it checks (within about 15 seconds).',
+  '已拒絕 {n} 台。': 'Rejected {n}.',
+  '核准勾選的 {n} 台': 'Approve {n} selected',
+  '拒絕勾選的 {n} 台': 'Reject {n} selected',
+  '也顯示已處理的': 'Also show handled requests',
+  '頁面開著時每 10 秒自動更新': 'Refreshes every 10 seconds while this page is open',
+  '更新於 {at}': 'Updated {at}',
+  '每 10 秒自動更新': 'Refreshes every 10 seconds',
+  '申請碼': 'Request code',
+  '電腦端畫面上也會顯示一組申請碼；兩邊一樣才是同一台，請先對照再核准。':
+    'The computer shows a request code on its screen too. Only if both match is it the same computer, so compare before approving.',
+  '這個申請實際從哪個網路位址送進來（Hub 看到的連線來源）。': 'The network address this request actually came from (the connection source the Hub sees).',
+  '申請時間': 'Requested',
+  '程式版本': 'Agent version',
+  '選取 {host}': 'Select {host}',
+  '這台主機以前就加入過（同一個 agent id）。可能是重灌或重新安裝；不確定就先問使用者。':
+    'This host has joined before (same agent id). It may have been reinstalled; if unsure, ask its user first.',
+  '重新加入': 'Rejoining',
+  '來源 IP 在「自動核准的網段」內，所以不用人按就核准了。': 'The source IP is inside an auto-approved network, so it was approved without anyone pressing a button.',
+  '自動核准': 'Auto-approved',
+  '這台主機願意執行你核准的封鎖 IP、關閉 port 等動作。': 'This host accepts actions you approve, such as blocking an IP or closing a port.',
+  '原因：{r}': 'Reason: {r}',
+  '目前沒有待核准的主機。電腦端執行免金鑰安裝後，申請會出現在這裡。': 'No hosts are waiting. Requests appear here after a computer runs the keyless install.',
+  '「{v}」範圍太大（IPv4 至少要 /8、IPv6 至少要 /16），請改小一點。': '"{v}" is too broad (IPv4 needs at least /8, IPv6 at least /16); please narrow it.',
+  '「{v}」不是正確的網段寫法。例：192.168.1.0/24、10.0.0.5': '"{v}" is not a valid network. Examples: 192.168.1.0/24, 10.0.0.5',
+  '目前拿不到可信的連線來源 IP（反向代理後面要設 ASA_HUB_TRUST_PROXY），所以自動核准不會生效，申請一律要人工核准。':
+    'No trusted connection source IP is available (behind a reverse proxy, set ASA_HUB_TRUST_PROXY), so auto-approval will not take effect and every request needs manual approval.',
+  '儲存網段': 'Save networks',
 };

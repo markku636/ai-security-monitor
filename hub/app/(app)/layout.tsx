@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Sidebar, type NavGroup } from '@/components/layout/Sidebar';
 import { listActions } from '@/lib/actions/store';
 import { getDb } from '@/lib/db';
+import { pendingCount as pendingEnrollCount } from '@/lib/enroll/store';
 import { fleetSummary } from '@/lib/queries/agents';
 import { requireViewer } from '@/lib/auth/require';
 import { isOpenMode } from '@/lib/env';
@@ -15,7 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { t } = await getT();
   const admin = viewer.role === 'admin';
   // 待辦數字：嚴重＋高的未處理問題、待核准的封鎖；查不到不影響頁面
-  const [urgent, pending] = admin
+  const [urgent, pending, enrollPending] = admin
     ? await Promise.all([
         fleetSummary()
           .then((f) => f.severities.critical + f.severities.high)
@@ -23,8 +24,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         listActions(getDb(), { status: ['pending'], limit: 1 })
           .then((r) => r.counts.pending ?? 0)
           .catch(() => 0),
+        // 待核准的免金鑰加入申請
+        Promise.resolve()
+          .then(() => pendingEnrollCount(getDb()))
+          .catch(() => 0),
       ])
-    : [0, 0];
+    : [0, 0, 0];
   const groups: NavGroup[] = [
     {
       items: [
@@ -64,7 +69,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             title: t('工具'),
             items: [
               { href: '/ai', label: t('AI 助手'), hint: t('用白話請 AI 解讀狀況'), icon: 'ai' },
-              { href: '/install', label: t('新增主機'), hint: t('產生一行安裝指令'), icon: 'add' },
+              { href: '/install', label: t('新增主機'), hint: t('產生一行安裝指令、核准要加入的主機'), icon: 'add', badge: enrollPending, badgeTone: 'amber' },
               { href: '/admin', label: t('設定與金鑰'), hint: t('註冊金鑰、API token、稽核紀錄'), icon: 'key' },
             ],
           },
