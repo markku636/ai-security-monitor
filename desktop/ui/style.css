@@ -139,7 +139,7 @@ input[type=text], textarea, select {
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
 }
 textarea { width: 100%; min-height: 70px; resize: vertical; }
-.split { display: grid; grid-template-columns: 1fr 340px; gap: 14px; align-items: start; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
 @media (max-width: 1100px) { .split { grid-template-columns: 1fr; } }
 .ai-out { white-space: pre-wrap; line-height: 1.65; }
 .md { white-space: normal; overflow-wrap: break-word; }
@@ -293,3 +293,4 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .meter > i { display: block; height: 100%; background: var(--chart-1); border-radius: 4px; }
 .meter.hot > i { background: var(--danger); }
 .tabs-row { display: flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }
+.nw { white-space: nowrap; }

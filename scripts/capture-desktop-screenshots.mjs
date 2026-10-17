@@ -322,6 +322,50 @@ const DATA = {
   connections: { connections: CONNECTIONS, listeners: [], intel_loaded: true },
   latest_report: REPORT,
   intel_feeds: { feeds: INTEL_FEEDS },
+  dns: (() => {
+    const t = (m) => new Date(Date.now() - m * 60_000).toISOString();
+    const rec = (m, name, process, rcode = 'NOERROR', count = 1, answers = [], reasons = [], qtype = 'A') => ({ ts: t(m), name, qtype, rcode, process, count, answers, reasons });
+    const records = [
+      rec(1, 'teams.microsoft.com', 'ms-teams.exe', 'NOERROR', 4, ['52.113.194.132']),
+      rec(2, 'kqfcpqbyqllgbr.net', 'rundll32.exe', 'NXDOMAIN', 2, [], ['看起來像亂數產生的網域']),
+      rec(2, 'pbqwnzlkhtrdve.net', 'rundll32.exe', 'NXDOMAIN', 2, [], ['看起來像亂數產生的網域']),
+      rec(3, 'outlook.office365.com', 'OUTLOOK.EXE', 'NOERROR', 3, ['52.98.152.178']),
+      rec(4, 'cdn-update.example-malware.test', 'updater.exe', 'NOERROR', 5, ['203.0.113.66'], ['情資：CERT Polska 警示清單（分數 85）']),
+      rec(5, 'www.google.com', 'chrome.exe', 'NOERROR', 6, ['142.250.196.196']),
+      rec(6, 'dns.google', 'helper.exe', 'NOERROR', 1, ['8.8.8.8'], ['加密 DNS 端點（HaGeZi DoH）']),
+      rec(7, 'login.microsoftonline.com', 'chrome.exe', 'NOERROR', 2, ['20.190.160.20']),
+      rec(9, 'github.com', 'Code.exe', 'NOERROR', 2, ['140.82.112.3']),
+      rec(12, 'ctldl.windowsupdate.com', 'svchost.exe', 'NOERROR', 1, ['93.184.221.240']),
+    ];
+    return {
+      records,
+      total: 1842,
+      nxdomain: 38,
+      suspicious: 4,
+      domains: 126,
+      top_domains: [
+        { domain: 'microsoft.com', count: 412, process: 'ms-teams.exe' },
+        { domain: 'office365.com', count: 233, process: 'OUTLOOK.EXE' },
+        { domain: 'google.com', count: 198, process: 'chrome.exe' },
+        { domain: 'github.com', count: 96, process: 'Code.exe' },
+        { domain: 'windowsupdate.com', count: 41, process: 'svchost.exe' },
+      ],
+      top_processes: [
+        { process: 'chrome.exe', count: 702 },
+        { process: 'ms-teams.exe', count: 455 },
+        { process: 'OUTLOOK.EXE', count: 233 },
+        { process: 'Code.exe', count: 120 },
+        { process: 'rundll32.exe', count: 24 },
+      ],
+      status: { source: 'etw', running: true, events: 18_420, deduped: 2_100, dropped: 0, last_event_at: t(0), has_process: true },
+      unreadable: false,
+      enabled: true,
+      upload: 'all',
+      use_hub: null,
+      hub_protect: { enabled: true, resolver_ips: ['192.0.2.53'] },
+      dns_server: false,
+    };
+  })(),
   ai_providers: {
     providers: [
       { id: 'claude', label: 'Claude Code', found: true, path: 'C:\\Users\\demo\\AppData\\Roaming\\npm\\claude.cmd', logged_in: true },
@@ -390,6 +434,7 @@ function installMock(D) {
     connections: () => D.connections,
     latest_report: () => D.latest_report,
     intel_feeds: () => D.intel_feeds,
+    dns_recent: () => D.dns,
     ai_providers: () => D.ai_providers,
     ai_auth_status: () => ({
       providers: [
@@ -589,6 +634,7 @@ const SHOTS = [
       );
     },
   ],
+  ['desktop-dns', 'dns', false, async () => waitFor(`document.querySelector('#main table')`)],
   ['desktop-intel', 'intel', false, async () => waitFor(`document.querySelector('#main table')`)],
   [
     'desktop-ai',

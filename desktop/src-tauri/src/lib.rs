@@ -28,6 +28,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tokio::sync::Mutex;
 
 mod ai_auth;
+mod dns;
 mod lan;
 mod live;
 mod updates;
@@ -634,6 +635,7 @@ pub fn run(start_in_tray: bool) {
             desktop_autostart_status,
             set_desktop_autostart,
             usage::metrics_now,
+            dns::dns_recent,
             usage::metrics_history,
             live::traffic_live,
             usage::set_performance,

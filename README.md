@@ -240,6 +240,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | ![桌面版掃描結果](docs/images/windows-desktop-findings.png) 掃描結果：依嚴重程度排序，展開看細節和修正方式 | ![桌面版深色模式](docs/images/windows-desktop-overview-dark.png) 深色模式：跟著 Windows 的設定 |
 | ![桌面版加入公司的 Hub](docs/images/windows-desktop-settings-join.png) 設定 → 公司的 Security Hub：自動找到公司的 Hub，核對指紋後按「申請加入」 | ![桌面版設定](docs/images/windows-desktop-settings.png) 設定：已加入的 Hub、背景自動回報、自動更新 |
 | ![桌面版流量與效能](docs/images/windows-desktop-usage.png) 流量與效能：最近 1 小時的網路速度、哪個程式用最多（也有即時與最近 24 小時） | ![桌面版 CPU、記憶體、磁碟](docs/images/windows-desktop-usage-perf.png) 開啟效能蒐集後：CPU、記憶體、磁碟、最吃資源的程式、電池 |
+| ![桌面版 DNS](docs/images/windows-desktop-dns.png) DNS：這台查了哪些網域、是哪個程式查的、哪些可疑（亂數網域、情資網域、加密 DNS 端點），以及有沒有用公司的防護 DNS | ![桌面版威脅情資](docs/images/windows-desktop-intel.png) 威脅情資：每份名單的筆數、最後更新、授權，可以立即更新 |
 
 **Security Hub（網頁）**
 
@@ -264,6 +265,8 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 - **系統安全設定（硬化）**：60 條跨平台檢查（UAC、Defender、BitLocker、SMBv1、遠端桌面 NLA、SSH、核心參數、AppArmor／SELinux、FileVault、Gatekeeper…），自動分辨 Windows 用戶端、Server、Server Core 與網域控制站，可用 YAML 自訂。
 - **流量**：不抓封包也能看各程式連到哪裡；也能分析 Wireshark／tcpdump 存的 pcap／pcapng（DNS、TLS SNI、明文協定、大量上傳、定時連線）。
 - **流量統計與效能**：每分鐘記錄各網卡、各程式的上傳／下載量，Hub 畫出頻寬圖、哪台與哪個程式用最多；CPU、記憶體、磁碟、電池是**選用**的，預設關，要在那台電腦上自己開（桌面版設定或 `config set metrics.performance true`，Hub 無法從遠端開），磁碟快滿、CPU 長時間滿載會列成待處理問題。桌面版「流量與效能」頁用圖表看這台電腦：即時（每秒）、最近 1 小時、最近 24 小時（沒加入 Hub 也會在本機記 24 小時）。
+- **DNS 防禦**（[說明](docs/dns.md)）：每台電腦即時記錄查了哪些網域、是哪個程式查的（Windows ETW、Linux／macOS 封包監聽），偵測情資網域、DNS 通道、亂數產生的網域、大量查無此網域、程式自己改走加密 DNS；也抓 DNS 伺服器被改、hosts 檔被動手腳、WPAD、NXDOMAIN 被導走；`fw dns-lock` 擋程式直接連外部 DNS。網域情資擴充了 CERT Polska、HaGeZi、Phishing.Database。
+- **防護 DNS 伺服器**（選用，預設不開，[說明](docs/dns-server.md)）：給整個區網用的 DNS，擋威脅情資列名的網域、上游走加密 DNS、有快取（約 12 萬 QPS、200 萬筆封鎖清單比對約 0.3 微秒）；由 Hub 的「防護 DNS」頁開關、暫停、放行；可以跑在任一台常開的電腦或 Hub 的 compose 裡；`dns use-hub` 把個別電腦指過去，連不上時自動改回。
 - **事件與當機**：Windows 事件記錄、藍屏 minidump、Linux journal、macOS 當機報告，整理出可能原因與處理方式；也抓暴力破解、帳號鎖定、從公網登入遠端桌面、新帳號、新服務、清除稽核記錄等資安事件。
 - **AI 與 MCP**：`ai ask`、`ai analyze` 交給 Claude Code 或 Codex CLI 解讀（只給唯讀工具）；`mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有全部主機層級的 MCP 和網頁上的 AI 助手。
 - **Hub**：總覽、主機、連線、待處理問題、漏洞、安全設定、流量、事件、情資、封鎖審核（簽章、主機身分綁定）、免金鑰加入申請與核准（DNS SRV、區網 mDNS 自動尋找）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
@@ -282,6 +285,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | 桌面版 Linux | x64，Ubuntu 22.04／Debian 12 以上（glibc 2.35 以上）；deb 會自動裝 WebKitGTK 4.1，系統匣圖示需要桌面支援 AppIndicator |
 | 命令列版 | Windows 10／11、Windows Server 2016／2019／2022／2025（含 Server Core），x64 或 ARM64；macOS 11 以上；Linux x64／ARM64（靜態連結，不挑發行版） |
 | Security Hub | Docker 24 以上（含 Compose v2），amd64 或 arm64 |
+| 防護 DNS（選用） | 命令列版能跑的平台都可以；或 Docker 映像 `ghcr.io/markku636/ai-security-monitor-dns`（amd64／arm64） |
 
 **桌面版：Windows**：見[情境 A](#情境-a我只想看自己的電腦windows)。裝過舊的「AI Security Agent」（0.1.x）要先到「設定 → 應用程式」解除安裝，新版不會覆蓋它。
 裝好後視窗會出現「總覽」，右下角系統匣有 AI Security Monitor 圖示。
@@ -393,6 +397,7 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 | `fw` | 防火牆狀態、稽核、封鎖／解除、情資同步 |
 | `vuln`、`harden` | 漏洞與更新、系統安全設定 |
 | `traffic`、`events` | 流量觀察與 pcap 分析、事件與當機原因 |
+| `dns`、`dns-server` | 這台查了哪些網域（`--follow` 即時看）、竄改基準、`dns use-hub`／`restore`；防護 DNS 伺服器 |
 | `metrics` | 現在的上傳／下載速率（各網卡、各程式），開啟效能蒐集時另有 CPU、記憶體、磁碟 |
 | `ai`、`mcp` | Claude Code／Codex 分析、MCP server 與一鍵設定 |
 | `enroll`、`discover`、`unenroll`、`status`、`watch`、`service` | 找 Hub、加入 Hub、常駐回報、開機自動啟動 |
@@ -417,7 +422,7 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 
 ## 文件
 
-[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [流量統計與效能](docs/metrics.md) · [事件與當機](docs/events.md) ·
+[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [流量統計與效能](docs/metrics.md) · [DNS 防禦](docs/dns.md) · [防護 DNS 伺服器](docs/dns-server.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
 ## 緣起

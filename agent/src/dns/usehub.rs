@@ -183,8 +183,10 @@ fn ps_list(v: &[String]) -> String {
 
 // ---------- Windows ----------
 
+/// 啟用中、而且有 DNS 用戶端設定的網卡（有些虛擬網卡是 Up 但沒有 DNS 設定，改它會失敗）。
 pub const WIN_CAPTURE: &str = r#"$ErrorActionPreference='Stop'
-$out = @(Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
+$dns = @(Get-DnsClient | ForEach-Object { $_.InterfaceIndex })
+$out = @(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $dns -contains $_.ifIndex } | ForEach-Object {
   $g = $_.InterfaceGuid
   $v4 = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$g" -Name NameServer -ErrorAction SilentlyContinue).NameServer
   $v6 = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces\$g" -Name NameServer -ErrorAction SilentlyContinue).NameServer
@@ -319,21 +321,45 @@ fn ensure_ok(o: &crate::util::cmd::CmdOutput, what: &str) -> AppResult<()> {
     )))
 }
 
-/// 記下目前的設定並改成 `servers`；回傳要存檔的狀態。
+/// 記下目前的設定並改成 `servers`；回傳要存檔的狀態。改到一半失敗時，先把已經改過的改回去再回報錯誤。
 pub async fn apply(r: &dyn CmdRunner, servers: &[IpAddr]) -> AppResult<UseHubState> {
     let method = detect_method(r).await;
+    let mut st = UseHubState {
+        servers: servers.to_vec(),
+        applied_at: Utc::now(),
+        method: method.to_string(),
+        original: Vec::new(),
+        failures: 0,
+    };
+    match apply_inner(r, servers, method, &mut st.original).await {
+        Ok(()) => Ok(st),
+        Err(e) => {
+            if !st.original.is_empty() {
+                let _ = restore(r, &st).await;
+            }
+            Err(e)
+        }
+    }
+}
+
+/// 每個目標都先記下原本的設定（`original`）再改，失敗時呼叫端照 `original` 改回。
+async fn apply_inner(
+    r: &dyn CmdRunner,
+    servers: &[IpAddr],
+    method: &str,
+    original: &mut Vec<Original>,
+) -> AppResult<()> {
     let (v4, v6) = v4v6(servers);
-    let mut original = Vec::new();
     match method {
         "windows" => {
             let o = r.run(&crate::util::cmd::powershell(WIN_CAPTURE)).await?;
             ensure_ok(&o, "Get-NetAdapter")?;
-            original = parse_win_capture(&o.stdout);
+            *original = parse_win_capture(&o.stdout);
             if original.is_empty() {
                 return Err(AppError::External(t!("找不到啟用中的網路卡").into()));
             }
             let o = r
-                .run(&crate::util::cmd::powershell(&win_apply_script(&original, servers)))
+                .run(&crate::util::cmd::powershell(&win_apply_script(original, servers)))
                 .await?;
             ensure_ok(&o, "Set-DnsClientServerAddress")?;
         }
@@ -345,18 +371,18 @@ pub async fn apply(r: &dyn CmdRunner, servers: &[IpAddr]) -> AppResult<UseHubSta
             for svc in parse_mac_services(&o.stdout) {
                 let cur = r.run(&CmdSpec::new("networksetup", &["-getdnsservers", &svc])).await?;
                 let prev = parse_mac_dns(&cur.stdout);
-                let mut args = vec!["-setdnsservers".to_string(), svc.clone()];
-                args.extend(servers.iter().map(|s| s.to_string()));
-                let a: Vec<&str> = args.iter().map(String::as_str).collect();
-                let o = r.run(&CmdSpec::new("networksetup", &a)).await?;
-                ensure_ok(&o, "networksetup -setdnsservers")?;
                 original.push(Original {
                     target: svc.clone(),
-                    label: svc,
+                    label: svc.clone(),
                     v4: prev.iter().filter(|s| s.contains('.')).cloned().collect(),
                     v6: prev.iter().filter(|s| s.contains(':')).cloned().collect(),
                     extra: None,
                 });
+                let mut args = vec!["-setdnsservers".to_string(), svc];
+                args.extend(servers.iter().map(|s| s.to_string()));
+                let a: Vec<&str> = args.iter().map(String::as_str).collect();
+                let o = r.run(&CmdSpec::new("networksetup", &a)).await?;
+                ensure_ok(&o, "networksetup -setdnsservers")?;
             }
             let _ = r.run(&CmdSpec::new("dscacheutil", &["-flushcache"])).await;
             let _ = r.run(&CmdSpec::new("killall", &["-HUP", "mDNSResponder"])).await;
@@ -440,19 +466,19 @@ pub async fn apply(r: &dyn CmdRunner, servers: &[IpAddr]) -> AppResult<UseHubSta
                     .split_once("): ")
                     .map(|(_, r)| split_list(r))
                     .unwrap_or_default();
+                original.push(Original {
+                    target: link.clone(),
+                    label: link.clone(),
+                    v4: prev.iter().filter(|s| s.contains('.')).cloned().collect(),
+                    v6: prev.iter().filter(|s| s.contains(':')).cloned().collect(),
+                    extra: None,
+                });
                 let mut args = vec!["dns".to_string(), link.clone()];
                 args.extend(servers.iter().map(|s| s.to_string()));
                 let a: Vec<&str> = args.iter().map(String::as_str).collect();
                 let o = r.run(&CmdSpec::new("resolvectl", &a)).await?;
                 ensure_ok(&o, "resolvectl dns")?;
                 let _ = r.run(&CmdSpec::new("resolvectl", &["domain", &link, "~."])).await;
-                original.push(Original {
-                    target: link.clone(),
-                    label: link,
-                    v4: prev.iter().filter(|s| s.contains('.')).cloned().collect(),
-                    v6: prev.iter().filter(|s| s.contains(':')).cloned().collect(),
-                    extra: None,
-                });
             }
             let _ = r.run(&CmdSpec::new("resolvectl", &["flush-caches"])).await;
         }
@@ -464,11 +490,12 @@ pub async fn apply(r: &dyn CmdRunner, servers: &[IpAddr]) -> AppResult<UseHubSta
                 ));
             }
             let text = std::fs::read_to_string(path)?;
-            std::fs::write(path, rewrite_resolv_conf(&text, servers)).map_err(|e| {
+            let new = rewrite_resolv_conf(&text, servers);
+            std::fs::write(path, new).map_err(|e| {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     AppError::Elevation(t!("修改 /etc/resolv.conf 需要 root").into())
                 } else {
-                    e.into()
+                    AppError::from(e)
                 }
             })?;
             original.push(Original {
@@ -480,13 +507,7 @@ pub async fn apply(r: &dyn CmdRunner, servers: &[IpAddr]) -> AppResult<UseHubSta
             });
         }
     }
-    Ok(UseHubState {
-        servers: servers.to_vec(),
-        applied_at: Utc::now(),
-        method: method.to_string(),
-        original,
-        failures: 0,
-    })
+    Ok(())
 }
 
 /// 還原成 `use-hub` 之前的設定。
@@ -712,6 +733,60 @@ mod tests {
             .iter()
             .any(|c| c.contains("ipv4.dns 192.168.1.5 ipv4.ignore-auto-dns yes")));
         assert!(calls.iter().any(|c| c.ends_with("ipv6.dns  ipv6.ignore-auto-dns no")));
+    }
+
+    #[tokio::test]
+    async fn partial_failure_records_what_was_changed() {
+        // 第二個網路服務改失敗：第一個已經改了，原設定都要記下來，回滾才改得回去
+        let r = FakeRunner::default()
+            .on(
+                "networksetup -listallnetworkservices",
+                CmdOutput::success(
+                    "An asterisk (*) denotes that a network service is disabled.
+Ethernet
+Wi-Fi
+",
+                ),
+            )
+            .on(
+                "networksetup -getdnsservers Ethernet",
+                CmdOutput::success(
+                    "There aren't any DNS Servers set on Ethernet.
+",
+                ),
+            )
+            .on(
+                "networksetup -getdnsservers Wi-Fi",
+                CmdOutput::success(
+                    "10.0.0.53
+",
+                ),
+            )
+            .on(
+                "networksetup -setdnsservers Wi-Fi 192.168.1.5",
+                CmdOutput::failure(4, "** Error: The parameters were not valid."),
+            )
+            .on("networksetup -setdnsservers", CmdOutput::success(""))
+            .on("dscacheutil", CmdOutput::success(""))
+            .on("killall", CmdOutput::success(""));
+        let mut orig = Vec::new();
+        let err = apply_inner(&r, &["192.168.1.5".parse().unwrap()], "networksetup", &mut orig).await;
+        assert!(err.is_err());
+        assert_eq!(orig.len(), 2);
+        assert_eq!(orig[1].v4, vec!["10.0.0.53"]);
+        let st = UseHubState {
+            servers: vec!["192.168.1.5".parse().unwrap()],
+            applied_at: Utc::now(),
+            method: "networksetup".into(),
+            original: orig,
+            failures: 0,
+        };
+        restore(&r, &st).await.unwrap_or(());
+        let calls: Vec<String> = r.calls().iter().map(|c| c.match_key()).collect();
+        assert!(
+            calls.iter().any(|c| c == "networksetup -setdnsservers Ethernet Empty"),
+            "{calls:?}"
+        );
     }
 
     #[test]

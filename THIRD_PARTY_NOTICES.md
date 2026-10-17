@@ -6,7 +6,8 @@
 | Source | Data | Licence / terms | Notes |
 |---|---|---|---|
 | Spamhaus DROP / DROPv6 / ASN-DROP | hijacked & criminal netblocks | [Fair Use Policy](https://www.spamhaus.org/blocklists/drop-fair-use-policy/) | free incl. commercial; keep header/timestamps, attribute "Spamhaus" |
-| abuse.ch Feodo Tracker / URLhaus / ThreatFox | botnet C2, malware hosts, IOCs | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | |
+| abuse.ch Feodo Tracker | botnet C2 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | |
+| abuse.ch URLhaus / ThreatFox | malware hosts, IOCs | [abuse.ch terms](https://abuse.ch/terms-of-use/) (since 2025-11-04: free for non-profit use; commercial use via Spamhaus) | marked **non-commercial**: alerts only, never used for blocking or the protective DNS |
 | blocklist.de | fail2ban community reports | [free](https://www.blocklist.de/en/index.html) | |
 | CINS Army | poor-reputation IPs | [free, attribution](https://cinsscore.com/#list) | |
 | Emerging Threats Open (Proofpoint) | compromised IPs, block list | BSD (ruleset) | block list aggregates Spamhaus + DShield |
@@ -14,6 +15,13 @@
 | Tor Project | exit node list | informational | poll ≥ 30 min; never auto-block |
 | IPsum (stamparm) | aggregated scored list | [Unlicense](https://github.com/stamparm/ipsum/blob/master/LICENSE) | |
 | FireHOL level1 | aggregate netset | per-source | |
+| CERT Polska warning list | malicious domains (incl. subdomains) | [terms](https://cert.pl/en/warning-list/) (any use incl. commercial; do not imply endorsement) | |
+| HaGeZi DNS blocklists (Threat Intelligence Feeds, DoH) | malicious domains, encrypted DNS endpoints | [GPL-3.0](https://github.com/hagezi/dns-blocklists/blob/main/LICENSE) | mirrored unmodified with its licence, kept as separate files and only combined in memory |
+| Phishing.Database | active phishing domains | [MIT](https://github.com/Phishing-Database/Phishing.Database/blob/master/LICENSE) | alerts only (exact match) |
+| The Block List Project (phishing, ransomware) | domains | [Unlicense](https://github.com/blocklistproject/Lists/blob/master/LICENSE) | off by default |
+| Phishing Army | phishing domains | upstream sources' terms | off by default; non-commercial |
+| Mozilla Public Suffix List | registrable domains (eTLD+1), embedded | [MPL-2.0](https://mozilla.org/MPL/2.0/) | `feeds/dns/public_suffix_list.dat`, unmodified |
+| Majestic Million | popular domains (top 10,000), embedded | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | attribution: "Majestic Million, majestic.com"; `feeds/dns/toplist.txt` |
 | DB-IP Lite (country / ASN) | IP geolocation | [CC BY 4.0](https://db-ip.com/db/lite.php) | attribution: "IP Geolocation by DB-IP" |
 | CISA KEV | known exploited vulnerabilities | public domain (US Gov) | |
 | FIRST EPSS | exploit prediction scores | [EPSS user guide](https://www.first.org/epss/user-guide) | attribution |

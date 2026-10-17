@@ -1,7 +1,7 @@
 // 示範資料：五台虛構主機（文件保留網段 IP，RFC 5737；含一台 Windows Server 網域控制站），經由正式的 ingest API 送進 Security Hub，供截圖與試玩。
 //   node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <AI_SECURITY_MONITOR_HUB_ADMIN_SECRET>
 // Hub 要能收到過去時間的報告：會用網頁 API 建一把註冊金鑰，每台送 6 份報告（每小時一份）＋連線快照，
-// 以及 7 天的流量樣本（其中三台含效能）。
+// 以及 7 天的流量樣本（其中三台含效能）、最近 2 小時的 DNS 查詢，和一台連上 Hub 的防護 DNS。
 import crypto from 'node:crypto';
 
 const args = Object.fromEntries(
@@ -692,6 +692,146 @@ async function seedMetrics(h, agentId, agentToken, key) {
   return list.length;
 }
 
+// ---------------- DNS（POST /api/v1/ingest/dns）與防護 DNS ----------------
+// 每台最近 2 小時、每分鐘聚合的查詢；fin-laptop-07 有亂數網域（DGA）與 DNS 通道。惡意網域一律用 .test（虛構）。
+const DNS_PROFILES = {
+  'web-01': [
+    ['api.github.com', 'node', 1, 'NOERROR', 3, ['140.82.112.6']],
+    ['registry.npmjs.org', 'node', 1, 'NOERROR', 2, ['104.16.27.34']],
+    ['archive.ubuntu.com', 'apt', 1, 'NOERROR', 30, ['185.125.190.36']],
+    ['db-02.corp.example', 'node', 1, 'NOERROR', 1, ['192.0.2.40']],
+  ],
+  'db-02': [
+    ['archive.ubuntu.com', 'apt', 1, 'NOERROR', 30, ['185.125.190.36']],
+    ['backup.corp.example', 'pg_dump', 1, 'NOERROR', 20, ['192.0.2.40']],
+  ],
+  'fin-laptop-07': [
+    ['www.google.com', 'chrome.exe', 1, 'NOERROR', 2, ['142.250.196.196']],
+    ['outlook.office365.com', 'OUTLOOK.EXE', 1, 'NOERROR', 3, ['52.98.152.178']],
+    ['teams.microsoft.com', 'ms-teams.exe', 1, 'NOERROR', 4, ['52.113.194.132']],
+    ['login.microsoftonline.com', 'chrome.exe', 1, 'NOERROR', 6, ['20.190.160.20']],
+    ['cdn-update.example-malware.test', 'updater.exe', 1, 'NOERROR', 5, ['203.0.113.66']],
+  ],
+  'dc-01': [
+    ['_ldap._tcp.corp.example', 'lsass.exe', 33, 'NOERROR', 2, []],
+    ['time.windows.com', 'svchost.exe', 1, 'NOERROR', 60, ['51.145.123.29']],
+    ['ctldl.windowsupdate.com', 'svchost.exe', 1, 'NOERROR', 40, ['93.184.221.240']],
+  ],
+  'design-mac-03': [
+    ['www.figma.com', null, 1, 'NOERROR', 3, ['18.165.140.86']],
+    ['api.apple-cloudkit.com', null, 1, 'NOERROR', 5, ['17.248.193.70']],
+    ['fonts.gstatic.com', null, 1, 'NOERROR', 4, ['142.250.196.195']],
+  ],
+};
+const DGA = ['kqfcpqbyqllgbr', 'xvhztpqmwrlkas', 'pbqwnzlkhtrdve', 'mfgqzxvlbnhwta', 'tqzplkwvrxnhbg', 'zgwqkfvhpxnlrt', 'hnvqzlkpwtrxbf', 'rkzqpvwlhtnxmg', 'wlqzxkpvhrtnbf', 'bqzxvlkpwhtrng', 'nzqkpvxlwhrtbg', 'fqzlpkvwxhrtnb'];
+const SOURCE = { windows: 'etw', linux: 'packet', macos: 'packet' };
+
+function dnsRecords(h) {
+  const prof = DNS_PROFILES[h.hostname] ?? [];
+  const out = [];
+  const minute = (m) => new Date(Math.floor((now - m * 60_000) / 60_000) * 60_000).toISOString();
+  for (let m = 120; m >= 1; m--) {
+    prof.forEach(([name, process, qtype, rcode, every, answers], i) => {
+      if ((m + i) % every !== 0) return;
+      out.push({ ts: minute(m), name, qtype, rcode, process, count: 1 + ((m * 7 + i) % 3), answers, cnames: [], source: SOURCE[h.os.family] });
+    });
+  }
+  if (h.hostname === 'fin-laptop-07') {
+    // 亂數產生的網域：一批查無此網域
+    DGA.forEach((d, i) => out.push({ ts: minute(14 - (i % 3)), name: `${d}.net`, qtype: 1, rcode: 'NXDOMAIN', process: 'rundll32.exe', count: 2, answers: [], cnames: [], source: 'etw' }));
+    // DNS 通道：又長又亂的子網域、TXT 查詢
+    for (let i = 0; i < 40; i++) {
+      const label = hex(`tunnel|${i}`, 40);
+      out.push({ ts: minute(9 - (i % 5)), name: `${label}.t.example-c2.test`, qtype: 16, rcode: 'NOERROR', process: 'powershell.exe', count: 3, answers: [], cnames: [], source: 'etw' });
+    }
+  }
+  return out.slice(-1000);
+}
+
+const DNS_FINDINGS = [
+  {
+    scanner: 'dns',
+    rule: 'dns.dga',
+    severity: 'high',
+    title: 'rundll32.exe 查了 12 個像亂數產生的網域（都查無此網域）',
+    detail: '5 分鐘內 24 次查無此網域、12 個不同網域，名稱像是亂數產生（DGA），常見於找控制伺服器的惡意程式。',
+    key: 'dga|rundll32.exe',
+    evidence: { type: 'dns', name: 'kqfcpqbyqllgbr.net', registrable: 'kqfcpqbyqllgbr.net', process: 'rundll32.exe', queries: 24, unique_names: 12, window_s: 300, first_seen: iso(15), samples: DGA.slice(0, 5).map((d) => `${d}.net`), sources: ['etw'] },
+    recommendation: '找出 rundll32.exe 載入的 DLL 與啟動來源，隔離主機並完整掃毒。',
+    since: 15,
+    tags: ['dns'],
+  },
+  {
+    scanner: 'dns',
+    rule: 'dns.tunnel',
+    severity: 'high',
+    title: 'powershell.exe 疑似用 DNS 通道傳資料：example-c2.test',
+    detail: '5 分鐘內 120 次查詢、40 個不重複的子網域，平均標籤長 40、多半是 TXT 查詢；資料可能被編碼在子網域裡送出去。',
+    key: 'tunnel|powershell.exe|example-c2.test',
+    evidence: { type: 'dns', name: 't.example-c2.test', registrable: 'example-c2.test', process: 'powershell.exe', queries: 120, unique_names: 40, window_s: 300, first_seen: iso(10), samples: [`${hex('tunnel|0', 40)}.t.example-c2.test`], sources: ['etw'] },
+    recommendation: '結束 powershell.exe、檢查它的命令列與父行程，並在防火牆或防護 DNS 封鎖 example-c2.test。',
+    since: 10,
+    tags: ['dns'],
+  },
+];
+HOSTS.find((h) => h.hostname === 'fin-laptop-07')?.findings.push(...DNS_FINDINGS);
+
+async function seedDns(h, agentId, agentToken, key) {
+  const records = dnsRecords(h);
+  if (!records.length) return 0;
+  await call('/api/v1/ingest/dns', { token: key, agentId, agentToken, body: { agent_id: agentId, records } });
+  return records.length;
+}
+
+/** 一台防護 DNS（office-dns，192.0.2.53）：心跳、最近 2 小時的查詢與封鎖；Hub 開啟封鎖。 */
+async function seedProtectiveDns() {
+  const { token } = await call('/api/v1/admin/tokens', { token: ADMIN, body: { name: 'office-dns', scopes: ['dns'] } });
+  await call('/api/v1/admin/dns-protect', { token: ADMIN, method: 'PUT', body: { enabled: true, resolver_ips: ['192.0.2.53'], allow: ['ok.example.com'] } });
+  await call('/api/v1/dns/heartbeat', {
+    token,
+    body: {
+      version: '0.6.0',
+      hostname: 'office-dns',
+      status: {
+        running: true,
+        started_at: iso(60 * 24 * 3),
+        updated_at: iso(0),
+        listen: ['192.0.2.53:53'],
+        blocking: true,
+        lists_loaded: ['certpl-domains', 'hagezi-tif-mini'],
+        lists_missing: [],
+        blocklist_entries: 354_812,
+        lists_memory_bytes: 3_412_224,
+        cache_entries: 18_204,
+        upstreams: [
+          { upstream: 'https://dns.quad9.net/dns-query', ewma_ms: 18.4, failures: 0 },
+          { upstream: 'https://cloudflare-dns.com/dns-query', ewma_ms: 12.9, failures: 0 },
+        ],
+        stats: { queries: 1_254_000, blocked: 3_120, cache_hits: 1_011_500, cache_misses: 242_500, hit_p50_us: 100, hit_p99_us: 500, miss_p50_us: 20_000, miss_p99_us: 100_000 },
+      },
+    },
+  });
+  const minute = (m) => new Date(Math.floor((now - m * 60_000) / 60_000) * 60_000).toISOString();
+  const clients = [
+    ['192.0.2.77', [['outlook.office365.com', 'NOERROR', 3], ['login.microsoft-verify.test', 'BLOCKED', 40, 'CERT Polska'], ['cdn-update.example-malware.test', 'BLOCKED', 15, 'HaGeZi Threat Intelligence Feeds (mini)']]],
+    ['192.0.2.21', [['api.github.com', 'NOERROR', 3], ['archive.ubuntu.com', 'NOERROR', 30]]],
+    ['192.0.2.150', [['www.youtube.com', 'NOERROR', 2], ['ads-tracker.example-adware.test', 'BLOCKED', 25, 'HaGeZi Threat Intelligence Feeds (mini)']]],
+    ['192.0.2.151', [['firmware.example-tv.com', 'NOERROR', 60], ['use-application-dns.net', 'BLOCKED', 90, '加密 DNS 繞過']]],
+  ];
+  const records = [];
+  for (let m = 120; m >= 1; m--) {
+    for (const [client, names] of clients) {
+      names.forEach(([name, rcode, every, by], i) => {
+        if ((m + i) % every !== 0) return;
+        const answers = rcode === 'NOERROR' ? ['198.51.100.' + (10 + i)] : [];
+        records.push({ ts: minute(m), name, qtype: 1, rcode, process: by ?? null, count: 1 + ((m + i) % 4), answers, cnames: [], client, source: 'resolver' });
+      });
+    }
+  }
+  await call('/api/v1/dns/queries', { token, body: { records: records.slice(-1000) } });
+  return records.length;
+}
+
 // ---------------- 送出 ----------------
 async function call(path, { token, body, agentId, agentToken, method = 'POST' } = {}) {
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
@@ -764,6 +904,8 @@ for (const h of HOSTS) {
     },
   });
   const samples = await seedMetrics(h, agentId, agentToken, key);
-  console.log(`seeded ${h.hostname} (${agentId}; ${samples} traffic samples)`);
+  const dns = await seedDns(h, agentId, agentToken, key);
+  console.log(`seeded ${h.hostname} (${agentId}; ${samples} traffic samples, ${dns} DNS records)`);
 }
+console.log(`seeded protective DNS (${await seedProtectiveDns()} resolver records)`);
 console.log('done');

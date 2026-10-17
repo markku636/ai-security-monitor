@@ -240,6 +240,7 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 | ![Desktop scan results](docs/images/windows-desktop-findings.png) Scan results: sorted by severity, expand for detail and how to fix | ![Desktop dark mode](docs/images/windows-desktop-overview-dark.png) Dark mode follows the Windows setting |
 | ![Desktop: join the company Hub](docs/images/windows-desktop-settings-join.png) Settings → Company Security Hub: finds the company Hub by itself; check the fingerprint and click *Request to join* | ![Desktop settings](docs/images/windows-desktop-settings.png) Settings: the joined Hub, background reporting, automatic updates |
 | ![Desktop traffic and performance](docs/images/windows-desktop-usage.png) Traffic & performance: network speed over the last hour and which programs use the most (also live and last 24 hours) | ![Desktop CPU, memory, disk](docs/images/windows-desktop-usage-perf.png) With performance collection on: CPU, memory, disk, top programs, battery |
+| ![Desktop DNS](docs/images/windows-desktop-dns.png) DNS: which domains this computer looks up, which program asked, what looks suspicious (generated domains, threat-intel domains, encrypted DNS endpoints), and whether it uses the company protective DNS | ![Desktop threat intel](docs/images/windows-desktop-intel.png) Threat intel: entries, last update and licence of each list, update now |
 
 **Security Hub (web)**
 
@@ -264,6 +265,8 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 - **Security settings (hardening)**: 60 cross-platform checks (UAC, Defender, BitLocker, SMBv1, Remote Desktop NLA, SSH, kernel parameters, AppArmor / SELinux, FileVault, Gatekeeper, …), aware of Windows client, Server, Server Core and domain controllers, customisable in YAML.
 - **Traffic**: see where each program connects without capturing packets; analyze pcap / pcapng files from Wireshark / tcpdump (DNS, TLS SNI, cleartext protocols, large uploads, periodic connections).
 - **Traffic statistics and performance**: upload/download per network card and per program every minute, charted on the Hub (bandwidth, which hosts and programs use the most); CPU, memory, disk and battery are **opt-in**, off by default and turned on on the computer itself (desktop Settings or `config set metrics.performance true`; the Hub cannot turn it on); a nearly full disk or a long-maxed-out CPU becomes a finding. The desktop app's *Traffic & performance* page charts this computer: live (every second), the last hour and the last 24 hours (the 24 hours are kept locally even without a Hub).
+- **DNS defense** ([docs](docs/dns.en.md)): each computer records which domains it looks up and which program asked (Windows ETW, packet capture on Linux / macOS), and detects threat-intel domains, DNS tunnels, generated domains, NXDOMAIN bursts and programs switching to their own encrypted DNS; it also catches changed DNS servers, tampered hosts files, WPAD and NXDOMAIN redirection; `fw dns-lock` stops programs from talking to outside DNS directly. Domain intel now includes CERT Polska, HaGeZi and Phishing.Database.
+- **Protective DNS server** (optional, off by default, [docs](docs/dns-server.en.md)): a DNS for the whole LAN that blocks threat-intel domains, uses encrypted upstream DNS and caches (about 120k QPS, ~0.3 µs lookups in a 2-million-entry blocklist); switched on, paused and corrected from the Hub's "Protective DNS" page; runs on any always-on computer or in the Hub's compose; `dns use-hub` points single computers at it and switches back automatically if it stops answering.
 - **Events and crashes**: Windows event logs, bugcheck minidumps, Linux journal and macOS crash reports, summarised into likely causes and what to do; also brute-force attempts, account lockouts, Remote Desktop logons from the internet, new accounts, new services and cleared audit logs.
 - **AI and MCP**: `ai ask` / `ai analyze` hand things to Claude Code or Codex CLI (read-only tools only); `mcp` lets Claude Code / Codex / Cursor / VS Code query this computer directly; the Hub has a fleet-wide MCP and an AI assistant in the web UI.
 - **Hub**: overview, hosts, connections, findings, vulnerabilities, hardening, traffic, events, intel, block approvals (signed, pinned host identity), keyless join requests with approval (found via DNS SRV or LAN mDNS), enroll keys, read-only API tokens, audit log, CSV export, Chinese and English, dark mode, mobile layout.
@@ -282,6 +285,7 @@ Full steps for every platform. If you just want to get going, [Get started in 5 
 | Desktop app, Linux | x64, Ubuntu 22.04 / Debian 12 or later (glibc 2.35+); the deb pulls in WebKitGTK 4.1; the tray icon needs AppIndicator support |
 | Command line | Windows 10 / 11, Windows Server 2016 / 2019 / 2022 / 2025 (including Server Core), x64 or ARM64; macOS 11+; Linux x64 / ARM64 (statically linked, any distribution) |
 | Security Hub | Docker 24+ (with Compose v2), amd64 or arm64 |
+| Protective DNS (optional) | anywhere the command-line version runs, or the Docker image `ghcr.io/markku636/ai-security-monitor-dns` (amd64/arm64) |
 
 **Desktop app: Windows**: see [scenario A](#scenario-a-i-just-want-to-check-my-own-computer-windows). If you had the old "AI Security Agent" (0.1.x), uninstall it first in Settings → Apps; the new version does not replace it.
 Once installed the window opens on the overview and the AI Security Monitor icon sits in the system tray.
@@ -393,6 +397,7 @@ ai-security-monitor service install --yes        # report automatically after lo
 | `fw` | Firewall status, audit, block / unblock, intel sync |
 | `vuln`, `harden` | Vulnerabilities and updates, security settings |
 | `traffic`, `events` | Traffic watching and pcap analysis, events and crash causes |
+| `dns`, `dns-server` | Which domains this computer looks up (`--follow` for live), tamper baselines, `dns use-hub` / `restore`; the protective DNS server |
 | `metrics` | Current upload/download rate (per card, per program); with performance collection on also CPU, memory and disk |
 | `ai`, `mcp` | Claude Code / Codex analysis, MCP server and one-step client setup |
 | `enroll`, `discover`, `unenroll`, `status`, `watch`, `service` | Find a Hub, join it, keep reporting, start at boot |
@@ -417,7 +422,7 @@ See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/servi
 
 ## Docs
 
-[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Traffic statistics & performance](docs/metrics.en.md) · [Events & crashes](docs/events.en.md) ·
+[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Traffic statistics & performance](docs/metrics.en.md) · [DNS defense](docs/dns.en.md) · [Protective DNS server](docs/dns-server.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
 ## Why this exists

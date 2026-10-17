@@ -597,6 +597,91 @@ async function pageIntel() {
   document.getElementById('force').onclick = () => updateIntel(true);
 }
 
+// ---------------- DNS ----------------
+const dnsState = { minutes: 60, suspicious: false, q: '' };
+const DNS_SOURCE = {
+  etw: ['Windows DNS 事件', '背景服務以系統管理員執行時，即時收 Windows 的 DNS 查詢事件，看得到是哪個程式查的。'],
+  eventlog: ['Windows DNS 事件紀錄', '讀 Windows 的 DNS Client 事件紀錄，看得到是哪個程式查的。'],
+  cache: ['DNS 快取快照', '沒有系統管理員權限時，每 30 秒讀一次 DNS 快取；看不到是哪個程式查的。'],
+  packet: ['監聽 DNS 封包', '直接看網路卡上的 DNS 回應（需要 root）。'],
+  resolved: ['systemd-resolved', '讀 Linux 的 systemd-resolved 查詢紀錄。'],
+};
+const DNS_HINT = {
+  nx: 'NXDOMAIN＝查無此網域。偶爾出現很正常；同一個程式短時間大量出現，常是用亂數網域找控制伺服器的惡意程式。',
+  domains: '依「可註冊網域」計算：a.b.example.co.uk 算成 example.co.uk，同一家的子網域合成一個。',
+  suspicious: '威脅情資列名的網域、像亂數產生的網域、少見的頂級網域，或加密 DNS 端點（程式自己走加密 DNS 會繞過公司的 DNS）。',
+  protect: '公司的防護 DNS 會擋掉威脅情資列名的網域；用 ai-security-monitor dns use-hub 把這台的 DNS 指過去（防護 DNS 連不上時會自動改回）。',
+};
+
+async function pageDns() {
+  $main.innerHTML = `<h1>DNS</h1><p class="sub">載入中…</p>`;
+  let d;
+  try {
+    d = await invoke('dns_recent', { minutes: dnsState.minutes, suspicious: dnsState.suspicious, q: dnsState.q });
+  } catch (e) {
+    $main.innerHTML = `<h1>DNS</h1><div class="card"><p class="small" style="color:var(--danger)">${esc(e)}</p></div>`;
+    return;
+  }
+  const st = d.status;
+  const src = st ? DNS_SOURCE[st.source] : null;
+  const nxPct = d.total ? Math.round((d.nxdomain / d.total) * 1000) / 10 : 0;
+  const protect = d.use_hub
+    ? `<span class="chip ok" title="${esc(DNS_HINT.protect)}">已用公司的防護 DNS（${esc(d.use_hub.servers.join('、'))}）</span>`
+    : d.hub_protect?.enabled && d.hub_protect.resolver_ips?.length
+      ? `<span class="chip medium" title="${esc(DNS_HINT.protect)}">沒用公司的防護 DNS</span> <span class="small muted mono">ai-security-monitor dns use-hub --yes</span>`
+      : '';
+  $main.innerHTML = `
+    <div class="head">
+      <div><h1>DNS</h1><p class="sub">這台電腦查了哪些網域、是哪個程式查的、哪些可疑。紀錄只留在這台電腦 7 天${d.upload === 'all' ? '，有加入公司 Hub 時每分鐘上傳' : ''}。</p></div>
+      <div class="row">
+        <label class="small">期間 <select id="dns-min">${[[15, '15 分鐘'], [60, '1 小時'], [360, '6 小時'], [1440, '24 小時'], [10080, '7 天']].map(([v, l]) => `<option value="${v}" ${v === dnsState.minutes ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <button class="btn" id="dns-refresh">重新整理</button>
+      </div>
+    </div>
+    ${d.enabled ? '' : `<div class="card"><p class="small">DNS 監看已關閉。開啟：<span class="mono">ai-security-monitor config set dns.enabled true</span></p></div>`}
+    ${d.unreadable ? `<div class="card"><p class="small">背景服務的 DNS 紀錄要以系統管理員身分執行才讀得到。</p></div>` : ''}
+    <div class="grid">
+      <div class="stat"><div class="label">查詢次數</div><div class="value">${Number(d.total).toLocaleString()}</div><div class="hint">${src ? `<span title="${esc(src[1])}">來源：${esc(src[0])}</span>` : '背景服務還沒有紀錄'}</div></div>
+      <div class="stat"><div class="label" title="${esc(DNS_HINT.domains)}">不同網域 ⓘ</div><div class="value">${Number(d.domains).toLocaleString()}</div></div>
+      <div class="stat"><div class="label" title="${esc(DNS_HINT.nx)}">NXDOMAIN ⓘ</div><div class="value">${nxPct}%</div><div class="hint">${Number(d.nxdomain).toLocaleString()} 次</div></div>
+      <div class="stat"><div class="label" title="${esc(DNS_HINT.suspicious)}">可疑 ⓘ</div><div class="value" style="${d.suspicious ? 'color:var(--warn)' : ''}">${d.suspicious}</div><div class="hint">${st?.last_event_at ? `最後一筆 ${ago(st.last_event_at)}` : ''}</div></div>
+    </div>
+    ${protect ? `<div class="card"><h2>公司的防護 DNS</h2><div class="row">${protect}</div></div>` : ''}
+    <div class="split">
+      <div>
+        <div class="card">
+          <div class="filters">
+            <input type="text" id="dns-q" placeholder="網域或程式" value="${esc(dnsState.q)}" style="width:240px"/>
+            <label class="small row" title="${esc(DNS_HINT.suspicious)}"><input type="checkbox" id="dns-bad" ${dnsState.suspicious ? 'checked' : ''}/> 只看可疑的</label>
+            <span class="muted small">${d.records.length >= 500 ? '只顯示最近 500 筆' : `${d.records.length} 筆`}</span>
+          </div>
+          ${d.records.length ? `<div style="overflow-x:auto"><table><thead><tr><th class="nw">時間</th><th>網域</th><th class="nw">類型</th><th class="nw">結果</th><th>程式</th><th class="nw">次數</th></tr></thead><tbody>${d.records
+            .map((r) => `<tr>
+              <td class="small muted nw">${ago(r.ts)}</td>
+              <td><span class="mono small">${esc(r.name)}</span>${r.reasons.map((x) => ` <span class="chip medium">${esc(x)}</span>`).join('')}${r.answers?.length ? `<div class="small muted mono">${esc(r.answers.slice(0, 3).join(', '))}${r.answers.length > 3 ? '…' : ''}</div>` : ''}</td>
+              <td class="small nw">${esc(r.qtype)}</td>
+              <td class="small nw">${r.rcode === 'NOERROR' ? '<span class="muted">有答案</span>' : r.rcode === 'NXDOMAIN' ? `<span title="${esc(DNS_HINT.nx)}">查無此網域</span>` : esc(r.rcode)}</td>
+              <td class="small">${esc(r.process ?? '—')}</td>
+              <td class="small mono nw">${r.count}</td>
+            </tr>`).join('')}</tbody></table></div>` : `<p class="muted small">這段期間沒有紀錄${d.enabled ? '（背景服務要在跑才會記錄；Windows 以系統管理員執行才看得到程式）' : ''}。</p>`}
+        </div>
+      </div>
+      <div>
+        <div class="card"><h2>查詢最多的網域</h2>${d.top_domains.length ? `<table><tbody>${d.top_domains.map((t) => `<tr><td class="mono small">${esc(t.domain)}</td><td class="small muted">${esc(t.process || '')}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">沒有</p>'}</div>
+        <div class="card"><h2>查詢最多的程式</h2>${d.top_processes.length ? `<table><tbody>${d.top_processes.map((t) => `<tr><td class="small">${esc(t.process)}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">看不到程式（Windows 以系統管理員執行背景服務才看得到）</p>'}</div>
+      </div>
+    </div>`;
+  document.getElementById('dns-refresh').onclick = () => pageDns();
+  document.getElementById('dns-min').onchange = (e) => { dnsState.minutes = Number(e.target.value); pageDns(); };
+  document.getElementById('dns-bad').onchange = (e) => { dnsState.suspicious = e.target.checked; pageDns(); };
+  let t = null;
+  document.getElementById('dns-q').oninput = (e) => {
+    dnsState.q = e.target.value;
+    clearTimeout(t);
+    t = setTimeout(() => pageDns().then(() => { const el = document.getElementById('dns-q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }), 400);
+  };
+}
+
 // ---------------- AI 分析 ----------------
 const aiState = { scope: 'connections', prompt: '' };
 function goAi(scope, prompt) {
@@ -1030,7 +1115,7 @@ function renderLive() {
 // ---------------- 路由 ----------------
 // 網址是 #頁面 或 #頁面/區塊：#settings/hub＝設定頁的 Hub 區塊；#traffic/1h、#traffic/24h＝流量與效能的歷史分頁（#traffic 是即時）
 // 「流量與效能」（traffic）由 usage.js 的 pageTrafficTabs 分成即時／最近 1 小時／最近 24 小時三個分頁
-const PAGES = { overview: pageOverview, connections: pageConnections, traffic: pageTrafficTabs, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
+const PAGES = { overview: pageOverview, connections: pageConnections, dns: pageDns, traffic: pageTrafficTabs, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
   let [page, section] = (location.hash || '#overview').slice(1).split('/');
   let opts = section === 'hub' ? { focus: 'hub' } : { section };

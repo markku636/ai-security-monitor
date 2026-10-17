@@ -70,7 +70,7 @@ jobs:
           SUDO=""; [ "$RUNNER_OS" = "Windows" ] || SUDO="sudo -E"
           snap() {
             case "$RUNNER_OS" in
-              Windows) powershell -NoProfile -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Get-DnsClientServerAddress -InterfaceIndex \$_.ifIndex } | Sort-Object InterfaceIndex,AddressFamily | ForEach-Object { '{0} {1} {2}' -f \$_.InterfaceIndex,\$_.AddressFamily,(\$_.ServerAddresses -join ',') }" ;;
+              Windows) powershell -NoProfile -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Get-DnsClientServerAddress -InterfaceIndex \$_.ifIndex -ErrorAction SilentlyContinue } | Sort-Object InterfaceIndex,AddressFamily | ForEach-Object { '{0} {1} {2}' -f \$_.InterfaceIndex,\$_.AddressFamily,(\$_.ServerAddresses -join ',') }" ;;
               macOS) networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' | while read -r svc; do echo "$svc: $(networksetup -getdnsservers "$svc" | tr '\n' ' ')"; done ;;
               Linux) resolvectl dns ;;
             esac
