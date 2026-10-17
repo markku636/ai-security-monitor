@@ -407,18 +407,3 @@ export const aiAnalyses = pgTable(
   },
   (t) => [index('ai_analyses_created_idx').on(t.createdAt)],
 );
-
-/**
- * IP 外部情資快取（AbuseIPDB、GreyNoise、ipinfo、proxycheck、反解）：只有管理員在 IP 分析頁按「查詢」才會打外部 API。
- * results：provider id → 該來源最近一次的結果（含原始回應與時間）。
- */
-export const ipReputation = pgTable(
-  'ip_reputation',
-  {
-    ip: text('ip').primaryKey(),
-    results: jsonb('results').$type<Record<string, unknown>>().notNull().default({}),
-    queriedAt: ts('queried_at').notNull().defaultNow(),
-    queriedBy: text('queried_by'),
-  },
-  (t) => [index('ip_reputation_queried_idx').on(t.queriedAt)],
-);
