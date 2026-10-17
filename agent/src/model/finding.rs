@@ -62,10 +62,11 @@ pub enum ScannerId {
     Files,
     Traffic,
     Events,
+    Dns,
 }
 
 impl ScannerId {
-    pub const ALL: [ScannerId; 9] = [
+    pub const ALL: [ScannerId; 10] = [
         ScannerId::Connections,
         ScannerId::Intel,
         ScannerId::Ports,
@@ -75,6 +76,7 @@ impl ScannerId {
         ScannerId::Files,
         ScannerId::Traffic,
         ScannerId::Events,
+        ScannerId::Dns,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -88,6 +90,7 @@ impl ScannerId {
             ScannerId::Files => "files",
             ScannerId::Traffic => "traffic",
             ScannerId::Events => "events",
+            ScannerId::Dns => "dns",
         }
     }
 
@@ -277,6 +280,21 @@ pub enum Evidence {
         name: Option<String>,
         module: Option<String>,
         params: Vec<String>,
+    },
+    /// DNS 查詢（每分鐘聚合的紀錄經規則判斷）。
+    Dns {
+        name: String,
+        registrable: Option<String>,
+        process: Option<String>,
+        /// 窗內查詢次數。
+        queries: u32,
+        /// 窗內不同名稱數（通道、DGA 才有）。
+        unique_names: Option<u32>,
+        window_s: u32,
+        first_seen: String,
+        samples: Vec<String>,
+        /// 情資來源（廠商、清單、信心、網址）。
+        sources: Vec<String>,
     },
     Text {
         detail: String,

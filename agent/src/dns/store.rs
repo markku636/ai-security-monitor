@@ -96,6 +96,26 @@ pub fn cleanup(config_dir: &Path, now: DateTime<Utc>) -> usize {
     n
 }
 
+/// 紀錄實際所在的設定目錄：背景服務以系統服務執行時寫在系統層目錄。
+/// `explicit`（明確指定了設定目錄）時只看 `config_dir`；否則兩邊誰的 `status.json` 比較新就用誰。
+/// 第二個值：系統層紀錄存在但讀不到（不是系統管理員）。
+pub fn pick_dir(config_dir: &Path, explicit: bool) -> (PathBuf, bool) {
+    if explicit {
+        return (config_dir.to_path_buf(), false);
+    }
+    let sys = crate::service::effective_system_config_dir(crate::service::Os::current());
+    if sys == config_dir {
+        return (sys, false);
+    }
+    let mine = read_status(config_dir).and_then(|s| s.updated_at);
+    let theirs = read_status(&sys).and_then(|s| s.updated_at);
+    let unreadable = dir(&sys).exists() && std::fs::read_dir(dir(&sys)).is_err();
+    match (mine, theirs) {
+        (_, Some(t)) if mine.is_none_or(|m| t > m) => (sys, unreadable),
+        _ => (config_dir.to_path_buf(), unreadable),
+    }
+}
+
 /// 背景蒐集的狀態。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DnsStatus {

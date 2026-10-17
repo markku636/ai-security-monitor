@@ -30,20 +30,14 @@ pub async fn run(env: &Env, a: DnsArgs) -> AppResult<()> {
     }
 }
 
-/// 紀錄所在的設定目錄：使用者目錄與系統服務目錄，誰的 `dns/status.json` 比較新就用誰。
+/// 紀錄所在的設定目錄（見 [`store::pick_dir`]）；第二個值是給使用者的提示。
 pub(crate) fn data_dir(env: &Env) -> (PathBuf, Option<String>) {
-    if env.global.config_dir.is_some() || crate::util::env::var(config::ENV_CONFIG_DIR).is_some() {
-        return (env.config_dir.clone(), None);
-    }
-    let sys = crate::service::effective_system_config_dir(crate::service::Os::current());
-    let mine = store::read_status(&env.config_dir).and_then(|s| s.updated_at);
-    let theirs = store::read_status(&sys).and_then(|s| s.updated_at);
-    let sys_unreadable = store::dir(&sys).exists() && std::fs::read_dir(store::dir(&sys)).is_err();
-    let note = sys_unreadable.then(|| t!("背景服務的 DNS 紀錄要以系統管理員身分執行才讀得到").to_string());
-    match (mine, theirs) {
-        (_, Some(t)) if mine.is_none_or(|m| t > m) => (sys, note),
-        _ => (env.config_dir.clone(), note),
-    }
+    let explicit = env.global.config_dir.is_some() || crate::util::env::var(config::ENV_CONFIG_DIR).is_some();
+    let (dir, unreadable) = store::pick_dir(&env.config_dir, explicit);
+    (
+        dir,
+        unreadable.then(|| t!("背景服務的 DNS 紀錄要以系統管理員身分執行才讀得到").to_string()),
+    )
 }
 
 /// 一列的可疑理由（情資命中、像亂數產生、少見頂級網域）；沒有就是空的。

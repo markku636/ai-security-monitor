@@ -509,10 +509,9 @@ mod tests {
                 eprintln!("{ev:?}");
                 assert_eq!(ev.pid, Some(std::process::id()));
                 assert_eq!(ev.source, Source::Etw);
+                // 不存在的子網域：有的 DNS 回 NXDOMAIN、有的回 NOERROR 沒答案（NODATA），都算
                 assert_ne!(ev.rcode, "ERR87");
-                if ev.rcode == "NXDOMAIN" {
-                    break;
-                }
+                break;
             }
         }
     }

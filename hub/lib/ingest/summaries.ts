@@ -63,7 +63,7 @@ export interface SummaryResult {
 
 export async function applySummaries(db: DB, agentId: string, summaries: Record<string, unknown>, at: Date): Promise<SummaryResult> {
   const res: SummaryResult = { crashes: 0, security: 0 };
-  for (const kind of ['events', 'traffic', 'vuln', 'hardening', 'fim'] as const) {
+  for (const kind of ['events', 'traffic', 'vuln', 'hardening', 'fim', 'dns'] as const) {
     const s = summaries[kind];
     if (s && typeof s === 'object' && !Array.isArray(s)) {
       await db

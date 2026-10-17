@@ -233,9 +233,9 @@ fn capture_loop(mut taps: HashMap<String, Tap>, tx: Sender<DnsEvent>, dropped: A
             let now = interfaces();
             taps.retain(|name, _| now.contains(name));
             for name in now {
-                if !taps.contains_key(&name) {
-                    if let Ok(t) = open_tap(&name) {
-                        taps.insert(name, t);
+                if let std::collections::hash_map::Entry::Vacant(e) = taps.entry(name) {
+                    if let Ok(t) = open_tap(e.key()) {
+                        e.insert(t);
                     }
                 }
             }

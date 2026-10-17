@@ -234,6 +234,17 @@ impl HubClient {
         Ok(Some(Self::finish(sent).await?.body))
     }
 
+    /// DNS 查詢紀錄。`Ok(None)`＝Hub 太舊沒有這個端點（404），紀錄留在佇列稍後再送。
+    pub async fn upload_dns(&self, batch: &crate::dns::queue::DnsBatch) -> AppResult<Option<Value>> {
+        let sent = self.send_post("/api/v1/ingest/dns", batch).await?;
+        if let Ok(r) = &sent {
+            if r.status().as_u16() == 404 {
+                return Ok(None);
+            }
+        }
+        Ok(Some(Self::finish(sent).await?.body))
+    }
+
     pub async fn heartbeat(&self, hb: &HeartbeatPayload) -> AppResult<Value> {
         Ok(self.post("/api/v1/agents/me/heartbeat", hb).await?.body)
     }

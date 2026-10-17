@@ -6,7 +6,10 @@ pub mod collect;
 pub mod heuristics;
 pub mod model;
 pub mod procname;
+pub mod queue;
+pub mod rules;
 pub mod runtime;
+pub mod scanner;
 pub mod store;
 
 use std::path::Path;

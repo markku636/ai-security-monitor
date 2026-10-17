@@ -121,6 +121,9 @@ pub struct Summaries {
     /// 檔案完整性＋開機自啟（監看數、變更數、基準建立時間）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fim: Option<serde_json::Value>,
+    /// DNS 監看摘要（查詢量、不同網域、NXDOMAIN、前幾名網域與程式、蒐集狀態）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

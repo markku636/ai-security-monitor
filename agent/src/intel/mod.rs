@@ -362,6 +362,8 @@ impl Scanner for IntelScanner {
         let db = tokio::task::spawn_blocking(move || IntelDb::load(&dir, &reg2))
             .await
             .map_err(|e| AppError::Intel(e.to_string()))?;
+        let db = std::sync::Arc::new(db);
+        ctx.shared.lock().await.intel = Some(crate::scan::SharedIntel(db.clone()));
         warnings.extend(db.warnings.iter().cloned());
         if db.feeds.is_empty() {
             warnings.push(t!("尚未下載任何威脅情資；執行 ai-security-monitor intel update").into());

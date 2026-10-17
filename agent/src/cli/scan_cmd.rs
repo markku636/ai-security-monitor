@@ -24,6 +24,7 @@ pub fn build_pipeline() -> Pipeline {
         .register(Box::new(crate::vuln::VulnScanner))
         .register(Box::new(crate::hardening::HardeningScanner))
         .register(Box::new(crate::fim::FimScanner))
+        .register(Box::new(crate::dns::scanner::DnsScanner))
 }
 
 /// 解析要跑的掃描器：參數 ＞ config.scan.scanners ＞ 全部可用。

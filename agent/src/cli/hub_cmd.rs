@@ -975,6 +975,9 @@ struct MetricsState {
     unsupported_until: Option<tokio::time::Instant>,
     warned_unsupported: bool,
     last_performance: Option<bool>,
+    /// DNS 紀錄上傳：Hub 太舊（沒有 dns 端點）時下次再試的時間。
+    dns_unsupported_until: Option<tokio::time::Instant>,
+    dns_warned: bool,
 }
 
 /// 取一個流量（＋效能）樣本：存進本機最近樣本；有 Hub 就排進待送佇列並分批送出。回傳下一次的間隔。
@@ -1031,6 +1034,30 @@ async fn metrics_round(env: &Env, st: &mut MetricsState, agent_id: &str, client:
                 }
                 crate::metrics::Flush::Failed(m) => {
                     log(env, &tf!("流量資料上傳失敗，稍後再試：{e}", e = m));
+                }
+            }
+        }
+        // DNS 查詢紀錄（背景 DNS 蒐集排進佇列的）跟著同一個節奏送
+        if st.dns_unsupported_until.is_none_or(|t| now >= t) {
+            match crate::dns::queue::flush(&env.config_dir, c, agent_id).await {
+                crate::dns::queue::Flush::Sent { sent, left } => {
+                    st.dns_unsupported_until = None;
+                    if left > 0 {
+                        log(
+                            env,
+                            &tf!("已上傳 {n} 筆 DNS 紀錄（還有 {left} 筆）", n = sent, left = left),
+                        );
+                    }
+                }
+                crate::dns::queue::Flush::Unsupported => {
+                    if !st.dns_warned {
+                        log(env, t!("這個 Hub 版本還不收 DNS 紀錄：先存在本機，Hub 升級後自動補送"));
+                        st.dns_warned = true;
+                    }
+                    st.dns_unsupported_until = Some(now + Duration::from_secs(30 * 60));
+                }
+                crate::dns::queue::Flush::Failed(m) => {
+                    log(env, &tf!("DNS 紀錄上傳失敗，稍後再試：{e}", e = m));
                 }
             }
         }
@@ -1251,6 +1278,8 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         unsupported_until: None,
         warned_unsupported: false,
         last_performance: None,
+        dns_unsupported_until: None,
+        dns_warned: false,
     };
     let metrics_started = tokio::time::Instant::now();
     let mut next_metrics = metrics_started

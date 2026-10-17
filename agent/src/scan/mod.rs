@@ -35,6 +35,18 @@ pub struct Shared {
     pub firewall_state: Option<serde_json::Value>,
     pub inventory: Option<serde_json::Value>,
     pub events: Vec<serde_json::Value>,
+    /// intel 掃描載入的情資（dns 等後面的掃描器沿用，不再重載大型清單）。
+    pub intel: Option<SharedIntel>,
+}
+
+/// 已載入的情資資料庫（包一層讓 `Shared` 可以 Debug）。
+#[derive(Clone)]
+pub struct SharedIntel(pub Arc<crate::intel::IntelDb>);
+
+impl std::fmt::Debug for SharedIntel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IntelDb({} feeds)", self.0.feeds.len())
+    }
 }
 
 pub struct ScanCtx {
@@ -219,6 +231,7 @@ impl Pipeline {
                             ScannerId::Events => summaries.events = Some(s),
                             ScannerId::Vuln => summaries.vuln = Some(s),
                             ScannerId::Files => summaries.fim = Some(s),
+                            ScannerId::Dns => summaries.dns = Some(s),
                             ScannerId::Hardening => {
                                 summaries.hardening = serde_json::from_value(s).ok();
                             }

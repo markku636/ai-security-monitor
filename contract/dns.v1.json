@@ -1,0 +1,30 @@
+{
+  "agent_id": "6f1c2e7a-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "records": [
+    {
+      "ts": "2026-10-17T09:30:00Z",
+      "name": "updates.example.net",
+      "qtype": 1,
+      "rcode": "NOERROR",
+      "process": "updater.exe",
+      "exe": "C:\\Program Files\\Updater\\updater.exe",
+      "pid": 4120,
+      "count": 3,
+      "answers": [
+        "203.0.113.66"
+      ],
+      "cnames": [
+        "edge.example.net"
+      ],
+      "source": "etw"
+    },
+    {
+      "ts": "2026-10-17T09:31:00Z",
+      "name": "kqfcpqbyqllgbr.example",
+      "qtype": 1,
+      "rcode": "NXDOMAIN",
+      "count": 1,
+      "source": "packet"
+    }
+  ]
+}

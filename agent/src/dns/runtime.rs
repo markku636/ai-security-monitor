@@ -12,6 +12,7 @@ use tokio::task::JoinHandle;
 
 use super::agg::{Aggregator, SharedIpMap};
 use super::collect;
+use super::queue;
 use super::store::{self, DnsStatus};
 
 /// 事件 channel 容量（尖峰時的緩衝；滿了就丟）。
@@ -87,7 +88,14 @@ async fn run(config_dir: PathBuf, session: &'static str, stop: Arc<Notify>) {
             _ = flush.tick() => {
                 let recs = agg.take_finished(Utc::now());
                 let dir = config_dir.clone();
-                let _ = tokio::task::spawn_blocking(move || store::append(&dir, &recs)).await;
+                let _ = tokio::task::spawn_blocking(move || {
+                    let _ = store::append(&dir, &recs);
+                    // 有加入 Hub 且 dns.upload = all：排進上傳佇列（watch 每分鐘送）
+                    if !recs.is_empty() && queue::wants_upload(&dir) {
+                        let _ = queue::push(&dir, &recs);
+                    }
+                })
+                .await;
                 status.events = agg.stats.events;
                 status.deduped = agg.stats.deduped;
                 status.dropped = dropped.load(Ordering::Relaxed);
@@ -113,7 +121,11 @@ async fn run(config_dir: PathBuf, session: &'static str, stop: Arc<Notify>) {
     while let Ok(ev) = rx.try_recv() {
         agg.push(ev);
     }
-    let _ = store::append(&config_dir, &agg.take_all());
+    let rest = agg.take_all();
+    let _ = store::append(&config_dir, &rest);
+    if !rest.is_empty() && queue::wants_upload(&config_dir) {
+        let _ = queue::push(&config_dir, &rest);
+    }
     status.running = false;
     status.events = agg.stats.events;
     status.deduped = agg.stats.deduped;
