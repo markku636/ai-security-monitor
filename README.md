@@ -12,67 +12,285 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
 </p>
 
-防禦型資安 agent **`ai-security-monitor`**（Rust，單一執行檔，Windows／Windows Server／macOS／Linux）＋ **Security Hub**（Next.js＋Tailwind＋PostgreSQL）。
-抓出對外與對內的異常連線、用公開威脅情資判定**安全／未知／可疑／危險**並附上每一筆來源，
-檢查防火牆、開放 port、漏洞與系統硬化，整理流量與 Windows 事件／當機原因，再交給 **Claude Code／Codex CLI** 用白話解讀；agent 與 Hub 都是 **MCP server**。
+裝上去之後，它會告訴你這台電腦在跟誰講話、哪些連線可疑、哪裡沒設好，再請 AI 用白話解釋給你聽。
+每一個「可疑」都會附上理由和出處（哪一份公開的壞人名單、哪一種奇怪的行為），不是黑箱打分數。
+可以只看自己這台，也可以把辦公室裡好幾台電腦集中到一個網頁看。
 
-![Security Hub 總覽](docs/images/overview.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-desktop-hero-dark.png">
+    <img src="docs/images/windows-desktop-hero.png" alt="AI Security Monitor 桌面版在 Windows 上：總覽頁顯示安全分數與可疑連線，右下角系統匣有圖示">
+  </picture>
+</p>
 
-## 緣起
+<p align="center"><sub>Windows 桌面版的總覽頁（示範資料）。關掉視窗後會縮到右下角的系統匣繼續待命。</sub></p>
 
-昨天睡前，讓 AI 做了一個有趣的小專案：
-用 Rust 寫的應用，蒐集並分析用戶端的異常連線，做威脅分析。
-AI 出現後，系統漏洞變得很明顯；既然攻擊者是 AI，AI 也很懂得怎麼防禦。
+## 適合誰？
 
-**架構**
+- **個人電腦**：想知道自己的 Windows／Mac／Linux 有沒有連到奇怪的地方、有沒有該更新沒更新、安全設定有沒有漏掉。裝桌面版就好。
+- **辦公室好幾台電腦**：IT 或老闆想在一個網頁看全部電腦的狀況，有問題可以一起處理，必要時在網頁上核准「封鎖這個 IP」。用 Hub。
+- **伺服器**（含 Windows Server、Server Core、網域控制站、Linux）：沒有桌面也能用，裝成開機就跑的背景服務，定時檢查並回報。用命令列版。
 
-```
-Client Agent → 定時回報 → Server 分析 → AI 判斷風險 → Dashboard 呈現
-```
+幾個會一直出現的詞，先講清楚：
 
-`#支援跨平台`（Windows／Windows Server／macOS／Linux）
-
-## 這是什麼
-
-| | |
+| 詞 | 白話 |
 |---|---|
-| **ai-security-monitor**（agent） | 裝在要保護的電腦或伺服器上（含 Windows Server 2016–2025、Server Core 與網域控制站）。掃描連線、情資、防火牆、port、漏洞、硬化、事件與流量；可以單獨用（CLI、MCP、AI 分析），也可以註冊到 Hub 定期回報、接受核准過的遠端封鎖。開機自動啟動（系統服務或使用者登入時）。 |
-| **桌面版**（選用） | 用戶端的視窗介面 AI Security Monitor：系統匣常駐，看這台電腦的連線判定（點 IP 分析）、掃描結果、情資狀態，一鍵掃描／更新情資，並用本機已登入的 Claude Code／Codex 做 AI 分析。和命令列、背景服務共用同一個設定目錄。見 [docs/desktop.md](docs/desktop.md)。 |
-| **Security Hub** | 集中看所有主機：連線判定、待處理問題、漏洞、安全設定分數、當機與資安事件、情資來源命中、封鎖審核、AI 分析與 MCP。單機版（只綁本機）或伺服器版（所有主機回報到同一台），Docker 部署。 |
+| agent | 裝在每台電腦上、負責檢查的小程式，也就是 `ai-security-monitor` 本身 |
+| 威脅情資 | 別人整理好、公開的壞人名單（例如已知的殭屍網路主機、正在暴力破解的 IP） |
+| Hub（Security Hub） | 集中看所有電腦的網頁，自己架在公司裡（Docker） |
+| 硬化 | 系統安全設定，例如有沒有開磁碟加密、防毒、遠端桌面的保護 |
+| MCP | 讓 Claude Code、Codex 這類 AI 工具可以「查資料」的標準接口；這裡只開放查詢，不能改設定 |
+
+## 我該裝哪一個？
+
+所有檔案都在 [Releases（最新版）](https://github.com/markku636/ai-security-monitor/releases/latest)，目前版本 **v0.2.1**。
+
+| 你想要 | 裝這個 | 下載的檔案 |
+|---|---|---|
+| 在自己電腦上用視窗看 | **桌面版**（雙擊安裝） | Windows 10／11：`AI-Security-Monitor-<版本>-windows-x64-setup.exe`<br>Mac（M1 以後）：`…-macos-arm64.dmg`；Mac（Intel）：`…-macos-x64.dmg`<br>Linux：`…-linux-x64.AppImage`（免安裝）或 `…-linux-amd64.deb` |
+| 伺服器、沒有桌面、或想用指令和自動化 | **命令列版** | 用下面的一行安裝指令最省事（會自動比對校驗碼）。也可以直接下載 `ai-security-monitor-<版本>-<平台>`，但它要在終端機裡執行，雙擊只會跳出說明 |
+| 一個網頁看全公司的電腦 | **Security Hub** | Docker 映像 `ghcr.io/markku636/ai-security-monitor-hub`，不用下載檔案 |
+| （看到 `asa-<版本>-*`） | 不用理它 | 給 0.1.x 舊版自動升級用的，內容和命令列版一樣 |
+| （看到 `SHA256SUMS`） | 校驗碼 | 每個檔案的指紋；安裝腳本和 `self-update` 會自動比對，被竄改就不裝 |
+
+桌面版和命令列版可以裝在同一台電腦，兩個會共用同一份設定和掃描結果。
+
+## 5 分鐘上手
+
+### 情境 A：我只想看自己的電腦（Windows）
+
+1. 到 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`。
+2. 雙擊安裝檔。如果跳出藍色的「Windows 已保護您的電腦」，按「**其他資訊**」，再按「**仍要執行**」。
+   這是因為安裝檔沒有付費的程式碼簽章，Windows 認不得發行者，不代表檔案有問題；不放心可以先比對 `SHA256SUMS`。
+3. 安裝到目前使用者，不需要系統管理員。裝好後從開始功能表打開「AI Security Monitor」。
+   第一次開啟會先出現「尋找公司的 Security Hub」，只用在自己電腦的話，按最下面的「先不要，只在這台電腦使用」。
+4. 在「總覽」頁先按「**更新情資**」（下載壞人名單），再按「**立即掃描**」。
+5. 看結果：
+   - 「總覽」：安全分數和最需要注意的連線。
+   - 「連線」：這台電腦現在連到哪裡、為什麼被判可疑；點 IP 可以看它在哪個國家、被哪些名單列入。
+   - 「掃描結果」：漏洞、沒裝的更新、沒設好的安全設定，每一條都附修正方式。
+   - 「AI 分析」：如果這台電腦已經裝好並登入 Claude Code 或 Codex CLI，按一下就會請 AI 用白話解讀（用的是你自己的帳號）。
+
+關掉視窗只是縮到右下角的系統匣，從系統匣選單按「結束」才會真的離開。
+想讓它在背景定時檢查，到「設定」頁打開「開機／登入後在背景自動回報」。Mac 和 Linux 的安裝步驟見下方「[安裝](#安裝)」。
+
+### 情境 B：我要管辦公室好幾台
+
+**第一步：架 Hub**（找一台一直開著、有裝 Docker 的電腦或伺服器）
+
+```bash
+git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
+cp .env.example .env    # 打開 .env，填 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET（登入密碼）、AI_SECURITY_MONITOR_HUB_DB_PASSWORD，
+                        # 以及 AI_SECURITY_MONITOR_HUB_PUBLIC_URL（其他電腦連這台用的網址，例如 http://<這台的 IP>:8088）
+docker compose -f docker/compose.yml --env-file .env up -d
+```
+
+用瀏覽器打開 `http://<這台的 IP>:8088`，用剛剛填的 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
+只想在自己這台試試看的話，把 `compose.yml` 換成 `compose.standalone.yml`，就只開在 `http://127.0.0.1:8088`。
+
+**第二步：把電腦加進來**
+
+**方法一：讓電腦自己找到 Hub，管理員按「核准」（建議，不用發金鑰）**
+
+1. 管理員打開 Hub 左側的「新增主機」，記下最上面的 **Hub 指紋**（一串像 `72AS-YEXT-VNGO-NLC5-W2NM` 的代碼，用來確認是自己公司的 Hub，不是別人架的假貨）。
+2. 同事那邊擇一：
+   - **桌面版**：第一次開啟就會自動找公司的 Hub。看到的指紋和管理員說的一樣，就按「**申請加入**」。找不到的話，可以輸入管理員給的網址。
+   - **命令列版**：執行 `ai-security-monitor enroll --auto`，核對指紋後送出申請，再執行 `ai-security-monitor service install --yes`（還沒核准也可以先裝，它會在背景等）。
+   - **還沒裝的電腦**：把「新增主機」頁上的「免金鑰安裝指令」給同事貼上執行，網址已經填好。
+3. 管理員在「新增主機 → 待核准的主機」核對主機名稱和核對碼（電腦端也會顯示同一組），按「**核准**」就完成。
+   嫌一台一台按太麻煩，可以設定「自動核准的網段」，例如公司內網 `192.168.10.0/24`。
+
+電腦是靠公司 DNS 的 SRV 紀錄或區網廣播（mDNS）找到 Hub 的。Hub 跑在 Docker Desktop 裡時廣播出不了區網，
+這時用 `ai-security-monitor hub advertise --url <Hub 網址>` 代為廣播，或直接給網址；細節見 [自動尋找 Hub、免金鑰加入](docs/enrollment.md)。
+
+**方法二：用註冊金鑰**
+
+- 在「新增主機」頁建立一把註冊金鑰，頁面會產生已經填好網址和金鑰的一行安裝指令（Windows、macOS、Linux 各一行），到要加入的電腦上貼上執行。
+- 已經裝好命令列版的電腦：
+
+  ```bash
+  ai-security-monitor enroll http://<Hub 的 IP>:8088 --key asa_ek_…
+  ai-security-monitor service install --yes    # 登入後自動回報；伺服器改用 --system
+  ```
+
+- 桌面版：「設定」頁按「我有註冊金鑰」。
+
+幾分鐘內，Hub 的「主機」頁就會出現這台電腦。之後每 1 分鐘回報一次連線、每 10 分鐘一份完整報告；Hub 暫時連不上時，報告會先存著，連上再補送。
+
+### 情境 C：伺服器／Windows Server
+
+Windows Server（2016 到 2025，含 Server Core）用「以系統管理員身分執行」的 PowerShell：
+
+```powershell
+irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
+```
+
+Linux、macOS：
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
+```
+
+開一個**新的**終端機視窗，然後：
+
+```bash
+ai-security-monitor doctor                          # 看權限、情資、Hub 連線是否正常
+ai-security-monitor intel update                    # 下載威脅情資
+ai-security-monitor scan                            # 完整檢查一次
+ai-security-monitor service install --system --yes  # 裝成開機就跑的系統服務（Linux／macOS 前面加 sudo）
+```
+
+沒加 `--yes` 的話，`service install`、封鎖 IP 這類會改系統的指令只會先列出「我打算做什麼」，不會真的動手，看過再加 `--yes`。
+要回報到 Hub，照[情境 B](#情境-b我要管辦公室好幾台) 加入即可（伺服器上同樣可以用 `enroll --auto`）。
+
+## 常見問題
+
+<details>
+<summary><b>雙擊 .exe 一下就關掉？</b></summary>
+
+你下載到的可能是命令列版 `ai-security-monitor-<版本>-windows-x64.exe`。它是給終端機用的，雙擊只會顯示一頁說明（告訴你桌面版在哪、怎麼一行安裝），按 Enter 就關閉。
+要視窗介面請下載 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`；要用命令列版，請在 PowerShell 裡執行，例如 `ai-security-monitor doctor`。
+</details>
+
+<details>
+<summary><b>SmartScreen 擋住，說「Windows 已保護您的電腦」？</b></summary>
+
+安裝檔沒有付費的程式碼簽章，所以 Windows 不認得發行者。按「其他資訊」→「仍要執行」即可。
+想確認檔案沒被動過，可以在 PowerShell 執行 `Get-FileHash .\AI-Security-Monitor-<版本>-windows-x64-setup.exe`，和 Releases 上 `SHA256SUMS` 裡的值比對。
+Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，見下方「[安裝](#安裝)」。
+</details>
+
+<details>
+<summary><b>AI 助手說「Please run /login」？</b></summary>
+
+代表 Claude Code 還沒登入。AI 分析用的是你自己的 Claude Code 或 Codex CLI 帳號，本專案不提供 AI 額度。
+
+- **桌面版、命令列版**：在同一台電腦開終端機執行 `claude`，輸入 `/login` 照指示登入，完成後輸入 `/exit`。Codex 則執行 `codex` 登入。`ai-security-monitor ai status` 可以看兩者有沒有裝好、登入了沒。
+- **Hub 網頁上的 AI 助手**：AI 跑在 Hub 的容器裡，要登入容器裡的那一份，見下方「[安裝](#安裝)」的 Hub 步驟。
+</details>
+
+<details>
+<summary><b>會不會把我的資料送出去？</b></summary>
+
+不會送給我們，本專案沒有任何遙測或回報給作者的功能。會連到外面的只有這些：
+
+- **下載威脅情資**：向 abuse.ch、Spamhaus 等名單提供者下載清單（有 Hub 就先向你自己的 Hub 拿）。這是「下載」，不會上傳你的連線。
+- **檢查漏洞**：Linux 會拿已安裝套件的名稱和版本去問 OSV.dev（不想要可以加 `--no-online`）。
+- **檢查新版本**：`self-update`、`version --check` 會查 GitHub Releases；Hub 也會查有沒有新版並在管理頁顯示（`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` 關閉）。
+- **你主動按的時候**：IP 線上名譽查詢（`intel lookup --online`，或 Hub 上按「查詢外部情資」，要自己填 API 金鑰；私有網段一律不送）、桌面版的 VirusTotal／AbuseIPDB 連結（只是用瀏覽器打開網頁）。
+- **AI 分析**：透過你自己電腦上的 Claude Code／Codex CLI，資料只會照你和 Anthropic／OpenAI 之間的帳號條款處理。
+- **你自己的 Hub**：註冊後，報告只送到你指定的 Hub。自動找 Hub 時，只會查公司 DNS 和在區網裡廣播詢問。
+</details>
+
+<details>
+<summary><b>可以免費商用嗎？</b></summary>
+
+程式碼是 MIT 授權，可以免費商用。但部分威脅情資來源本身只允許非商業使用（例如 DShield），在公司裡用時要留意哪些來源該關掉，詳見「[資料來源與授權](#資料來源與授權)」。
+</details>
+
+<details>
+<summary><b>怎麼移除？</b></summary>
+
+- **桌面版**：Windows 到「設定 → 應用程式 → 已安裝的應用程式」找「AI Security Monitor」解除安裝；Mac 把它從「應用程式」拖到垃圾桶；Linux deb 從軟體管理員移除（或 `sudo apt remove` 加上 `apt list --installed` 裡看到的套件名稱），AppImage 直接刪掉檔案。
+- **命令列版**：先停掉背景服務 `ai-security-monitor service uninstall --yes`（系統服務加 `--system`），加入過 Hub 的話執行 `ai-security-monitor unenroll` 刪掉金鑰，最後刪掉執行檔（Windows 預設在 `%LOCALAPPDATA%\ai-security-monitor\bin`，系統服務在 `%ProgramFiles%\ai-security-monitor`；Linux／macOS 在 `/usr/local/bin` 或 `~/.local/bin`）。
+- **設定和掃描紀錄**：`ai-security-monitor config path` 會告訴你在哪個資料夾，不要了就整個刪掉。
+- **Hub**：`docker compose -f docker/compose.yml --env-file .env down`；連資料一起清掉加 `-v`。
+</details>
 
 ## 畫面預覽
 
+**桌面版（Windows）**
+
 | | |
 |---|---|
-| ![連線](docs/images/connections.png) 連線：方向、判定、行程、國家／組織、理由與情資來源 | ![主機](docs/images/agent.png) 單台主機：五項分數、趨勢、看過的危險目的地 |
-| ![Windows Server](docs/images/agent-server.png) Windows Server：網域控制站 dc-01（Server 2022 Datacenter，Server Core） | ![待處理問題](docs/images/findings.png) 待處理問題：所有主機回報的問題，可依裝置、狀態、嚴重度篩選與批次處理 |
-| ![漏洞](docs/images/vulns.png) 漏洞與更新：作業系統支援期限、KEV、已知漏洞軟體 | ![安全設定](docs/images/hardening.png) 安全設定：最常未通過的檢查與各主機分數 |
-| ![事件](docs/images/events.png) 當機與事件：藍屏代碼與可能原因、暴力破解來源、帳號鎖定 | ![情資](docs/images/intel.png) 威脅情資：每台主機的情資新舊、來源授權、信心與命中 |
-| ![深色](docs/images/agent-hardening-dark.png) 深色模式：每條檢查的目前值、期望值與修正方式 | ![新增主機](docs/images/install.png) 新增主機：建立註冊金鑰並產生一行安裝指令 |
+| ![桌面版連線](docs/images/windows-desktop-connections.png) 連線：每條連線的判定、理由和情資出處，點 IP 看國家、組織和被哪些名單列入 | ![桌面版 AI 分析](docs/images/windows-desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具查資料，再用白話解釋 |
+| ![桌面版掃描結果](docs/images/windows-desktop-findings.png) 掃描結果：依嚴重程度排序，展開看細節和修正方式 | ![桌面版深色模式](docs/images/windows-desktop-overview-dark.png) 深色模式：跟著 Windows 的設定 |
 
-**桌面版**（AI Security Monitor，用戶端視窗介面）
+**Security Hub（網頁）**
 
-| | | |
-|---|---|---|
-| ![桌面版總覽](docs/images/desktop-overview.png) 總覽：這台電腦的分數、問題數、情資新舊與可疑連線 | ![桌面版連線](docs/images/desktop-connections.png) 連線：判定、理由與情資來源，點 IP 看國家／ASN 與命中清單 | ![桌面版 AI 分析](docs/images/desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具解讀可疑連線 |
+| | |
+|---|---|
+| ![Hub 總覽](docs/images/overview.png) 總覽：所有電腦的分數、待處理問題和危險連線 | ![連線](docs/images/connections.png) 連線：方向、判定、程式、國家／組織、理由與情資來源 |
+| ![主機](docs/images/agent.png) 單台主機：五項分數、趨勢、連過的危險目的地 | ![待處理問題](docs/images/findings.png) 待處理問題：依裝置、狀態、嚴重度篩選，批次處理 |
+| ![Windows Server](docs/images/agent-server.png) Windows Server：網域控制站 dc-01（Server Core） | ![漏洞](docs/images/vulns.png) 漏洞與更新：作業系統支援期限、已被利用的漏洞、有漏洞的軟體 |
+| ![安全設定](docs/images/hardening.png) 安全設定：最常沒通過的檢查與各主機分數 | ![事件](docs/images/events.png) 當機與事件：藍屏代碼與可能原因、暴力破解來源 |
+| ![情資](docs/images/intel.png) 威脅情資：每台主機的名單新舊、授權、命中 | ![新增主機](docs/images/install.png) 新增主機：建立註冊金鑰並產生一行安裝指令 |
 
-> 截圖用的是示範資料（虛構主機、文件保留網段 IP）：Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 注入假的 Tauri 回應，不讀任何真實設定。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
+> 截圖全部是示範資料（虛構主機、文件專用的保留 IP、example.com），Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 產生。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
 
 ## 功能一覽
 
-- **連線與威脅情資**：每條連線判斷方向（對外／對內／監聽／本機），綜合 Spamhaus DROP、abuse.ch（Feodo、URLhaus、ThreatFox）、blocklist.de、CINS、ET、DShield、Tor、IPsum、FireHOL 等開源情資，
-  加上異常行為（暫存目錄行程、shell 對外連線、高風險 port、週期性 beacon、新目的地），判定安全／未知／可疑／危險；每個命中都附廠商、信心、授權與來源網址。可選 AbuseIPDB／GreyNoise／CrowdSec 線上查詢（自備 key）。
-- **防火牆與曝露**：讀 Windows 防火牆、macOS pf／應用程式防火牆、Linux nftables／firewalld／ufw／iptables，算出每個監聽 port 實際能不能從網路連入；
-  `ai-security-monitor fw block`、`ai-security-monitor fw sync-blocklist` 把高信心情資同步成封鎖規則（預演、確認、可撤銷，非商用授權的來源預設只告警）。
-- **漏洞與更新**：軟體清單、作業系統支援期限（含 Windows Server 2008–2025）、Windows 多久沒更新、Linux 待裝安全性更新、常見軟體的已知漏洞版本（WinRAR、7-Zip、Chrome…），Linux 套件查 OSV，CISA KEV 命中升為嚴重。
-- **系統硬化**：60 條跨平台檢查（UAC、Defender、BitLocker、SMBv1、RDP NLA、SSH、核心參數、AppArmor／SELinux、FileVault、Gatekeeper…），自動分辨 Windows 用戶端、Server、Server Core 與網域控制站，嚴重度加權分數，可用 YAML 自訂。
-- **流量**：不抓封包也能看各行程連到哪裡（flow-lite）；分析 Wireshark／tcpdump 的 pcap／pcapng：DNS、TLS SNI、明文協定、大量上傳、週期性連線。
-- **事件與當機**：Windows 事件記錄、minidump 藍屏代碼、WER；Linux journal、macOS 當機報告；整理出可能原因與處置，以及暴力破解（含 Kerberos、NTLM）、帳號鎖定、公網遠端桌面登入、新帳號、新服務、清除稽核等資安事件。
-- **AI 與 MCP**：`ai-security-monitor ai ask|analyze` 交給 Claude Code 或 Codex CLI（只開唯讀工具）；`ai-security-monitor mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有所有主機層級的 MCP 與網頁上的 AI 分析。
-- **Hub**：總覽、主機、連線、待處理問題（批次處理）、漏洞、安全設定、流量、事件、情資、封鎖審核（HMAC 簽章、主機身分釘選）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
-- **部署與更新**：開機自動啟動（Windows 服務／systemd／launchd 或使用者層）、`ai-security-monitor self-update`（比對 SHA256SUMS）、一行安裝腳本、Hub Docker 映像（amd64／arm64）與 compose。
+- **連線與威脅情資**：每條連線分方向（對外／對內／監聽／本機），比對 Spamhaus DROP、abuse.ch（Feodo、URLhaus、ThreatFox）、blocklist.de、CINS、ET、DShield、Tor、IPsum、FireHOL 等公開名單，
+  再加上行為判斷（從暫存資料夾執行的程式、命令列程式直接連外、高風險 port、規律的定時連線、新目的地），判定安全／未知／可疑／危險；每個命中都附廠商、信心、授權與來源網址。可選 AbuseIPDB／GreyNoise／CrowdSec 線上查詢（自備金鑰）。
+- **防火牆與曝露**：讀 Windows 防火牆、macOS pf／應用程式防火牆、Linux nftables／firewalld／ufw／iptables，算出每個監聽 port 實際能不能從外面連進來；
+  `fw block`、`fw sync-blocklist` 可以把高信心的壞 IP 變成封鎖規則（先預演、確認後才做、可以撤銷；非商用授權的來源預設只告警）。
+- **漏洞與更新**：已安裝軟體、作業系統支援期限（含 Windows Server 2008 到 2025）、Windows 多久沒更新、Linux 待裝的安全性更新、常見軟體的已知漏洞版本（WinRAR、7-Zip、Chrome…），Linux 套件查 OSV，已被實際利用的（CISA KEV）升為嚴重。
+- **系統安全設定（硬化）**：60 條跨平台檢查（UAC、Defender、BitLocker、SMBv1、遠端桌面 NLA、SSH、核心參數、AppArmor／SELinux、FileVault、Gatekeeper…），自動分辨 Windows 用戶端、Server、Server Core 與網域控制站，可用 YAML 自訂。
+- **流量**：不抓封包也能看各程式連到哪裡；也能分析 Wireshark／tcpdump 存的 pcap／pcapng（DNS、TLS SNI、明文協定、大量上傳、定時連線）。
+- **事件與當機**：Windows 事件記錄、藍屏 minidump、Linux journal、macOS 當機報告，整理出可能原因與處理方式；也抓暴力破解、帳號鎖定、從公網登入遠端桌面、新帳號、新服務、清除稽核記錄等資安事件。
+- **AI 與 MCP**：`ai ask`、`ai analyze` 交給 Claude Code 或 Codex CLI 解讀（只給唯讀工具）；`mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有全部主機層級的 MCP 和網頁上的 AI 助手。
+- **Hub**：總覽、主機、連線、待處理問題、漏洞、安全設定、流量、事件、情資、封鎖審核（簽章、主機身分綁定）、免金鑰加入申請與核准（DNS SRV、區網 mDNS 自動尋找）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
+- **部署與更新**：開機自動啟動（Windows 服務／systemd／launchd 或登入時啟動）、`self-update`（比對 SHA256SUMS）、一行安裝腳本、Hub Docker 映像（amd64／arm64）。
 
-## 架構
+## 安裝
+
+這一段是每個平台的完整步驟；只想快速開始的話看上面的「[5 分鐘上手](#5-分鐘上手)」就夠了。
+
+**系統需求**
+
+| | 需求 |
+|---|---|
+| 桌面版 Windows | Windows 10／11（x64）；需要 Microsoft Edge WebView2（Windows 10／11 內建，沒有的話安裝檔會自動下載） |
+| 桌面版 macOS | macOS 10.13 以上（Apple Silicon 或 Intel） |
+| 桌面版 Linux | x64，Ubuntu 22.04／Debian 12 以上（glibc 2.35 以上）；deb 會自動裝 WebKitGTK 4.1，系統匣圖示需要桌面支援 AppIndicator |
+| 命令列版 | Windows 10／11、Windows Server 2016／2019／2022／2025（含 Server Core），x64 或 ARM64；macOS 11 以上；Linux x64／ARM64（靜態連結，不挑發行版） |
+| Security Hub | Docker 24 以上（含 Compose v2），amd64 或 arm64 |
+
+**桌面版：Windows**：見[情境 A](#情境-a我只想看自己的電腦windows)。裝過舊的「AI Security Agent」（0.1.x）要先到「設定 → 應用程式」解除安裝，新版不會覆蓋它。
+裝好後視窗會出現「總覽」，右下角系統匣有 AI Security Monitor 圖示。
+
+**桌面版：macOS**
+
+1. Apple Silicon（M1、M2…）下載 `AI-Security-Monitor-<版本>-macos-arm64.dmg`，Intel 下載 `…-macos-x64.dmg`。不確定的話：蘋果選單 →「關於這台 Mac」，看「晶片」或「處理器」。
+2. 打開 dmg，把「AI Security Monitor」拖到「應用程式」。
+3. 第一次開啟：在「應用程式」對它按右鍵 →「打開」→ 再按「打開」。如果顯示「已損毀，無法打開」，在終端機執行：
+   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
+
+**桌面版：Linux**
+
+- AppImage（各發行版通用，免安裝）：`chmod +x AI-Security-Monitor-<版本>-linux-x64.AppImage && ./AI-Security-Monitor-<版本>-linux-x64.AppImage`
+- deb（Debian／Ubuntu）：`sudo apt install ./AI-Security-Monitor-<版本>-linux-amd64.deb`，之後從應用程式選單開啟。
+
+**命令列版：Windows、Windows Server**
+
+1. 開 PowerShell。要裝成開機就啟動的系統服務，請用「以系統管理員身分執行」。
+2. 執行 `irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex`，預設裝到 `%LOCALAPPDATA%\ai-security-monitor\bin` 並加進 PATH。
+3. 開一個**新的** PowerShell 視窗，執行 `ai-security-monitor version`，應該印出 `ai-security-monitor 0.2.1 …`。
+4. （選用）登入後自動啟動：`ai-security-monitor service install --yes`；伺服器開機就啟動：`ai-security-monitor service install --system --yes`（系統管理員）。`ai-security-monitor service status` 可以確認。
+
+**命令列版：Linux、macOS**
+
+1. 執行 `curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh`，預設裝到 `/usr/local/bin`，沒有權限就裝到 `~/.local/bin`。
+2. 執行 `ai-security-monitor version` 和 `ai-security-monitor doctor` 確認。
+3. （選用）`ai-security-monitor service install --yes` 登入後啟動；伺服器用 `sudo ai-security-monitor service install --system --yes`。
+
+安裝腳本會比對 Release 的 `SHA256SUMS`，不符就停止。指定版本、安裝位置、內部鏡像、安裝時順便註冊 Hub 等選項見 [docs/install.md](docs/install.md)。
+
+**Security Hub（Docker）**
+
+1. 照[情境 B](#情境-b我要管辦公室好幾台) 啟動。單機版 `docker/compose.standalone.yml` 只開在本機 `http://127.0.0.1:8088`；伺服器版 `docker/compose.yml` 讓其他電腦回報。
+2. 確認：`curl http://127.0.0.1:8088/api/health` 回 `"db":"ok"`，網頁看得到登入頁。
+3. （選用）讓 Hub 的「AI 助手」能用：映像裡已經裝好 Claude Code 與 Codex，但要先登入一次（畫面出現「Please run /login」就是還沒登入）。擇一：
+   - **用 Claude 訂閱帳號登入**：執行 `docker compose -f docker/compose.yml --env-file .env exec hub claude`（單機版換成 `compose.standalone.yml`），輸入 `/login` → 選 Claude 帳號 → 把網址貼到瀏覽器授權 → 把授權碼貼回來 → 看到登入成功後輸入 `/exit`。
+   - **用 token 或 API key**（不用進容器）：在自己電腦跑 `claude setup-token` 產生長效 token，在 `.env` 加 `CLAUDE_CODE_OAUTH_TOKEN=…`；或用 `ANTHROPIC_API_KEY=…`；Codex 用 `OPENAI_API_KEY=…`。改完再執行一次 `up -d`。
+
+   登入資料存在 `hubdata` volume，更新映像或重建容器都會保留。AI 只拿到唯讀工具，看得到 Hub 的資料但不能改。
+
+細節見 [docs/docker.md](docs/docker.md)。
+
+**從舊版升級**：命令列版執行 `ai-security-monitor self-update --yes`（0.1.x 用 `asa self-update --yes`），再執行一次 `ai-security-monitor service install --yes`（系統服務加 `--system`）；桌面版直接裝新版（0.1.x 的「AI Security Agent」要先解除安裝）。見「[從 asa／ai-security-agent 升級](#從-asaai-security-agent-升級)」。
+
+## 運作方式
 
 ```mermaid
 flowchart LR
@@ -107,182 +325,38 @@ flowchart LR
   AI -- "唯讀" --> HMCP
 ```
 
-- **定時回報**：`ai-security-monitor watch`（開機自動啟動的背景服務）每 1 分鐘拍一次連線快照（含情資判定）並送心跳，每 10 分鐘跑一次完整掃描；
-  間隔可用 `ai-security-monitor config set scan.snapshot_interval`／`scan.interval` 調整，Hub 也能要求快照放慢。上傳走 HTTPS（http 只允許本機或私網），
-  帶註冊時拿到的 client 金鑰和這台主機自己的 agent token（Hub 第一次看到就釘選，別台冒用會被擋）。
-- **離線佇列**：Hub 停機或網路斷線時，完整報告先存在設定目錄的 `outbox/`（最多 50 份），下次連得上再依序補送。
-- **遠端動作**：管理員在 Hub 送出封鎖並核准後，agent 從心跳得知有待處理的動作才去領取；每個動作都帶 HMAC-SHA256 簽章，agent 驗章、檢查期限與護欄後才執行並回報結果。
-  註冊時沒加 `--accept-remote-actions` 的主機完全不領取。
-- **情資**：Hub 依 `feeds/registry.json` 向各廠商下載清單並快取（情資鏡像），agent 每 30 分鐘檢查一次，已註冊就先向 Hub 拿，Hub 沒有的才直接找廠商。
-- **桌面版**：直接連結 agent 的 Rust 程式庫，讀同一個設定目錄，所以看得到背景服務的最新報告、情資與 Hub 註冊；回報 Hub 仍由背景服務負責。
-- **AI**：`ai-security-monitor mcp`（stdio 或 `--http`）讓 Claude Code／Codex 查這台電腦，預設只有唯讀工具（封鎖等動作要加 `--allow-actions` 才會出現）；
-  Hub 的 `/api/mcp` 查所有主機，全部唯讀。`ai-security-monitor ai`、桌面版和 Hub 網頁上的 AI 分析，都是呼叫你已登入的 Claude Code／Codex CLI 並掛上這些唯讀工具。
+- **定時回報**：背景服務 `ai-security-monitor watch` 每 1 分鐘拍一次連線快照並送心跳，每 10 分鐘跑一次完整掃描（間隔可用 `config set scan.snapshot_interval`／`scan.interval` 調）。
+  上傳走 HTTPS（http 只允許本機或私網），帶註冊時拿到的金鑰和這台主機自己的 token；Hub 第一次看到就綁定，別台冒用會被擋。
+- **加入 Hub**：電腦用公司 DNS 的 SRV 紀錄或區網 mDNS 找 Hub，Hub 用自己的金鑰（Ed25519）簽章證明身分，電腦記下 Hub 指紋，之後指紋不符就拒絕上傳；管理員核准後才發給這台專屬的金鑰。
+- **離線佇列**：Hub 停機或斷線時，完整報告先存在設定目錄的 `outbox/`（最多 50 份），連得上再依序補送。
+- **遠端動作**：管理員在 Hub 送出封鎖並核准後，agent 才去領取；每個動作都有 HMAC-SHA256 簽章，agent 驗章、檢查期限與護欄後才執行。註冊時沒加 `--accept-remote-actions` 的主機完全不領取。
+- **情資**：Hub 依 `feeds/registry.json` 向各廠商下載並快取，agent 每 30 分鐘檢查一次，已註冊就先向 Hub 拿，Hub 沒有的才直接找廠商。
+- **桌面版**：直接連結 agent 的 Rust 程式庫、讀同一個設定目錄，所以看得到背景服務的最新報告和 Hub 註冊；回報 Hub 仍由背景服務負責。
+- **AI**：`ai-security-monitor mcp`（stdio 或 `--http`）預設只有唯讀工具，封鎖等動作要加 `--allow-actions` 才會出現；Hub 的 `/api/mcp` 全部唯讀。
+  命令列、桌面版和 Hub 網頁上的 AI 分析，都是呼叫你已登入的 Claude Code／Codex CLI 並掛上這些唯讀工具。
 
-## 安裝
-
-目前版本 **v0.2.1**。所有檔案都在 [Releases（最新版）](https://github.com/markku636/ai-security-monitor/releases/latest)，每個檔案都列在 `SHA256SUMS`。
-
-### 下載哪一個？
-
-| 你的情況 | 用哪個 | 檔案 |
-|---|---|---|
-| 一般使用者，想要視窗介面 | **桌面版**（雙擊安裝） | Windows 10／11：`AI-Security-Monitor-<版本>-windows-x64-setup.exe`<br>macOS Apple Silicon（M1 以後）：`AI-Security-Monitor-<版本>-macos-arm64.dmg`<br>macOS Intel：`AI-Security-Monitor-<版本>-macos-x64.dmg`<br>Linux：`AI-Security-Monitor-<版本>-linux-x64.AppImage`（免安裝）或 `…-linux-amd64.deb`（Debian／Ubuntu） |
-| 伺服器（含 Windows Server、Server Core）、自動化、沒有桌面環境 | **命令列版**，用一行安裝指令（會比對 SHA256、可順便設定開機自動啟動） | 見下方步驟 4、5；也可以直接下載 `ai-security-monitor-<版本>-<平台>`（`windows-x64.exe`、`windows-arm64.exe`、`linux-x64`、`linux-arm64`、`macos-arm64`、`macos-x64`）。這是命令列工具，要在終端機裡執行，**雙擊只會顯示說明** |
-| 要在一個網頁集中看多台主機 | **Security Hub**（Docker） | 映像 `ghcr.io/markku636/ai-security-monitor-hub`，見步驟 6 |
-| `asa-<版本>-*` | 不用下載 | 給 0.1.x 的 `asa self-update` 自動使用，內容和命令列版一樣，請忽略 |
-| `SHA256SUMS` | 校驗碼 | 所有檔案的 SHA256；安裝腳本與 `self-update` 會自動比對 |
-
-**系統需求**
-
-| | 需求 |
-|---|---|
-| 桌面版 Windows | Windows 10／11（x64）；需要 Microsoft Edge WebView2（Windows 10／11 內建，沒有時安裝檔會自動下載） |
-| 桌面版 macOS | macOS 10.13 以上（Apple Silicon 或 Intel） |
-| 桌面版 Linux | x64，Ubuntu 22.04／Debian 12 以上（glibc 2.35 以上）；deb 會自動安裝 WebKitGTK 4.1，系統匣圖示需要桌面支援 AppIndicator |
-| 命令列版 | Windows 10／11、Windows Server 2016／2019／2022／2025（含 Server Core），x64 或 ARM64；macOS 11 以上；Linux x64／ARM64（靜態連結，不挑發行版） |
-| Security Hub | Docker 24 以上（含 Compose v2），amd64 或 arm64 |
-
-桌面版和命令列版的安裝檔都**沒有程式碼簽章**，第一次開啟時系統會跳警告，照下面的步驟放行即可。
-
-### 1. 桌面版：Windows
-
-1. 裝過舊的「AI Security Agent」桌面版（0.1.x）的話，先到「設定 → 應用程式」解除安裝（新版不會覆蓋它）。
-2. 從 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`。
-3. 雙擊安裝檔。出現「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。
-4. 安裝到目前使用者，不需要系統管理員。完成後從開始功能表開啟「AI Security Monitor」。
-
-**確認**：視窗出現「總覽」，右下角系統匣有 AI Security Monitor 圖示。
-
-### 2. 桌面版：macOS
-
-1. Apple Silicon（M1、M2…）下載 `AI-Security-Monitor-<版本>-macos-arm64.dmg`，Intel 下載 `…-macos-x64.dmg`。不確定的話：蘋果選單 →「關於這台 Mac」，看「晶片」或「處理器」。
-2. 打開 dmg，把「AI Security Monitor」拖到「應用程式」。
-3. 第一次開啟：在「應用程式」對它按右鍵 →「打開」→ 再按「打開」。如果顯示「已損毀，無法打開」，在終端機執行：
-   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
-
-**確認**：視窗出現，選單列有 AI Security Monitor 圖示。
-
-### 3. 桌面版：Linux
-
-- AppImage（各發行版通用，免安裝）：
-  `chmod +x AI-Security-Monitor-<版本>-linux-x64.AppImage && ./AI-Security-Monitor-<版本>-linux-x64.AppImage`
-- deb（Debian／Ubuntu）：
-  `sudo apt install ./AI-Security-Monitor-<版本>-linux-amd64.deb`，之後從應用程式選單開啟「AI Security Monitor」。
-
-**確認**：視窗出現「總覽」。
-
-### 4. 命令列版：Windows、Windows Server
-
-1. 開 PowerShell。要裝成開機就啟動的系統服務，請用「以系統管理員身分執行」。
-2. 貼上執行：
-
-   ```powershell
-   irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
-   ```
-
-   預設裝到 `%LOCALAPPDATA%\ai-security-monitor\bin` 並加進 PATH。
-3. 開一個**新的** PowerShell 視窗，執行 `ai-security-monitor version`。
-4. （選用）登入後自動啟動：`ai-security-monitor service install --yes`；伺服器開機就啟動：`ai-security-monitor service install --system --yes`（系統管理員）。
-
-**確認**：`ai-security-monitor version` 印出 `ai-security-monitor 0.2.1 …`；`ai-security-monitor service status` 看得到服務。
-
-### 5. 命令列版：Linux、macOS
-
-1. 在終端機執行：
-
-   ```bash
-   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
-   ```
-
-   預設裝到 `/usr/local/bin`，沒有權限就裝到 `~/.local/bin`。
-2. 執行 `ai-security-monitor version`。
-3. （選用）`ai-security-monitor service install --yes` 登入後啟動；伺服器用 `sudo ai-security-monitor service install --system --yes`。
-
-**確認**：`ai-security-monitor version` 印出版本；`ai-security-monitor doctor` 列出環境檢查結果。
-
-腳本會比對 Release 的 `SHA256SUMS`，不符就停止；指定版本、安裝位置、內部鏡像等選項見 [docs/install.md](docs/install.md)。
-
-### 6. Security Hub（Docker）
-
-1. 取得 compose 檔並填好兩個必填值：
-
-   ```bash
-   git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
-   cp .env.example .env    # 填 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
-   ```
-
-2. 啟動：
-
-   ```bash
-   docker compose -f docker/compose.standalone.yml --env-file .env up -d   # 單機版：http://127.0.0.1:8088
-   # 伺服器版：docker compose -f docker/compose.yml --env-file .env up -d
-   ```
-
-3. 用 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
-4. （選用）讓 Hub 的「AI 助手」能用：映像裡已經裝好 Claude Code 與 Codex，但要先登入一次。AI 助手出現 **「Please run /login」** 就是還沒登入。擇一：
-   - **用 Claude 訂閱帳號登入**（最簡單）：
-
-     ```bash
-     docker compose -f docker/compose.standalone.yml --env-file .env exec hub claude
-     ```
-
-     進去後輸入 `/login` → 選 Claude 帳號 → 把畫面上的網址貼到瀏覽器授權 → 把授權碼貼回來 → 看到登入成功後輸入 `/exit`。
-   - **用 token 或 API key**（不用進容器，適合伺服器）：在自己電腦跑 `claude setup-token` 產生長效 token，在 `.env` 加 `CLAUDE_CODE_OAUTH_TOKEN=…`；或用 `ANTHROPIC_API_KEY=…`；Codex 用 `OPENAI_API_KEY=…`。改完重新執行上面第 2 步的 `up -d`。
-
-   登入資料存在 `hubdata` volume（`/data`），更新映像或重建容器都會保留。AI 只拿唯讀工具，查得到 Hub 的資料但不能改。
-
-**確認**：`curl http://127.0.0.1:8088/api/health` 回 `"db":"ok"`，網頁看得到登入頁。細節見 [docs/docker.md](docs/docker.md)。
-
-### 7. 把主機加進 Hub
-
-**免金鑰、自動尋找（建議）**：電腦自己找到公司的 Hub、送出加入申請，管理員在 Hub 按「核准」就完成，不用發金鑰。
-
-1. 管理員：Hub 左側「新增主機」→ 記下最上面的 **Hub 指紋**；把「免金鑰安裝指令」給同事（已預填這個 Hub 的網址），
-   或在公司 DNS 加 `_ai-security-monitor._tcp` 的 SRV 紀錄、在區網開啟 Hub 廣播（mDNS）讓電腦自己找到。可設定「自動核准的網段」（例如 `192.168.10.0/24`）。
-2. 電腦端：桌面版第一次開啟會顯示「尋找公司的 Security Hub」→ 核對指紋 → 「申請加入」；命令列版執行 `ai-security-monitor enroll --auto`
-   （或貼上 Hub 給的一行安裝指令），再 `ai-security-monitor service install --yes`。
-3. 管理員在「新增主機 → 待核准的主機」核對主機名稱與核對碼後按「核准」。電腦記下 Hub 指紋，之後 Hub 身分不符就拒絕上傳。
-   Hub 在 Docker Desktop／bridge 網路裡時廣播出不了區網：見 [自動尋找 Hub、免金鑰加入](docs/enrollment.md)。
-
-**用註冊金鑰**：「新增主機」頁也能建立註冊金鑰，給出已填好網址與金鑰的一行安裝指令；已經裝好命令列版的主機用
-`ai-security-monitor enroll https://hub.example.com --key asa_ek_…`，再 `ai-security-monitor service install --yes`（伺服器加 `--system`）。
-
-**確認**：Hub 的「主機」頁出現這台主機，幾分鐘內有最新回報；主機上 `ai-security-monitor status` 顯示已註冊。
-
-### 8. 從 0.1.x（asa）或 0.2.0 升級
-
-- **命令列版**：`asa self-update --yes`（0.1.x）或 `ai-security-monitor self-update --yes`（0.2.x），再執行 `ai-security-monitor service install --yes`（系統服務加 `--system`）換掉舊的 `asa` 服務。舊設定、Hub 註冊、金鑰都沿用。
-- **桌面版**：0.1.x 的「AI Security Agent」要先解除安裝再裝新版；0.2.x 直接安裝新版。
-- 細節見下方「[從 asa／ai-security-agent 升級](#從-asaai-security-agent-升級)」。
-
-**確認**：`ai-security-monitor version` 是新版，`ai-security-monitor service status` 沒有「舊版 asa」。
-
-## 快速上手
+## 命令列速查
 
 ```bash
 ai-security-monitor doctor                       # 環境檢查：權限、情資新鮮度、外部工具、Hub 連線
-ai-security-monitor intel update                 # 下載威脅情資（之後 ai-security-monitor watch 會自動更新）
+ai-security-monitor intel update                 # 下載威脅情資（之後背景服務會自動更新）
 ai-security-monitor connections --intel          # 目前連線與判定
-ai-security-monitor scan                         # 完整掃描（連線、情資、防火牆、port、事件、漏洞、硬化）
-ai-security-monitor fw sync-blocklist --dry-run  # 預覽會封鎖哪些高信心情資 IP
+ai-security-monitor scan                         # 完整掃描（連線、情資、防火牆、port、事件、漏洞、安全設定）
+ai-security-monitor fw sync-blocklist --dry-run  # 預覽會封鎖哪些高信心的壞 IP
 ai-security-monitor ai ask "這台電腦有沒有連到危險的地方？"   # 交給 Claude Code／Codex 解讀
-ai-security-monitor enroll https://hub.example.com --key asa_ek_…
-ai-security-monitor service install --yes        # 開機／登入後自動回報（伺服器加 --system）
+ai-security-monitor enroll --auto               # 自動找公司的 Hub、送出加入申請等核准（有金鑰：enroll <網址> --key asa_ek_…）
+ai-security-monitor service install --yes        # 登入後自動回報（伺服器加 --system）
 ```
-
-所有會改變系統的命令（封鎖 IP、關 port、安裝服務、更新）沒加 `--yes` 都只會預覽。
-
-## CLI
 
 | 命令 | 用途 |
 |---|---|
 | `scan`、`connections`、`ports` | 完整掃描、連線判定、port 可達性 |
 | `intel` | 情資更新、來源與授權、查 IP／網域 |
 | `fw` | 防火牆狀態、稽核、封鎖／解除、情資同步 |
-| `vuln`、`harden` | 漏洞與更新、系統硬化 |
+| `vuln`、`harden` | 漏洞與更新、系統安全設定 |
 | `traffic`、`events` | 流量觀察與 pcap 分析、事件與當機原因 |
 | `ai`、`mcp` | Claude Code／Codex 分析、MCP server 與一鍵設定 |
-| `enroll`、`status`、`watch`、`service` | 註冊 Hub、常駐回報、開機自動啟動 |
+| `enroll`、`discover`、`unenroll`、`status`、`watch`、`service` | 找 Hub、加入 Hub、常駐回報、開機自動啟動 |
 | `self-update`、`version`、`doctor` | 更新與環境檢查 |
 | `allowlist`、`baseline`、`config` | 白名單、基準線（只看新增）、設定 |
 
@@ -292,11 +366,11 @@ ai-security-monitor service install --yes        # 開機／登入後自動回�
 
 0.2.0 起專案改名為 ai-security-monitor（執行檔 `asa` → `ai-security-monitor`，GitHub 舊網址會自動轉址），不用重新註冊：
 
-- **自動沿用**：第一次執行新版時，設定目錄 `…/ai-security-agent` 搬到 `…/ai-security-monitor`（`agent_id`、Hub 註冊、白名單、基準線、情資都在），鑰匙圈的 `asa` 項目複製到新名。舊版 `asa` 的常駐 watch 還在跑時先不搬、直接沿用舊目錄（會提示一行），等 `service install` 換掉舊服務時才搬，所以不會留下一份不再更新的副本（0.2.0 留下的這種副本，0.2.1 會在下次搬移時備份成 `ai-security-monitor.bak-<時間>` 並重新同步）；
-  `ai-security-monitor service install` 移除舊的 `asa` 服務／Run 值／unit／plist 換成新名（系統層目錄也一起搬），`ai-security-monitor mcp install` 把舊的 `asa` MCP 項目換掉。舊版可以直接 `asa self-update --yes` 升上來。
-- **環境變數**：新前綴 `AI_SECURITY_MONITOR_*`（Hub 是 `AI_SECURITY_MONITOR_HUB_*`），舊的 `ASA_*`／`ASA_HUB_*` 照樣有效，只寫舊名的 `.env` 不用改。
-- **刻意不改**：防火牆物件名（Windows 群組 `ASA`、`ASA: …` 規則、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`、`fw unblock --all-asa`）、通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、資料庫 `asa_hub` 與 compose 專案名，舊的規則與資料都認得。
-- **桌面版**：應用程式識別碼改了，新版不會覆蓋舊版，請先到「設定 → 應用程式」解除安裝舊的「AI Security Agent」再裝新版（見 [docs/desktop.md](docs/desktop.md)）。
+- **自動沿用**：第一次執行新版時，設定目錄 `…/ai-security-agent` 會搬到 `…/ai-security-monitor`（agent id、Hub 註冊、白名單、基準線、情資都在），鑰匙圈的 `asa` 項目複製到新名。
+  舊版的常駐 watch 還在跑時先沿用舊目錄，等 `service install` 換掉舊服務時才搬；`service install` 會移除舊的 `asa` 服務，`mcp install` 會換掉舊的 MCP 設定。
+- **環境變數**：新前綴 `AI_SECURITY_MONITOR_*`（Hub 是 `AI_SECURITY_MONITOR_HUB_*`），舊的 `ASA_*`／`ASA_HUB_*` 照樣有效。
+- **刻意不改**：防火牆物件名（Windows 群組 `ASA`、nft `table inet asa`、ipset `asa_*`、pf anchor `com.asa`）、通訊標頭 `x-asa-*`、token 前綴 `asa_`／`asa_ek_`、資料庫 `asa_hub`，舊規則與資料都認得。
+- **桌面版**：應用程式識別碼改了，請先解除安裝舊的「AI Security Agent」再裝新版（見 [docs/desktop.md](docs/desktop.md)）。
 - **Hub 映像**：改名 `ghcr.io/markku636/ai-security-monitor-hub`；舊名 `ghcr.io/markku636/ai-security-agent-hub` 過渡期內照樣發佈。
 
 細節見 [docs/install.md](docs/install.md#從-asa01x升級)、[docs/service.md](docs/service.md#從-asa01x升級) 與 [變更紀錄](CHANGELOG.md)。
@@ -306,53 +380,28 @@ ai-security-monitor service install --yes        # 開機／登入後自動回�
 [連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
+## 緣起
+
+某天睡前，讓 AI 做了一個小專案：用 Rust 寫一個程式，蒐集並分析用戶端的異常連線，做威脅分析。
+AI 出現後，系統漏洞變得很明顯；既然攻擊者會用 AI，防守的一方也可以。整個想法很簡單：
+
+```
+每台電腦的 agent → 定時回報 → Hub 分析 → AI 判斷風險 → 網頁呈現
+```
+
 ## 資料夾結構
 
 ```text
 ai-security-monitor/
 ├── agent/                 Rust agent：ai-security-monitor 執行檔＋程式庫（桌面版也連結這份程式庫）
-│   ├── src/
-│   │   ├── bin/           執行檔進入點
-│   │   ├── cli/           各命令（scan、connections、fw、intel、ai、mcp、enroll、watch、service…）
-│   │   ├── scan/          完整掃描流程與分數計算
-│   │   ├── connections/   連線快照、判定、連線歷史與週期性連線（beacon）偵測
-│   │   ├── intel/         情資下載、解析、比對、國家／ASN 查詢
-│   │   ├── firewall/      各平台防火牆讀取、封鎖計畫與執行
-│   │   ├── ports/         監聽 port 與實際可達性
-│   │   ├── vuln/          軟體清單、作業系統支援期限、OSV／已知漏洞比對
-│   │   ├── hardening/     系統硬化檢查（套用 feeds/policies 的規則）
-│   │   ├── events/        Windows 事件記錄、minidump、journal、macOS 當機報告
-│   │   ├── traffic/       flow-lite 流量觀察與 pcap 分析
-│   │   ├── hub/           Hub 客戶端：上傳、離線佇列（outbox）、遠端動作驗章、watch 零件
-│   │   ├── actions/       封鎖等動作的預覽與執行
-│   │   ├── mcp/           MCP server（stdio／HTTP）與工具定義
-│   │   ├── ai/            呼叫 Claude Code／Codex CLI、解析串流事件
-│   │   ├── service/       開機自動啟動（Windows 服務、systemd、launchd）
-│   │   ├── update/        self-update（比對 SHA256SUMS）
-│   │   ├── model/         報告、發現、連線、白名單、基準線等資料模型
-│   │   ├── elevate/       系統管理員權限偵測
-│   │   ├── locales/       英文翻譯
-│   │   └── util/          共用工具
+│   ├── src/               各命令（cli/）、掃描（scan/、connections/、intel/、firewall/、ports/、vuln/、hardening/、events/、traffic/）、
+│   │                      Hub 客戶端（hub/）、動作（actions/）、MCP（mcp/）、AI（ai/）、開機自動啟動（service/）、self-update（update/）
 │   ├── prompts/           AI 分析用的提示詞
 │   └── tests/fixtures/    測試資料
-├── hub/                   Security Hub（Next.js＋Tailwind）
-│   ├── app/               頁面（主機、連線、待處理問題、漏洞、安全設定、事件、情資、封鎖審核…）與 API（/api/v1、/api/mcp、/api/ai）
-│   ├── components/        介面元件
-│   ├── lib/               資料庫查詢、回報寫入、遠端動作與簽章、情資鏡像、IP 情資、MCP 工具、AI、登入與權限
-│   ├── drizzle/           PostgreSQL schema 與 migration
-│   ├── messages/          英文翻譯
-│   ├── scripts/           i18n 與 client import 檢查
-│   └── tests/             單元測試與 API 路由測試
-├── desktop/               桌面版 AI Security Monitor（Tauri 2）
-│   ├── src-tauri/         Rust 殼：Tauri 指令、系統匣、單一實例
-│   └── ui/                純 HTML／CSS／JS 介面，沒有前端建置步驟
+├── hub/                   Security Hub（Next.js＋Tailwind）：頁面與 API（app/）、元件、資料庫查詢與業務邏輯（lib/）、PostgreSQL migration（drizzle/）、測試
+├── desktop/               桌面版 AI Security Monitor（Tauri 2）：Rust 殼（src-tauri/）＋純 HTML／CSS／JS 介面（ui/）
 ├── contract/              agent ↔ Hub 的 JSON Schema（註冊、報告、快照、遠端動作）
-├── feeds/                 隨執行檔內嵌的資料
-│   ├── registry.json      情資來源清單（網址、格式、信心、授權）
-│   ├── known-good.json    已知良好的服務與網段
-│   ├── policies/          Windows／macOS／Linux 硬化檢查規則（YAML）
-│   ├── vuln/              作業系統支援期限、常見軟體已知漏洞、高風險 port
-│   └── events/            藍屏代碼與事件 ID 說明
+├── feeds/                 隨執行檔內嵌的資料：情資來源清單、已知良好服務、硬化規則（YAML）、漏洞與藍屏說明
 ├── docker/                Hub 的 Dockerfile 與 compose（單機版、伺服器版、開發用資料庫）
 ├── scripts/               一行安裝腳本、示範資料、截圖、版本與變更紀錄檢查
 ├── docs/                  各主題文件與 README 截圖（docs/images）
@@ -373,7 +422,7 @@ npm run verify                                        # typecheck、i18n、測�
 cd desktop && npm ci && npx tauri build              # 產生 NSIS 安裝檔
 ```
 
-示範資料：`node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；截圖：`node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；桌面版截圖：`node scripts/capture-desktop-screenshots.mjs`（不需要 Hub）。
+示範資料：`node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；截圖：`node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <管理員金鑰>`；桌面版截圖：`node scripts/capture-desktop-screenshots.mjs`（不需要 Hub；加 `--frame windows` 產生套上 Windows 視窗外框的版本）。
 
 ## 資料來源與授權
 

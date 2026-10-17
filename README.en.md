@@ -12,73 +12,291 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
 </p>
 
-A defensive security agent, **`ai-security-monitor`** (Rust, single binary, Windows / Windows Server / macOS / Linux), plus a **Security Hub** (Next.js + Tailwind + PostgreSQL).
-It finds unusual outbound and inbound connections, rates them **safe / unknown / suspicious / dangerous** from public threat intel with the source of every hit,
-checks the firewall, open ports, vulnerabilities and system hardening, summarizes traffic and Windows events / crash causes, and hands them to **Claude Code / Codex CLI** for a plain-language read. Both the agent and the Hub are **MCP servers**.
+Install it and it tells you who your computer is talking to, which connections look suspicious and what isn't set up safely, then asks an AI to explain it all in plain language.
+Every "suspicious" comes with a reason and a source (which public blocklist, which odd behavior), so it is never a black-box score.
+Use it on just your own computer, or bring every computer in the office into one web page.
 
-![Security Hub overview](docs/images/overview.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-desktop-hero-dark.png">
+    <img src="docs/images/windows-desktop-hero.png" alt="The AI Security Monitor desktop app on Windows: the overview page shows the security score and suspicious connections, with its icon in the system tray">
+  </picture>
+</p>
 
-## Why
+<p align="center"><sub>The Windows desktop app's overview page (demo data). Closing the window keeps it running in the system tray.</sub></p>
 
-Last night before bed I had AI build a fun little project:
-a Rust app that collects and analyzes unusual connections on client machines and assesses threats.
-Since AI arrived, system vulnerabilities have become very visible; if the attackers are AI, AI also knows a lot about defending.
+## Who is it for?
 
-**Architecture**
+- **Your own computer**: you want to know whether your Windows / Mac / Linux machine talks to strange places, is missing updates, or has a security setting switched off. Install the desktop app.
+- **Several computers in an office**: IT (or the boss) wants one web page for every computer, to deal with problems together and, when needed, approve "block this IP" from the browser. Run the Hub.
+- **Servers** (including Windows Server, Server Core, domain controllers and Linux): no desktop needed. Install it as a background service that starts at boot, checks on a schedule and reports in. Use the command-line version.
 
-```
-Client Agent → periodic reports → Server analysis → AI risk assessment → Dashboard
-```
+A few words you will see a lot:
 
-`#cross-platform` (Windows / Windows Server / macOS / Linux)
-
-## What it is
-
-| | |
+| Word | In plain terms |
 |---|---|
-| **ai-security-monitor** (agent) | Runs on the computer or server you want to protect (including Windows Server 2016–2025, Server Core and domain controllers). Scans connections, intel, firewall, ports, vulnerabilities, hardening, events and traffic. Use it on its own (CLI, MCP, AI analysis) or enroll it with a Hub to report periodically and accept approved remote blocks. Starts at boot (system service or at user login). |
-| **Desktop app** (optional) | AI Security Monitor, a windowed client: lives in the system tray and shows this computer's connection verdicts (click an IP to analyze it), scan results and intel status, with one-click scan / intel update and AI analysis through the Claude Code / Codex CLI you are signed in to. Shares the config directory with the CLI and background service. See [docs/desktop.en.md](docs/desktop.en.md). |
-| **Security Hub** | One place for every host: connection verdicts, findings, vulnerabilities, hardening scores, crashes and security events, threat-intel hits, block review, AI analysis and MCP. Standalone (local only) or server (all hosts report to one place), deployed with Docker. |
+| agent | The small program on each computer that does the checking, i.e. `ai-security-monitor` itself |
+| threat intel | Public lists of known bad actors that other people maintain (known botnet servers, IPs currently brute-forcing logins, …) |
+| Hub (Security Hub) | The web page where you see all your computers; you host it yourself (Docker) |
+| hardening | Security settings of the system, such as disk encryption, antivirus, Remote Desktop protection |
+| MCP | A standard way for AI tools like Claude Code and Codex to look things up; here it only allows reading, never changing settings |
+
+## Which one do I install?
+
+Everything is on the [latest release](https://github.com/markku636/ai-security-monitor/releases/latest); the current version is **v0.2.1**.
+
+| You want to | Install | File |
+|---|---|---|
+| Look at your own computer in a window | **Desktop app** (double-click to install) | Windows 10 / 11: `AI-Security-Monitor-<version>-windows-x64-setup.exe`<br>Mac (M1 and later): `…-macos-arm64.dmg`; Mac (Intel): `…-macos-x64.dmg`<br>Linux: `…-linux-x64.AppImage` (no install) or `…-linux-amd64.deb` |
+| Run it on a server, without a desktop, or from scripts | **Command-line version** | The one-line installer below is easiest (it verifies the checksum for you). You can also download `ai-security-monitor-<version>-<platform>` directly, but it runs in a terminal; double-clicking only shows a help screen |
+| See every computer in the company on one page | **Security Hub** | Docker image `ghcr.io/markku636/ai-security-monitor-hub`; nothing to download |
+| (You see `asa-<version>-*`) | Ignore it | Used by old 0.1.x installs to update themselves; same content as the command-line version |
+| (You see `SHA256SUMS`) | Checksums | A fingerprint of every file; the install scripts and `self-update` check it and refuse tampered files |
+
+The desktop app and the command-line version can live on the same computer; they share the same settings and scan results.
+
+## Get started in 5 minutes
+
+### Scenario A: I just want to check my own computer (Windows)
+
+1. Download `AI-Security-Monitor-<version>-windows-x64-setup.exe` from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
+2. Double-click it. If a blue "Windows protected your PC" box appears, click "**More info**", then "**Run anyway**".
+   This happens because the installer has no paid code-signing certificate, so Windows does not recognise the publisher; it does not mean the file is bad. If you want to be sure, compare it with `SHA256SUMS` first.
+3. It installs for the current user; no administrator needed. Open "AI Security Monitor" from the Start menu.
+   The first time, it opens "Find your company's Security Hub" (尋找公司的 Security Hub). If it's just for your own computer, click the link at the bottom, "Not now, use it on this computer only" (先不要，只在這台電腦使用).
+4. On the "Overview" page click "**Update intel**" (downloads the blocklists), then "**Scan now**". (The app itself is in Traditional Chinese: 更新情資 and 立即掃描.)
+5. Read the results:
+   - Overview: the security score and the connections that need attention most.
+   - Connections: where this computer is connected right now and why something is marked suspicious; click an IP to see its country and which lists include it.
+   - Scan results: vulnerabilities, missing updates and weak security settings, each with how to fix it.
+   - AI analysis: if Claude Code or Codex CLI is installed and signed in on this computer, one click asks the AI to explain the findings in plain language (using your own account).
+
+Closing the window only hides it to the system tray; choose "結束" (Quit) in the tray menu to really exit.
+To have it check in the background on a schedule, turn on "Report in the background after startup / sign-in" (開機／登入後在背景自動回報) on the Settings page. macOS and Linux steps are under [Install](#install).
+
+### Scenario B: I manage several computers in an office
+
+**Step 1: run the Hub** (on a computer or server that is always on and has Docker)
+
+```bash
+git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
+cp .env.example .env    # edit .env: set AI_SECURITY_MONITOR_HUB_ADMIN_SECRET (your sign-in secret), AI_SECURITY_MONITOR_HUB_DB_PASSWORD,
+                        # and AI_SECURITY_MONITOR_HUB_PUBLIC_URL (the address other computers use, e.g. http://<this machine's IP>:8088)
+docker compose -f docker/compose.yml --env-file .env up -d
+```
+
+Open `http://<this machine's IP>:8088` in a browser and sign in with the `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` you just set.
+Just trying it on your own machine? Use `compose.standalone.yml` instead of `compose.yml`; it only listens on `http://127.0.0.1:8088`.
+
+**Step 2: add computers**
+
+**Option 1: computers find the Hub themselves and an admin clicks "Approve" (recommended, no keys to hand out)**
+
+1. The admin opens "Add a host" in the Hub sidebar and notes the **Hub fingerprint** at the top (a code like `72AS-YEXT-VNGO-NLC5-W2NM` that proves it's your company's Hub and not an impostor).
+2. On each computer, one of:
+   - **Desktop app**: on first start it looks for the company Hub by itself. If the fingerprint matches what the admin told you, click "**Request to join**" (申請加入). If nothing is found, type in the address the admin gave you.
+   - **Command line**: run `ai-security-monitor enroll --auto`, check the fingerprint and send the request, then `ai-security-monitor service install --yes` (you can install it before approval; it keeps waiting in the background).
+   - **Not installed yet**: give colleagues the "Keyless install commands" from the "Add a host" page; the Hub address is already filled in.
+3. The admin compares the host name and check code (the computer shows the same code) under "Add a host → Hosts waiting for approval" and clicks "**Approve**". Done.
+   Tired of clicking one by one? Set "Auto-approved networks", e.g. your office LAN `192.168.10.0/24`.
+
+Computers find the Hub through an SRV record in the company DNS or a local-network broadcast (mDNS). A Hub running in Docker Desktop can't broadcast to the LAN;
+then run `ai-security-monitor hub advertise --url <Hub URL>` to advertise it, or just hand out the address. Details in [Automatic Hub discovery and keyless enrollment](docs/enrollment.en.md).
+
+**Option 2: an enroll key**
+
+- Create an enroll key on the "Add a host" page; it gives you one-line install commands with the address and key filled in (Windows, macOS and Linux). Paste one on the computer you want to add.
+- On a computer that already has the command-line version:
+
+  ```bash
+  ai-security-monitor enroll http://<Hub IP>:8088 --key asa_ek_…
+  ai-security-monitor service install --yes    # report automatically after login; use --system on servers
+  ```
+
+- Desktop app: Settings page → "I have an enroll key" (我有註冊金鑰).
+
+Within a few minutes the computer shows up on the Hub's "Host" page. From then on it reports connections every minute and a full report every 10 minutes; if the Hub is unreachable, reports are kept and sent once it is back.
+
+### Scenario C: servers / Windows Server
+
+Windows Server (2016 to 2025, including Server Core), in PowerShell opened with "Run as administrator":
+
+```powershell
+irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
+```
+
+Linux, macOS:
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
+```
+
+Open a **new** terminal window, then:
+
+```bash
+ai-security-monitor doctor                          # check permissions, intel and Hub connection
+ai-security-monitor intel update                    # download threat intel
+ai-security-monitor scan                            # run a full check once
+ai-security-monitor service install --system --yes  # install as a service that starts at boot (prefix sudo on Linux / macOS)
+```
+
+Without `--yes`, commands that change the system (`service install`, blocking an IP, …) only print what they would do and change nothing; add `--yes` once you've read it.
+To report to a Hub, join it as in [scenario B](#scenario-b-i-manage-several-computers-in-an-office) (`enroll --auto` works on servers too).
+
+## FAQ
+
+<details>
+<summary><b>I double-click the .exe and it closes right away?</b></summary>
+
+You probably downloaded the command-line version, `ai-security-monitor-<version>-windows-x64.exe`. It is meant for a terminal; double-clicking only shows one page of help (where the desktop app is, how to install in one line) and closes when you press Enter.
+For the windowed app, download `AI-Security-Monitor-<version>-windows-x64-setup.exe`. To use the command-line version, run it from PowerShell, e.g. `ai-security-monitor doctor`.
+</details>
+
+<details>
+<summary><b>SmartScreen says "Windows protected your PC"?</b></summary>
+
+The installer has no paid code-signing certificate, so Windows does not recognise the publisher. Click "More info" → "Run anyway".
+To make sure the file wasn't altered, run `Get-FileHash .\AI-Security-Monitor-<version>-windows-x64-setup.exe` in PowerShell and compare it with the value in `SHA256SUMS` on the release.
+On a Mac, the first time you open it right-click it in Applications → "Open"; see [Install](#install).
+</details>
+
+<details>
+<summary><b>The AI assistant says "Please run /login"?</b></summary>
+
+Claude Code isn't signed in yet. AI analysis uses your own Claude Code or Codex CLI account; this project does not provide any AI credits.
+
+- **Desktop app, command line**: on the same computer open a terminal, run `claude`, type `/login` and follow the prompts, then `/exit`. For Codex, run `codex` and sign in. `ai-security-monitor ai status` shows whether each is installed and signed in.
+- **AI assistant in the Hub web UI**: the AI runs inside the Hub container, so sign in there; see the Hub steps under [Install](#install).
+</details>
+
+<details>
+<summary><b>Does it send my data anywhere?</b></summary>
+
+Nothing is sent to us; the project has no telemetry and nothing reports back to the author. The only outside connections are:
+
+- **Downloading threat intel** from list providers such as abuse.ch and Spamhaus (from your own Hub first, if you have one). These are downloads; your connections are not uploaded.
+- **Vulnerability checks**: on Linux, installed package names and versions are looked up on OSV.dev (turn off with `--no-online`).
+- **Update checks**: `self-update` and `version --check` ask GitHub Releases; the Hub also checks for new versions and shows a banner to admins (`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` turns it off).
+- **When you click**: online IP reputation lookups (`intel lookup --online`, or "Look up external intel" in the Hub, with API keys you provide; private ranges are never sent), and the desktop app's VirusTotal / AbuseIPDB links (they just open the web page in your browser).
+- **AI analysis** goes through the Claude Code / Codex CLI on your own computer, under your account's terms with Anthropic / OpenAI.
+- **Your own Hub**: once enrolled, reports go only to the Hub you chose. Looking for a Hub only queries your company DNS and asks on the local network.
+</details>
+
+<details>
+<summary><b>Can I use it commercially for free?</b></summary>
+
+The code is MIT licensed, so yes. Some threat intel sources, however, only allow non-commercial use (DShield, for example), so check which ones to turn off in a company setting; see [Data sources and licenses](#data-sources-and-licenses).
+</details>
+
+<details>
+<summary><b>How do I uninstall it?</b></summary>
+
+- **Desktop app**: on Windows, Settings → Apps → Installed apps → "AI Security Monitor" → Uninstall; on a Mac drag it from Applications to the Trash; on Linux remove the deb with your software manager (or `sudo apt remove` with the package name shown by `apt list --installed`), or just delete the AppImage.
+- **Command line**: stop the background service with `ai-security-monitor service uninstall --yes` (add `--system` for the system service), run `ai-security-monitor unenroll` if it was enrolled with a Hub, then delete the executable (on Windows `%LOCALAPPDATA%\ai-security-monitor\bin` by default, or `%ProgramFiles%\ai-security-monitor` for the system service; on Linux / macOS `/usr/local/bin` or `~/.local/bin`).
+- **Settings and scan history**: `ai-security-monitor config path` shows the folder; delete it if you don't need it.
+- **Hub**: `docker compose -f docker/compose.yml --env-file .env down`; add `-v` to delete its data too.
+</details>
 
 ## Screenshots
 
+**Desktop app (Windows)**
+
 | | |
 |---|---|
-| ![Connections](docs/images/connections.png) Connections: direction, verdict, process, country/org, reasons and intel sources | ![Host](docs/images/agent.png) One host: five scores, trend, dangerous destinations seen |
-| ![Windows Server](docs/images/agent-server.png) Windows Server: domain controller dc-01 (Server 2022 Datacenter, Server Core) | ![Findings](docs/images/findings.png) Findings from every host, filtered by device, status and severity, with bulk actions |
-| ![Vulnerabilities](docs/images/vulns.png) Vulnerabilities & updates: OS support lifetime, KEV, vulnerable software | ![Hardening](docs/images/hardening.png) Hardening: most common failures and scores by host |
-| ![Events](docs/images/events.png) Events & crashes: bugcheck codes with likely causes, brute-force sources, account lockouts | ![Intel](docs/images/intel.png) Threat intel: intel freshness per host, source licenses, confidence and hits |
-| ![Dark](docs/images/agent-hardening-dark.png) Dark mode: each check's current value, expected value and fix | ![Add a host](docs/images/install.png) Add a host: create an enroll key and get one-line install commands |
+| ![Desktop connections](docs/images/windows-desktop-connections.png) Connections: verdict, reasons and intel source for every connection; click an IP for its country, organisation and which lists include it | ![Desktop AI analysis](docs/images/windows-desktop-ai.png) AI analysis: the local Claude Code / Codex looks things up through read-only tools and explains in plain language |
+| ![Desktop scan results](docs/images/windows-desktop-findings.png) Scan results: sorted by severity, expand for detail and how to fix | ![Desktop dark mode](docs/images/windows-desktop-overview-dark.png) Dark mode follows the Windows setting |
 
-**Desktop app** (AI Security Monitor, the windowed client)
+**Security Hub (web)**
 
-| | | |
-|---|---|---|
-| ![Desktop overview](docs/images/desktop-overview.png) Overview: this computer's scores, finding counts, intel freshness and suspicious connections | ![Desktop connections](docs/images/desktop-connections.png) Connections: verdicts, reasons and intel sources; click an IP for country / ASN and matching lists | ![Desktop AI analysis](docs/images/desktop-ai.png) AI analysis: the local Claude Code / Codex reads suspicious connections through read-only tools |
+| | |
+|---|---|
+| ![Hub overview](docs/images/overview.png) Overview: scores, open findings and dangerous connections for every computer | ![Connections](docs/images/connections.png) Connections: direction, verdict, process, country / org, reasons and intel sources |
+| ![Host](docs/images/agent.png) A single host: five scores, trends, dangerous destinations it has contacted | ![Findings](docs/images/findings.png) Findings: filter by device, status and severity, handle them in bulk |
+| ![Windows Server](docs/images/agent-server.png) Windows Server: domain controller dc-01 (Server Core) | ![Vulnerabilities](docs/images/vulns.png) Vulnerabilities & updates: OS support dates, exploited vulnerabilities, vulnerable software |
+| ![Hardening](docs/images/hardening.png) Hardening: the most commonly failed checks and per-host scores | ![Events](docs/images/events.png) Crashes & events: bugcheck codes and likely causes, brute-force sources |
+| ![Intel](docs/images/intel.png) Threat intel: list freshness per host, licenses, hits | ![Add a host](docs/images/install.png) Add a host: create an enroll key and get a one-line install command |
 
-> Screenshots use demo data (fictional hosts, documentation IP ranges): the Hub is filled by `scripts/demo-seed.mjs`, and the desktop app gets fake Tauri responses injected by `scripts/capture-desktop-screenshots.mjs`, without reading any real config. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md). The Hub UI is available in Traditional Chinese and English.
+> All screenshots use demo data (fictional hosts, documentation-only IP ranges, example.com): the Hub is seeded by `scripts/demo-seed.mjs` and the desktop shots come from `scripts/capture-desktop-screenshots.mjs`. The UI is shown in Traditional Chinese; the Hub also has English. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md).
 
 ## Features
 
-- **Connections and threat intel**: every connection gets a direction (outbound / inbound / listening / local). Open feeds — Spamhaus DROP, abuse.ch (Feodo, URLhaus, ThreatFox), blocklist.de, CINS, ET, DShield, Tor, IPsum, FireHOL and more —
-  are combined with behavior anomalies (processes in temp dirs, shells with network connections, risky ports, periodic beacons, new destinations) into safe / unknown / suspicious / dangerous; every hit carries vendor, confidence, license and source URL. Optional online lookups via AbuseIPDB / GreyNoise / CrowdSec (bring your own key).
-- **Firewall and exposure**: reads Windows Firewall, macOS pf / application firewall, Linux nftables / firewalld / ufw / iptables, and works out whether each listening port is really reachable from the network;
-  `ai-security-monitor fw block` and `ai-security-monitor fw sync-blocklist` turn high-confidence intel into block rules (preview, confirm, reversible; non-commercial feeds only alert by default).
-- **Vulnerabilities and updates**: software inventory, OS support lifetime (including Windows Server 2008–2025), days since the last Windows update, pending Linux security updates, known-vulnerable versions of common software (WinRAR, 7-Zip, Chrome, …), OSV for Linux packages; CISA KEV matches become critical.
-- **System hardening**: 60 cross-platform checks (UAC, Defender, BitLocker, SMBv1, RDP NLA, SSH, kernel settings, AppArmor/SELinux, FileVault, Gatekeeper, …) that tell Windows clients, Server, Server Core and domain controllers apart, with a severity-weighted score, customizable in YAML.
-- **Traffic**: see which process talks to whom without packet capture (flow-lite); analyze Wireshark / tcpdump pcap/pcapng files: DNS, TLS SNI, plaintext protocols, large uploads, periodic connections.
-- **Events and crashes**: Windows event logs, minidump bugcheck codes, WER; Linux journal and macOS crash reports — with likely causes and fixes — plus security events such as brute force (including Kerberos and NTLM), account lockouts, Remote Desktop logons from the internet, new accounts, new services and cleared audit logs.
-- **AI and MCP**: `ai-security-monitor ai ask|analyze` hands off to Claude Code or Codex CLI (read-only tools only); `ai-security-monitor mcp` lets Claude Code / Codex / Cursor / VS Code query this computer directly; the Hub has MCP across all hosts and AI analysis in the browser.
-- **Hub**: overview, hosts, connections, findings (bulk actions), vulnerabilities, hardening, traffic, events, intel, block review (HMAC-signed, host identity pinning), enroll keys, read-only API tokens, audit log, CSV export, Chinese/English, dark mode, mobile layout.
-- **Deploy and update**: start at boot (Windows service / systemd / launchd or per-user), `ai-security-monitor self-update` (verified against SHA256SUMS), one-line install scripts, Hub Docker image (amd64/arm64) and compose files.
+- **Connections and threat intel**: every connection gets a direction (outbound / inbound / listening / local) and is checked against public lists such as Spamhaus DROP, abuse.ch (Feodo, URLhaus, ThreatFox), blocklist.de, CINS, ET, DShield, Tor, IPsum and FireHOL,
+  plus behavior checks (programs running from a temp folder, command shells talking to the internet, risky ports, regular "beacon" connections, new destinations), and is rated safe / unknown / suspicious / dangerous; every hit carries vendor, confidence, license and source URL. Optional AbuseIPDB / GreyNoise / CrowdSec online lookups (your own keys).
+- **Firewall and exposure**: reads Windows Firewall, macOS pf / application firewall and Linux nftables / firewalld / ufw / iptables, and works out whether each listening port is actually reachable from the network;
+  `fw block` and `fw sync-blocklist` turn high-confidence bad IPs into block rules (preview first, apply only when confirmed, reversible; sources with non-commercial licenses only alert by default).
+- **Vulnerabilities and updates**: installed software, OS support dates (including Windows Server 2008 to 2025), how long Windows has gone without updates, pending Linux security updates, known vulnerable versions of common software (WinRAR, 7-Zip, Chrome, …), OSV lookups for Linux packages; anything in CISA KEV (actively exploited) is raised to critical.
+- **Security settings (hardening)**: 60 cross-platform checks (UAC, Defender, BitLocker, SMBv1, Remote Desktop NLA, SSH, kernel parameters, AppArmor / SELinux, FileVault, Gatekeeper, …), aware of Windows client, Server, Server Core and domain controllers, customisable in YAML.
+- **Traffic**: see where each program connects without capturing packets; analyze pcap / pcapng files from Wireshark / tcpdump (DNS, TLS SNI, cleartext protocols, large uploads, periodic connections).
+- **Events and crashes**: Windows event logs, bugcheck minidumps, Linux journal and macOS crash reports, summarised into likely causes and what to do; also brute-force attempts, account lockouts, Remote Desktop logons from the internet, new accounts, new services and cleared audit logs.
+- **AI and MCP**: `ai ask` / `ai analyze` hand things to Claude Code or Codex CLI (read-only tools only); `mcp` lets Claude Code / Codex / Cursor / VS Code query this computer directly; the Hub has a fleet-wide MCP and an AI assistant in the web UI.
+- **Hub**: overview, hosts, connections, findings, vulnerabilities, hardening, traffic, events, intel, block approvals (signed, pinned host identity), keyless join requests with approval (found via DNS SRV or LAN mDNS), enroll keys, read-only API tokens, audit log, CSV export, Chinese and English, dark mode, mobile layout.
+- **Deployment and updates**: start at boot (Windows service / systemd / launchd or at login), `self-update` (checks SHA256SUMS), one-line install scripts, Hub Docker image (amd64 / arm64).
 
-## Architecture
+## Install
+
+Full steps for every platform. If you just want to get going, [Get started in 5 minutes](#get-started-in-5-minutes) is enough.
+
+**System requirements**
+
+| | Requirement |
+|---|---|
+| Desktop app, Windows | Windows 10 / 11 (x64); needs Microsoft Edge WebView2 (built into Windows 10 / 11; the installer downloads it if missing) |
+| Desktop app, macOS | macOS 10.13 or later (Apple Silicon or Intel) |
+| Desktop app, Linux | x64, Ubuntu 22.04 / Debian 12 or later (glibc 2.35+); the deb pulls in WebKitGTK 4.1; the tray icon needs AppIndicator support |
+| Command line | Windows 10 / 11, Windows Server 2016 / 2019 / 2022 / 2025 (including Server Core), x64 or ARM64; macOS 11+; Linux x64 / ARM64 (statically linked, any distribution) |
+| Security Hub | Docker 24+ (with Compose v2), amd64 or arm64 |
+
+**Desktop app: Windows**: see [scenario A](#scenario-a-i-just-want-to-check-my-own-computer-windows). If you had the old "AI Security Agent" (0.1.x), uninstall it first in Settings → Apps; the new version does not replace it.
+Once installed the window opens on the overview and the AI Security Monitor icon sits in the system tray.
+
+**Desktop app: macOS**
+
+1. On Apple Silicon (M1, M2, …) download `AI-Security-Monitor-<version>-macos-arm64.dmg`; on Intel `…-macos-x64.dmg`. Not sure? Apple menu → "About This Mac", look at "Chip" or "Processor".
+2. Open the dmg and drag "AI Security Monitor" to Applications.
+3. First launch: right-click it in Applications → "Open" → "Open". If it says the app "is damaged and can't be opened", run in Terminal:
+   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
+
+**Desktop app: Linux**
+
+- AppImage (any distribution, no install): `chmod +x AI-Security-Monitor-<version>-linux-x64.AppImage && ./AI-Security-Monitor-<version>-linux-x64.AppImage`
+- deb (Debian / Ubuntu): `sudo apt install ./AI-Security-Monitor-<version>-linux-amd64.deb`, then open it from the applications menu.
+
+**Command line: Windows, Windows Server**
+
+1. Open PowerShell. To install the service that starts at boot, use "Run as administrator".
+2. Run `irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex`. It installs to `%LOCALAPPDATA%\ai-security-monitor\bin` by default and adds it to your PATH.
+3. Open a **new** PowerShell window and run `ai-security-monitor version`; it should print `ai-security-monitor 0.2.1 …`.
+4. (Optional) start at login: `ai-security-monitor service install --yes`; start at boot on a server: `ai-security-monitor service install --system --yes` (administrator). Check with `ai-security-monitor service status`.
+
+**Command line: Linux, macOS**
+
+1. Run `curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh`. It installs to `/usr/local/bin`, or `~/.local/bin` without permission.
+2. Check with `ai-security-monitor version` and `ai-security-monitor doctor`.
+3. (Optional) `ai-security-monitor service install --yes` to start at login; on servers `sudo ai-security-monitor service install --system --yes`.
+
+The install scripts verify the release's `SHA256SUMS` and stop on a mismatch. Options for a specific version, install location, internal mirror or enrolling with a Hub during install are in [docs/install.en.md](docs/install.en.md).
+
+**Security Hub (Docker)**
+
+1. Start it as in [scenario B](#scenario-b-i-manage-several-computers-in-an-office). The standalone `docker/compose.standalone.yml` only listens on `http://127.0.0.1:8088`; the server version `docker/compose.yml` lets other computers report in.
+2. Check: `curl http://127.0.0.1:8088/api/health` returns `"db":"ok"` and the web page shows the sign-in screen.
+3. (Optional) make the Hub's "AI assistant" work: Claude Code and Codex are already in the image but need to be signed in once ("Please run /login" means they aren't). Either:
+   - **Sign in with your Claude subscription**: run `docker compose -f docker/compose.yml --env-file .env exec hub claude` (use `compose.standalone.yml` for the standalone Hub), type `/login` → choose your Claude account → open the URL in a browser and authorise → paste the code back → once it says you're signed in, type `/exit`.
+   - **Use a token or API key** (no need to enter the container): run `claude setup-token` on your own computer to create a long-lived token and add `CLAUDE_CODE_OAUTH_TOKEN=…` to `.env`; or use `ANTHROPIC_API_KEY=…`; for Codex `OPENAI_API_KEY=…`. Then run `up -d` again.
+
+   The sign-in is stored in the `hubdata` volume and survives image updates and container rebuilds. The AI only gets read-only tools: it can see Hub data but not change it.
+
+More in [docs/docker.en.md](docs/docker.en.md).
+
+**Upgrading**: for the command line run `ai-security-monitor self-update --yes` (on 0.1.x, `asa self-update --yes`), then `ai-security-monitor service install --yes` once more (add `--system` for the system service); for the desktop app just install the new version (uninstall the 0.1.x "AI Security Agent" first). See [Upgrading from asa / ai-security-agent](#upgrading-from-asa--ai-security-agent).
+
+## How it works
 
 ```mermaid
 flowchart LR
   subgraph HOST["Each computer / server you protect"]
     direction TB
-    CLI["ai-security-monitor<br/>CLI / background service (watch)"]
+    CLI["ai-security-monitor<br/>CLI / background service watch"]
     DESK["Desktop app AI Security Monitor<br/>Tauri, shares the agent library"]
     CFG[("Config directory<br/>latest report, intel, offline queue")]
     CLI --- CFG
@@ -94,212 +312,65 @@ flowchart LR
     API --- DB
   end
 
-  VENDORS["Threat-intel vendors<br/>abuse.ch, Spamhaus, blocklist.de, ..."]
-  ADMIN["Admin browser"]
+  VENDORS["Threat intel vendors<br/>abuse.ch, Spamhaus, blocklist.de…"]
+  ADMIN["Admin's browser"]
   AI["Claude Code / Codex CLI"]
 
-  CLI -- "Snapshot + heartbeat: every 1 min<br/>Full report: every 10 min<br/>HTTPS + per-host token" --> API
-  API -- "Approved remote actions<br/>HMAC-signed" --> CLI
+  CLI -- "snapshot + heartbeat: every 1 min<br/>full report: every 10 min<br/>HTTPS + per-host token" --> API
+  API -- "approved remote actions<br/>HMAC-signed" --> CLI
   VENDORS --> MIRROR
-  MIRROR -- "Intel: checked every 30 min" --> CLI
+  MIRROR -- "intel: checked every 30 min" --> CLI
   ADMIN --> API
   AI -- "ai-security-monitor mcp<br/>read-only by default" --> CLI
   AI -- "read-only" --> HMCP
 ```
 
-- **Scheduled reports**: `ai-security-monitor watch` (the background service started at boot) takes a connection snapshot (with intel verdicts) and sends a heartbeat every minute, and runs a full scan every 10 minutes.
-  Tune them with `ai-security-monitor config set scan.snapshot_interval` / `scan.interval`; the Hub can also ask for slower snapshots. Uploads use HTTPS (plain http only for localhost or private networks)
-  with the client key from enrollment plus this host's own agent token (pinned by the Hub on first sight, so another machine cannot impersonate it).
-- **Offline queue**: when the Hub is down or the network is out, full reports wait in `outbox/` in the config directory (up to 50) and are sent in order once the Hub is reachable again.
-- **Remote actions**: after an admin submits and approves a block in the Hub, the agent learns from its heartbeat that something is pending and fetches it. Every action carries an HMAC-SHA256 signature;
-  the agent verifies it and checks expiry and guardrails before running it and reporting back. Hosts enrolled without `--accept-remote-actions` never fetch actions.
-- **Threat intel**: the Hub downloads the lists in `feeds/registry.json` from each vendor and caches them (intel mirror). Agents check every 30 minutes, take lists from the Hub first when enrolled, and go to the vendor only for what the Hub lacks.
-- **Desktop app**: links the agent's Rust library directly and reads the same config directory, so it sees the background service's latest report, intel and Hub enrollment; reporting to the Hub stays with the background service.
-- **AI**: `ai-security-monitor mcp` (stdio or `--http`) lets Claude Code / Codex query this computer with read-only tools by default (actions such as blocking appear only with `--allow-actions`);
-  the Hub's `/api/mcp` covers every host and is entirely read-only. `ai-security-monitor ai`, the desktop app and the Hub's web AI analysis all run the Claude Code / Codex CLI you are signed in to, with these read-only tools.
+- **Periodic reports**: the background service `ai-security-monitor watch` takes a connection snapshot and sends a heartbeat every minute, and runs a full scan every 10 minutes (tune with `config set scan.snapshot_interval` / `scan.interval`).
+  Uploads use HTTPS (plain http only for localhost or private networks) with the key from enrollment and this host's own token; the Hub pins it on first sight, so another machine can't impersonate it.
+- **Joining a Hub**: computers find the Hub via an SRV record in the company DNS or LAN mDNS; the Hub proves its identity by signing with its own key (Ed25519), the computer pins the Hub fingerprint and refuses to upload if it ever changes; only after an admin approves does the computer get a key of its own.
+- **Offline queue**: when the Hub is down or the network drops, full reports wait in the config directory's `outbox/` (up to 50) and are sent in order once it is reachable.
+- **Remote actions**: after an admin requests and approves a block in the Hub, the agent picks it up; every action carries an HMAC-SHA256 signature, and the agent checks the signature, expiry and guardrails before running it. Hosts enrolled without `--accept-remote-actions` never pick up actions.
+- **Intel**: the Hub downloads and caches the lists in `feeds/registry.json`; agents check every 30 minutes, getting lists from the Hub first when enrolled and from the vendors only for what the Hub doesn't have.
+- **Desktop app**: links the agent's Rust library directly and reads the same config directory, so it sees the background service's latest report and Hub enrollment; reporting to the Hub is still the background service's job.
+- **AI**: `ai-security-monitor mcp` (stdio or `--http`) exposes read-only tools by default; actions like blocking only appear with `--allow-actions`. The Hub's `/api/mcp` is entirely read-only.
+  AI analysis in the CLI, the desktop app and the Hub web UI all call the Claude Code / Codex CLI you are signed in to, with these read-only tools attached.
 
-## Install
-
-Current version: **v0.2.1**. Every file is on [Releases (latest)](https://github.com/markku636/ai-security-monitor/releases/latest) and listed in `SHA256SUMS`.
-
-### Which download do I need?
-
-| Your situation | Use | File |
-|---|---|---|
-| Everyday user who wants a window | **Desktop app** (double-click to install) | Windows 10/11: `AI-Security-Monitor-<version>-windows-x64-setup.exe`<br>macOS Apple Silicon (M1 and later): `AI-Security-Monitor-<version>-macos-arm64.dmg`<br>macOS Intel: `AI-Security-Monitor-<version>-macos-x64.dmg`<br>Linux: `AI-Security-Monitor-<version>-linux-x64.AppImage` (portable) or `…-linux-amd64.deb` (Debian/Ubuntu) |
-| Servers (including Windows Server and Server Core), automation, no desktop | **Command line**, via the one-line install (verifies SHA256, can set up autostart) | See steps 4 and 5; or download `ai-security-monitor-<version>-<platform>` directly (`windows-x64.exe`, `windows-arm64.exe`, `linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`). It is a command-line tool: run it in a terminal, **double-clicking only shows a help message** |
-| One web page for many hosts | **Security Hub** (Docker) | Image `ghcr.io/markku636/ai-security-monitor-hub`, see step 6 |
-| `asa-<version>-*` | Don't download | Used automatically by 0.1.x `asa self-update`; identical to the command-line files, ignore them |
-| `SHA256SUMS` | Checksums | SHA256 of every file; the install scripts and `self-update` check it for you |
-
-**System requirements**
-
-| | Requirement |
-|---|---|
-| Desktop app, Windows | Windows 10/11 (x64); needs Microsoft Edge WebView2 (built into Windows 10/11; the installer downloads it if missing) |
-| Desktop app, macOS | macOS 10.13 or later (Apple Silicon or Intel) |
-| Desktop app, Linux | x64, Ubuntu 22.04 / Debian 12 or later (glibc 2.35+); the deb pulls in WebKitGTK 4.1; the tray icon needs AppIndicator support |
-| Command line | Windows 10/11, Windows Server 2016/2019/2022/2025 (including Server Core), x64 or ARM64; macOS 11 or later; Linux x64/ARM64 (statically linked, any distro) |
-| Security Hub | Docker 24+ with Compose v2, amd64 or arm64 |
-
-The installers and binaries are **not code-signed**, so the OS warns the first time; the steps below show how to allow them.
-
-### 1. Desktop app: Windows
-
-1. If you have the old "AI Security Agent" desktop app (0.1.x), uninstall it first in Settings → Apps (the new app does not replace it).
-2. Download `AI-Security-Monitor-<version>-windows-x64-setup.exe` from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
-3. Double-click it. When "Windows protected your PC" appears, click "More info" → "Run anyway".
-4. It installs for the current user (no administrator needed). Start "AI Security Monitor" from the Start menu.
-
-**Check**: the window opens on "Overview" and the AI Security Monitor icon appears in the system tray.
-
-### 2. Desktop app: macOS
-
-1. Apple Silicon (M1, M2, …): download `AI-Security-Monitor-<version>-macos-arm64.dmg`; Intel: `…-macos-x64.dmg`. Not sure? Apple menu → About This Mac → "Chip" or "Processor".
-2. Open the dmg and drag "AI Security Monitor" to Applications.
-3. First launch: right-click it in Applications → Open → Open. If macOS says it "is damaged and can't be opened", run in Terminal:
-   `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
-
-**Check**: the window opens and the icon appears in the menu bar.
-
-### 3. Desktop app: Linux
-
-- AppImage (any distro, no install):
-  `chmod +x AI-Security-Monitor-<version>-linux-x64.AppImage && ./AI-Security-Monitor-<version>-linux-x64.AppImage`
-- deb (Debian/Ubuntu):
-  `sudo apt install ./AI-Security-Monitor-<version>-linux-amd64.deb`, then start "AI Security Monitor" from the app menu.
-
-**Check**: the window opens on "Overview".
-
-### 4. Command line: Windows, Windows Server
-
-1. Open PowerShell. To install it as a system service that starts at boot, use "Run as administrator".
-2. Paste:
-
-   ```powershell
-   irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex
-   ```
-
-   It installs to `%LOCALAPPDATA%\ai-security-monitor\bin` and adds it to PATH.
-3. Open a **new** PowerShell window and run `ai-security-monitor version`.
-4. (Optional) Start at login: `ai-security-monitor service install --yes`; start at boot on a server: `ai-security-monitor service install --system --yes` (administrator).
-
-**Check**: `ai-security-monitor version` prints `ai-security-monitor 0.2.1 …`; `ai-security-monitor service status` shows the service.
-
-### 5. Command line: Linux, macOS
-
-1. In a terminal:
-
-   ```bash
-   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
-   ```
-
-   It installs to `/usr/local/bin`, or `~/.local/bin` without permission.
-2. Run `ai-security-monitor version`.
-3. (Optional) `ai-security-monitor service install --yes` to start at login; on servers `sudo ai-security-monitor service install --system --yes`.
-
-**Check**: `ai-security-monitor version` prints the version; `ai-security-monitor doctor` lists the environment checks.
-
-The script verifies the release's `SHA256SUMS` and stops on a mismatch; options for version, location and internal mirrors are in [docs/install.en.md](docs/install.en.md).
-
-### 6. Security Hub (Docker)
-
-1. Get the compose files and fill in the two required values:
-
-   ```bash
-   git clone https://github.com/markku636/ai-security-monitor && cd ai-security-monitor
-   cp .env.example .env    # set AI_SECURITY_MONITOR_HUB_ADMIN_SECRET and AI_SECURITY_MONITOR_HUB_DB_PASSWORD
-   ```
-
-2. Start it:
-
-   ```bash
-   docker compose -f docker/compose.standalone.yml --env-file .env up -d   # standalone: http://127.0.0.1:8088
-   # server: docker compose -f docker/compose.yml --env-file .env up -d
-   ```
-
-3. Sign in with `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`.
-4. (Optional) Enable the Hub's AI assistant: the image ships with Claude Code and Codex, but they need to be signed in once. If the AI assistant says **"Please run /login"**, it isn't signed in yet. Pick one:
-   - **Sign in with a Claude subscription** (simplest):
-
-     ```bash
-     docker compose -f docker/compose.standalone.yml --env-file .env exec hub claude
-     ```
-
-     Type `/login`, choose your Claude account, open the URL it prints in your browser and approve, paste the code back, then type `/exit` once it says you are signed in.
-   - **Use a token or API key** (no shell into the container, good for servers): run `claude setup-token` on your own machine and add `CLAUDE_CODE_OAUTH_TOKEN=…` to `.env`, or use `ANTHROPIC_API_KEY=…`; for Codex use `OPENAI_API_KEY=…`. Then run step 2's `up -d` again.
-
-   Sign-in data is kept in the `hubdata` volume (`/data`), so it survives image updates and container rebuilds. The AI only gets read-only tools: it can read Hub data but not change it.
-
-**Check**: `curl http://127.0.0.1:8088/api/health` returns `"db":"ok"` and the sign-in page loads. Details in [docs/docker.en.md](docs/docker.en.md).
-
-### 7. Add a host to the Hub
-
-**Keyless, automatic discovery (recommended)**: computers find your company's Hub and send an enrollment request; an administrator clicks
-**Approve** in the Hub and that's it — no keys to hand out.
-
-1. Administrator: Hub sidebar "Add host" → note the **Hub fingerprint** at the top; give colleagues the *keyless install command* (the Hub URL
-   is prefilled), or add an `_ai-security-monitor._tcp` SRV record to the company DNS / turn on Hub advertising (mDNS) so computers find it
-   themselves. Optionally set *auto-approve networks* (e.g. `192.168.10.0/24`).
-2. Computer: the desktop app opens *Find your company's Security Hub* on first start → compare the fingerprint → *Request to join*; on the command
-   line run `ai-security-monitor enroll --auto` (or paste the Hub's one-line install command), then `ai-security-monitor service install --yes`.
-3. The administrator checks host name and check code under "Add host → Pending hosts" and clicks **Approve**. The computer pins the Hub
-   fingerprint and refuses to upload if the Hub identity ever changes. A Hub inside Docker Desktop / bridge networking cannot advertise to the
-   LAN: see [Automatic Hub discovery and keyless enrollment](docs/enrollment.en.md).
-
-**With an enroll key**: the "Add host" page can also create an enroll key and gives one-line install commands with URL and key filled in; on a host
-that already has the command line run `ai-security-monitor enroll https://hub.example.com --key asa_ek_…`, then `ai-security-monitor service install --yes` (`--system` on servers).
-
-**Check**: the host appears on the Hub's "Hosts" page with a fresh report within a few minutes; `ai-security-monitor status` on the host shows it is enrolled.
-
-### 8. Upgrading from 0.1.x (asa) or 0.2.0
-
-- **Command line**: `asa self-update --yes` (0.1.x) or `ai-security-monitor self-update --yes` (0.2.x), then `ai-security-monitor service install --yes` (`--system` for the system service) to replace the old `asa` service. Settings, Hub enrollment and keys carry over.
-- **Desktop app**: uninstall the 0.1.x "AI Security Agent" first, then install the new one; from 0.2.x just install the new version.
-- Details in "[Upgrading from asa / ai-security-agent](#upgrading-from-asa--ai-security-agent)" below.
-
-**Check**: `ai-security-monitor version` shows the new version and `ai-security-monitor service status` no longer lists "old asa".
-
-## Quick start
+## Command-line cheat sheet
 
 ```bash
-ai-security-monitor doctor                       # environment check: privileges, intel freshness, external tools, Hub connection
-ai-security-monitor intel update                 # download threat intel (ai-security-monitor watch keeps it fresh afterwards)
+ai-security-monitor doctor                       # environment check: permissions, intel freshness, external tools, Hub connection
+ai-security-monitor intel update                 # download threat intel (the background service keeps it fresh afterwards)
 ai-security-monitor connections --intel          # current connections and verdicts
 ai-security-monitor scan                         # full scan (connections, intel, firewall, ports, events, vulnerabilities, hardening)
-ai-security-monitor fw sync-blocklist --dry-run  # preview which high-confidence intel IPs would be blocked
+ai-security-monitor fw sync-blocklist --dry-run  # preview which high-confidence bad IPs would be blocked
 ai-security-monitor ai ask "Is this computer talking to anything dangerous?"   # let Claude Code / Codex explain
-ai-security-monitor enroll https://hub.example.com --key asa_ek_…
-ai-security-monitor service install --yes        # report automatically after boot/login (add --system on servers)
+ai-security-monitor enroll --auto               # find the company Hub, send a join request and wait for approval (with a key: enroll <url> --key asa_ek_…)
+ai-security-monitor service install --yes        # report automatically after login (add --system on servers)
 ```
-
-Every command that changes the system (block an IP, close a port, install a service, update) only previews without `--yes`.
-
-## CLI
 
 | Command | Purpose |
 |---|---|
 | `scan`, `connections`, `ports` | Full scan, connection verdicts, port reachability |
-| `intel` | Update intel, sources and licenses, look up an IP/domain |
-| `fw` | Firewall status, audit, block/unblock, intel sync |
-| `vuln`, `harden` | Vulnerabilities and updates, system hardening |
-| `traffic`, `events` | Traffic and pcap analysis, events and crash causes |
+| `intel` | Intel updates, sources and licenses, look up an IP / domain |
+| `fw` | Firewall status, audit, block / unblock, intel sync |
+| `vuln`, `harden` | Vulnerabilities and updates, security settings |
+| `traffic`, `events` | Traffic watching and pcap analysis, events and crash causes |
 | `ai`, `mcp` | Claude Code / Codex analysis, MCP server and one-step client setup |
-| `enroll`, `status`, `watch`, `service` | Hub enrollment, resident reporting, start at boot |
-| `self-update`, `version`, `doctor` | Updates and environment checks |
-| `allowlist`, `baseline`, `config` | Allowlist, baseline (only show what is new), settings |
+| `enroll`, `discover`, `unenroll`, `status`, `watch`, `service` | Find a Hub, join it, keep reporting, start at boot |
+| `self-update`, `version`, `doctor` | Updates and environment check |
+| `allowlist`, `baseline`, `config` | Allowlist, baseline (only show what's new), settings |
 
-Run `ai-security-monitor --help` or `ai-security-monitor <command> --help` for every option; `--lang en` for English, `--json` for scripts.
+`ai-security-monitor --help` and `ai-security-monitor <command> --help` list every option; `--lang en` switches to English, `--json` gives machine-readable output.
 
 ## Upgrading from asa / ai-security-agent
 
 From 0.2.0 the project is called ai-security-monitor (the `asa` executable is now `ai-security-monitor`; the old GitHub URL redirects). No need to re-enroll:
 
-- **Migrated automatically**: on first run the config directory `…/ai-security-agent` moves to `…/ai-security-monitor` (`agent_id`, Hub enrollment, allowlist, baseline and intel included) and the `asa` keychain entry is copied to the new name. While an old `asa` resident watch is still running, the old directory is used in place (with a one-line hint) and moved when `service install` replaces the old service, so no stale copy is left behind (a stale copy left by 0.2.0 is backed up as `ai-security-monitor.bak-<time>` and re-synced on the next migration);
-  `ai-security-monitor service install` replaces the old `asa` service / Run value / unit / plist with the new names (moving the system config directory too), and `ai-security-monitor mcp install` replaces the old `asa` MCP entry. Old installs can upgrade with `asa self-update --yes`.
-- **Environment variables**: the new prefix is `AI_SECURITY_MONITOR_*` (`AI_SECURITY_MONITOR_HUB_*` for the Hub); the old `ASA_*` / `ASA_HUB_*` names still work, so an `.env` with only the old names needs no changes.
-- **Intentionally unchanged**: firewall object names (Windows group `ASA`, `ASA: …` rules, nft `table inet asa`, ipsets `asa_*`, pf anchor `com.asa`, `fw unblock --all-asa`), the `x-asa-*` headers, the `asa_` / `asa_ek_` token prefixes, the `asa_hub` database and the compose project names, so existing rules and data are still recognised.
-- **Desktop app**: its application identifier changed, so the new version does not replace the old one. Uninstall "AI Security Agent" in Settings → Apps first, then install the new version (see [docs/desktop.en.md](docs/desktop.en.md)).
+- **Migrated automatically**: on first run the config directory `…/ai-security-agent` moves to `…/ai-security-monitor` (agent id, Hub enrollment, allowlist, baseline and intel included) and the `asa` keychain entry is copied to the new name.
+  While an old resident watch is still running the old directory is used in place and moved when `service install` replaces the old service; `service install` removes the old `asa` service and `mcp install` replaces the old MCP entry.
+- **Environment variables**: the new prefix is `AI_SECURITY_MONITOR_*` (`AI_SECURITY_MONITOR_HUB_*` for the Hub); the old `ASA_*` / `ASA_HUB_*` names still work.
+- **Intentionally unchanged**: firewall object names (Windows group `ASA`, nft `table inet asa`, ipsets `asa_*`, pf anchor `com.asa`), the `x-asa-*` headers, the `asa_` / `asa_ek_` token prefixes and the `asa_hub` database, so existing rules and data are still recognised.
+- **Desktop app**: its application identifier changed; uninstall "AI Security Agent" first, then install the new version (see [docs/desktop.en.md](docs/desktop.en.md)).
 - **Hub image**: now `ghcr.io/markku636/ai-security-monitor-hub`; the old `ghcr.io/markku636/ai-security-agent-hub` keeps being published for a transition period.
 
 See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/service.en.md](docs/service.en.md#upgrading-from-asa-01x) and the [changelog](CHANGELOG.md).
@@ -309,57 +380,32 @@ See [docs/install.en.md](docs/install.en.md#upgrading-from-asa-01x), [docs/servi
 [Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
+## Why this exists
+
+One night before bed I had an AI build a small project: a Rust program that collects and analyzes unusual connections on client machines and assesses the threat.
+Since AI arrived, system vulnerabilities have become very visible; if attackers use AI, defenders can too. The idea is simple:
+
+```
+agent on each computer → periodic reports → Hub analysis → AI risk assessment → web dashboard
+```
+
 ## Repository layout
 
 ```text
 ai-security-monitor/
 ├── agent/                 Rust agent: the ai-security-monitor binary + library (the desktop app links this library too)
-│   ├── src/
-│   │   ├── bin/           Binary entry point
-│   │   ├── cli/           Commands (scan, connections, fw, intel, ai, mcp, enroll, watch, service, ...)
-│   │   ├── scan/          Full-scan pipeline and scoring
-│   │   ├── connections/   Connection snapshots, verdicts, connection history and beacon detection
-│   │   ├── intel/         Intel download, parsing, matching, country / ASN lookup
-│   │   ├── firewall/      Per-platform firewall reading, block plans and execution
-│   │   ├── ports/         Listening ports and real reachability
-│   │   ├── vuln/          Software inventory, OS support lifetime, OSV / known-vulnerability matching
-│   │   ├── hardening/     Hardening checks (rules from feeds/policies)
-│   │   ├── events/        Windows event logs, minidumps, journal, macOS crash reports
-│   │   ├── traffic/       flow-lite traffic view and pcap analysis
-│   │   ├── hub/           Hub client: uploads, offline queue (outbox), remote-action verification, watch parts
-│   │   ├── actions/       Preview and execution of actions such as blocking
-│   │   ├── mcp/           MCP server (stdio / HTTP) and tool definitions
-│   │   ├── ai/            Running the Claude Code / Codex CLI and parsing their event streams
-│   │   ├── service/       Start at boot (Windows service, systemd, launchd)
-│   │   ├── update/        self-update (verified against SHA256SUMS)
-│   │   ├── model/         Data model: report, finding, connection, allowlist, baseline
-│   │   ├── elevate/       Administrator / root detection
-│   │   ├── locales/       English translations
-│   │   └── util/          Shared helpers
-│   ├── prompts/           Prompts for AI analysis
-│   └── tests/fixtures/    Test data
-├── hub/                   Security Hub (Next.js + Tailwind)
-│   ├── app/               Pages (hosts, connections, findings, vulnerabilities, hardening, events, intel, action review, ...) and APIs (/api/v1, /api/mcp, /api/ai)
-│   ├── components/        UI components
-│   ├── lib/               DB queries, report ingest, remote actions and signing, intel mirror, IP intel, MCP tools, AI, auth
-│   ├── drizzle/           PostgreSQL schema and migrations
-│   ├── messages/          English translations
-│   ├── scripts/           i18n and client-import checks
-│   └── tests/             Unit and API route tests
-├── desktop/               Desktop app AI Security Monitor (Tauri 2)
-│   ├── src-tauri/         Rust shell: Tauri commands, tray, single instance
-│   └── ui/                Plain HTML / CSS / JS UI, no front-end build step
-├── contract/              agent <-> Hub JSON Schemas (register, report, snapshot, remote action)
-├── feeds/                 Data embedded in the binary
-│   ├── registry.json      Threat-intel sources (URL, format, confidence, license)
-│   ├── known-good.json    Known-good services and ranges
-│   ├── policies/          Windows / macOS / Linux hardening rules (YAML)
-│   ├── vuln/              OS support lifetimes, known-vulnerable software, risky ports
-│   └── events/            Bugcheck codes and event ID descriptions
+│   ├── src/               commands (cli/), scanners (scan/, connections/, intel/, firewall/, ports/, vuln/, hardening/, events/, traffic/),
+│   │                      Hub client (hub/), actions (actions/), MCP (mcp/), AI (ai/), start at boot (service/), self-update (update/)
+│   ├── prompts/           prompts for AI analysis
+│   └── tests/fixtures/    test data
+├── hub/                   Security Hub (Next.js + Tailwind): pages and API (app/), components, queries and logic (lib/), PostgreSQL migrations (drizzle/), tests
+├── desktop/               Desktop app AI Security Monitor (Tauri 2): Rust shell (src-tauri/) + plain HTML / CSS / JS UI (ui/)
+├── contract/              JSON Schemas between agent and Hub (enrollment, reports, snapshots, remote actions)
+├── feeds/                 data embedded in the binary: intel source list, known-good services, hardening rules (YAML), vulnerability and bugcheck notes
 ├── docker/                Hub Dockerfile and compose files (standalone, server, dev database)
-├── scripts/               One-line installers, demo data, screenshots, version and changelog checks
-├── docs/                  Topic docs and README screenshots (docs/images)
-└── .github/workflows/     CI and release workflows
+├── scripts/               one-line installers, demo data, screenshots, version and changelog checks
+├── docs/                  topic docs and README screenshots (docs/images)
+└── .github/workflows/     CI and release pipelines
 ```
 
 ## Build from source
@@ -376,7 +422,7 @@ npm run verify                                        # typecheck, i18n, tests, 
 cd desktop && npm ci && npx tauri build              # builds the NSIS installer
 ```
 
-Demo data: `node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <admin secret>`; screenshots: `node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <admin secret>`.
+Demo data: `node scripts/demo-seed.mjs --hub http://127.0.0.1:3000 --admin <admin secret>`; screenshots: `node scripts/capture-screenshots.mjs --hub http://127.0.0.1:3000 --admin <admin secret>`; desktop screenshots: `node scripts/capture-desktop-screenshots.mjs` (no Hub needed; add `--frame windows` for the Windows-framed versions).
 
 ## Data sources and licenses
 
