@@ -2,6 +2,9 @@
 //! 上傳連線快照、跑完整掃描並上傳報告、送心跳。上傳失敗的報告照樣暫存，之後由背景服務重送。
 //! 桌面版的「立即掃描並上傳到 Hub」也呼叫 [`upload_now`]。
 
+use std::future::Future;
+use std::time::Duration;
+
 use serde::Serialize;
 
 use super::args::ScanArgs;
@@ -53,6 +56,28 @@ pub struct UploadSummary {
 /// 進度回報（CLI 印到 stderr；桌面版送到視窗）。
 pub type Progress<'a> = &'a (dyn Fn(&str) + Send + Sync);
 
+/// Hub 要求稍後再傳、而且等待時間不長（例如背景服務剛上傳過）時，最多等這麼久再自動重試一次。
+const MAX_THROTTLE_WAIT_S: u64 = 90;
+
+/// 碰上 Hub 限流（429）就照 Retry-After 等一下、重試一次；等待時間太長或沒給就直接回錯誤（報告照樣暫存）。
+async fn retry_throttled<T, F, Fut>(progress: Progress<'_>, mut send: F) -> AppResult<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = AppResult<T>>,
+{
+    match send().await {
+        Err(AppError::HubThrottled { retry_after_s: Some(s) }) if s <= MAX_THROTTLE_WAIT_S => {
+            progress(&tf!(
+                "Hub 要求 {s} 秒後再傳（背景服務剛上傳過），等一下自動重試…",
+                s = s
+            ));
+            tokio::time::sleep(Duration::from_secs(s + 1)).await;
+            send().await
+        }
+        r => r,
+    }
+}
+
 /// 立即上傳一輪。沒加入 Hub、或 Hub 身分和這台記得的不同時回錯誤。
 pub async fn upload_now(env: &Env, progress: Progress<'_>) -> AppResult<UploadSummary> {
     let dir = &env.config_dir;
@@ -89,7 +114,7 @@ pub async fn upload_now(env: &Env, progress: Progress<'_>) -> AppResult<UploadSu
                 flagged: s.connections.iter().filter(|c| c.verdict.is_bad()).count(),
                 error: None,
             };
-            match client.upload_snapshot(&s).await {
+            match retry_throttled(progress, || client.upload_snapshot(&s)).await {
                 Ok(_) => watch::record_upload(dir, client.base(), watch::Uploaded::Snapshot),
                 Err(e) => sent.error = Some(e.message()),
             }
@@ -114,7 +139,7 @@ pub async fn upload_now(env: &Env, progress: Progress<'_>) -> AppResult<UploadSu
         score: report.score.overall,
         ..Default::default()
     };
-    match client.upload_report(&report).await {
+    match retry_throttled(progress, || client.upload_report(&report)).await {
         Ok(v) => {
             sent.new = v["findings"]["new"].as_u64().unwrap_or(0);
             sent.resolved = v["findings"]["resolved"].as_u64().unwrap_or(0);
@@ -190,9 +215,8 @@ pub async fn run(env: &Env) -> AppResult<()> {
     if s.ok {
         Ok(())
     } else {
-        Err(AppError::Hub(
-            s.report.and_then(|r| r.error).unwrap_or_else(|| t!("上傳失敗").into()),
-        ))
+        // 原因已印在上一行（summary_line），這裡只讓結束碼不是 0，不再重複整段訊息
+        Err(AppError::Hub(t!("報告沒有上傳成功（原因見上一行）").into()))
     }
 }
 
@@ -228,6 +252,37 @@ mod tests {
         s.report.as_mut().unwrap().error = Some("連不上 hub".into());
         s.report.as_mut().unwrap().queued = true;
         assert!(summary_line(&s).contains("已暫存"));
+    }
+
+    #[tokio::test]
+    async fn throttled_upload_waits_and_retries_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let calls = AtomicUsize::new(0);
+        let said = std::sync::Mutex::new(Vec::<String>::new());
+        let progress = |m: &str| said.lock().unwrap().push(m.to_string());
+        let r = retry_throttled(&progress, || async {
+            if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                Err(AppError::HubThrottled { retry_after_s: Some(0) })
+            } else {
+                Ok(42)
+            }
+        })
+        .await;
+        assert_eq!(r.unwrap(), 42);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(said.lock().unwrap()[0].contains("自動重試"));
+
+        // 等太久或沒給秒數：不等，直接回錯誤（報告由呼叫端暫存）
+        for wait in [Some(MAX_THROTTLE_WAIT_S + 1), None] {
+            let calls = AtomicUsize::new(0);
+            let r: AppResult<()> = retry_throttled(&|_| {}, || async {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Err(AppError::HubThrottled { retry_after_s: wait })
+            })
+            .await;
+            assert!(matches!(r, Err(AppError::HubThrottled { .. })));
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+        }
     }
 
     #[test]

@@ -156,10 +156,9 @@ impl HubClient {
         match status {
             200..=299 => Ok(HubResponse { status, body }),
             401 | 403 => Err(AppError::HubAuth),
-            429 => Err(AppError::Hub(tf!(
-                "hub 要求稍後再傳（{s} 秒後）",
-                s = retry_after.unwrap_or_else(|| "?".into())
-            ))),
+            429 => Err(AppError::HubThrottled {
+                retry_after_s: retry_after.and_then(|s| s.trim().parse().ok()),
+            }),
             // 格式／大小被拒：重送也不會過，呼叫端應丟棄（outbox 不保留）。
             400 | 413 | 422 => Err(AppError::HubRejected(tf!(
                 "HTTP {status}：{detail}",
@@ -430,7 +429,9 @@ mod tests {
         c.upload_report(&rep).await.unwrap();
         assert!(matches!(c.upload_report(&rep).await, Err(AppError::HubAuth)));
         let e = c.upload_report(&rep).await.unwrap_err();
+        assert!(matches!(e, AppError::HubThrottled { retry_after_s: Some(7) }), "{e:?}");
         assert!(e.message().contains('7'), "{}", e.message());
+        assert_eq!(e.code(), "ERR_HUB");
         // 400 是永久拒收：outbox 會丟掉，不該當成可重試的 Hub 錯誤。
         let e = c.upload_report(&rep).await.unwrap_err();
         assert!(

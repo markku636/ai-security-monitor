@@ -32,6 +32,10 @@ pub enum AppError {
     /// Hub 身分驗證失敗（簽章不對、指紋和釘選的不同）：重試也不會過。
     #[error("hub identity: {0}")]
     HubIdentity(String),
+    /// Hub 要求稍後再傳（HTTP 429，例如背景服務剛上傳過）：可重試；`retry_after_s` 是 Hub 給的 Retry-After 秒數。
+    /// kind／code 跟一般 Hub 錯誤相同（hub／ERR_HUB），既有的判斷不受影響。
+    #[error("hub throttled (retry after {retry_after_s:?} s)")]
+    HubThrottled { retry_after_s: Option<u64> },
     #[error("mcp error: {0}")]
     Mcp(String),
     #[error("ai provider: {0}")]
@@ -69,7 +73,7 @@ impl AppError {
             AppError::Elevation(_) => "elevation",
             AppError::External(_) => "external",
             AppError::Parse(_) => "parse",
-            AppError::Hub(_) => "hub",
+            AppError::Hub(_) | AppError::HubThrottled { .. } => "hub",
             AppError::HubAuth => "hub_auth",
             AppError::HubRejected(_) => "hub_rejected",
             AppError::HubIdentity(_) => "hub_identity",
@@ -98,7 +102,7 @@ impl AppError {
             AppError::Elevation(_) => "ERR_ELEVATION",
             AppError::External(_) => "ERR_EXTERNAL",
             AppError::Parse(_) => "ERR_PARSE",
-            AppError::Hub(_) => "ERR_HUB",
+            AppError::Hub(_) | AppError::HubThrottled { .. } => "ERR_HUB",
             AppError::HubAuth => "ERR_HUB_AUTH",
             AppError::HubRejected(_) => "ERR_HUB_REJECTED",
             AppError::HubIdentity(_) => "ERR_HUB_IDENTITY",
@@ -131,6 +135,12 @@ impl AppError {
             AppError::HubAuth => t!("Hub 拒絕了這把金鑰").to_string(),
             AppError::HubRejected(d) => tf!("Hub 拒收這份資料（不會重送）：{detail}", detail = d),
             AppError::HubIdentity(d) => tf!("Hub 身分驗證失敗：{detail}", detail = d),
+            AppError::HubThrottled { retry_after_s: Some(s) } => {
+                tf!("Hub 要求 {s} 秒後再傳（剛上傳過，避免太頻繁）", s = s)
+            }
+            AppError::HubThrottled { retry_after_s: None } => {
+                t!("Hub 要求稍後再傳（剛上傳過，避免太頻繁）").to_string()
+            }
             AppError::Mcp(d) => tf!("MCP 錯誤：{detail}", detail = d),
             AppError::Ai(d) => tf!("AI 提供者錯誤：{detail}", detail = d),
             AppError::Capture(d) => tf!("抓包錯誤：{detail}", detail = d),
