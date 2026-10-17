@@ -4,7 +4,7 @@ English | [繁體中文](install.md)
 
 ## Which download do I need?
 
-Current version: **v0.2.1**; all files are on [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
+Current version: **v0.3.0**; all files are on [Releases](https://github.com/markku636/ai-security-monitor/releases/latest).
 
 | Your situation | Download |
 |---|---|

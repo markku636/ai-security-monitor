@@ -48,7 +48,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | `0`＝關閉免金鑰加入申請（預設開） |
 | `AI_SECURITY_MONITOR_HUB_NAME` | 電腦端看到的 Hub 名稱（預設 Security Hub） |
 | `AI_SECURITY_MONITOR_HUB_HOST_PORT`／`AI_SECURITY_MONITOR_HUB_BIND` | 主機 port（8088）與綁定位址 |
-| `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.2.1`） |
+| `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.3.0`） |
 | `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY`／`AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN`／`AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY`／`AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` 完全不對外查詢 |
 | `ANTHROPIC_API_KEY`／`CLAUDE_CODE_OAUTH_TOKEN`／`OPENAI_API_KEY` | `/ai` 頁用；也可以 `docker compose exec hub claude` 進去輸入 `/login` 登入（AI 助手顯示「Please run /login」就是還沒登入），登入資料存在 `/data` volume；長效 token 可用 `claude setup-token` 產生 |
 

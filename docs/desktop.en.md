@@ -6,7 +6,7 @@ English | [繁體中文](desktop.md)
 
 ## Install
 
-Download from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) (current version v0.2.1):
+Download from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) (current version v0.3.0):
 
 | Platform | File | First launch (the installers are not code-signed) |
 |---|---|---|

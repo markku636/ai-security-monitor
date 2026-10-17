@@ -6,7 +6,7 @@
 
 ## 安裝
 
-從 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載（目前版本 v0.2.1）：
+從 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) 下載（目前版本 v0.3.0）：
 
 | 平台 | 檔案 | 第一次開啟（安裝檔沒有程式碼簽章） |
 |---|---|---|

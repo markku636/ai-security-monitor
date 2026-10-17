@@ -2,6 +2,10 @@
 
 ## 未發佈
 
+## v0.3.0 — 2026-10-17
+
+**辦公室電腦可以自動找到公司的 Security Hub、免金鑰申請加入並由管理員核准；桌面版多了設定頁（Hub 網址、開機自動啟動）；Hub 可以批次分析 IP、IP 旁顯示風險圖示、可疑 IP 排名可排序；桌面版 logo 放大；README 改寫成新手看得懂的版本。** 一般使用者請下載 `AI-Security-Monitor-0.3.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；`ai-security-monitor-0.3.0-*` 是命令列版。
+
 - **自動尋找 Hub、免金鑰加入**（[docs/enrollment.md](docs/enrollment.md)）：辦公室電腦不用金鑰、不用手動設定就能加入公司的 Security Hub。
   - **尋找**：依序用明確給的網址（`enroll --hub`、Hub 預填的安裝指令、`AI_SECURITY_MONITOR_HUB_URL`）→ 公司 DNS 的 SRV 紀錄 `_aisecmon._tcp.<搜尋網域>`（TXT 可帶 `url=`、`fp=`；Windows 讀 DNS 尾碼、Linux `/etc/resolv.conf`、macOS `scutil --dns`）→ 區網 mDNS／DNS-SD `_aisecmon._tcp.local`。新增 `ai-security-monitor discover`（只列出）與 `enroll --auto [--hub URL] [--wait 15m] [--repin]`；`enroll` 沒給 `--key` 就走免金鑰。
   - **服務名稱**：DNS-SD 服務類型是 `_aisecmon._tcp`（服務名稱 9 字，符合 RFC 6335／6763 的 15 字上限，mDNS 用預設限制就能登記）。開發期間用過的 `_ai-security-monitor._tcp`（20 字）mDNS 不再使用；DNS SRV 在新名稱查不到紀錄時仍會查舊名稱。

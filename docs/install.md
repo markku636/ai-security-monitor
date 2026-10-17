@@ -4,7 +4,7 @@
 
 ## 下載哪一個？
 
-目前版本 **v0.2.1**，檔案都在 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest)。
+目前版本 **v0.3.0**，檔案都在 [Releases](https://github.com/markku636/ai-security-monitor/releases/latest)。
 
 | 你的情況 | 下載 |
 |---|---|

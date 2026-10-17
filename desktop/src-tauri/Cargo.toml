@@ -1,6 +1,6 @@
 [package]
 name = "ai-security-monitor-desktop"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "AI Security Monitor desktop app (GUI for ai-security-monitor)"
 license = "MIT"
