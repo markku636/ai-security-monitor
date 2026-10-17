@@ -32,3 +32,26 @@ export function bytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** 位元組（含 GB／TB），小數一位。 */
+export function fmtBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = Math.max(0, n);
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return i === 0 ? `${Math.round(v)} B` : `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
+}
+
+/** 速率（bytes/s）。 */
+export function fmtRate(n: number | null | undefined): string {
+  return n == null ? '—' : `${fmtBytes(n)}/s`;
+}
+
+/** 百分比（整數）。 */
+export function fmtPct(n: number | null | undefined): string {
+  return n == null || !Number.isFinite(n) ? '—' : `${Math.round(n)}%`;
+}

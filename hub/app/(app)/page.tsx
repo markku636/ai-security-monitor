@@ -13,6 +13,9 @@ import { cachedRisks } from '@/lib/ipintel/service';
 import { averageScore, fleetSummary, listAgents } from '@/lib/queries/agents';
 import { inboundAttackers, listConnections } from '@/lib/queries/connections';
 import { topIntelFeeds } from '@/lib/queries/intel';
+import { PerfAlertsCard } from '@/components/metrics/MetricsViews';
+import { fmtBytes } from '@/lib/format';
+import { perfAlerts, trafficSummary } from '@/lib/queries/metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,12 +55,14 @@ function NoAgents({ t }: { t: TFn }) {
 }
 
 async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
-  const [fleet, list, feeds, risky, attackers] = await Promise.all([
+  const [fleet, list, feeds, risky, attackers, traffic, alerts] = await Promise.all([
     fleetSummary(),
     listAgents(),
     topIntelFeeds(7, 8),
     isAdmin ? listConnections({ verdict: ['dangerous', 'suspicious'], limit: 100, offset: 0 }) : null,
     isAdmin ? inboundAttackers(5) : [],
+    trafficSummary(),
+    perfAlerts(),
   ]);
   if (!fleet.agents.total) return <NoAgents t={t} />;
   const risks = isAdmin ? await cachedRisks([...(risky?.items ?? []).map((c) => c.remoteIp), ...attackers.map((a) => a.remoteIp)]) : {};
@@ -72,6 +77,17 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
             value={<span className={fleet.connections.dangerous ? 'text-verdict-dangerous' : ''}>{fleet.connections.dangerous}</span>}
             hint={t('另有 {n} 條可疑', { n: fleet.connections.suspicious })}
           />
+          {traffic.reporting ? (
+            <Stat
+              label={t('24 小時流量（所有主機）')}
+              value={
+                <span className="text-lg">
+                  ↓ {fmtBytes(traffic.rx24h)} · ↑ {fmtBytes(traffic.tx24h)}
+                </span>
+              }
+              hint={t('{n} 台主機回報流量，{p} 台開啟效能蒐集', { n: traffic.hosts24h, p: traffic.perfEnabled })}
+            />
+          ) : null}
         </div>
       </div>
       <Card title={t('待處理問題')}>
@@ -87,6 +103,7 @@ async function FleetView({ t, isAdmin }: { t: TFn; isAdmin: boolean }) {
         <IntelFeedsCard t={t} feeds={feeds} />
         {attackers.length ? <AttackersCard t={t} attackers={attackers} risks={risks} /> : null}
         <WorstHostsCard t={t} agents={list} linkable={isAdmin} />
+        {traffic.perfEnabled || alerts.length ? <PerfAlertsCard t={t} alerts={alerts} perfHosts={traffic.perfEnabled} linkable={isAdmin} /> : null}
       </div>
     </>
   );

@@ -21,10 +21,12 @@ import { newDestinations, processActivity, topDestinations } from '@/lib/queries
 import { CrashTable, DestinationTable, ProcessTable, SecurityTable } from '@/components/security/EventViews';
 import { AppHitsTable, HardeningTable, OsvTable, ScoreTrend, SupportBadge } from '@/components/security/PostureViews';
 import { agentHardening, agentVuln, type VulnSummary } from '@/lib/queries/posture';
+import { FleetTrafficSection, HostPerfView, RangeChips } from '@/components/metrics/MetricsViews';
+import { parseRange, type Range } from '@/lib/queries/metrics';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['overview', 'connections', 'findings', 'vulns', 'hardening', 'events', 'traffic', 'history'] as const;
+const TABS = ['overview', 'connections', 'findings', 'vulns', 'hardening', 'events', 'traffic', 'perf', 'history'] as const;
 type Tab = (typeof TABS)[number];
 
 type Agent = NonNullable<Awaited<ReturnType<typeof getAgent>>>;
@@ -38,6 +40,7 @@ function tabLabel(t: TFn, tab: Tab): string {
     hardening: t('安全設定'),
     events: t('當機與事件'),
     traffic: t('流量'),
+    perf: t('效能'),
     history: t('報告紀錄'),
   }[tab];
 }
@@ -176,18 +179,30 @@ async function EventsTab({ t, a }: { t: TFn; a: Agent }) {
   );
 }
 
-async function TrafficTab({ t, a }: { t: TFn; a: Agent }) {
+async function TrafficTab({ t, a, range }: { t: TFn; a: Agent; range: Range }) {
   const [top, fresh, procs] = await Promise.all([
     topDestinations({ agentId: a.id, days: 7, limit: 50 }),
     newDestinations(24, 30, a.id),
     processActivity(a.id, 20),
   ]);
   const risks = await cachedRisks([...fresh, ...top].map((d) => d.remoteIp));
+  const volume = (
+    <>
+      <RangeChips t={t} base={`/agents/${encodeURIComponent(a.id)}`} range={range} keep={{ tab: 'traffic' }} />
+      <FleetTrafficSection t={t} range={range} agentId={a.id} />
+    </>
+  );
   if (!top.length && !procs.length) {
-    return <EmptyState title={t('還沒有流量資料')}>{t('主機執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>;
+    return (
+      <div className="space-y-4">
+        {volume}
+        <EmptyState title={t('還沒有連線資料')}>{t('主機執行 ai-security-monitor watch 後每分鐘會回報連線快照。')}</EmptyState>
+      </div>
+    );
   }
   return (
     <div className="space-y-4">
+      {volume}
       {procs.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('各行程目前的連線')}</h2>
@@ -404,7 +419,7 @@ export default async function AgentPage({
         </div>
         <p className="font-mono text-xs text-slate-500">{a.id}</p>
       </header>
-      <nav className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
         {TABS.map((k) => (
           <Link
             key={k}
@@ -424,7 +439,8 @@ export default async function AgentPage({
       {tab === 'vulns' ? <VulnsTab t={t} a={a} /> : null}
       {tab === 'hardening' ? <HardeningTab t={t} a={a} sp={sp} /> : null}
       {tab === 'events' ? <EventsTab t={t} a={a} /> : null}
-      {tab === 'traffic' ? <TrafficTab t={t} a={a} /> : null}
+      {tab === 'traffic' ? <TrafficTab t={t} a={a} range={parseRange(sp)} /> : null}
+      {tab === 'perf' ? <HostPerfView t={t} agentId={a.id} perfEnabled={a.perfEnabled} range={parseRange(sp, 'range', '24h')} base={base} /> : null}
       {tab === 'history' ? <HistoryTab t={t} a={a} /> : null}
     </div>
   );

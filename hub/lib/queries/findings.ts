@@ -7,7 +7,7 @@ import { clampInt, listParam, strParam, type Params } from './params';
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const STATUSES = ['open', 'acked', 'suppressed', 'resolved'] as const;
-export const SCANNERS = ['connections', 'intel', 'ports', 'firewall', 'vuln', 'hardening', 'files', 'traffic', 'events'] as const;
+export const SCANNERS = ['connections', 'intel', 'ports', 'firewall', 'vuln', 'hardening', 'files', 'traffic', 'events', 'metrics'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 export type FindingStatus = (typeof STATUSES)[number];
 

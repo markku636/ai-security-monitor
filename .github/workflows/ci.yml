@@ -291,6 +291,10 @@ jobs:
           curl -sf -H "$K" -H 'content-type: application/json' -H 'content-encoding: gzip' --data-binary @rep.gz http://127.0.0.1:3911/api/v1/ingest/report | tee rep.json
           grep -q '"new":2' rep.json
           curl -sf -H "$K" -H 'content-type: application/json' --data-binary @../contract/snapshot.v1.json http://127.0.0.1:3911/api/v1/ingest/snapshot | grep -q '"dangerous":1'
+          # 流量／效能樣本：契約範例的時間改成剛剛（超過保留天數的樣本會被略過）
+          jq '.samples |= (to_entries | map(.value.ts = ((now | floor) - 180 + .key * 60 | todate)) | map(.value))' ../contract/metrics.v1.json > metrics.json
+          curl -sf -H "$K" -H 'content-type: application/json' --data-binary @metrics.json http://127.0.0.1:3911/api/v1/ingest/metrics | tee met.json
+          grep -q '"stored":2' met.json
           curl -sf -b cj.txt http://127.0.0.1:3911/agents -o page.out && grep -q 'demo-host' page.out
           curl -sf -b cj.txt 'http://127.0.0.1:3911/connections?verdict=dangerous' -o page.out && grep -q 'feodotracker' page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/findings -o page.out && grep -q 'ports.exposed_open' page.out
@@ -298,11 +302,12 @@ jobs:
           curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=history' > /dev/null
           curl -sf -H 'authorization: Bearer ci-admin-secret' http://127.0.0.1:3911/api/v1/fleet/summary -o page.out && grep -q '"intel_feeds"' page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/events -o page.out
-          curl -sf -b cj.txt http://127.0.0.1:3911/traffic -o page.out && grep -q 'updater.exe' page.out
+          curl -sf -b cj.txt http://127.0.0.1:3911/traffic -o page.out && grep -q 'updater.exe' page.out && grep -q 'vEthernet (WSL)' page.out
+          curl -sf -b cj.txt 'http://127.0.0.1:3911/agents/0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee?tab=perf' -o page.out && grep -q 'Code.exe' page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/vulns -o page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/hardening -o page.out
           curl -sf -H "authorization: Bearer ci-admin-secret" http://127.0.0.1:3911/api/v1/vulns -o page.out && grep -q hosts page.out
-          curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:3911/api/mcp -o page.out && grep -q crash_history page.out
+          curl -sf -H 'authorization: Bearer ci-admin-secret' -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:3911/api/mcp -o page.out && grep -q crash_history page.out && grep -q fleet_traffic page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/admin -o page.out
           curl -sf -b cj.txt http://127.0.0.1:3911/install -o page.out
           curl -sf http://127.0.0.1:3911/install.sh -o page.out && grep -q '^DEFAULT_HUB="http://127.0.0.1:3911"' page.out
@@ -400,6 +405,9 @@ jobs:
           test "$(jq -r .action.status action.json)" = "succeeded"
           sudo nft list set inet asa block4 | grep -q 198.51.100.77
           curl -sf -H "$A" "$B/api/v1/agents/$AID" | jq -e '.reports | length >= 1' > /dev/null
+          # watch --once 也送了一個流量樣本（真實 Ubuntu runner 的介面計數器）
+          curl -sf -H "$A" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fleet_traffic","arguments":{"range":"1h"}}}' $B/api/mcp > ft.json
+          jq -r '.result.content[0].text' ft.json | jq -e --arg id "$AID" '[.hosts[] | select(.agent_id == $id)] | length == 1' > /dev/null
           # 真實 Ubuntu runner 的漏洞與硬化摘要有進 hub
           curl -sf -H "$A" "$B/api/v1/vulns?agent_id=$AID" | jq -e '.summary.packages > 100 and .summary.os.family == "linux"' > /dev/null
           curl -sf -H "$A" "$B/api/v1/hardening?agent_id=$AID" | jq -e '(.summary.results | length) >= 20 and .summary.score != null' > /dev/null

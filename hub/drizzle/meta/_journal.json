@@ -78,6 +78,13 @@
       "when": 1792252541520,
       "tag": "0010_destinations_last_risky",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792252797215,
+      "tag": "0011_host_metrics",
+      "breakpoints": true
     }
   ]
 }

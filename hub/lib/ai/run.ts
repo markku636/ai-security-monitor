@@ -205,7 +205,7 @@ export async function runAi(spec: RunSpec, bin: Bin, onEvent: (e: AiEvent) => vo
   return result;
 }
 
-export const SYSTEM_PROMPT = (lang: 'zh-TW' | 'en') => `You are a defensive security analyst for the operator of this Security Hub. Use the asahub MCP tools to look at the fleet (agents, findings, connections, threat-intel hits, traffic, crashes, security events). All tools are read-only.
+export const SYSTEM_PROMPT = (lang: 'zh-TW' | 'en') => `You are a defensive security analyst for the operator of this Security Hub. Use the asahub MCP tools to look at the fleet (agents, findings, connections, threat-intel hits, traffic destinations and traffic volume, performance metrics where hosts enabled them, crashes, security events). All tools are read-only.
 - Look before you conclude; prefer a few targeted calls.
 - When you mention a threat-intel hit, cite the vendor, feed and source_url. Never invent sources.
 - Separate facts from interpretation; say "unknown" when the data does not support a conclusion.
@@ -227,7 +227,10 @@ export const SCOPE_PROMPTS: Record<string, { zh: string; en: string }> = {
     zh: '分析下方這幾個 IP（附有 hub 已有的資料：連線紀錄、黑名單命中、人工備註、快取的外部情資）：逐一說明它大概是什麼服務（CDN、雲端、廣告、更新伺服器、掃描器、C2…）、被判可疑的理由是情資還是行為判斷、是不是誤報；再看它們之間有沒有關聯（同一個 ASN／國家、同一個程式、同時間出現）。最後依急迫程度排序，給出每個 IP 的建議（放著、加白名單、或建議封鎖）。',
     en: 'Analyze the IPs below (the hub data on each is attached: connection records, blocklist hits, operator notes, cached external intel): for each, work out what service it probably is (CDN, cloud, ads, update server, scanner, C2, …), whether the suspicious rating comes from intel or behavior and whether it is a false positive; then look for links between them (same ASN/country, same process, appearing at the same time). Finally rank them by urgency and recommend what to do with each (leave it, allowlist it, or suggest a block).',
   },
-  traffic: { zh: '解讀網路流量：哪些目的地或行程可疑？哪些看起來正常？', en: 'Interpret the traffic: which destinations or processes look suspicious, which look normal?' },
+  traffic: {
+    zh: '解讀網路流量：哪些目的地或行程可疑？哪些看起來正常？也用 fleet_traffic 看各主機與各程式的上傳／下載量，找出異常的大量上傳、流量突增或在非上班時間傳很多資料的主機。',
+    en: 'Interpret the traffic: which destinations or processes look suspicious, which look normal? Also use fleet_traffic to check upload/download volume per host and per process and point out unusual large uploads, spikes, or hosts moving a lot of data off-hours.',
+  },
   events: { zh: '分析各主機的當機原因（藍屏代碼、模組、時間模式），並評估資安事件是否需要處理。', en: 'Analyze crash root causes on each host (bugcheck codes, modules, timing patterns) and assess whether the security events need action.' },
   agent: { zh: '檢查這台主機（agent_id 見下方）：連線、發現、當機與資安事件，給出結論與處置。', en: 'Review this host (agent_id below): connections, findings, crashes and security events; give a verdict and next steps.' },
 };

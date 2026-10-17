@@ -12,6 +12,8 @@ import { bruteForceSources, recentCrashes, securityHits, topBugchecks } from '@/
 import { listFindings, parseFindingFilter, toFindingView } from '@/lib/queries/findings';
 import { feedHitStats, lookupIndicator } from '@/lib/queries/intel';
 import { agentHardening, agentVuln, hardeningOverview, vulnOverview } from '@/lib/queries/posture';
+import { bandwidthSeries, hostPerfSeries, hostTrafficRanking, interfaceBreakdown, latestPerf, parseRange, perfAlerts, processTraffic, trafficSummary } from '@/lib/queries/metrics';
+import { getAgent } from '@/lib/queries/agents';
 import { processActivity, topDestinations } from '@/lib/queries/traffic';
 
 export interface ToolDef {
@@ -68,6 +70,18 @@ export const TOOLS: ToolDef[] = [
     description:
       'System hardening checks (UAC, antivirus, disk encryption, SSH, kernel settings, automatic updates, ...): per-host scores and the most common failures, or one host\'s check results with current value, fix and references (agent_id).',
     inputSchema: obj({ agent_id: agent, only_failed: { type: 'boolean' } }),
+  },
+  {
+    name: 'fleet_traffic',
+    description:
+      'Network traffic volume (bytes, not packets) reported every minute by each host: fleet upload/download totals and average rates for the range, hosts ranked by traffic (24 h and 7 days), per-interface totals (virtual adapters such as VPN/Docker/WSL are flagged and not counted in totals) and per-process bytes where the host can measure them (Windows running as administrator, macOS). Optional agent_id narrows it to one host.',
+    inputSchema: obj({ range: { type: 'string', enum: ['1h', '24h', '7d', '30d'] }, agent_id: agent }),
+  },
+  {
+    name: 'host_performance',
+    description:
+      'Performance metrics (CPU, memory, disk usage and I/O, network rate, top processes by CPU/memory, battery) for one host over a range; only available when the host itself turned performance collection on (the hub cannot enable it). Without agent_id: hosts whose latest CPU, memory or disk usage is at or above 90%.',
+    inputSchema: obj({ agent_id: agent, range: { type: 'string', enum: ['1h', '24h', '7d', '30d'] } }),
   },
   { name: 'intel_feeds', description: 'Threat-intel sources used by the agents: vendor, license (commercial use, attribution), confidence and 7-day hits.', inputSchema: obj({}) },
 ];
@@ -187,6 +201,57 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
       }
       const h = await hardeningOverview();
       return toText({ average: h.average, hosts: h.hosts, top_failed: h.topFailed.slice(0, 40).map((e) => ({ id: e.check.id, title: e.check.title, severity: e.check.severity, remediation: e.check.remediation, failed: e.hosts.length, checked: e.checked, hosts: e.hosts.map((x) => x.hostname) })) });
+    }
+    case 'fleet_traffic': {
+      const range = parseRange({ range: str(args, 'range') });
+      const agentId = str(args, 'agent_id');
+      const [bw, hosts, ifaces, procs, summary] = await Promise.all([
+        bandwidthSeries(range, agentId),
+        agentId ? Promise.resolve([]) : hostTrafficRanking(20),
+        interfaceBreakdown(range, agentId, 30),
+        processTraffic(range, agentId, 15),
+        trafficSummary(),
+      ]);
+      const pts = bw.points.filter((p) => p.rx != null);
+      const peak = (k: 'rx' | 'tx') => pts.reduce((m, p) => Math.max(m, p[k] ?? 0), 0);
+      return toText({
+        range,
+        unit: 'bytes; rates in bytes per second averaged over each bucket',
+        totals: { rx_bytes: bw.totalRx, tx_bytes: bw.totalTx, peak_rx_bytes_per_s: peak('rx'), peak_tx_bytes_per_s: peak('tx'), bucket_s: bw.bucketS },
+        fleet_24h: agentId ? undefined : summary,
+        hosts: hosts.map((h) => ({ agent_id: h.agentId, hostname: h.hostname, rx_24h: h.rx24h, tx_24h: h.tx24h, rx_7d: h.rx7d, tx_7d: h.tx7d })),
+        interfaces: ifaces,
+        processes: procs.rows,
+        processes_note: procs.hostsWithData < procs.hostsTotal ? `${procs.hostsTotal - procs.hostsWithData} host(s) cannot measure per-process bytes (Linux without eBPF, or Windows not running as administrator); use top_destinations for per-process connection counts` : undefined,
+      });
+    }
+    case 'host_performance': {
+      const agentId = str(args, 'agent_id');
+      const range = parseRange({ range: str(args, 'range') });
+      if (!agentId) return toText({ threshold_pct: 90, hosts_over_threshold: await perfAlerts() });
+      const a = await getAgent(agentId);
+      if (!a) throw new Error('unknown agent_id');
+      const [series, latest] = await Promise.all([hostPerfSeries(agentId, range), latestPerf(agentId)]);
+      const vals = (k: 'cpu' | 'memPct' | 'diskPct') => series.points.map((p) => p[k]).filter((v): v is number => v != null);
+      const avg = (v: number[]) => (v.length ? v.reduce((x, y) => x + y, 0) / v.length : null);
+      const max = (v: number[]) => (v.length ? Math.max(...v) : null);
+      return toText({
+        hostname: a.hostname,
+        performance_enabled: a.perfEnabled === true,
+        note: a.perfEnabled === true ? undefined : 'performance collection is off on this host (the host owner can enable it: ai-security-monitor config set metrics.performance true, or the desktop app Settings); only network traffic is available',
+        range,
+        series: {
+          samples: series.points.filter((p) => p.rx != null || p.cpu != null).length,
+          bucket_s: series.bucketS,
+          cpu_avg_pct: avg(vals('cpu')),
+          cpu_max_pct: max(series.points.map((p) => p.cpuMax).filter((v): v is number => v != null)),
+          mem_max_pct: max(vals('memPct')),
+          disk_max_pct: max(vals('diskPct')),
+          rx_peak_bytes_per_s: max(series.points.map((p) => p.rx).filter((v): v is number => v != null)),
+          tx_peak_bytes_per_s: max(series.points.map((p) => p.tx).filter((v): v is number => v != null)),
+        },
+        latest,
+      });
     }
     case 'intel_feeds': {
       const stats = await feedHitStats(7);

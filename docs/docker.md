@@ -50,6 +50,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 | `AI_SECURITY_MONITOR_HUB_HOST_PORT`／`AI_SECURITY_MONITOR_HUB_BIND` | 主機 port（8088）與綁定位址 |
 | `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.3.0`） |
 | `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY`／`AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN`／`AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY`／`AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` 完全不對外查詢 |
+| `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS`／`AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS` | 網路流量／效能資料保留天數：每分鐘的原始樣本（預設 7，1–90）、每小時彙總（預設 90）；見 [metrics.md](metrics.md) |
 | `ANTHROPIC_API_KEY`／`CLAUDE_CODE_OAUTH_TOKEN`／`OPENAI_API_KEY` | `/ai` 頁用；也可以 `docker compose exec hub claude` 進去輸入 `/login` 登入（AI 助手顯示「Please run /login」就是還沒登入），登入資料存在 `/data` volume；長效 token 可用 `claude setup-token` 產生 |
 
 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`、`AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS`、`AI_SECURITY_MONITOR_HUB_DATABASE_URL`、`AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY` 也接受 `<名稱>_FILE`（Docker secrets）。

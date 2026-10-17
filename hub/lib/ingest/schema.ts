@@ -190,7 +190,77 @@ export const Heartbeat = z
   })
   .passthrough();
 
+// ---- 網路流量與效能樣本（POST /api/v1/ingest/metrics；contract/metrics.v1.json）----
+const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
+export const MetricIface = z
+  .object({ name: shortText(64), virtual: z.boolean().default(false), rx_bytes: count, tx_bytes: count })
+  .passthrough();
+export const MetricProcNet = z.object({ name: shortText(80), rx_bytes: count, tx_bytes: count }).passthrough();
+export const MetricDisk = z
+  .object({ mount: shortText(120), fs: shortText(32).optional(), used: count, total: count, removable: z.boolean().optional() })
+  .passthrough();
+export const MetricProcPerf = z
+  .object({
+    name: shortText(80),
+    pid: z.number().int().nonnegative().nullish(),
+    count: z.number().int().min(1).max(1_000_000).default(1),
+    cpu_pct: z.number().min(0).max(100),
+    rss: count,
+  })
+  .passthrough();
+export const MetricPerf = z
+  .object({
+    cpu_pct: z.number().min(0).max(100),
+    cpu_cores: z.number().int().min(1).max(8192),
+    mem_used: count,
+    mem_total: count,
+    swap_used: count,
+    swap_total: count,
+    disks: z.array(MetricDisk).max(32).default([]),
+    disk_read_bytes: count.nullish(),
+    disk_write_bytes: count.nullish(),
+    load: z.array(z.number().min(0).max(1_000_000)).length(3).nullish(),
+    uptime_s: count,
+    boot_time: isoDate,
+    top_cpu: z.array(MetricProcPerf).max(10).default([]),
+    top_mem: z.array(MetricProcPerf).max(10).default([]),
+    battery: z
+      .object({ percent: z.number().int().min(0).max(100), charging: z.boolean(), plugged: z.boolean().nullish() })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough();
+export const MetricSample = z
+  .object({
+    ts: isoDate,
+    interval_s: z.number().int().min(1).max(86_400),
+    net: z
+      .object({
+        rx_bytes: count,
+        tx_bytes: count,
+        interfaces: z.array(MetricIface).max(32).default([]),
+        processes: z.array(MetricProcNet).max(20).nullish(),
+        process_source: shortText(16).nullish(),
+      })
+      .passthrough(),
+    perf: MetricPerf.nullish(),
+  })
+  .passthrough();
+/** 一次最多幾個樣本（agent 每批送 120 個）。 */
+export const MAX_METRIC_SAMPLES = 240;
+export const MetricsBatch = z
+  .object({
+    agent_id: AgentInfo.shape.id,
+    /** 主機有沒有開啟效能蒐集（Hub 無法從遠端開）。 */
+    performance: z.boolean().default(false),
+    samples: z.array(MetricSample).min(1).max(MAX_METRIC_SAMPLES),
+  })
+  .passthrough();
+
 export type ReportT = z.infer<typeof Report>;
+export type MetricsBatchT = z.infer<typeof MetricsBatch>;
+export type MetricSampleT = z.infer<typeof MetricSample>;
 export type FindingT = z.infer<typeof Finding>;
 export type SnapshotT = z.infer<typeof Snapshot>;
 export type RegisterT = z.infer<typeof Register>;

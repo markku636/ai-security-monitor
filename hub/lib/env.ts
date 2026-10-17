@@ -17,6 +17,10 @@ export interface HubEnv {
   snapshotMinIntervalMs: number;
   /** 超過這段時間沒消息就算「離線」（之內但超過快照間隔兩倍算「延遲」）。 */
   staleAfterMs: number;
+  /** 流量／效能原始樣本（每分鐘）保留天數。 */
+  metricsRawDays: number;
+  /** 流量／效能每小時彙總保留天數。 */
+  metricsHourlyDays: number;
 }
 
 /** 改名後的新前綴：ASA_X 也接受 AI_SECURITY_MONITOR_X，新名優先（舊名繼續有效）。 */
@@ -87,6 +91,8 @@ export function loadEnv(): HubEnv {
     reportMinIntervalMs: num('ASA_HUB_INGEST_MIN_INTERVAL_MS', 60_000),
     snapshotMinIntervalMs: num('ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS', 10_000),
     staleAfterMs: num('ASA_HUB_STALE_AFTER_MS', 30 * 60_000),
+    metricsRawDays: Math.min(90, Math.max(1, num('ASA_HUB_METRICS_RAW_DAYS', 7))),
+    metricsHourlyDays: Math.min(3650, Math.max(1, num('ASA_HUB_METRICS_HOURLY_DAYS', 90))),
   };
 }
 

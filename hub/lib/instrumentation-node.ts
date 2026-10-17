@@ -19,6 +19,9 @@ export async function registerNode(): Promise<void> {
   } catch (err) {
     console.error('[ai-security-monitor-hub] migration failed; will retry on first request', err);
   }
+  // 流量／效能：每小時彙總與保留期限（每 10 分鐘；advisory lock，多個 hub 行程只有一個在做）
+  const { startMetricsScheduler } = await import('./metrics/rollup');
+  startMetricsScheduler();
   void startDiscovery();
 }
 

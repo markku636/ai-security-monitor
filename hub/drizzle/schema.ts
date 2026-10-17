@@ -2,8 +2,10 @@
 // 雜湊一律存 hex 文字，避免 pg（Buffer）與 PGlite（Uint8Array）型別差異。
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   bigserial,
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -125,6 +127,10 @@ export const agents = pgTable(
     deletedAt: ts('deleted_at'),
     /** 身分釘選：第一次看到時記下 X-ASA-Agent-Token 的 sha256，之後不符就拒絕（防共用 client 金鑰冒名）。 */
     tokenHash: text('token_hash'),
+    /** 最後一次收到流量／效能樣本的時間（舊版 agent 不送，一直是 null）。 */
+    metricsAt: ts('metrics_at'),
+    /** 這台電腦有沒有開啟效能蒐集（主機自己決定；null＝還沒送過樣本）。 */
+    perfEnabled: boolean('perf_enabled'),
   },
   (t) => [index('agents_last_seen_idx').on(t.lastSeenAt), index('agents_hostname_idx').on(t.hostname)],
 );
@@ -472,4 +478,86 @@ export const enrollmentRequests = pgTable(
     enrollKeyId: text('enroll_key_id'),
   },
   (t) => [index('enrollment_requests_status_idx').on(t.status, t.createdAt), index('enrollment_requests_agent_idx').on(t.agentId)],
+);
+
+export type MetricIface = { name: string; virtual: boolean; rx: number; tx: number };
+export type MetricProcNet = { name: string; rx: number; tx: number };
+export type MetricDisk = { mount: string; fs?: string; used: number; total: number; removable?: boolean };
+export type MetricProcPerf = { name: string; pid?: number | null; count: number; cpu: number; rss: number };
+export type MetricBattery = { percent: number; charging: boolean; plugged?: boolean | null };
+
+/**
+ * 網路流量與效能的原始樣本：每台主機每個取樣一列（預設每分鐘），保留 AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS（預設 7 天）。
+ * 網路欄位一律有；效能欄位只有主機開啟效能蒐集（perf=true）時才有。(agent_id, at) 唯一，重送不會重複計算。
+ */
+export const hostMetrics = pgTable(
+  'host_metrics',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    at: ts('at').notNull(),
+    intervalS: integer('interval_s').notNull(),
+    rxBytes: bigint('rx_bytes', { mode: 'number' }).notNull().default(0),
+    txBytes: bigint('tx_bytes', { mode: 'number' }).notNull().default(0),
+    interfaces: jsonb('interfaces').$type<MetricIface[]>().notNull().default([]),
+    /** 各程式收發量（Windows 系統管理員／macOS）；讀不到是 null。 */
+    processes: jsonb('processes').$type<MetricProcNet[]>(),
+    perf: boolean('perf').notNull().default(false),
+    cpuPct: doublePrecision('cpu_pct'),
+    cpuCores: integer('cpu_cores'),
+    memUsed: bigint('mem_used', { mode: 'number' }),
+    memTotal: bigint('mem_total', { mode: 'number' }),
+    swapUsed: bigint('swap_used', { mode: 'number' }),
+    swapTotal: bigint('swap_total', { mode: 'number' }),
+    disks: jsonb('disks').$type<MetricDisk[]>(),
+    /** 各磁碟區最高的使用率（%），查詢「磁碟快滿」用。 */
+    diskUsedPct: doublePrecision('disk_used_pct'),
+    diskRead: bigint('disk_read', { mode: 'number' }),
+    diskWrite: bigint('disk_write', { mode: 'number' }),
+    load1: doublePrecision('load1'),
+    uptimeS: bigint('uptime_s', { mode: 'number' }),
+    topCpu: jsonb('top_cpu').$type<MetricProcPerf[]>(),
+    topMem: jsonb('top_mem').$type<MetricProcPerf[]>(),
+    battery: jsonb('battery').$type<MetricBattery>(),
+    receivedAt: ts('received_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.at] }), index('host_metrics_at_idx').on(t.at), index('host_metrics_received_idx').on(t.receivedAt)],
+);
+
+/**
+ * 每小時彙總（由 hub 背景工作從原始樣本算出，可重算、冪等），保留 AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS（預設 90 天）。
+ * 7 天／30 天的圖表與排行用這張表。
+ */
+export const hostMetricsHourly = pgTable(
+  'host_metrics_hourly',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    hour: ts('hour').notNull(),
+    samples: integer('samples').notNull().default(0),
+    seconds: integer('seconds').notNull().default(0),
+    rxBytes: bigint('rx_bytes', { mode: 'number' }).notNull().default(0),
+    txBytes: bigint('tx_bytes', { mode: 'number' }).notNull().default(0),
+    interfaces: jsonb('interfaces').$type<MetricIface[]>().notNull().default([]),
+    processes: jsonb('processes').$type<MetricProcNet[]>(),
+    perfSamples: integer('perf_samples').notNull().default(0),
+    cpuAvg: doublePrecision('cpu_avg'),
+    cpuMax: doublePrecision('cpu_max'),
+    memUsedAvg: bigint('mem_used_avg', { mode: 'number' }),
+    memUsedMax: bigint('mem_used_max', { mode: 'number' }),
+    memTotal: bigint('mem_total', { mode: 'number' }),
+    swapUsedMax: bigint('swap_used_max', { mode: 'number' }),
+    swapTotal: bigint('swap_total', { mode: 'number' }),
+    diskUsedPctMax: doublePrecision('disk_used_pct_max'),
+    disks: jsonb('disks').$type<MetricDisk[]>(),
+    diskRead: bigint('disk_read', { mode: 'number' }),
+    diskWrite: bigint('disk_write', { mode: 'number' }),
+    load1Avg: doublePrecision('load1_avg'),
+    batteryMin: integer('battery_min'),
+    batteryLast: integer('battery_last'),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.hour] }), index('host_metrics_hourly_hour_idx').on(t.hour)],
 );

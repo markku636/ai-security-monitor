@@ -50,6 +50,7 @@ See [.env.example](../.env.example) for the full list. The important ones:
 | `AI_SECURITY_MONITOR_HUB_HOST_PORT` / `AI_SECURITY_MONITOR_HUB_BIND` | Host port (8088) and bind address |
 | `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | Image tag (default `latest`; e.g. `slim`, `0.3.0`) |
 | `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY` / `AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN` / `AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY` / `AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | Keys for "External threat intel" on the IP page (optional; can also be set under Settings & keys → Threat intel sources); `AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` disables outbound lookups |
+| `AI_SECURITY_MONITOR_HUB_METRICS_RAW_DAYS` / `AI_SECURITY_MONITOR_HUB_METRICS_HOURLY_DAYS` | How long network traffic / performance data is kept: per-minute raw samples (default 7, 1–90) and hourly rollups (default 90); see [metrics.en.md](metrics.en.md) |
 | `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` | For the `/ai` page; or run `docker compose exec hub claude` and type `/login` (the AI assistant showing "Please run /login" means it is not signed in yet); the login is kept in the `/data` volume; `claude setup-token` creates a long-lived token |
 
 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`, `AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS`, `AI_SECURITY_MONITOR_HUB_DATABASE_URL` and `AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY` also accept `<NAME>_FILE` (Docker secrets).
