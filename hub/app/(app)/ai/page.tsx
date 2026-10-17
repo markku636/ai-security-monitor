@@ -1,4 +1,5 @@
 import { desc } from 'drizzle-orm';
+import { AiAccounts } from '@/components/ai/AiAccounts';
 import { AiConsole } from '@/components/ai/AiConsole';
 import { Card } from '@/components/ui/Card';
 import { Markdown } from '@/components/ui/Markdown';
@@ -32,6 +33,7 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<R
           {t('在 hub 主機上用 Claude Code 或 Codex 分析所有主機；AI 透過唯讀的 hub 工具查資料，引用情資時會附來源，不會改動任何設定。')}
         </p>
       </header>
+      <AiAccounts />
       <AiConsole
         providers={providers}
         agents={agents.map((a) => ({ id: a.id, hostname: a.hostname }))}

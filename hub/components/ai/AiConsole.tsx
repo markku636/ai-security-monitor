@@ -104,10 +104,10 @@ export function AiConsole({
           if (e.type === 'text') setAnswer((a) => a + e.text);
           else if (e.type === 'tool') setLines((l) => [...l, { kind: 'tool', text: `${e.name} ${e.input ?? ''}` }]);
           else if (e.type === 'tool_result' && !e.ok) setLines((l) => [...l, { kind: 'tool_err', text: e.preview }]);
-          else if (e.type === 'error') setLines((l) => [...l, { kind: 'note', text: e.message }]);
+          else if (e.type === 'error') setLines((l) => withLoginHint(l, e.message));
           else if (e.type === 'end') {
             setStatus(e.status);
-            if (e.error) setLines((l) => [...l, { kind: 'note', text: e.error! }]);
+            if (e.error) setLines((l) => withLoginHint(l, e.error!));
           }
         }
       }
@@ -118,6 +118,14 @@ export function AiConsole({
       router.refresh();
     }
   }
+
+  // CLI 回「請登入／登入過期」時，多給一行提示指向上面的 AI 帳號卡
+  function withLoginHint(l: Line[], text: string): Line[] {
+    const next = [...l, { kind: 'note' as const, text }];
+    if (/\/login|not logged in|login expired|invalid api key|authentication/i.test(text) && !l.some((x) => x.text === LOGIN_HINT)) next.push({ kind: 'note', text: LOGIN_HINT });
+    return next;
+  }
+  const LOGIN_HINT = t('AI 還沒登入或登入已過期：請到上面的「AI 帳號」按「登入」。');
 
   if (!available.length) {
     return (

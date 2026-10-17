@@ -166,7 +166,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 代表 Claude Code 還沒登入。AI 分析用的是你自己的 Claude Code 或 Codex CLI 帳號，本專案不提供 AI 額度。
 
 - **桌面版、命令列版**：在同一台電腦開終端機執行 `claude`，輸入 `/login` 照指示登入，完成後輸入 `/exit`。Codex 則執行 `codex` 登入。`ai-security-monitor ai status` 可以看兩者有沒有裝好、登入了沒。
-- **Hub 網頁上的 AI 助手**：AI 跑在 Hub 的容器裡，要登入容器裡的那一份，見下方「[安裝](#安裝)」的 Hub 步驟。
+- **Hub 網頁上的 AI 助手**：AI 跑在 Hub 的容器裡，要登入容器裡的那一份：到「AI 助手」最上面的「AI 帳號」按「登入」（Claude 開授權頁面、貼回代碼；Codex 到 OpenAI 網站輸入代碼），也可以在那裡登出。步驟與手動指令見 [docs/ai-login.md](docs/ai-login.md)。
 </details>
 
 <details>
@@ -316,7 +316,8 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 1. 照[情境 B](#情境-b我要管辦公室好幾台) 啟動。單機版 `docker/compose.standalone.yml` 只開在本機 `http://127.0.0.1:8088`；伺服器版 `docker/compose.yml` 讓其他電腦回報。
 2. 確認：`curl http://127.0.0.1:8088/api/health` 回 `"db":"ok"`，網頁看得到登入頁。
 3. （選用）讓 Hub 的「AI 助手」能用：映像裡已經裝好 Claude Code 與 Codex，但要先登入一次（畫面出現「Please run /login」就是還沒登入）。擇一：
-   - **用 Claude 訂閱帳號登入**：執行 `docker compose -f docker/compose.yml --env-file .env exec hub claude`（單機版換成 `compose.standalone.yml`），輸入 `/login` → 選 Claude 帳號 → 把網址貼到瀏覽器授權 → 把授權碼貼回來 → 看到登入成功後輸入 `/exit`。
+   - **在網頁上登入**（最簡單）：Hub「AI 助手」最上面的「AI 帳號」→「登入」，Claude 開授權頁面、把代碼貼回來；Codex 到 OpenAI 網站輸入代碼。要登出也在這裡。詳見 [docs/ai-login.md](docs/ai-login.md)。
+   - **用指令登入**：執行 `docker compose -f docker/compose.yml --env-file .env exec hub claude auth login`（單機版換成 `compose.standalone.yml`），把網址貼到瀏覽器授權 → 把授權碼貼回來；登出用 `… exec hub claude auth logout`。
    - **用 token 或 API key**（不用進容器）：在自己電腦跑 `claude setup-token` 產生長效 token，在 `.env` 加 `CLAUDE_CODE_OAUTH_TOKEN=…`；或用 `ANTHROPIC_API_KEY=…`；Codex 用 `OPENAI_API_KEY=…`。改完再執行一次 `up -d`。
 
    登入資料存在 `hubdata` volume，更新映像或重建容器都會保留。AI 只拿到唯讀工具，看得到 Hub 的資料但不能改。

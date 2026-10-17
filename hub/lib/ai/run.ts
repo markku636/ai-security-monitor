@@ -108,7 +108,7 @@ export function codexArgs(spec: RunSpec, workspace: string, url: string): string
   return a;
 }
 
-function killTree(child: ChildProcess): void {
+export function killTree(child: ChildProcess): void {
   if (child.exitCode !== null || child.pid === undefined) return;
   if (process.platform === 'win32') {
     spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], { stdio: 'ignore', windowsHide: true });

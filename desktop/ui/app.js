@@ -458,10 +458,90 @@ async function pageAi() {
       <div class="row" style="margin-top:8px"><button class="btn primary" id="go" ${usable.length ? '' : 'disabled'}>開始分析</button><span class="muted small" id="status"></span></div>
       ${usable.length ? '' : `<p class="small" style="color:var(--danger)">找不到 Claude Code 或 Codex CLI。請先安裝並登入其中一個（例如 <span class="mono">npm i -g @anthropic-ai/claude-code</span> 後執行 <span class="mono">claude</span> 登入）。</p>`}
     </div>
-    <div class="card"><div id="tools"></div><div id="out" class="ai-out muted">結果會顯示在這裡。</div></div>`;
+    <div class="card"><div id="tools"></div><div id="out" class="ai-out muted">結果會顯示在這裡。</div></div>
+    <div class="card" id="ai-accounts"><h2>AI 帳號</h2><p class="muted small"><span class="spin"></span> 正在確認登入狀態…</p></div>`;
+  renderAiAccounts();
   document.getElementById('scope').value = aiState.scope;
   document.getElementById('prompt').value = aiState.prompt;
   document.getElementById('go').onclick = runAi;
+}
+
+// ---- AI 帳號：這台電腦上的 Claude Code／Codex 登入狀態、登入（開終端機）、登出 ----
+const AI_METHOD = { 'claude.ai': 'Claude 訂閱帳號', chatgpt: 'ChatGPT 帳號', api_key: 'API key', oauth_token: '長效 token（環境變數）' };
+let aiAuthTimer = null;
+
+async function renderAiAccounts() {
+  const box = document.getElementById('ai-accounts');
+  if (!box) return;
+  let list;
+  try {
+    list = (await invoke('ai_auth_status')).providers;
+  } catch (e) {
+    box.innerHTML = `<h2>AI 帳號</h2><p class="small" style="color:var(--danger)">${esc(e)}</p>`;
+    return;
+  }
+  box.innerHTML = `<h2>AI 帳號 <span class="muted small" title="AI 分析用的是這台電腦上的 Claude Code／Codex 程式，也就是你平常用的那個。">(?)</span></h2>
+    <table><tbody>${list
+      .map(
+        (p) => `<tr>
+        <td><b>${esc(p.label)}</b></td>
+        <td>${!p.installed ? '<span class="chip neutral">未安裝</span>' : p.logged_in ? '<span class="chip ok">已登入</span>' : '<span class="chip medium">未登入</span>'}
+          <span class="muted small">${esc([p.email, AI_METHOD[p.method] ?? p.method, p.plan ? String(p.plan).toUpperCase() : null].filter(Boolean).join(' · '))}</span>
+          ${p.env_override?.length ? `<div class="small" style="color:var(--warn)">已設環境變數 ${esc(p.env_override.join('、'))}，程式會優先用它。</div>` : ''}</td>
+        <td style="text-align:right">${p.installed ? `<button class="btn" data-login="${p.id}">${p.logged_in ? '重新登入' : '登入'}</button>` : ''}
+          ${p.installed && p.logged_in ? `<button class="btn" data-logout="${p.id}" style="border-color:var(--danger);color:var(--danger)">登出</button>` : ''}</td>
+      </tr>`,
+      )
+      .join('')}</tbody></table>
+    <details class="small" style="margin-top:8px"><summary class="link">怎麼登入？登出會怎樣？</summary>
+      <p>按「登入」會開一個終端機視窗執行官方的登入指令（<span class="mono">claude auth login</span>／<span class="mono">codex login</span>），接著會打開瀏覽器，用你的帳號登入並授權就完成，這裡會自動顯示已登入。</p>
+      <p>登出會刪掉這台電腦上該程式的登入資料。<b>這就是你平常用的 Claude Code／Codex</b>，登出後你在終端機或編輯器裡用它也要重新登入。</p>
+      <p>按鈕不能用時，自己開終端機執行：<span class="mono">claude auth login</span>、<span class="mono">claude auth logout</span>、<span class="mono">codex login</span>、<span class="mono">codex logout</span>。</p>
+    </details>`;
+  for (const b of box.querySelectorAll('[data-login]')) {
+    b.onclick = async () => {
+      try {
+        await invoke('ai_login', { providerId: b.dataset.login });
+        toast('已開啟終端機視窗：照指示在瀏覽器登入，完成後這裡會自動更新', 8000);
+        watchAiLogin(b.dataset.login);
+      } catch (e) {
+        toast(String(e), 8000);
+      }
+    };
+  }
+  for (const b of box.querySelectorAll('[data-logout]')) {
+    b.onclick = async () => {
+      const name = b.dataset.logout === 'claude' ? 'Claude Code' : 'Codex';
+      if (!window.confirm(`登出這台電腦上的 ${name}？\n\n這就是你平常用的 ${name}：登出後在終端機或編輯器裡用它也要重新登入。`)) return;
+      b.disabled = true;
+      try {
+        await invoke('ai_logout', { providerId: b.dataset.logout });
+        toast(`${name} 已登出`);
+      } catch (e) {
+        toast(`登出失敗：${e}`, 8000);
+      }
+      renderAiAccounts();
+    };
+  }
+}
+
+/** 登入是在另一個視窗完成的：每 3 秒問一次，最多 5 分鐘、或離開 AI 頁就停。 */
+function watchAiLogin(id) {
+  clearInterval(aiAuthTimer);
+  const until = Date.now() + 5 * 60_000;
+  aiAuthTimer = setInterval(async () => {
+    if (location.hash !== '#ai' || Date.now() > until) return clearInterval(aiAuthTimer);
+    try {
+      const p = (await invoke('ai_auth_status')).providers.find((x) => x.id === id);
+      if (p?.logged_in) {
+        clearInterval(aiAuthTimer);
+        toast(`${p.label} 已登入`);
+        renderAiAccounts();
+      }
+    } catch {
+      // 下一輪再問
+    }
+  }, 3000);
 }
 
 let aiUnlisten = null;

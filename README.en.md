@@ -166,7 +166,7 @@ On a Mac, the first time you open it right-click it in Applications → "Open"; 
 Claude Code isn't signed in yet. AI analysis uses your own Claude Code or Codex CLI account; this project does not provide any AI credits.
 
 - **Desktop app, command line**: on the same computer open a terminal, run `claude`, type `/login` and follow the prompts, then `/exit`. For Codex, run `codex` and sign in. `ai-security-monitor ai status` shows whether each is installed and signed in.
-- **AI assistant in the Hub web UI**: the AI runs inside the Hub container, so sign in there; see the Hub steps under [Install](#install).
+- **AI assistant in the Hub web UI**: the AI runs inside the Hub container, so sign in there: click **Sign in** under *AI accounts* at the top of the AI assistant page (Claude: open the authorization page and paste the code back; Codex: enter the code on OpenAI's site). You can sign out there too. Steps and manual commands: [docs/ai-login.en.md](docs/ai-login.en.md).
 </details>
 
 <details>
@@ -316,7 +316,8 @@ The install scripts verify the release's `SHA256SUMS` and stop on a mismatch. Op
 1. Start it as in [scenario B](#scenario-b-i-manage-several-computers-in-an-office). The standalone `docker/compose.standalone.yml` only listens on `http://127.0.0.1:8088`; the server version `docker/compose.yml` lets other computers report in.
 2. Check: `curl http://127.0.0.1:8088/api/health` returns `"db":"ok"` and the web page shows the sign-in screen.
 3. (Optional) make the Hub's "AI assistant" work: Claude Code and Codex are already in the image but need to be signed in once ("Please run /login" means they aren't). Either:
-   - **Sign in with your Claude subscription**: run `docker compose -f docker/compose.yml --env-file .env exec hub claude` (use `compose.standalone.yml` for the standalone Hub), type `/login` → choose your Claude account → open the URL in a browser and authorise → paste the code back → once it says you're signed in, type `/exit`.
+   - **Sign in on the web page** (easiest): Hub *AI assistant* → *AI accounts* → **Sign in**; for Claude open the authorization page and paste the code back, for Codex enter the code on OpenAI's site. Sign out there too. See [docs/ai-login.en.md](docs/ai-login.en.md).
+   - **Sign in with a command**: run `docker compose -f docker/compose.yml --env-file .env exec hub claude auth login` (use `compose.standalone.yml` for the standalone Hub), open the URL in a browser and authorise, then paste the code back; sign out with `… exec hub claude auth logout`.
    - **Use a token or API key** (no need to enter the container): run `claude setup-token` on your own computer to create a long-lived token and add `CLAUDE_CODE_OAUTH_TOKEN=…` to `.env`; or use `ANTHROPIC_API_KEY=…`; for Codex `OPENAI_API_KEY=…`. Then run `up -d` again.
 
    The sign-in is stored in the `hubdata` volume and survives image updates and container rebuilds. The AI only gets read-only tools: it can see Hub data but not change it.

@@ -27,6 +27,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tokio::sync::Mutex;
 
+mod ai_auth;
 mod lan;
 mod updates;
 
@@ -678,6 +679,9 @@ pub fn run(start_in_tray: bool) {
             intel_update,
             ai_providers,
             ai_ask,
+            ai_auth::ai_auth_status,
+            ai_auth::ai_login,
+            ai_auth::ai_logout,
             hub_status,
             discover_hubs,
             request_join,
