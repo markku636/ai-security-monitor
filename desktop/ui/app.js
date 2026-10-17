@@ -108,9 +108,11 @@ async function pageOverview() {
       <div class="stat"><div class="label">威脅情資</div><div class="value">${o.intel.ok}/${o.intel.total}</div><div class="hint">${o.intel.checked_at ? `最後更新 ${ago(o.intel.checked_at)}` : '還沒下載'}${o.intel.source === 'hub' ? '・從 Hub' : o.intel.source === 'vendor' ? '・直接找廠商' : ''}${intelOld ? ' <span class="chip medium">過期</span>' : ''}</div></div>
       <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : '<a class="link" href="#join">尋找公司的 Hub</a>'}</div></div>
     </div>
+    <div class="grid" id="ov-metrics"><div class="stat"><div class="label">網路</div><div class="hint">載入中…</div></div></div>
     <div class="card"><h2>危險與可疑連線</h2><div id="ov-conn" class="muted">載入中…</div></div>`;
   document.getElementById('scan').onclick = () => scanNow();
   document.getElementById('upd').onclick = () => updateIntel(false);
+  loadMetrics();
   try {
     const c = await invoke('connections');
     const bad = c.connections.filter((x) => x.verdict.level === 'dangerous' || x.verdict.level === 'suspicious');
@@ -120,6 +122,99 @@ async function pageOverview() {
   } catch (e) {
     document.getElementById('ov-conn').textContent = String(e);
   }
+}
+
+// ---------------- 網路流量與效能（總覽的卡片） ----------------
+const fmtBytes = (n) => {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = Math.max(0, n);
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return i === 0 ? `${Math.round(v)} B` : `${v.toFixed(v >= 100 ? 0 : 1)} ${u[i]}`;
+};
+const fmtRate = (n) => (n == null ? '—' : `${fmtBytes(n)}/s`);
+const fmtPct = (n) => (n == null ? '—' : `${Math.round(n)}%`);
+
+/** 小折線圖（一條或兩條線；pct 時固定 0–100）。 */
+function sparkline(series, { pct = false, label = '' } = {}) {
+  const W = 160;
+  const H = 36;
+  const all = series.flatMap((s) => s.values).filter((v) => v != null);
+  if (all.length < 2) return '<div class="spark-empty">累積幾分鐘後會畫出變化</div>';
+  const max = pct ? 100 : Math.max(...all, 1);
+  const n = Math.max(...series.map((s) => s.values.length));
+  const x = (i) => (n <= 1 ? W / 2 : (i / (n - 1)) * (W - 2) + 1);
+  const y = (v) => H - 2 - (Math.min(v, max) / max) * (H - 4);
+  const lines = series
+    .map((s) => {
+      let d = '';
+      let pen = false;
+      s.values.forEach((v, i) => {
+        if (v == null) { pen = false; return; }
+        d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+        pen = true;
+      });
+      return d ? `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : '';
+    })
+    .join('');
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">${lines}</svg>`;
+}
+
+let metricsTimer = null;
+async function loadMetrics() {
+  clearTimeout(metricsTimer);
+  const el = document.getElementById('ov-metrics');
+  if (!el) return;
+  try {
+    const m = await invoke('metrics_now');
+    renderMetrics(el, m);
+  } catch (e) {
+    el.innerHTML = `<div class="stat"><div class="label">網路</div><div class="hint">${esc(e)}</div></div>`;
+  }
+  // 開著總覽時每 10 秒更新（背景服務的樣本是每分鐘一個）
+  if (location.hash === '' || location.hash === '#overview') metricsTimer = setTimeout(loadMetrics, 10000);
+}
+
+const NET_HINT = '這台電腦實體網卡的上傳／下載速度（VPN、Docker、WSL 這類虛擬網卡不重複計算）。網路流量一律統計，有加入公司 Hub 時會一起回報。';
+const PERF_HINT = '要蒐集 CPU、記憶體、磁碟才會顯示；資料只會送到這台電腦加入的公司 Hub。到「設定」開啟。';
+
+function renderMetrics(el, m) {
+  const pts = m.points ?? [];
+  const cur = m.current;
+  const secs = Math.max(1, cur?.interval_s ?? 1);
+  const rx = cur ? cur.net.rx_bytes / secs : null;
+  const tx = cur ? cur.net.tx_bytes / secs : null;
+  const src = m.source === 'background' ? `背景服務每 ${esc(m.interval)} 取樣` : '桌面版開著時取樣';
+  const net = `<div class="stat metric" title="${esc(`${NET_HINT}
+${src}`)}">
+    <div class="label">網路（現在）<span class="muted"> (?)</span></div>
+    <div class="value small-value"><span class="dl">↓ ${fmtRate(rx)}</span> <span class="ul">↑ ${fmtRate(tx)}</span></div>
+    ${sparkline([{ values: pts.map((p) => p.rx), color: 'var(--chart-1)' }, { values: pts.map((p) => p.tx), color: 'var(--chart-2)' }], { label: '下載與上傳速率' })}
+    <div class="hint"><span class="key dl">下載</span> <span class="key ul">上傳</span></div>
+  </div>`;
+  if (!m.performance_enabled) {
+    el.innerHTML = `${net}<div class="stat" title="${esc(PERF_HINT)}">
+      <div class="label">效能（CPU、記憶體、磁碟）</div>
+      <div class="value" style="font-size:15px;padding-top:8px">未開啟</div>
+      <div class="hint"><a class="link" href="#settings">到設定開啟</a>・只會送到這台加入的 Hub</div>
+    </div>`;
+    return;
+  }
+  const p = cur?.perf;
+  const memPct = p && p.mem_total ? (p.mem_used * 100) / p.mem_total : null;
+  const disk = p?.disks?.filter((d) => d.total > 0).map((d) => ({ ...d, pct: (d.used * 100) / d.total })).sort((a, b) => b.pct - a.pct)[0];
+  const card = (label, value, key, sub, hint) => `<div class="stat metric" title="${esc(hint)}">
+    <div class="label">${label}<span class="muted"> (?)</span></div>
+    <div class="value small-value${value != null && value >= 90 ? ' hot' : ''}">${fmtPct(value)}</div>
+    ${sparkline([{ values: pts.map((x) => x[key]), color: 'var(--chart-1)' }], { pct: true, label })}
+    <div class="hint">${sub}</div>
+  </div>`;
+  el.innerHTML =
+    net +
+    card('CPU', p?.cpu_pct, 'cpu', p ? `${p.cpu_cores} 個邏輯核心` : '—', '整台電腦的處理器使用率（所有核心平均）。') +
+    card('記憶體', memPct, 'mem', p ? `${fmtBytes(p.mem_used)}／${fmtBytes(p.mem_total)}` : '—', '已用＝總量減掉可立即使用的部分（可回收的快取不算已用）。') +
+    card('磁碟（最滿的磁碟區）', disk?.pct, 'disk', disk ? `${esc(disk.mount)}：${fmtBytes(disk.used)}／${fmtBytes(disk.total)}` : '—', '各磁碟區裡用得最滿的那個。超過 90% 會在 Hub 列成待處理問題。');
 }
 
 async function scanNow() {
@@ -402,6 +497,12 @@ async function runAi() {
 
 // ---------------- 設定 ----------------
 const BG_HINT = '開機或登入後，在背景定時掃描這台電腦、把結果回報給公司的 Hub。不用開著這個視窗，也不需要系統管理員權限（裝在目前的使用者底下）。';
+const PERF_TOGGLE_HINT = '開啟後，每分鐘記錄 CPU、記憶體、磁碟用量與讀寫、最吃資源的程式與電池，送到這台電腦加入的公司 Hub（不會送到其他地方）。Hub 無法從遠端幫你開啟。';
+function perfStateText(on) {
+  return on
+    ? '已開啟。有開「開機／登入後在背景自動回報」時，不用開著這個視窗也會在背景持續蒐集（背景服務每分鐘重讀設定，不用重新啟動）。'
+    : '未開啟：只統計網路流量。';
+}
 const TRAY_HINT = '登入 Windows／macOS／Linux 時自動開啟這個程式，但只放在右下角的系統匣，不會跳出視窗。想看狀況時再點系統匣圖示。';
 const NEEDS_CONFIRM = 'needs_confirm:';
 
@@ -458,6 +559,11 @@ async function pageSettings() {
       <p class="small muted" id="auto-bg-state" style="margin:4px 0 10px 24px">讀取中…</p>
       <label class="row" title="${esc(TRAY_HINT)}"><input type="checkbox" id="auto-tray" disabled /> <b>登入時開啟桌面版（常駐系統匣、不跳視窗）</b> <span class="small muted">(?)</span></label>
       <p class="small muted" style="margin:4px 0 0 24px">關閉這個視窗只會縮到系統匣；從系統匣選「結束」才會離開。</p>
+    </div>
+    <div class="card"><h2>網路流量與效能</h2>
+      <p class="small muted" style="margin:0 0 8px">網路流量（各網卡、各程式的上傳／下載量）一律統計，有加入公司 Hub 時每分鐘回報。</p>
+      <label class="row" title="${esc(PERF_TOGGLE_HINT)}"><input type="checkbox" id="perf-toggle" ${o.metrics?.performance ? 'checked' : ''} /> <b>蒐集這台電腦的效能（CPU、記憶體、磁碟）</b> <span class="small muted">(?)</span></label>
+      <p class="small muted" style="margin:4px 0 0 24px" id="perf-state">${perfStateText(o.metrics?.performance)}</p>
     </div>
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
@@ -575,6 +681,21 @@ async function pageSettings() {
       tray.disabled = false;
     })
     .catch(() => {});
+  const perf = document.getElementById('perf-toggle');
+  perf.onchange = async () => {
+    const want = perf.checked;
+    perf.disabled = true;
+    try {
+      perf.checked = await invoke('set_performance', { enabled: want });
+      document.getElementById('perf-state').textContent = perfStateText(perf.checked);
+      toast(perf.checked ? '已開啟效能蒐集' : '已關閉效能蒐集');
+    } catch (e) {
+      perf.checked = !want;
+      toast(String(e), 8000);
+    } finally {
+      perf.disabled = false;
+    }
+  };
   tray.onchange = async () => {
     const want = tray.checked;
     tray.disabled = true;

@@ -16,6 +16,8 @@
   --ok-soft: #dcfce7;
   --info-soft: #e0f2fe;
   --info: #075985;
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -36,6 +38,8 @@
     --ok-soft: #052e16;
     --info: #7dd3fc;
     --info-soft: #082f49;
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
     color-scheme: dark;
   }
 }
@@ -169,3 +173,13 @@ details summary { cursor: pointer; }
 }
 a.btn { text-decoration: none; display: inline-block; }
 details > summary { cursor: pointer; }
+/* 網路流量與效能卡片 */
+.stat.metric .small-value { font-size: 18px; padding-top: 2px; }
+.stat.metric .small-value.hot { color: var(--danger); }
+.stat.metric .value .dl, .stat.metric .value .ul { white-space: nowrap; }
+.spark { display: block; width: 100%; height: 36px; margin: 6px 0 2px; }
+.spark-empty { font-size: 11px; color: var(--muted); height: 36px; display: flex; align-items: center; }
+.key::before { content: ""; display: inline-block; width: 10px; height: 2px; margin-right: 4px; vertical-align: middle; background: currentColor; }
+.stat .key { color: var(--muted); }
+.key.dl::before { background: var(--chart-1); }
+.key.ul::before { background: var(--chart-2); }

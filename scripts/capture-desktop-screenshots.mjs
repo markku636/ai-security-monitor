@@ -148,6 +148,50 @@ const OVERVIEW = {
   intel: { checked_at: iso(12), ok: enabledFeeds, total: enabledFeeds, source: 'hub' },
   watcher_running: true,
   elevated: false,
+  metrics: { performance: true, interval: '1m' },
+};
+
+// 最近 1 小時的流量／效能（背景服務每分鐘一個樣本）：辦公時段的起伏、最後幾分鐘 updater.exe 往外傳
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const wave = (i, k) => 0.8 + 0.35 * Math.sin(i / 6 + k) + 0.15 * Math.sin(i / 2.3 + k * 3);
+const METRIC_POINTS = Array.from({ length: 60 }, (_, k) => {
+  const i = 59 - k;
+  const upload = i < 6 ? 5.8 * MB : 0;
+  return {
+    ts: iso(i),
+    rx: Math.round(1.1 * MB * wave(k, 1)),
+    tx: Math.round(0.18 * MB * wave(k, 2) + upload),
+    cpu: i < 6 ? 88 + 6 * wave(k, 3) / 1.3 : 16 + 9 * wave(k, 3),
+    mem: 68 + 4 * wave(k, 4),
+    disk: 71,
+  };
+});
+const last = METRIC_POINTS[METRIC_POINTS.length - 1];
+const METRICS = {
+  performance_enabled: true,
+  interval: '1m',
+  source: 'background',
+  points: METRIC_POINTS,
+  current: {
+    ts: last.ts,
+    interval_s: 60,
+    net: { rx_bytes: last.rx * 60, tx_bytes: last.tx * 60, interfaces: [{ name: 'Wi-Fi', virtual: false, rx_bytes: last.rx * 60, tx_bytes: last.tx * 60 }] },
+    perf: {
+      cpu_pct: Math.round(last.cpu * 10) / 10,
+      cpu_cores: 12,
+      mem_used: Math.round(16 * GB * (last.mem / 100)),
+      mem_total: 16 * GB,
+      swap_used: 1.2 * GB,
+      swap_total: 5 * GB,
+      disks: [{ mount: 'C:\\', fs: 'NTFS', used: 338 * GB, total: 476 * GB }],
+      uptime_s: 3 * 86_400,
+      boot_time: iso(3 * 1440),
+      top_cpu: [{ name: 'updater.exe', pid: 6120, count: 1, cpu_pct: 71.4, rss: 96 * MB }],
+      top_mem: [{ name: 'chrome.exe', count: 31, cpu_pct: 3.5, rss: 3.1 * GB }],
+      battery: { percent: 76, charging: false, plugged: false },
+    },
+  },
 };
 
 const AI_ANSWER = `結論：這台電腦有 1 組危險連線、3 組可疑連線，其中 updater.exe 需要立刻處理。
@@ -197,6 +241,7 @@ const DATA = {
   },
   ai: { answer: AI_ANSWER, tools: AI_TOOLS },
   hub_status: { hub_url: 'https://hub.example.com', hub_fingerprint: '72AS-YEXT-VNGO-NLC5-W2NM', pending: null },
+  metrics: METRICS,
   background_service: {
     status: { scope: 'user', manager: 'windows_run', installed: true, legacy: false },
     exe: 'C:\Users\demo\AppData\Local\AI Security Monitor\ai-security-monitor-desktop.exe',
@@ -224,6 +269,8 @@ function installMock(D) {
     hub_status: () => D.hub_status,
     background_service_status: () => D.background_service,
     desktop_autostart_status: () => true,
+    metrics_now: () => D.metrics,
+    set_performance: ({ enabled }) => enabled,
     discover_hubs: () => ({ hubs: [], pinned_fingerprint: D.hub_status.hub_fingerprint }),
     ai_ask: async ({ provider }) => {
       emit('ai-event', { type: 'start', provider: provider === 'codex' ? 'Codex CLI' : 'Claude Code' });
@@ -347,7 +394,7 @@ await send('Page.addScriptToEvaluateOnNewDocument', { source: `(${installMock.to
 
 // 名稱｜頁面｜深色｜擷取前要做的事
 const SHOTS = [
-  ['desktop-overview', 'overview', false, async () => waitFor(`document.querySelector('#ov-conn table')`)],
+  ['desktop-overview', 'overview', false, async () => waitFor(`document.querySelector('#ov-conn table') && document.querySelector('#ov-metrics .spark')`)],
   [
     'desktop-connections',
     'connections',
@@ -379,7 +426,7 @@ const SHOTS = [
     },
   ],
   ['desktop-settings', 'settings', false, async () => waitFor(`document.getElementById('auto-bg') && !document.getElementById('auto-bg').disabled && !document.getElementById('auto-tray').disabled`)],
-  ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table')`)],
+  ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table') && document.querySelector('#ov-metrics .spark')`)],
 ];
 
 const only = args.only ? new Set(args.only.split(',')) : null;
