@@ -154,6 +154,7 @@ impl Aggregator {
             count: 0,
             answers: Vec::new(),
             cnames: Vec::new(),
+            client: None,
             source: ev.source,
         });
         rec.count = rec.count.saturating_add(1);

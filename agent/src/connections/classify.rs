@@ -131,6 +131,11 @@ impl KnownGood {
             .map(|(_, name)| name.as_str())
     }
 
+    /// 已知良性的網域樣式（`*.windowsupdate.com` 或完整名稱）。
+    pub fn domain_patterns(&self) -> impl Iterator<Item = &str> {
+        self.domains.iter().map(|(d, _)| d.as_str())
+    }
+
     pub fn match_domain(&self, domain: &str) -> Option<&str> {
         let d = domain.trim_end_matches('.').to_ascii_lowercase();
         self.domains

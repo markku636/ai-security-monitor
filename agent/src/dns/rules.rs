@@ -523,6 +523,7 @@ mod tests {
             count,
             answers: vec![],
             cnames: vec![],
+            client: None,
             source: Source::Etw,
         }
     }

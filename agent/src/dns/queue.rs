@@ -167,6 +167,7 @@ pub fn sample_batch() -> DnsBatch {
                 count: 3,
                 answers: vec!["203.0.113.66".parse().unwrap()],
                 cnames: vec!["edge.example.net".into()],
+                client: None,
                 source: Source::Etw,
             },
             DnsRecord {
@@ -181,6 +182,7 @@ pub fn sample_batch() -> DnsBatch {
                 count: 1,
                 answers: vec![],
                 cnames: vec![],
+                client: None,
                 source: Source::Packet,
             },
         ],

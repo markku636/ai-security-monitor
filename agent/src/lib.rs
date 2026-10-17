@@ -14,6 +14,8 @@ pub mod ai;
 pub mod config;
 pub mod connections;
 pub mod dns;
+#[cfg(feature = "dns-server")]
+pub mod dnsd;
 pub mod elevate;
 pub mod embedded;
 pub mod error;

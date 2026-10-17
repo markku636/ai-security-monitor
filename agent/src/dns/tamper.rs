@@ -416,12 +416,10 @@ pub fn wpad_findings(records: &[DnsRecord]) -> Vec<Finding> {
 
 fn random_label() -> String {
     uuid::Uuid::new_v4()
-        .simple()
-        .to_string()
-        .chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .chain("qzxvkj".chars())
+        .into_bytes()
+        .iter()
         .take(12)
+        .map(|b| (b'a' + b % 26) as char)
         .collect()
 }
 
@@ -713,6 +711,7 @@ mod tests {
             count: 2,
             answers: vec![ip("10.0.0.66")],
             cnames: vec![],
+            client: None,
             source: Source::Etw,
         };
         let f = wpad_findings(std::slice::from_ref(&r));

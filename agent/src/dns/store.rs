@@ -165,6 +165,7 @@ mod tests {
             count: 1,
             answers: vec![],
             cnames: vec![],
+            client: None,
             source: Source::Etw,
         }
     }

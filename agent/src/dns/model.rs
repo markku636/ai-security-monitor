@@ -19,6 +19,8 @@ pub enum Source {
     Resolved,
     /// 直接監聽 53 port 的封包（Linux AF_PACKET、macOS BPF）。
     Packet,
+    /// 防護 DNS 伺服器（`dns-server`）收到的查詢。
+    Resolver,
 }
 
 impl Source {
@@ -29,6 +31,7 @@ impl Source {
             Source::Cache => "cache",
             Source::Resolved => "resolved",
             Source::Packet => "packet",
+            Source::Resolver => "resolver",
         }
     }
 }
@@ -75,6 +78,9 @@ pub struct DnsRecord {
     pub answers: Vec<IpAddr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cnames: Vec<String>,
+    /// 防護 DNS 的紀錄才有：問的那台用戶端的 IP。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
     pub source: Source,
 }
 

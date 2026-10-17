@@ -117,6 +117,9 @@ pub enum Command {
     Metrics(MetricsArgs),
     /// DNS 監看：這台電腦最近查了哪些網域、是哪個程式查的、哪些可疑（--follow 即時看）
     Dns(DnsArgs),
+    /// 防護 DNS 伺服器（選用）：給區網用的 DNS，封鎖情資列名的網域、上游走加密 DNS、有快取
+    #[cfg(feature = "dns-server")]
+    DnsServer(DnsServerArgs),
     /// 檔案完整性與開機自啟：看哪些重要檔案或開機自動執行項目被改過、接受變更、重建基準
     Fim(FimArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
@@ -413,6 +416,56 @@ pub struct DnsArgs {
     /// 即時顯示新的查詢（Ctrl+C 結束；Windows 以系統管理員執行才看得到是哪個程式）
     #[arg(long)]
     pub follow: bool,
+}
+
+#[cfg(feature = "dns-server")]
+#[derive(Args, Debug, Clone)]
+pub struct DnsServerArgs {
+    /// 監聽位址（逗號分隔；預設 0.0.0.0:53 與 [::]:53，被佔用時改綁各網卡位址）
+    #[arg(long, value_delimiter = ',', value_name = "ADDR")]
+    pub listen: Vec<String>,
+    /// 上游 DNS：https:// 開頭＝加密 DNS（DoH），否則是 IP（預設 Quad9 與 Cloudflare 的 DoH）
+    #[arg(long, value_delimiter = ',', value_name = "URL|IP")]
+    pub upstream: Vec<String>,
+    /// 拿來封鎖的網域情資來源 id（省略＝已啟用、信心夠高的網域清單）
+    #[arg(long = "feed", value_name = "ID")]
+    pub feeds: Vec<String>,
+    /// 自動挑選清單時的最低信心
+    #[arg(long, default_value_t = 75)]
+    pub min_confidence: u8,
+    /// 另外要封鎖的網域（含子網域）
+    #[arg(long = "block", value_name = "DOMAIN")]
+    pub block: Vec<String>,
+    /// 不要封鎖的網域（含子網域）
+    #[arg(long = "allow", value_name = "DOMAIN")]
+    pub allow: Vec<String>,
+    /// 允許使用的用戶端網段（逗號分隔；預設 loopback 與私有網段）
+    #[arg(long, value_delimiter = ',', value_name = "CIDR")]
+    pub acl: Vec<String>,
+    /// 每個用戶端每秒最多幾題（0＝不限）
+    #[arg(long, default_value_t = 200)]
+    pub rate_limit: u32,
+    /// 快取最多幾筆
+    #[arg(long, default_value_t = 200_000)]
+    pub cache: u64,
+    /// 不封鎖，只做加密轉送與快取
+    #[arg(long)]
+    pub no_block: bool,
+    /// 也擋 iCloud Private Relay（讓 Apple 裝置回到這台 DNS）
+    #[arg(long)]
+    pub block_private_relay: bool,
+    /// 不記錄查詢
+    #[arg(long)]
+    pub no_log: bool,
+    /// 內部網域（回私有位址不當成 DNS rebinding），例 corp.example
+    #[arg(long = "internal-suffix", value_name = "SUFFIX")]
+    pub internal_suffix: Vec<String>,
+    /// 檢查本機的防護 DNS 是否正常（健康檢查名稱與測試封鎖網域）後結束
+    #[arg(long)]
+    pub healthcheck: bool,
+    /// 顯示防護 DNS 的狀態（查詢量、快取、封鎖、上游延遲）後結束
+    #[arg(long)]
+    pub status: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

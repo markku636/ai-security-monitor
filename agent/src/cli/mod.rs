@@ -13,6 +13,8 @@ pub mod baseline_cmd;
 pub mod config_cmd;
 pub mod connections_cmd;
 pub mod dns_cmd;
+#[cfg(feature = "dns-server")]
+pub mod dns_server_cmd;
 pub mod doctor_cmd;
 pub mod events_cmd;
 pub mod fim_cmd;
