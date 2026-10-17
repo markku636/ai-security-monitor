@@ -6,7 +6,7 @@ English | [繁體中文](desktop.md)
 
 ## Install
 
-Download from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) (current version v0.3.0):
+Download from [Releases](https://github.com/markku636/ai-security-monitor/releases/latest) (current version v0.4.0):
 
 | Platform | File | First launch (the installers are not code-signed) |
 |---|---|---|
@@ -65,6 +65,8 @@ moves `%APPDATA%\ai-security-agent` to `%APPDATA%\ai-security-monitor`, and the 
 ## Automatic updates
 
 Settings → "Background reporting and automatic updates":
+
+![Background reporting and automatic updates in Settings](images/desktop-settings-update.png)
 
 - **Automatic updates**: "Off", "Notify me when a new version is out (recommended, default)", "Update automatically". It checks once a day (first about 30 seconds after start). In notify mode a "New version 0.x.y" notice appears in the bottom-right corner; press "Update now" or dismiss it. In automatic mode the update is downloaded in the background and installed the next time you choose "Quit" from the tray or reopen the app (if the app was started in the tray at sign-in and its window has not been opened yet, it installs right away).
 - **Check for updates / Update now** work at any time regardless of the setting, and show the current version, the latest version and a link to the release notes.
