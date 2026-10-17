@@ -126,7 +126,8 @@ describe('events summaries', () => {
   });
 
   it('answers the traffic queries from snapshots', async () => {
-    await snapshot(clientPost('/api/v1/ingest/snapshot', load('snapshot.v1.json')));
+    // 契約範例的 ts 是固定日期；「最近 24 小時的新目的地」要以現在為準，否則過了那天就失敗
+    await snapshot(clientPost('/api/v1/ingest/snapshot', { ...load('snapshot.v1.json'), ts: new Date().toISOString() }));
     const top = await topDestinations({ days: 7 });
     expect(top[0]).toMatchObject({ remoteIp: '203.0.113.66', worstVerdict: 'dangerous' });
     expect(await topDestinations({ days: 7, risky: true })).toHaveLength(1);
