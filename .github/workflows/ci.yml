@@ -476,6 +476,39 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $TOK" http://127.0.0.1:3911/api/v1/admin/tokens)" = "403"
           echo "hub smoke ok"
 
+  dnsbench:
+    name: dnsbench (protective DNS performance, linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agent
+          key: release
+      - name: Benchmark (cache hits + blocks, misses, 2M-entry blocklist)
+        run: |
+          set -euo pipefail
+          cargo build -q --release --locked --example dnsbench
+          ./target/release/examples/dnsbench --seconds 15 --clients 64 --json | tee bench.json
+          {
+            echo "### Protective DNS benchmark ($(jq -r .cpus bench.json) CPUs, client and server on the same runner)"
+            echo
+            echo "| metric | result | target |"
+            echo "|---|---|---|"
+            jq -r '"| cache hit + block QPS | \(.qps) | ≥ 50,000 |",
+                   "| cache hit p50 / p99 / p99.9 | \(.hit_p50_us) / \(.hit_p99_us) / \(.hit_p999_us) µs | p99 < 1,000 µs |",
+                   "| cache miss p50 / p99 (local fake upstream) | \(.miss_p50_us) / \(.miss_p99_us) µs | — |",
+                   "| blocklist lookup (\(.blocklist_entries) entries) | \(.block_lookup_ns) ns | < 1,000 ns |",
+                   "| blocklist memory / rebuild | \(.blocklist_mb) MB / \(.rebuild_ms) ms | — / < 3,000 ms |",
+                   "| process RSS | \(.rss_mb) MB | < 150 MB |"' bench.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 只擋嚴重退步（約目標的一半；runner 是共用機器，數字會抖）
+          jq -e '.qps >= 20000 and .hit_p99_us <= 5000 and .block_lookup_ns <= 2000 and .rebuild_ms <= 6000 and .rss_mb <= 300' bench.json > /dev/null
+
   docker:
     name: docker (hub image + standalone compose)
     runs-on: ubuntu-latest

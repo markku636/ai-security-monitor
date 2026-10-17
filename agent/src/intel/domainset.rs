@@ -1,11 +1,13 @@
 //! DomainSet：大量網域的精簡集合。每個網域只存 64-bit 雜湊（排序後二分搜尋），
 //! 有附加資訊的條目才帶一個 meta 索引。50 萬筆約 6 MB（存字串要幾十 MB）。
+//! 比對：雜湊高位元先查分桶索引（每桶約 16–32 筆），再在桶內二分搜尋，200 萬筆時每層只碰幾條 cache line。
 //! 碰撞機率：100 萬筆時任一查詢誤中約 5e-14，可忽略。
 
 /// 沒有附加資訊的條目。
 pub const NO_META: u32 = u32::MAX;
 
-/// 網域雜湊：FNV-1a 64，先轉小寫、去掉結尾的點。同一份程式內穩定即可（不落地）。
+/// 網域雜湊：FNV-1a 64，先轉小寫、去掉結尾的點，最後再混一次（高位元拿來分桶，要分布均勻）。
+/// 同一份程式內穩定即可（不落地）。
 pub fn hash(name: &str) -> u64 {
     let n = name.strip_suffix('.').unwrap_or(name);
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -13,13 +15,29 @@ pub fn hash(name: &str) -> u64 {
         h ^= u64::from(b.to_ascii_lowercase());
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    h
+    // MurmurHash3 fmix64
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    h ^ (h >> 33)
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct DomainSet {
     hashes: Vec<u64>,
     metas: Vec<u32>,
+    /// 分桶索引：桶 b 的條目在 `hashes[index[b]..index[b + 1]]`；條目少時是空的（直接二分搜尋）。
+    index: Vec<u32>,
+    shift: u32,
+}
+
+/// 幾個位元分桶：每桶平均 16–32 筆，最多 2^20 桶；1,024 筆以下不分桶。
+fn bucket_bits(n: usize) -> u32 {
+    if n < 1024 {
+        return 0;
+    }
+    (usize::BITS - n.leading_zeros()).saturating_sub(5).min(20)
 }
 
 /// 命中：比中的那一層網域（可能是查詢名稱的上層）與 meta 索引（`NO_META`＝沒有附加資訊）。
@@ -32,10 +50,32 @@ pub struct DomainHit<'a> {
 impl DomainSet {
     /// 由 (雜湊, meta) 建立；重複的雜湊保留第一筆。
     pub fn build(mut entries: Vec<(u64, u32)>) -> DomainSet {
-        entries.sort_by_key(|e| e.0);
+        entries.sort_unstable_by_key(|e| e.0);
         entries.dedup_by_key(|e| e.0);
-        let (hashes, metas) = entries.into_iter().unzip();
-        DomainSet { hashes, metas }
+        let (hashes, metas): (Vec<u64>, Vec<u32>) = entries.into_iter().unzip();
+        let bits = bucket_bits(hashes.len());
+        if bits == 0 {
+            return DomainSet {
+                hashes,
+                metas,
+                index: Vec::new(),
+                shift: 0,
+            };
+        }
+        let shift = 64 - bits;
+        let mut index = vec![0u32; (1usize << bits) + 1];
+        for h in &hashes {
+            index[(h >> shift) as usize + 1] += 1;
+        }
+        for i in 1..index.len() {
+            index[i] += index[i - 1];
+        }
+        DomainSet {
+            hashes,
+            metas,
+            index,
+            shift,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -47,7 +87,12 @@ impl DomainSet {
     }
 
     fn find(&self, h: u64) -> Option<u32> {
-        self.hashes.binary_search(&h).ok().map(|i| self.metas[i])
+        if self.index.is_empty() {
+            return self.hashes.binary_search(&h).ok().map(|i| self.metas[i]);
+        }
+        let b = (h >> self.shift) as usize;
+        let (lo, hi) = (self.index[b] as usize, self.index[b + 1] as usize);
+        self.hashes[lo..hi].binary_search(&h).ok().map(|i| self.metas[lo + i])
     }
 
     /// `subdomains`＝true：名稱本身或任一上層（不含單獨的頂級網域）在集合內就算命中；false：只比完全相同。
@@ -69,7 +114,7 @@ impl DomainSet {
 
     /// 估計佔用的記憶體（bytes）。
     pub fn heap_bytes(&self) -> usize {
-        self.hashes.capacity() * 8 + self.metas.capacity() * 4
+        self.hashes.capacity() * 8 + self.metas.capacity() * 4 + self.index.capacity() * 4
     }
 }
 
@@ -99,6 +144,19 @@ mod tests {
 
     fn set(names: &[&str]) -> DomainSet {
         DomainSet::build(names.iter().enumerate().map(|(i, n)| (hash(n), i as u32)).collect())
+    }
+
+    #[test]
+    fn bucketed_set_finds_every_entry() {
+        let names: Vec<String> = (0..50_000).map(|i| format!("n{i}.bucket.example")).collect();
+        let s = DomainSet::build(names.iter().enumerate().map(|(i, n)| (hash(n), i as u32)).collect());
+        assert!(!s.index.is_empty());
+        for (i, n) in names.iter().enumerate().step_by(97) {
+            assert_eq!(s.lookup(&format!("www.{n}"), true).map(|h| h.meta), Some(i as u32));
+        }
+        assert!(s.lookup("absent.bucket.example", true).is_none());
+        assert_eq!(bucket_bits(2_000_000), 16);
+        assert_eq!(bucket_bits(1000), 0);
     }
 
     #[test]
