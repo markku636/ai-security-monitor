@@ -2,6 +2,10 @@
 
 ## 未發佈
 
+## v0.4.0 — 2026-10-18
+
+**網路流量統計與效能（效能可選開啟）、桌面版與命令列版自動更新（有簽章）、手動更新與「立即上傳到 Hub」、區網更容易找到 Hub；可疑 IP 排名可選時間範圍，週期性連線誤報大幅減少；圖示改成滿版圓角方塊。** 一般使用者請下載 `AI-Security-Monitor-0.4.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；`ai-security-monitor-0.4.0-*` 是命令列版。0.3.0 的桌面版沒有自動更新，要手動裝一次 0.4.0，之後就會自動更新。
+
 - **網路流量統計與效能（效能可選開啟）**（[docs/metrics.md](docs/metrics.md)）：每台電腦每分鐘記錄用了多少網路，Hub 畫出頻寬圖、哪台與哪個程式用最多；CPU、記憶體、磁碟要在那台電腦上自己開啟（預設關，Hub 無法從遠端開）。Windows（含 Server Core）、macOS、Linux 都支援。
   - **網路（一律開啟）**：各網卡收發位元組（計數器相減，處理歸零與 32 位元溢位），只把實體網卡加總；VPN、Docker、WSL、Hyper-V 等虛擬網卡照列但標「虛擬」、不算進總量，Windows 網卡上疊的篩選層（`…Filter Driver-0000`）不列。各程式用量：Windows 以系統管理員執行時用 TCP 延伸統計、macOS 用 `nettop`，Linux 沒有（Hub 改看各行程的連線數）。
   - **效能（`metrics.performance`，預設關）**：CPU 與核心數、記憶體、置換空間、各磁碟區用量與讀寫、開機時間、負載（Linux／macOS）、最吃 CPU／記憶體的前 5 個程式（同名合併）、電池（筆電）。開啟：桌面版「設定 → 蒐集這台電腦的效能（CPU、記憶體、磁碟）」或 `ai-security-monitor config set metrics.performance true`；背景服務每輪重讀設定，不用重新啟動。

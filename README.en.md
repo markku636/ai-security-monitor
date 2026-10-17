@@ -43,7 +43,7 @@ A few words you will see a lot:
 
 ## Which one do I install?
 
-Everything is on the [latest release](https://github.com/markku636/ai-security-monitor/releases/latest); the current version is **v0.3.0**.
+Everything is on the [latest release](https://github.com/markku636/ai-security-monitor/releases/latest); the current version is **v0.4.0**.
 
 | You want to | Install | File |
 |---|---|---|
@@ -300,7 +300,7 @@ Once installed the window opens on the overview and the AI Security Monitor icon
 
 1. Open PowerShell. To install the service that starts at boot, use "Run as administrator".
 2. Run `irm https://github.com/markku636/ai-security-monitor/releases/latest/download/install.ps1 | iex`. It installs to `%LOCALAPPDATA%\ai-security-monitor\bin` by default and adds it to your PATH.
-3. Open a **new** PowerShell window and run `ai-security-monitor version`; it should print `ai-security-monitor 0.3.0 …`.
+3. Open a **new** PowerShell window and run `ai-security-monitor version`; it should print `ai-security-monitor 0.4.0 …`.
 4. (Optional) start at login: `ai-security-monitor service install --yes`; start at boot on a server: `ai-security-monitor service install --system --yes` (administrator). Check with `ai-security-monitor service status`.
 
 **Command line: Linux, macOS**

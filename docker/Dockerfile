@@ -12,7 +12,7 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:${NODE_VERSION}-bookworm-slim AS build
 WORKDIR /src
-ARG ASA_HUB_VERSION=0.3.0
+ARG ASA_HUB_VERSION=0.4.0
 ENV NEXT_TELEMETRY_DISABLED=1 \
     ASA_HUB_VERSION=${ASA_HUB_VERSION}
 COPY --from=deps /src/hub/node_modules hub/node_modules
@@ -25,7 +25,7 @@ RUN cd hub && npx next build \
  && rm -rf .next/standalone/hub/tests .next/standalone/hub/tsconfig.tsbuildinfo
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
-ARG ASA_HUB_VERSION=0.3.0
+ARG ASA_HUB_VERSION=0.4.0
 ARG AI_CLIS="@anthropic-ai/claude-code@2.1.302 @openai/codex@0.163.0"
 LABEL org.opencontainers.image.title="AI Security Monitor Security Hub" \
       org.opencontainers.image.source="https://github.com/markku636/ai-security-monitor" \
