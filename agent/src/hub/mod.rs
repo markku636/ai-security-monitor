@@ -274,7 +274,7 @@ impl HubClient {
 
 #[cfg(test)]
 pub(crate) mod test_server {
-    //! 迷你 HTTP 伺服器：依序回應預設內容，並把收到的請求（含 body）交回測試。
+    //! 迷你 HTTP 伺服器：依序回應預設內容（`{BASE}` 換成伺服器網址），並把收到的請求（含 body）交回測試。
     use std::sync::{Arc, Mutex};
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -290,8 +290,11 @@ pub(crate) mod test_server {
         let url = format!("http://{}", listener.local_addr().unwrap());
         let captured = Arc::new(Mutex::new(Vec::new()));
         let cap = captured.clone();
+        let base = url.clone();
         tokio::spawn(async move {
             for (status, body) in responses {
+                // 回應裡的 {BASE} 換成這台伺服器的網址（例如 Release JSON 裡的下載網址）
+                let body = body.replace("{BASE}", &base);
                 let Ok((mut sock, _)) = listener.accept().await else {
                     return;
                 };

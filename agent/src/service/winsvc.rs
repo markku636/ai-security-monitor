@@ -79,6 +79,7 @@ fn service_main(_args: Vec<OsString>) {
     };
     let args = WatchArgs {
         service: true,
+        scm: true,
         interval: ctx.interval.clone(),
         ..Default::default()
     };

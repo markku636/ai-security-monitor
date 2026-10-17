@@ -156,6 +156,31 @@ pub async fn user_service_status(config_dir: &std::path::Path) -> AppResult<serd
     }))
 }
 
+/// 桌面版用：使用者層的背景服務有登記、卻沒有在跑（例如更新安裝時被結束）→ 把它啟動起來。回傳有沒有啟動。
+pub async fn ensure_user_service_running(config_dir: &std::path::Path) -> AppResult<Option<Vec<String>>> {
+    if !service::running_watchers(Some(config_dir)).is_empty() {
+        return Ok(None);
+    }
+    let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
+    if !target.existing {
+        return Ok(None);
+    }
+    service::apply(&service::plan_restart(&target), &RealRunner)
+        .await
+        .map(Some)
+}
+
+/// 桌面版用：更新之後讓使用者層的背景服務換成新版（有登記才做）。
+pub async fn restart_user_service(config_dir: &std::path::Path) -> AppResult<Option<Vec<String>>> {
+    let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
+    if !target.existing {
+        return Ok(None);
+    }
+    service::apply(&service::plan_restart(&target), &RealRunner)
+        .await
+        .map(Some)
+}
+
 async fn restart(env: &Env, scope: Scope) -> AppResult<()> {
     let target = service::current_target(scope, &env.config_dir, None, &RealRunner).await?;
     if !target.existing && !target.legacy {

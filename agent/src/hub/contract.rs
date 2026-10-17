@@ -36,6 +36,47 @@ pub struct HeartbeatPayload {
     pub intel_checked_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub intel_feeds: Option<IntelFeedsInfo>,
+    /// 自動更新狀態（Hub 在主機清單顯示「有新版」）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<UpdateInfo>,
+    /// 這台電腦的背景服務正在幫哪個 Hub 做區網廣播（`hub.advertise_url`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advertising: Option<AdvertiseInfo>,
+}
+
+/// 心跳裡的更新狀態。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UpdateInfo {
+    /// `off`／`notify`／`auto`。
+    pub mode: String,
+    /// 誰負責安裝：`agent`（命令列版自己）／`desktop`（桌面版的更新器）。
+    pub owner: String,
+    /// 最新版（檢查過才有）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest: Option<String>,
+    /// `latest` 比這台的版本新。
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checked_at: Option<DateTime<Utc>>,
+    /// 沒有自動安裝的原因或最近的錯誤。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// 心跳裡的區網廣播狀態。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct AdvertiseInfo {
+    /// 廣播的 Hub 網址。
+    pub url: String,
+    /// `advertising`（廣播中）／`hub_unreachable`（連不到 Hub，已停止）／`starting`／`error`。
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// 這一輪開始廣播的時間。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -5,6 +5,8 @@
 //! 改名相容：資產名是 `ai-security-monitor-<ver>-<平台>`；release 另外附同內容的 `asa-<ver>-<平台>` 給 0.1.x 自我更新用。
 //! 一律替換「目前執行中的那個檔案」，所以從 0.1.x 更新上來、檔名仍是 `asa.exe` 的安裝照樣能用。
 
+pub mod auto;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

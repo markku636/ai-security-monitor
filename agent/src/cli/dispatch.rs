@@ -28,7 +28,7 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
     match cli.cmd {
         Command::Version { check } => super::version_cmd::run(&env, check).await,
         Command::Doctor => super::doctor_cmd::run(&env).await,
-        Command::SelfUpdate { check, to } => super::update_cmd::run(&env, check, to).await,
+        Command::SelfUpdate { check, to, no_restart } => super::update_cmd::run(&env, check, to, !no_restart).await,
         Command::Scan(a) => super::scan_cmd::run(&env, a).await,
         Command::Connections(a) => super::connections_cmd::run(&env, a).await,
         Command::Intel { cmd } => super::intel_cmd::run(&env, cmd).await,
@@ -39,6 +39,7 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Unenroll => super::hub_cmd::unenroll(&env).await,
         Command::Status => super::hub_cmd::status(&env).await,
         Command::Watch(a) => super::hub_cmd::watch(&env, a).await,
+        Command::Upload => super::upload_cmd::run(&env).await,
         Command::Service { cmd } => super::service_cmd::run(&env, cmd).await,
         Command::Ports(a) => super::ports_cmd::run(&env, a).await,
         Command::Traffic(a) => super::traffic_cmd::run(&env, a).await,

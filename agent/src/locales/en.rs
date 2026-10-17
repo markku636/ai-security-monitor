@@ -1096,6 +1096,71 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "重新啟動常駐行程" => "restart the resident process",
         "重新啟動失敗" => "Restart failed",
         "更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換" => "Update ai-security-monitor: download the GitHub release executable, verify its SHA256 and replace this one",
+        "更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換，並重新啟動背景服務" =>
+            "Update ai-security-monitor: download the GitHub release executable, verify its SHA256, replace this one and restart the background service",
+        "更新後不要重新啟動背景服務" => "Do not restart the background service after updating",
+        "立即掃描並上傳到 Hub（先補送暫存的報告，再上傳連線快照、掃描報告與心跳）" =>
+            "Scan now and upload to the Hub (first resend queued reports, then upload a connection snapshot, the scan report and a heartbeat)",
+        // ---- auto-update (update.mode) ----
+        "{key} 只能是 off、notify 或 auto" => "{key} must be off, notify or auto",
+        "桌面版內建的背景服務：由桌面版的更新器更新" => "Background service built into the desktop app: updated by the desktop app's updater",
+        "開發版（從原始碼建置）：不自動更新" => "Development build (built from source): no automatic updates",
+        "由 {manager} 安裝：請用 {manager} 更新" => "Installed by {manager}: update it with {manager}",
+        "只有背景服務（watch --service）會自動安裝；手動更新：ai-security-monitor self-update --yes" =>
+            "Only the background service (watch --service) installs updates automatically; to update by hand: ai-security-monitor self-update --yes",
+        "無法啟動新版：{e}" => "Could not start the new version: {e}",
+        "已是最新版（{v}）" => "Up to date ({v})",
+        "有新版 {v}：{note}" => "New version {v}: {note}",
+        "有新版 {v}" => "New version {v}",
+        "有新版 {v}（設定 update.mode = auto 可自動更新；手動：ai-security-monitor self-update --yes）" =>
+            "New version {v} (set update.mode = auto to update automatically; by hand: ai-security-monitor self-update --yes)",
+        "已自動更新 {from} → {to}" => "Updated automatically {from} → {to}",
+        "檢查更新失敗：{e}" => "Update check failed: {e}",
+        "重新啟動成新版…" => "Restarting as the new version…",
+        "這是桌面版內建的 ai-security-monitor：請在桌面版「設定 → 檢查更新」更新（背景自動回報會跟著一起更新）" =>
+            "This ai-security-monitor is built into the desktop app: update it from the desktop app (Settings → Check for updates); background reporting is updated with it",
+        "{why}（確定要直接替換執行檔請加 --force）" => "{why} (add --force to replace the executable anyway)",
+        "有新版：{latest}（目前 {current}）；{why}；說明：{url}" => "New version available: {latest} (current {current}); {why}; notes: {url}",
+        "系統服務還是舊版：以系統管理員執行 ai-security-monitor service restart --system --yes 換成新版" =>
+            "The system service still runs the old version: run ai-security-monitor service restart --system --yes as administrator",
+        "已重新啟動背景服務（換成新版）" => "Restarted the background service (now the new version)",
+        "背景服務重新啟動失敗：{e}；請執行 ai-security-monitor service restart --yes" =>
+            "Could not restart the background service: {e}; run ai-security-monitor service restart --yes",
+        "自動更新" => "Auto-update",
+        "{mode} · 有新版 {v}（{why}）" => "{mode} · new version {v} ({why})",
+        "{mode} · 有新版 {v}" => "{mode} · new version {v}",
+        "區網廣播" => "LAN advertising",
+        "上次上傳" => "Last upload",
+        "失敗：{e}" => "Failed: {e}",
+        // ---- upload ----
+        "這台電腦還沒加入 Hub：先申請加入（桌面版「加入公司 Hub」，或 ai-security-monitor enroll --auto）" =>
+            "This computer has not joined a Hub yet: request to join first (desktop app \"Join company Hub\", or ai-security-monitor enroll --auto)",
+        "確認 Hub 身分…" => "Checking the Hub identity…",
+        "Hub 的身分和這台電腦記得的不同，已停止上傳（確認過指紋後重新加入：ai-security-monitor enroll --auto --repin）" =>
+            "The Hub's identity differs from the one this computer remembers; upload stopped (after checking the fingerprint, re-join: ai-security-monitor enroll --auto --repin)",
+        "補送之前沒送出的報告…" => "Resending reports that were not delivered earlier…",
+        "拍連線快照並上傳…" => "Taking and uploading a connection snapshot…",
+        "完整掃描中（約 10–60 秒）…" => "Running a full scan (about 10–60 seconds)…",
+        "上傳掃描報告…" => "Uploading the scan report…",
+        "沒有上傳任何東西" => "Nothing was uploaded",
+        "上傳失敗，報告已暫存，之後會自動重送：{e}" => "Upload failed; the report is queued and will be resent automatically: {e}",
+        "Hub 拒收這份報告：{e}" => "The Hub rejected this report: {e}",
+        "已上傳，Hub 收到 {n} 筆（新 {new}、解決 {resolved}，總分 {score}）" =>
+            "Uploaded; the Hub received {n} findings ({new} new, {resolved} resolved, score {score})",
+        "；連線快照 {n} 條" => "; connection snapshot with {n} connections",
+        "；連線快照沒送出（{e}）" => "; connection snapshot not sent ({e})",
+        "；補送暫存報告 {n} 份" => "; resent {n} queued reports",
+        "；還有 {n} 份等重送" => "; {n} still waiting to be resent",
+        "上傳失敗" => "Upload failed",
+        // ---- LAN advertising from the background service ----
+        "Hub 的指紋變了（{fp}），重新廣播" => "The Hub fingerprint changed ({fp}); advertising again",
+        "開始在區網廣播 Hub：{url}（指紋 {fp}）" => "Advertising the Hub on the local network: {url} (fingerprint {fp})",
+        "連不到 Hub（{url}），停止區網廣播：{e}" => "Cannot reach the Hub ({url}); stopped advertising on the local network: {e}",
+        "已停止區網廣播（設定改了）" => "Stopped advertising on the local network (setting changed)",
+        "要開機後一直廣播：ai-security-monitor config set hub.advertise_url {url}（由背景服務負責）" =>
+            "To keep advertising after restarts: ai-security-monitor config set hub.advertise_url {url} (the background service takes care of it)",
+        "只找到這台電腦已經加入的 Hub（設定檔）；公司 DNS 與區網廣播都沒有找到。要讓辦公室其他電腦也自動找到它：\n  1. 請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄（Hub「新增主機」頁有現成指令）；\n  2. 或在跑 Hub 的那台電腦開啟區網廣播：ai-security-monitor config set hub.advertise_url http://<那台的區網 IP>:8088（背景服務會負責廣播；Hub 要讓區網連得到，單機版預設只綁 127.0.0.1）；\n  3. 或直接把 Hub 網址給同事：ai-security-monitor enroll --hub <網址>" =>
+            "Only the Hub this computer already joined was found (from the config file); neither the company DNS nor LAN advertising found it. For other office computers to find it automatically:\n  1. ask the administrator to add an _aisecmon._tcp SRV record to the company DNS (the Hub's \"Add a host\" page has ready-made commands);\n  2. or turn on LAN advertising on the computer that runs the Hub: ai-security-monitor config set hub.advertise_url http://<its LAN IP>:8088 (the background service advertises it; the Hub must be reachable on the LAN — the standalone edition binds 127.0.0.1 only);\n  3. or simply give colleagues the Hub URL: ai-security-monitor enroll --hub <url>",
         "只檢查有沒有新版" => "Only check whether a new version exists",
         "更新（或退回）到指定版本，例：0.2.0" => "Update (or roll back) to this version, e.g. 0.2.0",
         "重新啟動常駐行程（例如更新 ai-security-monitor 之後）" => "Restart the resident process (e.g. after updating ai-security-monitor)",

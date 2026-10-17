@@ -19,11 +19,15 @@ use crate::model::report::AgentInfo;
 use crate::secrets::{SecretStore, KEY_HUB_ACTION, KEY_HUB_CLIENT, KEY_HUB_ENROLL_SECRET};
 
 fn log(env: &Env, msg: &str) {
+    log_line(env.global.quiet, msg);
+}
+
+/// 印一行 log（背景工作也用）：服務模式寫每日 log 檔（<設定目錄>/logs），不寫主控台。
+pub(crate) fn log_line(quiet: bool, msg: &str) {
     let line = format!("[{}] {msg}", Utc::now().format("%Y-%m-%d %H:%M:%S"));
-    // 服務模式：寫每日 log 檔（<設定目錄>/logs），不寫主控台
     if crate::service::instance::log_enabled() {
         crate::service::instance::write_log(&line);
-    } else if !env.global.quiet {
+    } else if !quiet {
         eprintln!("{line}");
     }
 }
@@ -242,7 +246,14 @@ pub async fn discover(env: &Env, a: DiscoverArgs) -> AppResult<()> {
     let found = discover::find(&opts).await?;
     let pinned = cfg.hub.as_ref().and_then(|h| h.fingerprint.clone());
     if env.global.json {
-        print_json(&serde_json::json!({ "hubs": found, "pinned_fingerprint": pinned }));
+        let hint = if found.is_empty() {
+            Some(crate::i18n::lookup(NOT_FOUND_HINT))
+        } else if only_configured(&found) {
+            Some(crate::i18n::lookup(ONLY_CONFIG_HINT))
+        } else {
+            None
+        };
+        print_json(&serde_json::json!({ "hubs": found, "pinned_fingerprint": pinned, "hint": hint }));
         return Ok(());
     }
     if found.is_empty() {
@@ -250,8 +261,18 @@ pub async fn discover(env: &Env, a: DiscoverArgs) -> AppResult<()> {
         return Ok(());
     }
     println!("{}", found_table(&found, pinned.as_deref()));
+    if only_configured(&found) {
+        println!("\n{}", crate::i18n::lookup(ONLY_CONFIG_HINT));
+    }
     Ok(())
 }
+
+/// 只找到設定檔裡已加入的 Hub（公司 DNS、區網廣播都沒找到）。
+fn only_configured(found: &[Found]) -> bool {
+    !found.is_empty() && found.iter().all(|f| f.candidate.source == discover::Source::Config)
+}
+
+const ONLY_CONFIG_HINT: &str = "只找到這台電腦已經加入的 Hub（設定檔）；公司 DNS 與區網廣播都沒有找到。要讓辦公室其他電腦也自動找到它：\n  1. 請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄（Hub「新增主機」頁有現成指令）；\n  2. 或在跑 Hub 的那台電腦開啟區網廣播：ai-security-monitor config set hub.advertise_url http://<那台的區網 IP>:8088（背景服務會負責廣播；Hub 要讓區網連得到，單機版預設只綁 127.0.0.1）；\n  3. 或直接把 Hub 網址給同事：ai-security-monitor enroll --hub <網址>";
 
 /// 等候中的申請說明（給使用者核對）。
 fn print_waiting(p: &PendingEnroll) {
@@ -576,10 +597,7 @@ pub async fn hub(env: &Env, cmd: HubCmd) -> AppResult<()> {
             let id = identity::fetch(&http, &url)
                 .await?
                 .ok_or_else(|| AppError::Hub(t!("這個 Hub 版本太舊，沒有身分端點，不能廣播").into()))?;
-            let host = hostname::get()
-                .map(|h| h.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let instance = name.unwrap_or_else(|| format!("{} ({host})", id.name));
+            let instance = name.unwrap_or_else(|| crate::hub::advertise::instance_name(&id));
             let dur = duration.as_deref().map(crate::util::time::parse_duration).transpose()?;
             let (daemon, fullname) = crate::hub::advertise::start(&url, &id, &instance)?;
             if env.global.json {
@@ -594,6 +612,13 @@ pub async fn hub(env: &Env, cmd: HubCmd) -> AppResult<()> {
                         name = instance,
                         url = url,
                         fp = id.fingerprint
+                    )
+                );
+                println!(
+                    "{}",
+                    tf!(
+                        "要開機後一直廣播：ai-security-monitor config set hub.advertise_url {url}（由背景服務負責）",
+                        url = url
                     )
                 );
             }
@@ -648,6 +673,9 @@ pub async fn status(env: &Env) -> AppResult<()> {
         Ok(Some(c)) => Some(c.health().await.map_err(|e| e.message())),
         _ => None,
     };
+    let upd = crate::update::auto::UpdateState::load(&env.config_dir);
+    let kind = crate::update::auto::install_kind();
+    let uploads = watch::upload_state(&env.config_dir);
     if env.global.json {
         print_json(&serde_json::json!({
             "agent_id": cfg.agent_id,
@@ -659,6 +687,9 @@ pub async fn status(env: &Env) -> AppResult<()> {
             "outbox": pending,
             "last_report": latest.as_ref().map(|r| serde_json::json!({ "finished_at": r.finished_at, "score": r.score, "findings": r.findings.len() })),
             "hub_health": health.as_ref().map(|h| match h { Ok(v) => v.clone(), Err(e) => serde_json::json!({ "error": e }) }),
+            "uploads": uploads,
+            "update": { "mode": cfg.update.mode, "install": kind, "state": upd, "available": upd.available(crate::VERSION) },
+            "hub_advertise_url": cfg.hub_advertise_url,
         }));
         return Ok(());
     }
@@ -692,6 +723,14 @@ pub async fn status(env: &Env) -> AppResult<()> {
             },
         ]);
         rows.push(vec![t!("待重送").to_string(), pending.to_string()]);
+        rows.push(vec![
+            t!("上次上傳").to_string(),
+            match (uploads.last_upload_at(), &uploads.last_error) {
+                (_, Some(e)) => tf!("失敗：{e}", e = e),
+                (Some(at), None) => at.format("%Y-%m-%d %H:%M").to_string(),
+                (None, None) => "-".into(),
+            },
+        ]);
         if let Some(fp) = cfg.hub.as_ref().and_then(|h| h.fingerprint.as_deref()) {
             rows.push(vec![t!("Hub 指紋").to_string(), fp.to_string()]);
         }
@@ -706,6 +745,22 @@ pub async fn status(env: &Env) -> AppResult<()> {
                 fp = p.hub_fingerprint
             ),
         ]);
+    }
+    rows.push(vec![
+        t!("自動更新").to_string(),
+        match (upd.available(crate::VERSION), kind.reason()) {
+            (Some(v), Some(why)) => tf!(
+                "{mode} · 有新版 {v}（{why}）",
+                mode = cfg.update.mode.as_str(),
+                v = v,
+                why = why
+            ),
+            (Some(v), None) => tf!("{mode} · 有新版 {v}", mode = cfg.update.mode.as_str(), v = v),
+            (None, _) => cfg.update.mode.as_str().to_string(),
+        },
+    ]);
+    if let Some(u) = &cfg.hub_advertise_url {
+        rows.push(vec![t!("區網廣播").to_string(), u.clone()]);
     }
     rows.push(vec![
         t!("最後一次掃描").to_string(),
@@ -802,7 +857,7 @@ async fn execute_remote(
 }
 
 /// 檢查 Hub 身分是否是釘選的那一個；沒釘選過（舊設定）就第一次看到時釘選。回傳能不能上傳。
-async fn hub_identity_ok(env: &Env, c: &HubClient, cfg: &mut config::AgentConfig) -> bool {
+pub(crate) async fn hub_identity_ok(env: &Env, c: &HubClient, cfg: &mut config::AgentConfig) -> bool {
     let pinned = cfg.hub.as_ref().and_then(|h| h.fingerprint.clone());
     match c.identity().await {
         Ok(Some(id)) => match identity::check_pin(pinned.as_deref(), &id.fingerprint) {
@@ -977,7 +1032,20 @@ async fn metrics_round(env: &Env, st: &mut MetricsState, agent_id: &str, client:
     crate::metrics::interval_of(&mc)
 }
 
-async fn flush_outbox(env: &Env, client: &HubClient) {
+/// 補送暫存報告的結果。
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct OutboxFlush {
+    pub sent: usize,
+    /// Hub 拒收（格式／大小不符，不會再送）。
+    pub rejected: usize,
+    /// 還沒送出的（連不上，下一輪再送）。
+    pub left: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+pub(crate) async fn flush_outbox(env: &Env, client: &HubClient) -> OutboxFlush {
+    let mut out = OutboxFlush::default();
     for p in outbox::list(&env.config_dir) {
         let Some(r) = outbox::load(&p) else {
             outbox::remove(&p);
@@ -986,17 +1054,53 @@ async fn flush_outbox(env: &Env, client: &HubClient) {
         match client.upload_report(&r).await {
             Ok(_) => {
                 outbox::remove(&p);
+                out.sent += 1;
+                watch::record_upload(&env.config_dir, client.base(), watch::Uploaded::Report(&r.report_id));
                 log(env, &tf!("已補送暫存報告 {id}", id = r.report_id));
             }
             Err(e @ AppError::HubRejected(_)) => {
                 outbox::remove(&p);
+                out.rejected += 1;
                 log(env, &e.message());
             }
             Err(e) => {
                 log(env, &tf!("補送失敗，稍後再試：{e}", e = e.message()));
-                return;
+                out.error = Some(e.message());
+                break;
             }
         }
+    }
+    out.left = outbox::list(&env.config_dir).len();
+    out
+}
+
+/// 心跳內容（背景服務與「立即上傳」共用）。
+pub(crate) fn heartbeat_payload(
+    env: &Env,
+    cfg: &config::AgentConfig,
+    client: &HubClient,
+    uptime_s: Option<u64>,
+    last_scan_at: Option<chrono::DateTime<Utc>>,
+    advertising: Option<crate::hub::contract::AdvertiseInfo>,
+) -> HeartbeatPayload {
+    let (intel_checked_at, intel_feeds) = intel_heartbeat(env, client);
+    let upd = crate::update::auto::UpdateState::load(&env.config_dir);
+    HeartbeatPayload {
+        agent_id: cfg.agent_id.clone(),
+        ts: Utc::now(),
+        version: crate::VERSION.to_string(),
+        uptime_s,
+        last_scan_at,
+        elevated: crate::elevate::is_elevated(),
+        intel_checked_at,
+        intel_feeds,
+        update: Some(crate::update::auto::heartbeat_info(
+            &upd,
+            cfg.update.mode,
+            &crate::update::auto::install_kind(),
+            crate::VERSION,
+        )),
+        advertising,
     }
 }
 
@@ -1015,7 +1119,7 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
     } else {
         env
     };
-    let _lock = if a.service {
+    let lock = if a.service {
         crate::service::instance::init_log(&env.config_dir);
         crate::service::instance::detach_console_if_owned();
         match crate::service::instance::InstanceLock::acquire(&env.config_dir) {
@@ -1045,6 +1149,14 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             ),
         );
         reapply_firewall(env).await;
+    }
+    // 自動更新：誰負責（桌面版內建的交給桌面版）、執行檔位置（更新後重新啟動用）
+    let upd_kind = crate::update::auto::install_kind();
+    let exe = crate::update::auto::current_exe();
+    if a.service && upd_kind.can_self_update() {
+        if let Some(e) = &exe {
+            crate::update::cleanup_old(e);
+        }
     }
     let mut cfg = config::load_or_init(&env.config_dir)?;
     let mut client = if a.no_upload {
@@ -1141,6 +1253,19 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         } else {
             crate::metrics::interval_of(&cfg.metrics)
         };
+    // 自動更新：每天最多查一次（--once 不查）
+    let mut next_update = (!a.once).then(|| {
+        let st = crate::update::auto::UpdateState::load(&env.config_dir);
+        let at = crate::update::auto::first_check_at(
+            &st,
+            Utc::now(),
+            crate::update::auto::jitter(crate::update::auto::FIRST_MAX),
+        );
+        tokio::time::Instant::now() + (at - Utc::now()).to_std().unwrap_or_default()
+    });
+    let mut restart_after_update = false;
+    // 區網廣播（hub.advertise_url）：設定改了下一輪就跟著開／關
+    let mut advertiser: Option<crate::hub::advertise::Advertiser> = None;
     // 停止訊號（Ctrl-C／SIGTERM／服務停止）：等待與掃描中都會被打斷，服務停止不必等完整掃描跑完
     let stop = crate::service::instance::stopped();
     tokio::pin!(stop);
@@ -1198,6 +1323,13 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                 }
             };
         }
+        if now >= next_snap && !a.once {
+            let want = match config::load(&env.config_dir) {
+                Ok(c) => c.hub_advertise_url,
+                Err(_) => cfg.hub_advertise_url.clone(),
+            };
+            advertiser = reconcile_advertiser(env, advertiser, want).await;
+        }
         if now >= next_snap {
             if intel_loaded.elapsed() > Duration::from_secs(3600) {
                 intel = watch::load_intel(&env.config_dir).await;
@@ -1208,29 +1340,33 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                     let bad = s.connections.iter().filter(|c| c.verdict.is_bad()).count();
                     if let Some(c) = &client {
                         match c.upload_snapshot(&s).await {
-                            Ok(_) => log(
-                                env,
-                                &tf!(
-                                    "快照已上傳：{n} 條連線（可疑／危險 {bad}）",
-                                    n = s.connections.len(),
-                                    bad = bad
-                                ),
-                            ),
-                            Err(e) => log(env, &tf!("快照上傳失敗：{e}", e = e.message())),
+                            Ok(_) => {
+                                watch::record_upload(&env.config_dir, c.base(), watch::Uploaded::Snapshot);
+                                log(
+                                    env,
+                                    &tf!(
+                                        "快照已上傳：{n} 條連線（可疑／危險 {bad}）",
+                                        n = s.connections.len(),
+                                        bad = bad
+                                    ),
+                                )
+                            }
+                            Err(e) => {
+                                watch::record_upload(&env.config_dir, c.base(), watch::Uploaded::Failed(&e.message()));
+                                log(env, &tf!("快照上傳失敗：{e}", e = e.message()))
+                            }
                         }
-                        let (intel_checked_at, intel_feeds) = intel_heartbeat(env, c);
-                        let hb = HeartbeatPayload {
-                            agent_id: cfg.agent_id.clone(),
-                            ts: Utc::now(),
-                            version: crate::VERSION.to_string(),
-                            uptime_s: agent.uptime_s,
+                        let hb = heartbeat_payload(
+                            env,
+                            &cfg,
+                            c,
+                            agent.uptime_s,
                             last_scan_at,
-                            elevated: crate::elevate::is_elevated(),
-                            intel_checked_at,
-                            intel_feeds,
-                        };
+                            advertiser.as_ref().map(|a| a.info()),
+                        );
                         match c.heartbeat(&hb).await {
                             Ok(v) => {
+                                watch::record_upload(&env.config_dir, c.base(), watch::Uploaded::Heartbeat);
                                 let commands = v["commands"].as_array().cloned().unwrap_or_default();
                                 if commands.iter().any(|x| x == "refresh_feeds") && !force_intel {
                                     log(env, t!("Hub 要求立即更新情資"));
@@ -1289,17 +1425,25 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                     );
                     if let Some(c) = &client {
                         match c.upload_report(&report).await {
-                            Ok(v) => log(
-                                env,
-                                &tf!(
-                                    "{summary}；已上傳（新 {new}、解決 {resolved}）",
-                                    summary = summary,
-                                    new = v["findings"]["new"].as_u64().unwrap_or(0),
-                                    resolved = v["findings"]["resolved"].as_u64().unwrap_or(0)
-                                ),
-                            ),
+                            Ok(v) => {
+                                watch::record_upload(
+                                    &env.config_dir,
+                                    c.base(),
+                                    watch::Uploaded::Report(&report.report_id),
+                                );
+                                log(
+                                    env,
+                                    &tf!(
+                                        "{summary}；已上傳（新 {new}、解決 {resolved}）",
+                                        summary = summary,
+                                        new = v["findings"]["new"].as_u64().unwrap_or(0),
+                                        resolved = v["findings"]["resolved"].as_u64().unwrap_or(0)
+                                    ),
+                                )
+                            }
                             Err(e @ AppError::HubRejected(_)) => log(env, &format!("{summary}；{}", e.message())),
                             Err(e) => {
+                                watch::record_upload(&env.config_dir, c.base(), watch::Uploaded::Failed(&e.message()));
                                 let _ = outbox::push(&env.config_dir, &report);
                                 log(
                                     env,
@@ -1323,11 +1467,22 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             let every = metrics_round(env, &mut metrics, &cfg.agent_id, client.as_ref()).await;
             next_metrics = tokio::time::Instant::now() + every;
         }
+        if next_update.is_some_and(|t| tokio::time::Instant::now() >= t) {
+            let (next, installed) = update_tick(env, &upd_kind, exe.as_deref(), a.service).await;
+            next_update = Some(next);
+            if installed {
+                restart_after_update = true;
+                break;
+            }
+        }
         if a.once || crate::service::instance::stop_requested() {
             break;
         }
         let mut wake = next_scan.min(next_snap).min(next_intel).min(next_metrics);
         if let Some(t) = next_enroll {
+            wake = wake.min(t);
+        }
+        if let Some(t) = next_update {
             wake = wake.min(t);
         }
         tokio::select! {
@@ -1338,5 +1493,95 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
             }
         }
     }
+    if let Some(adv) = advertiser {
+        adv.shutdown().await;
+    }
+    if restart_after_update {
+        if let Some(e) = &exe {
+            let sup = crate::update::auto::supervisor(a.scm);
+            log(env, t!("重新啟動成新版…"));
+            crate::update::auto::restart(sup, e, lock);
+        }
+    }
+    drop(lock);
     Ok(())
+}
+
+/// 依設定開／關區網廣播；網址改了就換一個。
+async fn reconcile_advertiser(
+    env: &Env,
+    current: Option<crate::hub::advertise::Advertiser>,
+    want: Option<String>,
+) -> Option<crate::hub::advertise::Advertiser> {
+    let want = want.filter(|u| !u.trim().is_empty());
+    match (current, want) {
+        (Some(a), Some(w)) if a.url().eq_ignore_ascii_case(&w) => Some(a),
+        (current, want) => {
+            if let Some(a) = current {
+                a.shutdown().await;
+                log(env, t!("已停止區網廣播（設定改了）"));
+            }
+            want.map(|url| {
+                let quiet = env.global.quiet;
+                crate::hub::advertise::Advertiser::spawn(
+                    url,
+                    std::sync::Arc::new(move |m: &str| log_line(quiet, m)),
+                    Some(env.config_dir.clone()),
+                )
+            })
+        }
+    }
+}
+
+/// 檢查一次更新（依目前設定的 update.mode）；回傳下一次檢查的時間與是不是已經換好新版（要重新啟動）。
+async fn update_tick(
+    env: &Env,
+    kind: &crate::update::auto::InstallKind,
+    exe: Option<&std::path::Path>,
+    service: bool,
+) -> (tokio::time::Instant, bool) {
+    use crate::update::auto::{self, Outcome};
+    let mode = config::load(&env.config_dir).map(|c| c.update.mode).unwrap_or_default();
+    if mode == config::UpdateMode::Off {
+        // 關閉：一小時後再看一次設定（桌面版可能剛打開）
+        return (tokio::time::Instant::now() + Duration::from_secs(3600), false);
+    }
+    let Some(exe) = exe else {
+        return (tokio::time::Instant::now() + auto::CHECK_EVERY, false);
+    };
+    let out = auto::check_and_apply(&env.config_dir, &crate::update::base_url(), mode, kind, exe, service).await;
+    let installed = match &out {
+        Outcome::UpToDate { latest } => {
+            log(env, &tf!("已是最新版（{v}）", v = latest));
+            false
+        }
+        Outcome::Available { latest, note, .. } => {
+            log(
+                env,
+                &match note {
+                    Some(n) => tf!("有新版 {v}：{note}", v = latest, note = n),
+                    None if mode == config::UpdateMode::Auto => tf!("有新版 {v}", v = latest),
+                    None => tf!(
+                        "有新版 {v}（設定 update.mode = auto 可自動更新；手動：ai-security-monitor self-update --yes）",
+                        v = latest
+                    ),
+                },
+            );
+            false
+        }
+        Outcome::Installed { from, to } => {
+            log(env, &tf!("已自動更新 {from} → {to}", from = from, to = to));
+            true
+        }
+        Outcome::Failed(e) => {
+            log(env, &tf!("檢查更新失敗：{e}", e = e));
+            false
+        }
+    };
+    let st = auto::UpdateState::load(&env.config_dir);
+    let wait = st
+        .next_check_at
+        .and_then(|t| (t - Utc::now()).to_std().ok())
+        .unwrap_or(auto::CHECK_EVERY);
+    (tokio::time::Instant::now() + wait, installed)
 }

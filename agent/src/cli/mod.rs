@@ -25,6 +25,7 @@ pub mod scan_cmd;
 pub mod service_cmd;
 pub mod traffic_cmd;
 pub mod update_cmd;
+pub mod upload_cmd;
 pub mod version_cmd;
 pub mod vuln_cmd;
 

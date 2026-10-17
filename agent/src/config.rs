@@ -45,6 +45,12 @@ pub struct AgentConfig {
     pub hub: Option<HubConfig>,
     pub remote_actions: RemoteActionsConfig,
     pub metrics: MetricsConfig,
+    /// 自動更新（`update.mode`）。
+    pub update: UpdateConfig,
+    /// 這台電腦的背景服務（`watch`）用 mDNS 在區網廣播的 Hub 網址（`config set hub.advertise_url <URL>`）；
+    /// 通常設在跑 Hub 的那台。沒設定＝不廣播。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hub_advertise_url: Option<String>,
 }
 
 impl Default for AgentConfig {
@@ -58,6 +64,8 @@ impl Default for AgentConfig {
             hub: None,
             remote_actions: RemoteActionsConfig::default(),
             metrics: MetricsConfig::default(),
+            update: UpdateConfig::default(),
+            hub_advertise_url: None,
         }
     }
 }
@@ -82,6 +90,53 @@ impl Default for MetricsConfig {
             process_network: true,
         }
     }
+}
+
+/// 自動更新方式：關閉／有新版時通知（預設）／自動更新。
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateMode {
+    /// 不檢查。
+    Off,
+    /// 每天檢查一次；有新版就記下、回報給 Hub（桌面版顯示提示），不自動安裝。
+    #[default]
+    Notify,
+    /// 背景服務自動下載、比對 SHA256SUMS 後更新並重新啟動。
+    Auto,
+}
+
+impl UpdateMode {
+    pub fn parse(s: &str) -> Option<UpdateMode> {
+        Some(match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "0" | "false" | "no" | "disabled" | "關閉" => UpdateMode::Off,
+            "notify" | "check" | "通知" => UpdateMode::Notify,
+            "auto" | "on" | "1" | "true" | "yes" | "自動" | "自動更新" => UpdateMode::Auto,
+            _ => return None,
+        })
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UpdateMode::Off => "off",
+            UpdateMode::Notify => "notify",
+            UpdateMode::Auto => "auto",
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for UpdateMode {
+    /// 看不懂的值當成預設（notify），免得一個打錯的字讓整份設定讀不進來。
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Ok(v.as_str().and_then(UpdateMode::parse).unwrap_or_default())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct UpdateConfig {
+    /// `off`／`notify`／`auto`。桌面版內建的背景服務由桌面版的更新器負責安裝（見 `update::auto`）。
+    pub mode: UpdateMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -528,6 +583,8 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "metrics.performance",
     "metrics.interval",
     "metrics.process_network",
+    "update.mode",
+    "hub.advertise_url",
 ];
 
 fn parse_bool(key: &str, v: &str) -> AppResult<bool> {
@@ -578,6 +635,18 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
             cfg.metrics.interval = v;
         }
         "metrics.process_network" => cfg.metrics.process_network = parse_bool(key, value)?,
+        "update.mode" => {
+            cfg.update.mode = UpdateMode::parse(value)
+                .ok_or_else(|| AppError::InvalidArg(tf!("{key} 只能是 off、notify 或 auto", key = key)))?
+        }
+        "hub.advertise_url" | "hub_advertise_url" => {
+            let v = value.trim();
+            cfg.hub_advertise_url = if v.is_empty() || ["off", "none", "-"].contains(&v.to_ascii_lowercase().as_str()) {
+                None
+            } else {
+                Some(crate::hub::validate_url(v, false)?)
+            };
+        }
         _ => {
             return Err(AppError::InvalidArg(tf!(
                 "未知的設定鍵：{key}；可用：{keys}",
@@ -993,5 +1062,33 @@ mod tests {
         // 舊設定檔沒有 metrics：讀成預設（關）
         let old: AgentConfig = serde_json::from_str(r#"{"schema_version":1,"agent_id":"x"}"#).unwrap();
         assert!(!old.metrics.performance && old.metrics.process_network);
+    }
+
+    #[test]
+    fn update_mode_and_advertise_url() {
+        let mut c = AgentConfig::default();
+        assert_eq!(c.update.mode, UpdateMode::Notify);
+        set_value(&mut c, "update.mode", "AUTO").unwrap();
+        assert_eq!(c.update.mode, UpdateMode::Auto);
+        set_value(&mut c, "update.mode", "off").unwrap();
+        assert_eq!(c.update.mode, UpdateMode::Off);
+        assert!(set_value(&mut c, "update.mode", "sometimes").is_err());
+        // 看不懂的值不讓整份設定壞掉：當成預設 notify
+        let parsed: AgentConfig = serde_json::from_str(r#"{"update":{"mode":"weekly"}}"#).unwrap();
+        assert_eq!(parsed.update.mode, UpdateMode::Notify);
+        let parsed: AgentConfig = serde_json::from_str(r#"{"update":{"mode":"auto"}}"#).unwrap();
+        assert_eq!(parsed.update.mode, UpdateMode::Auto);
+        assert_eq!(serde_json::to_value(&parsed.update).unwrap()["mode"], "auto");
+
+        set_value(&mut c, "hub.advertise_url", "http://192.168.1.10:8088/").unwrap();
+        assert_eq!(c.hub_advertise_url.as_deref(), Some("http://192.168.1.10:8088"));
+        // 公網 http 不行；off／空白＝不廣播
+        assert!(set_value(&mut c, "hub.advertise_url", "http://8.8.8.8:8088").is_err());
+        set_value(&mut c, "hub.advertise_url", "off").unwrap();
+        assert!(c.hub_advertise_url.is_none());
+        set_value(&mut c, "hub_advertise_url", "https://hub.corp.example").unwrap();
+        assert_eq!(c.hub_advertise_url.as_deref(), Some("https://hub.corp.example"));
+        set_value(&mut c, "hub.advertise_url", "").unwrap();
+        assert!(c.hub_advertise_url.is_none());
     }
 }

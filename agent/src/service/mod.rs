@@ -21,8 +21,16 @@ use crate::error::{AppError, AppResult};
 use crate::util::cmd::{CmdRunner, CmdSpec};
 use units::{Names, DISPLAY_NAME, LEGACY_NAMES, NAMES};
 
-/// 常駐行程的執行檔名（不分大小寫）：新名，以及從 0.1.x 原地更新上來仍叫 `asa` 的。
-pub const PROCESS_NAMES: &[&str] = &["ai-security-monitor", "ai-security-monitor.exe", "asa", "asa.exe"];
+/// 常駐行程的執行檔名（不分大小寫）：新名、從 0.1.x 原地更新上來仍叫 `asa` 的，
+/// 以及桌面版執行檔（桌面版「背景自動回報」登記的是桌面版本身 `… watch --service`）。
+pub const PROCESS_NAMES: &[&str] = &[
+    "ai-security-monitor",
+    "ai-security-monitor.exe",
+    "asa",
+    "asa.exe",
+    "ai-security-monitor-desktop",
+    "ai-security-monitor-desktop.exe",
+];
 const LEGACY_PROCESS_NAMES: &[&str] = &["asa", "asa.exe"];
 
 pub const WIN_RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
@@ -633,6 +641,9 @@ pub fn plan_restart(t: &Target) -> Plan {
 pub struct Watcher {
     pub pid: u32,
     pub cmd: String,
+    /// 執行檔路徑（讀得到才有）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exe: Option<PathBuf>,
 }
 
 pub fn running_watchers(config_dir: Option<&Path>) -> Vec<Watcher> {
@@ -690,6 +701,7 @@ fn watchers_named(config_dir: Option<&Path>, names: &[&str]) -> Vec<Watcher> {
             (is_ours && daemon && same_dir && pid.as_u32() != me).then(|| Watcher {
                 pid: pid.as_u32(),
                 cmd: args.join(" "),
+                exe: p.exe().map(dunce_like),
             })
         })
         .collect()
@@ -722,7 +734,8 @@ fn kill_watchers(list: Vec<Watcher>) -> usize {
     n
 }
 
-fn spawn_detached(program: &str, args: &[String]) -> std::io::Result<u32> {
+/// 在背景啟動（不跟著目前的主控台／行程群組）；回傳 PID。
+pub fn spawn_detached(program: &str, args: &[String]) -> std::io::Result<u32> {
     let mut c = std::process::Command::new(program);
     c.args(args)
         .stdin(std::process::Stdio::null())
@@ -1227,7 +1240,12 @@ mod tests {
             assert!(is_process_name(n, PROCESS_NAMES), "{n}");
         }
         assert!(!is_process_name("asa-desktop.exe", PROCESS_NAMES));
-        assert!(!is_process_name("ai-security-monitor-desktop.exe", PROCESS_NAMES));
+        // 桌面版執行檔帶 watch --service 跑的也是常駐行程（只看名字；命令列另外要有 watch --service）
+        assert!(is_process_name("ai-security-monitor-desktop.exe", PROCESS_NAMES));
+        assert!(!is_process_name(
+            "ai-security-monitor-desktop.exe",
+            LEGACY_PROCESS_NAMES
+        ));
         // Linux /proc/<pid>/comm 只有 15 字元
         assert!(is_process_name("ai-security-mon", PROCESS_NAMES));
         assert!(!is_process_name("ai-security-mo", PROCESS_NAMES));

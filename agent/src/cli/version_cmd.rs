@@ -21,7 +21,7 @@ pub async fn run(env: &Env, check: bool) -> AppResult<()> {
         );
     }
     if check {
-        return super::update_cmd::run(env, true, None).await;
+        return super::update_cmd::run(env, true, None, false).await;
     }
     Ok(())
 }

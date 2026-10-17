@@ -66,7 +66,7 @@ pub enum Command {
     },
     /// 檢查環境：權限、外部工具、情資新鮮度、hub 連線、AI 用戶端
     Doctor,
-    /// 更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換
+    /// 更新 ai-security-monitor：下載 GitHub Release 的執行檔，比對 SHA256 後替換，並重新啟動背景服務
     SelfUpdate {
         /// 只檢查有沒有新版
         #[arg(long)]
@@ -74,6 +74,9 @@ pub enum Command {
         /// 更新（或退回）到指定版本，例：0.2.0
         #[arg(long, value_name = "VER")]
         to: Option<String>,
+        /// 更新後不要重新啟動背景服務
+        #[arg(long)]
+        no_restart: bool,
     },
     /// 執行掃描並輸出報告
     Scan(ScanArgs),
@@ -94,6 +97,8 @@ pub enum Command {
     Status,
     /// 常駐：定期掃描、上傳報告、連線快照與心跳
     Watch(WatchArgs),
+    /// 立即掃描並上傳到 Hub（先補送暫存的報告，再上傳連線快照、掃描報告與心跳）
+    Upload,
     /// 開機自動啟動：裝成系統服務（伺服器）或登入時啟動（個人電腦）
     Service {
         #[command(subcommand)]
@@ -726,4 +731,7 @@ pub struct WatchArgs {
     /// 以系統服務身分執行（服務管理器使用）
     #[arg(long, hide = true)]
     pub service: bool,
+    /// 由 Windows 服務入口（`service run`）啟動：更新後交給服務的失敗動作重新啟動。
+    #[arg(skip)]
+    pub scm: bool,
 }
