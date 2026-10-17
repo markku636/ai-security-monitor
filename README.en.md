@@ -219,6 +219,17 @@ The script verifies the release's `SHA256SUMS` and stops on a mismatch; options 
    ```
 
 3. Sign in with `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`.
+4. (Optional) Enable the Hub's AI assistant: the image ships with Claude Code and Codex, but they need to be signed in once. If the AI assistant says **"Please run /login"**, it isn't signed in yet. Pick one:
+   - **Sign in with a Claude subscription** (simplest):
+
+     ```bash
+     docker compose -f docker/compose.standalone.yml --env-file .env exec hub claude
+     ```
+
+     Type `/login`, choose your Claude account, open the URL it prints in your browser and approve, paste the code back, then type `/exit` once it says you are signed in.
+   - **Use a token or API key** (no shell into the container, good for servers): run `claude setup-token` on your own machine and add `CLAUDE_CODE_OAUTH_TOKEN=…` to `.env`, or use `ANTHROPIC_API_KEY=…`; for Codex use `OPENAI_API_KEY=…`. Then run step 2's `up -d` again.
+
+   Sign-in data is kept in the `hubdata` volume (`/data`), so it survives image updates and container rebuilds. The AI only gets read-only tools: it can read Hub data but not change it.
 
 **Check**: `curl http://127.0.0.1:8088/api/health` returns `"db":"ok"` and the sign-in page loads. Details in [docs/docker.en.md](docs/docker.en.md).
 

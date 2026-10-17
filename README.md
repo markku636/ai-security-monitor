@@ -219,6 +219,17 @@ flowchart LR
    ```
 
 3. 用 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
+4. （選用）讓 Hub 的「AI 助手」能用：映像裡已經裝好 Claude Code 與 Codex，但要先登入一次。AI 助手出現 **「Please run /login」** 就是還沒登入。擇一：
+   - **用 Claude 訂閱帳號登入**（最簡單）：
+
+     ```bash
+     docker compose -f docker/compose.standalone.yml --env-file .env exec hub claude
+     ```
+
+     進去後輸入 `/login` → 選 Claude 帳號 → 把畫面上的網址貼到瀏覽器授權 → 把授權碼貼回來 → 看到登入成功後輸入 `/exit`。
+   - **用 token 或 API key**（不用進容器，適合伺服器）：在自己電腦跑 `claude setup-token` 產生長效 token，在 `.env` 加 `CLAUDE_CODE_OAUTH_TOKEN=…`；或用 `ANTHROPIC_API_KEY=…`；Codex 用 `OPENAI_API_KEY=…`。改完重新執行上面第 2 步的 `up -d`。
+
+   登入資料存在 `hubdata` volume（`/data`），更新映像或重建容器都會保留。AI 只拿唯讀工具，查得到 Hub 的資料但不能改。
 
 **確認**：`curl http://127.0.0.1:8088/api/health` 回 `"db":"ok"`，網頁看得到登入頁。細節見 [docs/docker.md](docs/docker.md)。
 
