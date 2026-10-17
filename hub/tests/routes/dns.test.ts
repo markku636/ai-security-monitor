@@ -27,8 +27,10 @@ function post(body: unknown) {
   });
 }
 
+type Batch = { agent_id: string; records: { ts: string; count: number }[] };
+
 /** 把契約範例改成最近的時間（固定日期會超過保留天數被略過）。 */
-function recent(batch: { records: { ts: string }[] }, now = Date.now()) {
+function recent(batch: Batch, now = Date.now()): Batch {
   batch.records = batch.records.map((r, i) => ({ ...r, ts: new Date(now - (10 - i) * minute).toISOString() }));
   return batch;
 }
