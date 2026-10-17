@@ -17,6 +17,8 @@
 
 **Release 說明**：GitHub Release 的說明改由 `scripts/release-notes.mjs` 產生：這版重點、依實際資產名列出的「下載哪一個？」表格、未簽章安裝檔的開啟方式、一行安裝、從 0.1.x／0.2.x 升級，最後才是完整變更；dry run 也會產生並上傳 `release-notes` 供檢查。`scripts/check-version.mjs` 另外檢查桌面版（package(-lock).json、tauri.conf.json、Cargo.toml／lock）、Hub 的 package-lock.json 與 env.ts 預設值、Dockerfile 的 `ASA_HUB_VERSION`。
 
+**Hub**：可疑 IP 排名的表頭可以點著排序。
+
 **文件**：
 - README（中英）的「安裝」：目前版本、「下載哪一個？」表格（桌面版、命令列版、Hub、`asa-*` 別名、`SHA256SUMS`）、系統需求，以及桌面版 Windows／macOS／Linux、命令列版 Windows／Windows Server 與 Linux／macOS、Hub（Docker）、把主機加進 Hub、從 0.1.x／0.2.0 升級的步驟，每條都附「怎麼確認裝好了」。`docs/install*.md`、`docs/desktop*.md` 同步加上下載表與桌面版安裝。
 - README 加上桌面版截圖、「架構」（mermaid 流程圖）與「資料夾結構」兩節，docs/desktop 加上各頁截圖；新增 `scripts/capture-desktop-screenshots.mjs`（注入示範資料的假 Tauri 回應擷取桌面版畫面）；桌面版設定頁的舊名「asa」改成 ai-security-monitor。

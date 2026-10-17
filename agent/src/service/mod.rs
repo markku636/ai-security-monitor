@@ -1218,7 +1218,7 @@ mod tests {
         let mig = p
             .steps
             .iter()
-            .position(|s| matches!(s, Step::MigrateDir { from, to } if from.ends_with("ai-security-agent") && to == &t.config_dir))
+            .position(|s| matches!(s, Step::MigrateDir { from, to } if Some(from) == t.migrate_user_dir.as_ref() && to == &t.config_dir))
             .unwrap();
         assert!(stop < mig);
         assert_eq!(
