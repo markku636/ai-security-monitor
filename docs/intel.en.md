@@ -2,16 +2,16 @@
 
 English | [繁體中文](intel.md)
 
-asa rates every connection on four levels — **safe / unknown / suspicious / dangerous** — and lists the reason and data source behind each rating.
+ai-security-monitor rates every connection on four levels — **safe / unknown / suspicious / dangerous** — and lists the reason and data source behind each rating.
 
 ```bash
-asa intel update                    # download / refresh intel (stale feeds only; --force refetches all)
-asa intel status                    # entries, last update and status per feed
-asa intel sources                   # every feed: vendor, license, URL
-asa intel lookup 203.0.113.66       # look up an IP or domain: feed hits, country/ASN, verdict
-asa intel lookup 1.2.3.4 --online   # also query online reputation services that have a key
-asa connections --intel             # current connections with country/org
-asa connections --direction inbound --verdict suspicious,dangerous
+ai-security-monitor intel update                   # download / refresh intel (stale feeds only; --force refetches all)
+ai-security-monitor intel status                   # entries, last update and status per feed
+ai-security-monitor intel sources                  # every feed: vendor, license, URL
+ai-security-monitor intel lookup 203.0.113.66      # look up an IP or domain: feed hits, country/ASN, verdict
+ai-security-monitor intel lookup 1.2.3.4 --online  # also query online reputation services that have a key
+ai-security-monitor connections --intel            # current connections with country/org
+ai-security-monitor connections --direction inbound --verdict suspicious,dangerous
 ```
 
 ## Direction
@@ -25,7 +25,7 @@ asa connections --direction inbound --verdict suspicious,dangerous
 
 ## Rules
 
-1. On the allowlist (`asa allowlist add …`) → **safe** (explicit user decision).
+1. On the allowlist (`ai-security-monitor allowlist add …`) → **safe** (explicit user decision).
 2. Any intel hit with confidence ≥ 80, or an online reputation score ≥ 75 → **dangerous**.
 3. Any intel hit with lower confidence, reputation ≥ 40, one strong anomaly, or two or more anomalies → **suspicious**.
    Strong anomalies: programs running from temp/download folders, shells or script hosts (PowerShell, cmd, bash, python, mshta, rundll32, …) with network connections, periodic beacons, brute-force sources.
@@ -58,19 +58,19 @@ The Hub and MCP answers cite `source_url`, and the AI is told never to invent so
 See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for full license details.
 
 - Downloads use ETag/Last-Modified and only fetch stale feeds; HTML error pages, empty lists or files over 96 MB never overwrite existing data.
-- Custom feeds: `<config dir>/feeds/custom.json` (https only); `asa intel enable|disable <id>` toggles feeds.
-- Online reputation: `asa intel key set abuseipdb -` (reads the key from stdin, stored in the keychain); results are cached for 24 hours with a daily quota.
+- Custom feeds: `<config dir>/feeds/custom.json` (https only); `ai-security-monitor intel enable|disable <id>` toggles feeds.
+- Online reputation: `ai-security-monitor intel key set abuseipdb -` (reads the key from stdin, stored in the keychain); results are cached for 24 hours with a daily quota.
 - The Hub IP page (`/ip/<ip>`) adds "External threat intel": when an admin clicks Look up, the hub queries AbuseIPDB, GreyNoise, IPinfo, proxycheck.io and reverse DNS, and combines them with the blocklist hits reported by agents into a 0–100 risk score. Score = weighted signals (Spamhaus 30, IPsum 25, FireHOL 20, other blocklists 20, AbuseIPDB 25×confidence, GreyNoise malicious 15, proxy/VPN 12, data center 8, Tor 10, GreyNoise benign −20) ÷ 165, then floors (Spamhaus DROP ≥ 85, AbuseIPDB ≥ 90 → ≥ 75, Tor ≥ 40); ≥ 75 critical, ≥ 50 high, ≥ 25 medium. Private/reserved addresses are never sent, and the hub never looks anything up on its own.
 
 ### Sync (Hub mirror)
 
-- The Hub downloads each list from its vendor on that source's refresh interval and stores the original file unchanged in `/data/feeds/<id>/` (headers and attribution kept; `ASA_HUB_FEED_CACHE_DIR` moves it, `ASA_HUB_FEED_MIRROR=0` turns background sync off). Only default-enabled, downloadable lists are mirrored; lookup APIs are not.
-- Enrolled agents fetch from the Hub first (`GET /api/v1/feeds/manifest`, `/api/v1/feeds/<id>`, ETag = sha256, 304 when unchanged) and fall back to the vendor when the Hub lacks a list or is unreachable; `asa intel update --no-hub` always goes to the vendors.
-- The resident `asa watch` checks intel every 30 minutes (each list still downloads only when its own interval is due) and reports its oldest check time and list count in the heartbeat; `--once` does not auto-update.
+- The Hub downloads each list from its vendor on that source's refresh interval and stores the original file unchanged in `/data/feeds/<id>/` (headers and attribution kept; `AI_SECURITY_MONITOR_HUB_FEED_CACHE_DIR` moves it, `AI_SECURITY_MONITOR_HUB_FEED_MIRROR=0` turns background sync off). Only default-enabled, downloadable lists are mirrored; lookup APIs are not.
+- Enrolled agents fetch from the Hub first (`GET /api/v1/feeds/manifest`, `/api/v1/feeds/<id>`, ETag = sha256, 304 when unchanged) and fall back to the vendor when the Hub lacks a list or is unreachable; `ai-security-monitor intel update --no-hub` always goes to the vendors.
+- The resident `ai-security-monitor watch` checks intel every 30 minutes (each list still downloads only when its own interval is due) and reports its oldest check time and list count in the heartbeat; `--once` does not auto-update.
 - "Sync threat intel now" on the Threat intel page makes the Hub refetch every list right away and, for 24 hours, tells hosts that have not updated yet to update on their next heartbeat (`commands: ["refresh_feeds"]` in the response). The page shows each source's last Hub sync and each host's last intel update and source.
 - The mirror is served only to agents (client keys), admins and read tokens; the public dashboard cannot download the raw files (vendor-licensed content is not redistributed).
 
 ## Blocking
 
-Intel can be synced into firewall block rules: `asa fw sync-blocklist --dry-run` shows what would be blocked. Only public, narrow-enough networks are picked, confidence ≥ 80 by default,
+Intel can be synced into firewall block rules: `ai-security-monitor fw sync-blocklist --dry-run` shows what would be blocked. Only public, narrow-enough networks are picked, confidence ≥ 80 by default,
 excluding Tor, non-commercial feeds (DShield), local addresses, the allowlist and known-good entries. See [firewall.en.md](firewall.en.md).

@@ -2,18 +2,18 @@
 
 [English](events.en.md) | 繁體中文
 
-`asa events` 把系統記錄整理成「發生了什麼、可能為什麼、該怎麼辦」，不用自己翻事件檢視器。
+`ai-security-monitor events` 把系統記錄整理成「發生了什麼、可能為什麼、該怎麼辦」，不用自己翻事件檢視器。
 
 ```bash
-asa events                 # 近 7 天：當機、資安事件、最常出現的錯誤
-asa events --since 30d     # 最多 90 天
-asa events crashes         # 只看當機（預設 30 天）
-asa events explain 0x7E    # 解釋藍屏代碼
-asa events explain 4625    # 解釋事件 ID
-asa events analyze x.evtx  # 分析匯出的檔案（.evtx、journalctl -o json、.ips／.panic、.dmp）
+ai-security-monitor events                 # 近 7 天：當機、資安事件、最常出現的錯誤
+ai-security-monitor events --since 30d     # 最多 90 天
+ai-security-monitor events crashes         # 只看當機（預設 30 天）
+ai-security-monitor events explain 0x7E    # 解釋藍屏代碼
+ai-security-monitor events explain 4625    # 解釋事件 ID
+ai-security-monitor events analyze x.evtx  # 分析匯出的檔案（.evtx、journalctl -o json、.ips／.panic、.dmp）
 ```
 
-`asa scan`／`asa watch` 也會跑事件掃描（近 7 天），摘要放進報告的 `summaries.events`，上傳到 Security Hub。
+`ai-security-monitor scan`／`ai-security-monitor watch` 也會跑事件掃描（近 7 天），摘要放進報告的 `summaries.events`，上傳到 Security Hub。
 
 ## 讀哪些資料
 
@@ -51,6 +51,6 @@ asa events analyze x.evtx  # 分析匯出的檔案（.evtx、journalctl -o json�
 
 ## 限制
 
-- 非管理員在 Windows 讀 Security 記錄時，系統只回「找不到事件」，所以 asa 以目前權限判斷並在 `needs_admin` 註明。
+- 非管理員在 Windows 讀 Security 記錄時，系統只回「找不到事件」，所以 ai-security-monitor 以目前權限判斷並在 `needs_admin` 註明。
 - 藍屏的出錯驅動（faulting module）要完整解析 dump 才看得到；目前只讀檔頭的代碼與參數，其餘交給 AI 或 WinDbg。
 - macOS 的統一記錄（`log show`）與資安事件尚未納入。

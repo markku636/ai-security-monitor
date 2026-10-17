@@ -1,5 +1,6 @@
 # 開發用 PostgreSQL（只綁本機 127.0.0.1:55432）。hub/.env.local 設
-# ASA_HUB_DATABASE_URL=postgres://asa_hub:asa_dev_only@127.0.0.1:55432/asa_hub
+# AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:asa_dev_only@127.0.0.1:55432/asa_hub
+# （舊名 ASA_HUB_DATABASE_URL 也可以）。專案名 asa-hub-dev、資料庫 asa_hub 刻意不改。
 name: asa-hub-dev
 services:
   postgres:

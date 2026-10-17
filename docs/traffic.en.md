@@ -2,15 +2,15 @@
 
 English | [繁體中文](traffic.md)
 
-`asa` takes a "Wireshark, but only the highlights" approach: instead of individual packets it tells you who this machine is talking to and what deserves a look.
+`ai-security-monitor` takes a "Wireshark, but only the highlights" approach: instead of individual packets it tells you who this machine is talking to and what deserves a look.
 There are two modes; both produce the same summary (`TrafficSummary`), which is also what gets handed to the AI and uploaded to Security Hub.
 
 | Mode | Command | Needs | Shows |
 |---|---|---|---|
-| Live (flow-lite) | `asa traffic [--duration 30s]` | nothing to install, no administrator rights | which process talks to which remote, newly opened connections, interface totals, intel hits, risky ports, beaconing (from the 24-hour connection history) |
-| Offline (pcap) | `asa traffic analyze <file>` | a `.pcap` / `.pcapng` from any tool | all of the above plus per-connection bytes, DNS queries and answers, TLS SNI, HTTP Host, large uploads, plain-text protocols |
+| Live (flow-lite) | `ai-security-monitor traffic [--duration 30s]` | nothing to install, no administrator rights | which process talks to which remote, newly opened connections, interface totals, intel hits, risky ports, beaconing (from the 24-hour connection history) |
+| Offline (pcap) | `ai-security-monitor traffic analyze <file>` | a `.pcap` / `.pcapng` from any tool | all of the above plus per-connection bytes, DNS queries and answers, TLS SNI, HTTP Host, large uploads, plain-text protocols |
 
-`asa` does not install a capture driver. For packet-level analysis, save a capture with a built-in or trusted tool and hand it to `asa traffic analyze`:
+`ai-security-monitor` does not install a capture driver. For packet-level analysis, save a capture with a built-in or trusted tool and hand it to `ai-security-monitor traffic analyze`:
 
 ```powershell
 # Windows (built-in pktmon, elevated PowerShell)
@@ -18,17 +18,17 @@ pktmon start --capture --pkt-size 256
 # …reproduce the issue…
 pktmon stop
 pktmon etl2pcap PktMon.etl -o cap.pcapng
-asa traffic analyze cap.pcapng
+ai-security-monitor traffic analyze cap.pcapng
 ```
 
 ```bash
 # macOS / Linux
 sudo tcpdump -i any -s 256 -w cap.pcap   # Ctrl+C to stop
-asa traffic analyze cap.pcap
+ai-security-monitor traffic analyze cap.pcap
 ```
 
 Files saved by Wireshark work too. `--pkt-size 256` / `-s 256` keeps only the first 256 bytes of each packet: enough for DNS, SNI and HTTP Host, a much smaller file, and no full payloads on disk.
-`asa doctor` lists the capture tools available on the machine.
+`ai-security-monitor doctor` lists the capture tools available on the machine.
 
 ## Detections
 

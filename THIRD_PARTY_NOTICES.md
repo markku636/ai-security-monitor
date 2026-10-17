@@ -1,6 +1,6 @@
 # Third-party notices
 
-`asa` 本身是 MIT 授權。它**下載並使用**下列第三方資料；資料本身不隨本專案散佈，授權以各來源為準。
+`ai-security-monitor` 本身是 MIT 授權。它**下載並使用**下列第三方資料；資料本身不隨本專案散佈，授權以各來源為準。
 每一筆情資命中都會帶出 `vendor` / `license` / `source_url`，請在報告與介面中保留。
 
 | Source | Data | Licence / terms | Notes |

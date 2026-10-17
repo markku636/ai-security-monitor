@@ -28,6 +28,13 @@
 應用程式識別碼 `dev.asa.desktop` → `dev.ai-security-monitor.desktop`，所以**新版不會覆蓋舊版**：請先結束並到「設定 → 應用程式」解除安裝舊的「AI Security Agent」，再安裝新版；
 舊的 WebView 快取 `%LOCALAPPDATA%\dev.asa.desktop` 可以刪掉。報告、情資與 Hub 註冊在 agent 設定目錄（`%APPDATA%\ai-security-monitor`），新版直接沿用。詳見 `docs/desktop.md`。
 
+**文件、設定範例與截圖跟著改名**：
+- README（中英）頂端放新 logo，標題、徽章（含 Windows Server）、安裝指令、Hub 映像、`ai-security-monitor` 命令全面換新名，新增「從 asa／ai-security-agent 升級」一節（自動搬移的項目、舊環境變數照用、刻意不改的防火牆物件名與標頭、桌面版要手動解除安裝、舊 Hub 映像名過渡期照發）。
+- `docs/*.md`（中英）：命令、服務名（`ai-security-monitor.service`、`dev.ai-security-monitor.agent`、Windows 服務 `ai-security-monitor`）、設定目錄、環境變數改新名，並註明舊 `ASA_*` 照樣有效；安裝與開機自動啟動文件新增「從 asa（0.1.x）升級」。
+- `.env.example`、`hub/.env.example` 改用 `AI_SECURITY_MONITOR_HUB_*`；`docker/compose.yml`、`compose.standalone.yml` 先讀新名、沒設才讀 `ASA_HUB_*`（只有舊名的 `.env` 展開結果完全相同，CI 會比對），傳進容器的也改成新名。compose 專案名、volume、資料庫 `asa_hub` 不變。
+- Hub 容器入口（`docker/entrypoint.sh`）新舊變數名都認；資料庫密碼沒設（連線字串密碼空白）時拒絕啟動並說明要設哪個變數（compose 的巢狀預設值不能再用 `:?` 檢查必填）。
+- 截圖用示範資料重拍：側欄是新 logo 與 ai-security-monitor、主機版本 0.2.0，新增 Windows Server 網域控制站 dc-01 的主機頁（`docs/images/agent-server.png`）；`scripts/demo-seed.mjs` 多送一次心跳，讓威脅情資頁有每台主機的情資新舊；`scripts/capture-screenshots.mjs` 也讀 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`。
+
 改進：
 - Hub 選單改版：分成「要處理的事／網路／弱點／事件／工具」，每項有圖示與一行說明、目前頁面高亮、待處理問題（嚴重＋高）與待核准封鎖的數字；名稱改白話（代理程式→主機、發現→待處理問題、動作→封鎖審核、系統硬化→安全設定、管理→設定與金鑰、安裝代理程式→新增主機），頁面標題與內文一致；手機版選單可收合。README 截圖重拍。
 - 用詞：「車隊」一律改成「所有主機」（總覽分數卡、AI 頁、情資查詢）；總覽的危險與可疑連線把同一主機、同一行程連到同一遠端的多條連線合併成一列並標出條數。

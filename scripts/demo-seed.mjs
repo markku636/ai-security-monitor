@@ -604,6 +604,22 @@ for (const h of HOSTS) {
     agentToken,
     body: { agent_id: agentId, ts: iso(1), connections: h.connections.map(conn), listeners: h.listeners },
   });
+  // 心跳：情資最後檢查時間與清單數（威脅情資頁的「每台主機的情資新舊」）
+  await call('/api/v1/agents/me/heartbeat', {
+    token: key,
+    agentId,
+    agentToken,
+    body: {
+      agent_id: agentId,
+      ts: iso(0),
+      version: agent.version,
+      uptime_s: agent.uptime_s,
+      last_scan_at: iso(0),
+      elevated: h.elevated,
+      intel_checked_at: iso(h.hostname === 'design-mac-03' ? 50 : 12),
+      intel_feeds: { ok: 16, total: 16, source: h.hostname === 'design-mac-03' ? 'vendor' : 'hub' },
+    },
+  });
   console.log(`seeded ${h.hostname} (${agentId})`);
 }
 console.log('done');

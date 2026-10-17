@@ -2,7 +2,7 @@
 
 English | [繁體中文](docker.md)
 
-Hub image: `ghcr.io/markku636/ai-security-agent-hub` (linux/amd64, linux/arm64).
+Hub image: `ghcr.io/markku636/ai-security-monitor-hub` (linux/amd64, linux/arm64). The old name `ghcr.io/markku636/ai-security-agent-hub` keeps receiving the same image for a transition period.
 
 | Tag | Contents |
 |---|---|
@@ -14,11 +14,11 @@ The database is always PostgreSQL (the compose files include `postgres:18-alpine
 ## Standalone (this computer only)
 
 ```bash
-cp .env.example .env        # set ASA_HUB_ADMIN_SECRET and ASA_HUB_DB_PASSWORD (openssl rand -hex 32)
+cp .env.example .env                       # set AI_SECURITY_MONITOR_HUB_ADMIN_SECRET and AI_SECURITY_MONITOR_HUB_DB_PASSWORD (openssl rand -hex 32)
 docker compose -f docker/compose.standalone.yml --env-file .env up -d
-# open http://127.0.0.1:8088 → sign in with the admin key → "Install agent" to create an enroll key
-asa enroll http://127.0.0.1:8088 --key asa_ek_…
-asa service install --yes   # report automatically after login
+# open http://127.0.0.1:8088 → sign in with the admin key → "Add a host" to create an enroll key
+ai-security-monitor enroll http://127.0.0.1:8088 --key asa_ek_…
+ai-security-monitor service install --yes  # report automatically after login
 ```
 
 It binds to `127.0.0.1` only; other computers cannot reach it.
@@ -26,11 +26,11 @@ It binds to `127.0.0.1` only; other computers cannot reach it.
 ## Server (the whole fleet reports in)
 
 ```bash
-cp .env.example .env        # also set ASA_HUB_PUBLIC_URL=https://hub.example.com
+cp .env.example .env        # also set AI_SECURITY_MONITOR_HUB_PUBLIC_URL=https://hub.example.com
 docker compose -f docker/compose.yml --env-file .env up -d
 ```
 
-- Published on `0.0.0.0:8088` by default; put it behind a TLS reverse proxy and set `ASA_HUB_TRUST_PROXY=1`.
+- Published on `0.0.0.0:8088` by default; put it behind a TLS reverse proxy and set `AI_SECURITY_MONITOR_HUB_TRUST_PROXY=1`.
   SSE (`/ai` streaming) needs response buffering off in the proxy (nginx: `proxy_buffering off;`).
 - PostgreSQL is not published; it is only reachable inside the compose network.
 - Agents install and enroll with the one-liner from `https://hub.example.com/install`.
@@ -41,15 +41,17 @@ See [.env.example](../.env.example) for the full list. The important ones:
 
 | Variable | Meaning |
 |---|---|
-| `ASA_HUB_ADMIN_SECRET` | **Required.** 127.0.0.1 inside a container is not the host's loopback, so open mode without a key is refused in Docker (set `ASA_HUB_ALLOW_OPEN_MODE=1` to override) |
-| `ASA_HUB_DB_PASSWORD` | **Required.** Used by compose to build `ASA_HUB_DATABASE_URL` |
-| `ASA_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` |
-| `ASA_HUB_HOST_PORT` / `ASA_HUB_BIND` | Host port (8088) and bind address |
-| `ASA_HUB_IMAGE_TAG` | Image tag (default `latest`; e.g. `slim`, `0.1.0`) |
-| `ASA_HUB_ABUSEIPDB_KEY` / `ASA_HUB_IPINFO_TOKEN` / `ASA_HUB_PROXYCHECK_KEY` / `ASA_HUB_GREYNOISE_KEY` | Keys for "External threat intel" on the IP page (optional; can also be set under Settings & keys → Threat intel sources); `ASA_HUB_IP_LOOKUPS=off` disables outbound lookups |
+| `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **Required.** 127.0.0.1 inside a container is not the host's loopback, so open mode without a key is refused in Docker (set `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1` to override) |
+| `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **Required.** Used by compose to build `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
+| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` |
+| `AI_SECURITY_MONITOR_HUB_HOST_PORT` / `AI_SECURITY_MONITOR_HUB_BIND` | Host port (8088) and bind address |
+| `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | Image tag (default `latest`; e.g. `slim`, `0.1.0`) |
+| `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY` / `AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN` / `AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY` / `AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | Keys for "External threat intel" on the IP page (optional; can also be set under Settings & keys → Threat intel sources); `AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` disables outbound lookups |
 | `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` | For the `/ai` page; or sign in with `docker compose exec hub claude` — the login is kept in the `/data` volume |
 
-`ASA_HUB_ADMIN_SECRET`, `ASA_HUB_CLIENT_SECRETS`, `ASA_HUB_DATABASE_URL` and `ASA_HUB_ACTION_SIGNING_KEY` also accept `<NAME>_FILE` (Docker secrets).
+`AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`, `AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS`, `AI_SECURITY_MONITOR_HUB_DATABASE_URL` and `AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY` also accept `<NAME>_FILE` (Docker secrets).
+
+The old `ASA_HUB_*` names still work: compose reads `AI_SECURITY_MONITOR_HUB_*` first and falls back to `ASA_HUB_*`, so an `.env` with only the old names needs no changes. The compose project names (`asa-hub`, `asa-hub-standalone`), volumes and the `asa_hub` database are intentionally unchanged, so data stays in place across the upgrade.
 
 ## Update
 
@@ -58,7 +60,7 @@ docker compose -f docker/compose.yml --env-file .env pull
 docker compose -f docker/compose.yml --env-file .env up -d
 ```
 
-The Hub runs database migrations at startup (with an advisory lock, so two Hubs starting together is safe). Admin pages show a banner when a new version is out (`ASA_HUB_UPDATE_CHECK=0` turns that off).
+The Hub runs database migrations at startup (with an advisory lock, so two Hubs starting together is safe). Admin pages show a banner when a new version is out (`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` turns that off).
 
 ## Backup
 
@@ -71,8 +73,8 @@ docker compose -f docker/compose.yml --env-file .env exec -T postgres pg_dump -U
 ## Build it yourself
 
 ```bash
-docker build -f docker/Dockerfile -t ai-security-agent-hub .                 # with AI CLIs
-docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ai-security-agent-hub:slim .
+docker build -f docker/Dockerfile -t ai-security-monitor-hub .                 # with AI CLIs
+docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ai-security-monitor-hub:slim .
 ```
 
 The build context is the repo root (the image needs `feeds/` and `scripts/install.*`). The container runs as the `node` user with `/data` as a writable volume, and has a HEALTHCHECK on `/api/health`.

@@ -244,9 +244,9 @@ jobs:
       - run: npm run verify
       - name: Smoke test against PostgreSQL
         env:
-          ASA_HUB_DATABASE_URL: postgres://asa_hub:ci_only@127.0.0.1:5432/asa_hub
-          ASA_HUB_ADMIN_SECRET: ci-admin-secret
-          ASA_HUB_CLIENT_SECRETS: ci-client-key
+          AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:ci_only@127.0.0.1:5432/asa_hub
+          AI_SECURITY_MONITOR_HUB_ADMIN_SECRET: ci-admin-secret
+          AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS: ci-client-key
         run: |
           set -euo pipefail
           npx next start -H 127.0.0.1 -p 3911 > server.log 2>&1 &
@@ -294,7 +294,13 @@ jobs:
       - name: Standalone compose smoke
         run: |
           set -euo pipefail
-          printf 'ASA_HUB_ADMIN_SECRET=ci-admin\nASA_HUB_DB_PASSWORD=ci-db\nASA_HUB_IMAGE_TAG=ci\nASA_HUB_HOST_PORT=18088\nASA_HUB_UPDATE_CHECK=0\n' > ci.env
+          printf 'AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=ci-admin\nAI_SECURITY_MONITOR_HUB_DB_PASSWORD=ci-db\nAI_SECURITY_MONITOR_HUB_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_HOST_PORT=18088\nAI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0\n' > ci.env
+          # 只有舊名 ASA_HUB_* 的 .env（0.1.x）展開結果要跟新名完全一樣
+          printf 'ASA_HUB_ADMIN_SECRET=ci-admin\nASA_HUB_DB_PASSWORD=ci-db\nASA_HUB_IMAGE_TAG=ci\nASA_HUB_HOST_PORT=18088\nASA_HUB_UPDATE_CHECK=0\n' > legacy.env
+          for f in compose.standalone.yml compose.yml; do
+            diff <(docker compose -f docker/$f --env-file ci.env config) <(docker compose -f docker/$f --env-file legacy.env config)
+          done
+          docker compose -f docker/compose.standalone.yml --env-file legacy.env config | grep -q 'AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:ci-db@postgres:5432/asa_hub'
           docker compose -f docker/compose.standalone.yml --env-file ci.env up -d --wait --no-build
           B=http://127.0.0.1:18088
           curl -sf $B/api/health | tee health.json | grep -q '"db":"ok"'
@@ -304,7 +310,10 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' $B/api/v1/fleet/summary)" = "401"
           docker compose -f docker/compose.standalone.yml --env-file ci.env exec -T hub sh -c 'test "$(id -un)" = node'
           # 沒有管理員金鑰的容器要拒絕啟動
+          ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
           ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
+          # 資料庫密碼空白（.env 沒設）也要拒絕
+          ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:@postgres:5432/asa_hub -e AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=x ghcr.io/markku636/ai-security-monitor-hub:ci
           docker compose -f docker/compose.standalone.yml --env-file ci.env down -v
           echo "docker smoke ok"
 

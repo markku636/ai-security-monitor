@@ -10,7 +10,7 @@ const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
 );
 const HUB = (args.hub ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
-const ADMIN = args.admin ?? process.env.ASA_HUB_ADMIN_SECRET;
+const ADMIN = args.admin ?? process.env.AI_SECURITY_MONITOR_HUB_ADMIN_SECRET ?? process.env.ASA_HUB_ADMIN_SECRET;
 const OUT = path.resolve(args.out ?? 'docs/images');
 if (!ADMIN) {
   console.error('usage: node scripts/capture-screenshots.mjs --hub <url> --admin <secret> [--out dir]');
@@ -37,6 +37,7 @@ function findBrowser() {
 const PAGES = [
   ['overview', '/', 1440],
   ['agent', '/agents/AGENT_FIN', 1440],
+  ['agent-server', '/agents/AGENT_DC', 1440],
   ['connections', '/connections', 1440],
   ['findings', '/findings', 1440],
   ['vulns', '/vulns', 1440],
@@ -58,10 +59,13 @@ fs.mkdirSync(OUT, { recursive: true });
 
 // 找 fin-laptop-07 的 agent id（示範資料）
 const agents = await (await fetch(`${HUB}/api/v1/agents`, { headers: { authorization: `Bearer ${ADMIN}` } })).json();
-const fin = (agents.items ?? agents).find?.((a) => a.hostname === 'fin-laptop-07') ?? (agents.items ?? agents)[0];
+const list = agents.items ?? agents;
+const fin = list.find?.((a) => a.hostname === 'fin-laptop-07') ?? list[0];
+// Windows Server 網域控制站（示範資料）
+const dc = list.find?.((a) => a.hostname === 'dc-01') ?? fin;
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'asa-shot-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-security-monitor-shot-'));
 const proc = spawn(browser, ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target;
@@ -104,7 +108,7 @@ await send('Page.enable');
 await send('Network.enable');
 await send('Network.setExtraHTTPHeaders', { headers: { authorization: `Bearer ${ADMIN}` } });
 for (const [name, p, width, dark] of PAGES) {
-  const url = HUB + p.replace('AGENT_FIN', encodeURIComponent(fin?.id ?? ''));
+  const url = HUB + p.replace('AGENT_FIN', encodeURIComponent(fin?.id ?? '')).replace('AGENT_DC', encodeURIComponent(dc?.id ?? ''));
   const mobile = width < 600;
   await send('Emulation.setDeviceMetricsOverride', { width, height: mobile ? 844 : 900, deviceScaleFactor: 1, mobile });
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' }] });

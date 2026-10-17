@@ -1,7 +1,10 @@
 # 單機版：Hub＋PostgreSQL 只給這台電腦用（只綁 127.0.0.1），本機的 ai-security-monitor 回報到 http://127.0.0.1:8088。
-#   cp .env.example .env   # 填好 ASA_HUB_ADMIN_SECRET、ASA_HUB_DB_PASSWORD
+#   cp .env.example .env   # 填好 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
 #   docker compose -f docker/compose.standalone.yml --env-file .env up -d
-#   ai-security-monitor enroll http://127.0.0.1:8088 --key <在 Hub「安裝代理程式」頁建立的註冊金鑰>
+#   ai-security-monitor enroll http://127.0.0.1:8088 --key <在 Hub「新增主機」頁建立的註冊金鑰>
+# 變數先讀 AI_SECURITY_MONITOR_HUB_*，沒設才讀舊名 ASA_HUB_*（0.1.x 的 .env 不用改）。
+# 管理員金鑰與資料庫密碼必填：沒設時 Hub 容器會拒絕啟動（docker compose logs hub 看原因）。
+# 專案名、volume 與資料庫名稱 asa_hub 刻意不改，升級後資料原地沿用。
 name: asa-hub-standalone
 
 services:
@@ -11,7 +14,7 @@ services:
     environment:
       POSTGRES_DB: asa_hub
       POSTGRES_USER: asa_hub
-      POSTGRES_PASSWORD: ${ASA_HUB_DB_PASSWORD:?set ASA_HUB_DB_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${AI_SECURITY_MONITOR_HUB_DB_PASSWORD:-${ASA_HUB_DB_PASSWORD:-}}
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -21,7 +24,7 @@ services:
       retries: 30
 
   hub:
-    image: ghcr.io/markku636/ai-security-monitor-hub:${ASA_HUB_IMAGE_TAG:-latest}
+    image: ghcr.io/markku636/ai-security-monitor-hub:${AI_SECURITY_MONITOR_HUB_IMAGE_TAG:-${ASA_HUB_IMAGE_TAG:-latest}}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -30,25 +33,25 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      ASA_HUB_DATABASE_URL: postgres://asa_hub:${ASA_HUB_DB_PASSWORD}@postgres:5432/asa_hub
-      ASA_HUB_ADMIN_SECRET: ${ASA_HUB_ADMIN_SECRET:?set ASA_HUB_ADMIN_SECRET in .env}
-      ASA_HUB_CLIENT_SECRETS: ${ASA_HUB_CLIENT_SECRETS:-}
-      ASA_HUB_PUBLIC_URL: ${ASA_HUB_PUBLIC_URL:-http://127.0.0.1:${ASA_HUB_HOST_PORT:-8088}}
-      ASA_HUB_EDITION: standalone
-      ASA_HUB_MCP_TOKEN: ${ASA_HUB_MCP_TOKEN:-}
-      ASA_HUB_UPDATE_CHECK: ${ASA_HUB_UPDATE_CHECK:-}
+      AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:${AI_SECURITY_MONITOR_HUB_DB_PASSWORD:-${ASA_HUB_DB_PASSWORD:-}}@postgres:5432/asa_hub
+      AI_SECURITY_MONITOR_HUB_ADMIN_SECRET: ${AI_SECURITY_MONITOR_HUB_ADMIN_SECRET:-${ASA_HUB_ADMIN_SECRET:-}}
+      AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS: ${AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS:-${ASA_HUB_CLIENT_SECRETS:-}}
+      AI_SECURITY_MONITOR_HUB_PUBLIC_URL: ${AI_SECURITY_MONITOR_HUB_PUBLIC_URL:-${ASA_HUB_PUBLIC_URL:-http://127.0.0.1:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}}}
+      AI_SECURITY_MONITOR_HUB_EDITION: standalone
+      AI_SECURITY_MONITOR_HUB_MCP_TOKEN: ${AI_SECURITY_MONITOR_HUB_MCP_TOKEN:-${ASA_HUB_MCP_TOKEN:-}}
+      AI_SECURITY_MONITOR_HUB_UPDATE_CHECK: ${AI_SECURITY_MONITOR_HUB_UPDATE_CHECK:-${ASA_HUB_UPDATE_CHECK:-}}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # IP 外部情資（選填；也可在「設定與金鑰 → 外部情資來源」設定）
-      ASA_HUB_ABUSEIPDB_KEY: ${ASA_HUB_ABUSEIPDB_KEY:-}
-      ASA_HUB_IPINFO_TOKEN: ${ASA_HUB_IPINFO_TOKEN:-}
-      ASA_HUB_PROXYCHECK_KEY: ${ASA_HUB_PROXYCHECK_KEY:-}
-      ASA_HUB_GREYNOISE_KEY: ${ASA_HUB_GREYNOISE_KEY:-}
-      ASA_HUB_IP_LOOKUPS: ${ASA_HUB_IP_LOOKUPS:-}
+      AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY: ${AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY:-${ASA_HUB_ABUSEIPDB_KEY:-}}
+      AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN: ${AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN:-${ASA_HUB_IPINFO_TOKEN:-}}
+      AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY: ${AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY:-${ASA_HUB_PROXYCHECK_KEY:-}}
+      AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY: ${AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY:-${ASA_HUB_GREYNOISE_KEY:-}}
+      AI_SECURITY_MONITOR_HUB_IP_LOOKUPS: ${AI_SECURITY_MONITOR_HUB_IP_LOOKUPS:-${ASA_HUB_IP_LOOKUPS:-}}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
     ports:
-      - "127.0.0.1:${ASA_HUB_HOST_PORT:-8088}:3000"
+      - "127.0.0.1:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}:3000"
     volumes:
       - hubdata:/data
 

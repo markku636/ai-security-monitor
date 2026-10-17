@@ -2,15 +2,15 @@
 
 [English](vuln.en.md) | 繁體中文
 
-`asa vuln` 回答三個問題：這台的作業系統還有沒有安全性更新？多久沒更新了？裝的軟體有沒有已知漏洞的版本？
+`ai-security-monitor vuln` 回答三個問題：這台的作業系統還有沒有安全性更新？多久沒更新了？裝的軟體有沒有已知漏洞的版本？
 
 ```bash
-asa vuln                         # 作業系統支援期限、最近一次更新、已知漏洞軟體（Linux 另查 OSV）
-asa vuln --no-online             # 不連網，只用內建規則
-asa vuln --inventory-only        # 只列出已安裝的軟體
-asa vuln --inventory-only --filter python
-asa --json vuln                  # 給程式或 AI 讀
-asa scan --scanners vuln         # 進完整報告（summaries.vuln），asa watch 會一起上傳 Hub
+ai-security-monitor vuln                   # 作業系統支援期限、最近一次更新、已知漏洞軟體（Linux 另查 OSV）
+ai-security-monitor vuln --no-online       # 不連網，只用內建規則
+ai-security-monitor vuln --inventory-only  # 只列出已安裝的軟體
+ai-security-monitor vuln --inventory-only --filter python
+ai-security-monitor --json vuln            # 給程式或 AI 讀
+ai-security-monitor scan --scanners vuln   # 進完整報告（summaries.vuln），ai-security-monitor watch 會一起上傳 Hub
 ```
 
 ## 讀哪些資料
@@ -37,7 +37,7 @@ asa scan --scanners vuln         # 進完整報告（summaries.vuln），asa wat
 - **OSV（Linux 套件，線上）**：把 dpkg／rpm／apk 套件依發行版生態系（`Debian:12`、`Ubuntu:24.04:LTS`、`Alpine:v3.20`、`Rocky Linux:9`…）
   送到 [OSV.dev](https://osv.dev) `querybatch`，再抓前 300 個漏洞的細節（CVE 別名、嚴重度）。結果快取 24 小時（`<設定目錄>/vuln/osv-result.json`）。
   → `vuln.osv_package`（每個套件一筆，最多 30 筆，低嚴重度不列）。
-- **CISA KEV**：`asa intel update` 會下載 CISA 已知遭利用漏洞清單；比對到的 CVE 一律升為**嚴重**並標 `kev`。
+- **CISA KEV**：`ai-security-monitor intel update` 會下載 CISA 已知遭利用漏洞清單；比對到的 CVE 一律升為**嚴重**並標 `kev`。
 
 ## 限制
 

@@ -2,18 +2,18 @@
 
 English | [繁體中文](events.md)
 
-`asa events` turns system logs into "what happened, why it probably happened, and what to do", so you do not have to dig through Event Viewer.
+`ai-security-monitor events` turns system logs into "what happened, why it probably happened, and what to do", so you do not have to dig through Event Viewer.
 
 ```bash
-asa events                 # last 7 days: crashes, security events, most frequent errors
-asa events --since 30d     # up to 90 days
-asa events crashes         # crashes only (30 days by default)
-asa events explain 0x7E    # explain a bugcheck code
-asa events explain 4625    # explain an event ID
-asa events analyze x.evtx  # analyze an exported file (.evtx, journalctl -o json, .ips/.panic, .dmp)
+ai-security-monitor events                 # last 7 days: crashes, security events, most frequent errors
+ai-security-monitor events --since 30d     # up to 90 days
+ai-security-monitor events crashes         # crashes only (30 days by default)
+ai-security-monitor events explain 0x7E    # explain a bugcheck code
+ai-security-monitor events explain 4625    # explain an event ID
+ai-security-monitor events analyze x.evtx  # analyze an exported file (.evtx, journalctl -o json, .ips/.panic, .dmp)
 ```
 
-`asa scan` / `asa watch` also run the events scanner (last 7 days); the summary goes into the report's `summaries.events` and is uploaded to Security Hub.
+`ai-security-monitor scan` / `ai-security-monitor watch` also run the events scanner (last 7 days); the summary goes into the report's `summaries.events` and is uploaded to Security Hub.
 
 ## What is read
 
@@ -51,6 +51,6 @@ Low-severity items (such as a new service installed under Program Files) stay in
 
 ## Limitations
 
-- When a non-administrator reads the Windows Security log, the system just reports "no events found", so asa decides from the current privileges and notes it in `needs_admin`.
-- The faulting driver of a blue screen needs a full dump parse; asa reads only the header's code and parameters and leaves the rest to the AI or WinDbg.
+- When a non-administrator reads the Windows Security log, the system just reports "no events found", so ai-security-monitor decides from the current privileges and notes it in `needs_admin`.
+- The faulting driver of a blue screen needs a full dump parse; ai-security-monitor reads only the header's code and parameters and leaves the rest to the AI or WinDbg.
 - The macOS unified log (`log show`) and security events are not analyzed yet.

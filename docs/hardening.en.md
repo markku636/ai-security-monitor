@@ -2,14 +2,14 @@
 
 English | [繁體中文](hardening.md)
 
-`asa harden` checks this machine's security settings one by one, lists what failed with the current value and how to fix it, and gives a 0–100 score.
+`ai-security-monitor harden` checks this machine's security settings one by one, lists what failed with the current value and how to fix it, and gives a 0–100 score.
 
 ```bash
-asa harden                       # failures only, with fixes
-asa harden --all                 # every check and result
-asa harden --category remote     # one category (account, remote, kernel, network, update, encryption, malware, …)
-asa --json harden                # for scripts or AI
-asa scan --scanners hardening    # into the full report (summaries.hardening); asa watch uploads it to the Hub
+ai-security-monitor harden                     # failures only, with fixes
+ai-security-monitor harden --all               # every check and result
+ai-security-monitor harden --category remote   # one category (account, remote, kernel, network, update, encryption, malware, …)
+ai-security-monitor --json harden              # for scripts or AI
+ai-security-monitor scan --scanners hardening  # into the full report (summaries.hardening); ai-security-monitor watch uploads it to the Hub
 ```
 
 Everything is read-only; nothing is changed. The 20 Windows checks run in a single PowerShell call (about 3 seconds).
@@ -22,7 +22,7 @@ Everything is read-only; nothing is changed. The 20 Windows checks run in a sing
 | Linux (25) | SSH (root login, password login, empty passwords, X11, MaxAuthTries, fail2ban/CrowdSec/sshguard), kernel settings (ASLR, kptr/dmesg restrictions, unprivileged eBPF, symlink/hardlink protection, suid core dumps, SYN cookies, rp_filter, ICMP redirects), AppArmor/SELinux, UID 0 accounts, empty passwords, sudo NOPASSWD, world-writable PATH dirs, automatic security updates (unattended-upgrades on Debian/Ubuntu, dnf-automatic on RHEL-likes), telnet/FTP/rsh, auditd |
 | macOS (15) | Gatekeeper, SIP, FileVault, firewall stealth mode, automatic updates (check, security responses, XProtect data, download), guest, auto-login, password hints, screen lock, Remote Login, sudo NOPASSWD, world-writable PATH dirs |
 
-Whether the firewall is on is checked by the firewall engine (`asa fw audit`), not repeated here.
+Whether the firewall is on is checked by the firewall engine (`ai-security-monitor fw audit`), not repeated here.
 
 ## Results and score
 
@@ -49,7 +49,7 @@ The edition comes from the registry: `ProductOptions\ProductType` (WinNT worksta
 
 ## Custom checks
 
-Drop `.yml` files into `<config dir>/policies/` (see `asa config path`): the same id replaces a built-in check, `disabled: true` turns one off.
+Drop `.yml` files into `<config dir>/policies/` (see `ai-security-monitor config path`): the same id replaces a built-in check, `disabled: true` turns one off.
 
 ```yaml
 # turn off a built-in check

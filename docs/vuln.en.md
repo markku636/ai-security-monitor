@@ -2,15 +2,15 @@
 
 English | [繁體中文](vuln.md)
 
-`asa vuln` answers three questions: does this operating system still get security updates, how long since the last update, and is any installed software on a version with known vulnerabilities?
+`ai-security-monitor vuln` answers three questions: does this operating system still get security updates, how long since the last update, and is any installed software on a version with known vulnerabilities?
 
 ```bash
-asa vuln                         # OS support, last update, vulnerable software (plus OSV on Linux)
-asa vuln --no-online             # offline: built-in rules only
-asa vuln --inventory-only        # just list installed software
-asa vuln --inventory-only --filter python
-asa --json vuln                  # for scripts or AI
-asa scan --scanners vuln         # into the full report (summaries.vuln); asa watch uploads it to the Hub
+ai-security-monitor vuln                   # OS support, last update, vulnerable software (plus OSV on Linux)
+ai-security-monitor vuln --no-online       # offline: built-in rules only
+ai-security-monitor vuln --inventory-only  # just list installed software
+ai-security-monitor vuln --inventory-only --filter python
+ai-security-monitor --json vuln            # for scripts or AI
+ai-security-monitor scan --scanners vuln   # into the full report (summaries.vuln); ai-security-monitor watch uploads it to the Hub
 ```
 
 ## What it reads
@@ -37,7 +37,7 @@ Everything is read-only and needs no administrator rights.
 - **OSV (Linux packages, online)**: dpkg/rpm/apk packages are sent to [OSV.dev](https://osv.dev) `querybatch` using the distribution ecosystem
   (`Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, `Rocky Linux:9`, …); details (CVE aliases, severity) are fetched for up to 300 vulnerabilities.
   Results are cached for 24 hours (`<config dir>/vuln/osv-result.json`) → `vuln.osv_package` (one per package, at most 30, low severity omitted).
-- **CISA KEV**: `asa intel update` downloads the CISA Known Exploited Vulnerabilities catalog; matching CVEs are raised to **critical** and tagged `kev`.
+- **CISA KEV**: `ai-security-monitor intel update` downloads the CISA Known Exploited Vulnerabilities catalog; matching CVEs are raised to **critical** and tagged `kev`.
 
 ## Limits
 

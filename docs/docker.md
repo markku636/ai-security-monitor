@@ -2,7 +2,7 @@
 
 [English](docker.en.md) | 繁體中文
 
-Hub 映像：`ghcr.io/markku636/ai-security-agent-hub`（linux/amd64、linux/arm64）。
+Hub 映像：`ghcr.io/markku636/ai-security-monitor-hub`（linux/amd64、linux/arm64）。舊名 `ghcr.io/markku636/ai-security-agent-hub` 過渡期內照樣發佈同一份映像。
 
 | 標籤 | 內容 |
 |---|---|
@@ -14,11 +14,11 @@ Hub 映像：`ghcr.io/markku636/ai-security-agent-hub`（linux/amd64、linux/arm
 ## 單機版（只給這台電腦用）
 
 ```bash
-cp .env.example .env        # 填 ASA_HUB_ADMIN_SECRET、ASA_HUB_DB_PASSWORD（openssl rand -hex 32）
+cp .env.example .env                       # 填 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD（openssl rand -hex 32）
 docker compose -f docker/compose.standalone.yml --env-file .env up -d
-# 打開 http://127.0.0.1:8088 → 用管理員金鑰登入 →「安裝代理程式」建立註冊金鑰
-asa enroll http://127.0.0.1:8088 --key asa_ek_…
-asa service install --yes   # 登入時自動回報
+# 打開 http://127.0.0.1:8088 → 用管理員金鑰登入 →「新增主機」建立註冊金鑰
+ai-security-monitor enroll http://127.0.0.1:8088 --key asa_ek_…
+ai-security-monitor service install --yes  # 登入時自動回報
 ```
 
 只綁 `127.0.0.1`；別台電腦連不到。
@@ -26,11 +26,11 @@ asa service install --yes   # 登入時自動回報
 ## 伺服器版（整個車隊回報）
 
 ```bash
-cp .env.example .env        # 另外設 ASA_HUB_PUBLIC_URL=https://hub.example.com
+cp .env.example .env        # 另外設 AI_SECURITY_MONITOR_HUB_PUBLIC_URL=https://hub.example.com
 docker compose -f docker/compose.yml --env-file .env up -d
 ```
 
-- 預設發佈到 `0.0.0.0:8088`；建議放在反向代理（TLS）後面並設 `ASA_HUB_TRUST_PROXY=1`。
+- 預設發佈到 `0.0.0.0:8088`；建議放在反向代理（TLS）後面並設 `AI_SECURITY_MONITOR_HUB_TRUST_PROXY=1`。
   SSE（`/ai` 串流）要關掉代理的回應緩衝（nginx：`proxy_buffering off;`）。
 - PostgreSQL 不對外發佈，只在 compose 的網路裡。
 - agent 用 `https://hub.example.com/install` 頁產生的一行指令安裝並註冊。
@@ -41,15 +41,17 @@ docker compose -f docker/compose.yml --env-file .env up -d
 
 | 變數 | 說明 |
 |---|---|
-| `ASA_HUB_ADMIN_SECRET` | **必填**。容器裡的 127.0.0.1 不是主機的 loopback，所以 Docker 裡不允許沒金鑰的開放模式（要的話設 `ASA_HUB_ALLOW_OPEN_MODE=1`） |
-| `ASA_HUB_DB_PASSWORD` | **必填**。compose 用它組 `ASA_HUB_DATABASE_URL` |
-| `ASA_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址 |
-| `ASA_HUB_HOST_PORT`／`ASA_HUB_BIND` | 主機 port（8088）與綁定位址 |
-| `ASA_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.1.0`） |
-| `ASA_HUB_ABUSEIPDB_KEY`／`ASA_HUB_IPINFO_TOKEN`／`ASA_HUB_PROXYCHECK_KEY`／`ASA_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`ASA_HUB_IP_LOOKUPS=off` 完全不對外查詢 |
+| `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **必填**。容器裡的 127.0.0.1 不是主機的 loopback，所以 Docker 裡不允許沒金鑰的開放模式（要的話設 `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1`） |
+| `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **必填**。compose 用它組 `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
+| `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址 |
+| `AI_SECURITY_MONITOR_HUB_HOST_PORT`／`AI_SECURITY_MONITOR_HUB_BIND` | 主機 port（8088）與綁定位址 |
+| `AI_SECURITY_MONITOR_HUB_IMAGE_TAG` | 映像版本（預設 `latest`；可改 `slim`、`0.1.0`） |
+| `AI_SECURITY_MONITOR_HUB_ABUSEIPDB_KEY`／`AI_SECURITY_MONITOR_HUB_IPINFO_TOKEN`／`AI_SECURITY_MONITOR_HUB_PROXYCHECK_KEY`／`AI_SECURITY_MONITOR_HUB_GREYNOISE_KEY` | IP 分析頁「外部威脅情資」的金鑰（選填，也可在「設定與金鑰 → 外部情資來源」設定）；`AI_SECURITY_MONITOR_HUB_IP_LOOKUPS=off` 完全不對外查詢 |
 | `ANTHROPIC_API_KEY`／`CLAUDE_CODE_OAUTH_TOKEN`／`OPENAI_API_KEY` | `/ai` 頁用；也可以 `docker compose exec hub claude` 登入，登入資料存在 `/data` volume |
 
-`ASA_HUB_ADMIN_SECRET`、`ASA_HUB_CLIENT_SECRETS`、`ASA_HUB_DATABASE_URL`、`ASA_HUB_ACTION_SIGNING_KEY` 也接受 `<名稱>_FILE`（Docker secrets）。
+`AI_SECURITY_MONITOR_HUB_ADMIN_SECRET`、`AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS`、`AI_SECURITY_MONITOR_HUB_DATABASE_URL`、`AI_SECURITY_MONITOR_HUB_ACTION_SIGNING_KEY` 也接受 `<名稱>_FILE`（Docker secrets）。
+
+舊的 `ASA_HUB_*` 變數名照樣有效：compose 會先讀 `AI_SECURITY_MONITOR_HUB_*`，沒設才讀 `ASA_HUB_*`，所以只寫舊名的 `.env` 不用改。compose 專案名（`asa-hub`、`asa-hub-standalone`）、volume 與資料庫名稱 `asa_hub` 刻意不改，升級後資料原地沿用。
 
 ## 更新
 
@@ -58,7 +60,7 @@ docker compose -f docker/compose.yml --env-file .env pull
 docker compose -f docker/compose.yml --env-file .env up -d
 ```
 
-Hub 啟動時自動跑資料庫 migration（advisory lock，兩個 Hub 同時啟動也安全）。有新版時管理員頁面會顯示橫幅（`ASA_HUB_UPDATE_CHECK=0` 關閉）。
+Hub 啟動時自動跑資料庫 migration（advisory lock，兩個 Hub 同時啟動也安全）。有新版時管理員頁面會顯示橫幅（`AI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0` 關閉）。
 
 ## 備份
 
@@ -71,8 +73,8 @@ docker compose -f docker/compose.yml --env-file .env exec -T postgres pg_dump -U
 ## 自己建置
 
 ```bash
-docker build -f docker/Dockerfile -t ai-security-agent-hub .                 # 含 AI CLI
-docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ai-security-agent-hub:slim .
+docker build -f docker/Dockerfile -t ai-security-monitor-hub .                 # 含 AI CLI
+docker build -f docker/Dockerfile --build-arg AI_CLIS= -t ai-security-monitor-hub:slim .
 ```
 
 建置環境是 repo 根目錄（映像要帶 `feeds/` 與 `scripts/install.*`）。容器以 `node` 使用者執行，`/data` 是可寫的 volume，內建 HEALTHCHECK 打 `/api/health`。

@@ -2,15 +2,15 @@
 
 [English](traffic.en.md) | 繁體中文
 
-`asa` 的流量功能走「像 Wireshark，但只給重點」的路線：不用看一個個封包，直接告訴你這台機器在跟誰講話、哪些值得注意。
+`ai-security-monitor` 的流量功能走「像 Wireshark，但只給重點」的路線：不用看一個個封包，直接告訴你這台機器在跟誰講話、哪些值得注意。
 有兩種模式，產生同一種摘要（`TrafficSummary`），之後也是交給 AI 解讀、上傳 Security Hub 的格式。
 
 | 模式 | 指令 | 需要 | 看得到 |
 |---|---|---|---|
-| 即時（flow-lite） | `asa traffic [--duration 30s]` | 什麼都不用裝、不需要系統管理員 | 每個行程連到哪些遠端、新出現的連線、介面總流量、情資命中、高風險 port、週期性連線（用 24 小時連線歷史） |
-| 離線（pcap） | `asa traffic analyze <檔案>` | 一個 `.pcap`／`.pcapng`（任何工具存的都行） | 以上全部，再加上逐連線位元組、DNS 查詢與回應、TLS SNI、HTTP Host、大量上傳、明文協定 |
+| 即時（flow-lite） | `ai-security-monitor traffic [--duration 30s]` | 什麼都不用裝、不需要系統管理員 | 每個行程連到哪些遠端、新出現的連線、介面總流量、情資命中、高風險 port、週期性連線（用 24 小時連線歷史） |
+| 離線（pcap） | `ai-security-monitor traffic analyze <檔案>` | 一個 `.pcap`／`.pcapng`（任何工具存的都行） | 以上全部，再加上逐連線位元組、DNS 查詢與回應、TLS SNI、HTTP Host、大量上傳、明文協定 |
 
-`asa` 本身不安裝抓包驅動。要逐封包分析時，用系統內建或你信任的工具存檔，再交給 `asa traffic analyze`：
+`ai-security-monitor` 本身不安裝抓包驅動。要逐封包分析時，用系統內建或你信任的工具存檔，再交給 `ai-security-monitor traffic analyze`：
 
 ```powershell
 # Windows（內建 pktmon，系統管理員 PowerShell）
@@ -18,17 +18,17 @@ pktmon start --capture --pkt-size 256
 # …重現問題…
 pktmon stop
 pktmon etl2pcap PktMon.etl -o cap.pcapng
-asa traffic analyze cap.pcapng
+ai-security-monitor traffic analyze cap.pcapng
 ```
 
 ```bash
 # macOS / Linux
 sudo tcpdump -i any -s 256 -w cap.pcap   # Ctrl+C 結束
-asa traffic analyze cap.pcap
+ai-security-monitor traffic analyze cap.pcap
 ```
 
 也可以直接分析 Wireshark 存的檔案。`--pkt-size 256`／`-s 256` 只留每個封包前 256 bytes，就足夠解析 DNS、SNI 與 HTTP Host，檔案小很多，也不會留下完整內容。
-`asa doctor` 會告訴你這台機器有哪些擷取工具可用。
+`ai-security-monitor doctor` 會告訴你這台機器有哪些擷取工具可用。
 
 ## 偵測項目
 

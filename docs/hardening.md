@@ -2,14 +2,14 @@
 
 [English](hardening.en.md) | 繁體中文
 
-`asa harden` 逐條檢查這台機器的安全設定，列出沒過的項目、目前的值與怎麼修，並給 0–100 分。
+`ai-security-monitor harden` 逐條檢查這台機器的安全設定，列出沒過的項目、目前的值與怎麼修，並給 0–100 分。
 
 ```bash
-asa harden                       # 只列未通過，附修正方式
-asa harden --all                 # 全部檢查與結果
-asa harden --category remote     # 只看某一類（account、remote、kernel、network、update、encryption、malware…）
-asa --json harden                # 給程式或 AI 讀
-asa scan --scanners hardening    # 進完整報告（summaries.hardening），asa watch 會一起上傳 Hub
+ai-security-monitor harden                     # 只列未通過，附修正方式
+ai-security-monitor harden --all               # 全部檢查與結果
+ai-security-monitor harden --category remote   # 只看某一類（account、remote、kernel、network、update、encryption、malware…）
+ai-security-monitor --json harden              # 給程式或 AI 讀
+ai-security-monitor scan --scanners hardening  # 進完整報告（summaries.hardening），ai-security-monitor watch 會一起上傳 Hub
 ```
 
 全部唯讀，不會改任何設定。Windows 的 20 條檢查合併成一次 PowerShell 呼叫（約 3 秒）。
@@ -22,7 +22,7 @@ asa scan --scanners hardening    # 進完整報告（summaries.hardening），as
 | Linux（25） | SSH（root 登入、密碼登入、空白密碼、X11、MaxAuthTries、fail2ban／CrowdSec／sshguard）、核心參數（ASLR、kptr／dmesg 限制、非特權 eBPF、符號／硬連結保護、suid core dump、SYN cookies、rp_filter、ICMP redirect）、AppArmor／SELinux、UID 0 帳號、空白密碼、sudo NOPASSWD、PATH 可寫目錄、自動安全更新（Debian／Ubuntu unattended-upgrades、RHEL 系 dnf-automatic）、telnet／FTP／rsh、auditd |
 | macOS（15） | Gatekeeper、SIP、FileVault、防火牆隱形模式、自動更新（檢查、安全性回應、XProtect 資料、下載）、訪客、自動登入、密碼提示、螢幕鎖定、遠端登入、sudo NOPASSWD、PATH 可寫目錄 |
 
-防火牆是否開啟由防火牆引擎檢查（`asa fw audit`），這裡不重複。
+防火牆是否開啟由防火牆引擎檢查（`ai-security-monitor fw audit`），這裡不重複。
 
 ## 結果與分數
 
@@ -49,7 +49,7 @@ asa scan --scanners hardening    # 進完整報告（summaries.hardening），as
 
 ## 自訂檢查
 
-在 `<設定目錄>/policies/` 放 `.yml` 檔（設定目錄見 `asa config path`）：同 id 會取代內建，`disabled: true` 關掉某條。
+在 `<設定目錄>/policies/` 放 `.yml` 檔（設定目錄見 `ai-security-monitor config path`）：同 id 會取代內建，`disabled: true` 關掉某條。
 
 ```yaml
 # 關掉某條內建檢查
