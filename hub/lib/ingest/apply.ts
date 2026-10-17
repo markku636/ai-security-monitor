@@ -363,6 +363,32 @@ export async function applyHeartbeat(db: DB, h: HeartbeatT): Promise<boolean> {
       elevated: h.elevated,
       ...(h.intel_checked_at ? { intelCheckedAt: new Date(h.intel_checked_at) } : {}),
       ...(h.intel_feeds ? { intelFeeds: h.intel_feeds } : {}),
+      // 只存認得的欄位；沒送（舊版 agent、手動上傳）就保留上次的（廣播狀態看 at 新不新）
+      ...(h.update
+        ? {
+            updateInfo: {
+              mode: h.update.mode,
+              owner: h.update.owner,
+              latest: h.update.latest ?? null,
+              available: h.update.available,
+              checked_at: h.update.checked_at ?? null,
+              note: h.update.note ?? null,
+              at: now.toISOString(),
+            },
+          }
+        : {}),
+      ...(h.advertising
+        ? {
+            advertising: {
+              url: h.advertising.url,
+              state: h.advertising.state,
+              fingerprint: h.advertising.fingerprint ?? null,
+              error: h.advertising.error ?? null,
+              since: h.advertising.since ?? null,
+              at: now.toISOString(),
+            },
+          }
+        : {}),
     })
     .where(eq(agents.id, h.agent_id));
   return true;

@@ -187,6 +187,28 @@ export const Heartbeat = z
     elevated: z.boolean().default(false),
     intel_checked_at: isoDate.nullish(),
     intel_feeds: z.object({ ok: z.number().int().nonnegative().max(1000), total: z.number().int().nonnegative().max(1000), source: shortText(16).optional() }).nullish(),
+    // 0.4.0 起：自動更新狀態、區網廣播狀態（舊版 agent 不送）
+    update: z
+      .object({
+        mode: shortText(16),
+        owner: shortText(16),
+        latest: shortText(64).nullish(),
+        available: z.boolean().default(false),
+        checked_at: isoDate.nullish(),
+        note: shortText(500).nullish(),
+      })
+      .passthrough()
+      .nullish(),
+    advertising: z
+      .object({
+        url: shortText(500),
+        state: shortText(32),
+        fingerprint: shortText(64).nullish(),
+        error: shortText(500).nullish(),
+        since: isoDate.nullish(),
+      })
+      .passthrough()
+      .nullish(),
   })
   .passthrough();
 

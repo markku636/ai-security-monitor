@@ -136,6 +136,35 @@ describe('ingest', () => {
     expect(nope.status).toBe(404);
   });
 
+  it('heartbeat stores update and LAN-advertising status; omitting them keeps the last value', async () => {
+    process.env.ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS = '0';
+    resetEnvForTests();
+    const ID = '0f8e5a52-1c3b-4b8e-9d7a-2b1f00c0ffee';
+    await register(post('/api/v1/agents/register', load('register.v1.json')));
+    const hb = (body: Record<string, unknown>) => heartbeat(post('/api/v1/agents/me/heartbeat', { agent_id: ID, ts: new Date().toISOString(), version: '0.3.0', ...body }));
+    const r = await hb({
+      update: { mode: 'notify', owner: 'agent', latest: '0.4.0', available: true, checked_at: '2026-10-17T08:00:00Z', extra: 'ignored' },
+      advertising: { url: 'http://192.168.1.10:8088', state: 'advertising', fingerprint: 'AAAA-BBBB', since: '2026-10-17T08:00:00Z' },
+    });
+    expect(r.status).toBe(200);
+    let [a] = await db.select().from(agents).where(eq(agents.id, ID));
+    expect(a.updateInfo).toMatchObject({ mode: 'notify', owner: 'agent', latest: '0.4.0', available: true });
+    expect(a.updateInfo).not.toHaveProperty('extra');
+    expect(a.advertising).toMatchObject({ url: 'http://192.168.1.10:8088', state: 'advertising', fingerprint: 'AAAA-BBBB' });
+    const { advertisers } = await import('@/lib/discovery/status');
+    expect(await advertisers(db, 'aaaa-bbbb')).toEqual([expect.objectContaining({ url: 'http://192.168.1.10:8088', fingerprintOk: true })]);
+    expect((await advertisers(db, 'CCCC-DDDD'))[0].fingerprintOk).toBe(false);
+    // 太久沒心跳的廣播不算
+    expect(await advertisers(db, 'AAAA-BBBB', Date.now() + 16 * 60_000)).toEqual([]);
+    // 手動上傳的心跳不帶這兩項：保留上次的
+    expect((await hb({})).status).toBe(200);
+    [a] = await db.select().from(agents).where(eq(agents.id, ID));
+    expect(a.updateInfo?.latest).toBe('0.4.0');
+    expect(a.advertising?.state).toBe('advertising');
+    // 格式不對：拒收
+    expect((await hb({ update: { mode: 'x'.repeat(40), owner: 'agent', available: true } })).status).toBe(400);
+  });
+
   it('guards: forbidden keys, gzip bombs, header mismatch, throttling', async () => {
     const bad = await register(post('/api/v1/agents/register', JSON.parse('{"__proto__":{"x":1},"agent":{}}')));
     expect([400]).toContain(bad.status);

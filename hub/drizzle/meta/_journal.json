@@ -85,6 +85,13 @@
       "when": 1792252797215,
       "tag": "0011_host_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792259472678,
+      "tag": "0012_agent_update_advertise",
+      "breakpoints": true
     }
   ]
 }

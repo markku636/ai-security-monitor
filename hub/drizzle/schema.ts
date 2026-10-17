@@ -91,6 +91,27 @@ export const auditLog = pgTable(
 export type Scores = { overall: number; connections: number; exposure: number; vulns: number; hardening: number };
 export type SevCounts = { critical: number; high: number; medium: number; low: number; info: number };
 
+/** 心跳裡的更新狀態（agents.update_info）。 */
+export interface AgentUpdateInfo {
+  mode: string;
+  owner: string;
+  latest?: string | null;
+  available: boolean;
+  checked_at?: string | null;
+  note?: string | null;
+  at: string;
+}
+
+/** 心跳裡的區網廣播狀態（agents.advertising）。 */
+export interface AgentAdvertising {
+  url: string;
+  state: string;
+  fingerprint?: string | null;
+  error?: string | null;
+  since?: string | null;
+  at: string;
+}
+
 export const agents = pgTable(
   'agents',
   {
@@ -131,6 +152,10 @@ export const agents = pgTable(
     metricsAt: ts('metrics_at'),
     /** 這台電腦有沒有開啟效能蒐集（主機自己決定；null＝還沒送過樣本）。 */
     perfEnabled: boolean('perf_enabled'),
+    /** agent 心跳回報的自動更新狀態（有沒有新版、update.mode、誰負責更新）；at＝回報時間。 */
+    updateInfo: jsonb('update_info').$type<AgentUpdateInfo>(),
+    /** 這台的背景服務在區網幫哪個 Hub 廣播（hub.advertise_url）；at＝回報時間，太舊就當作沒在廣播。 */
+    advertising: jsonb('advertising').$type<AgentAdvertising>(),
   },
   (t) => [index('agents_last_seen_idx').on(t.lastSeenAt), index('agents_hostname_idx').on(t.hostname)],
 );

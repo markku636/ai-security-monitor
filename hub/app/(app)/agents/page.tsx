@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UpdateBadge } from '@/components/security/UpdateBadge';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ScorePill, SevCountsRow } from '@/components/ui/Severity';
@@ -6,12 +7,13 @@ import { getViewer } from '@/lib/auth/require';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { listAgents, type AgentStatus } from '@/lib/queries/agents';
+import { agentNewVersion, latestRelease } from '@/lib/update';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AgentsPage() {
   const { t } = await getT();
-  const rows = await listAgents();
+  const [rows, release] = await Promise.all([listAgents(), latestRelease().catch(() => null)]);
   const isAdmin = (await getViewer()).role === 'admin';
   const statusBadge = (s: AgentStatus) =>
     s === 'online' ? <Badge tone="ok">{t('線上')}</Badge> : s === 'stale' ? <Badge tone="warn">{t('延遲')}</Badge> : <Badge>{t('離線')}</Badge>;
@@ -59,7 +61,10 @@ export default async function AgentsPage() {
                   </td>
                   <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                     {[a.osName ?? a.osFamily, a.osVersion].filter(Boolean).join(' ')}
-                    <div className="text-xs text-slate-500">ai-security-monitor {a.version}</div>
+                    <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                      <span>ai-security-monitor {a.version}</span>
+                      <UpdateBadge t={t} latest={agentNewVersion(a.version, a.updateInfo, release?.latest)} info={a.updateInfo} />
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     <ScorePill score={a.score?.overall} />

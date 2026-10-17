@@ -1,4 +1,5 @@
-# 單機版：Hub＋PostgreSQL 只給這台電腦用（只綁 127.0.0.1），本機的 ai-security-monitor 回報到 http://127.0.0.1:8088。
+# 單機版：Hub＋PostgreSQL 預設只給這台電腦用（只綁 127.0.0.1），本機的 ai-security-monitor 回報到 http://127.0.0.1:8088。
+# 要讓辦公室其他電腦也連得到：.env 加 AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0 與 AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<這台的區網 IP>:8088。
 #   cp .env.example .env   # 填好 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
 #   docker compose -f docker/compose.standalone.yml --env-file .env up -d
 #   ai-security-monitor enroll http://127.0.0.1:8088 --key <在 Hub「新增主機」頁建立的註冊金鑰>
@@ -38,6 +39,9 @@ services:
       AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS: ${AI_SECURITY_MONITOR_HUB_CLIENT_SECRETS:-${ASA_HUB_CLIENT_SECRETS:-}}
       AI_SECURITY_MONITOR_HUB_PUBLIC_URL: ${AI_SECURITY_MONITOR_HUB_PUBLIC_URL:-${ASA_HUB_PUBLIC_URL:-http://127.0.0.1:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}}}
       AI_SECURITY_MONITOR_HUB_EDITION: standalone
+      # 主機上綁的位址（和下面 ports 同一個值）：Hub「新增主機」頁用它判斷辦公室其他電腦連不連得到
+      AI_SECURITY_MONITOR_HUB_BIND: ${AI_SECURITY_MONITOR_HUB_BIND:-${ASA_HUB_BIND:-127.0.0.1}}
+      AI_SECURITY_MONITOR_HUB_MDNS: ${AI_SECURITY_MONITOR_HUB_MDNS:-}
       AI_SECURITY_MONITOR_HUB_MCP_TOKEN: ${AI_SECURITY_MONITOR_HUB_MCP_TOKEN:-${ASA_HUB_MCP_TOKEN:-}}
       AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS: ${AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS:-}
       AI_SECURITY_MONITOR_HUB_NAME: ${AI_SECURITY_MONITOR_HUB_NAME:-}
@@ -55,8 +59,9 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
+    # 預設只給這台電腦用；要給辦公室其他電腦連，.env 設 AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0（一定要有管理員金鑰，只在公司內網使用）
     ports:
-      - "127.0.0.1:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}:3000"
+      - "${AI_SECURITY_MONITOR_HUB_BIND:-${ASA_HUB_BIND:-127.0.0.1}}:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}:3000"
     volumes:
       - hubdata:/data
 

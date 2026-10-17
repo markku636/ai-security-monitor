@@ -65,8 +65,8 @@ async function refresh(): Promise<void> {
     .onConflictDoUpdate({ target: settings.key, set: { value: info, updatedAt: new Date(), updatedBy: 'system' } });
 }
 
-/** 讀快取；過期就在背景更新（不等），讓頁面不會被 GitHub 拖慢。 */
-export async function updateAvailable(): Promise<{ latest: string; url: string | null } | null> {
+/** GitHub 上的最新版（讀快取；過期就在背景更新、不等，讓頁面不會被 GitHub 拖慢）。關閉檢查時回 null。 */
+export async function latestRelease(): Promise<{ latest: string; url: string | null } | null> {
   if (!enabled()) return null;
   const c = await cached().catch(() => null);
   if (!c || Date.now() - Date.parse(c.checkedAt) > EVERY_MS) {
@@ -76,5 +76,26 @@ export async function updateAvailable(): Promise<{ latest: string; url: string |
         inflight = null;
       });
   }
-  return c?.latest && newer(c.latest, env().version) ? { latest: c.latest, url: c.url } : null;
+  return c?.latest ? { latest: c.latest, url: c.url } : null;
+}
+
+/** Hub 本身有沒有新版。 */
+export async function updateAvailable(): Promise<{ latest: string; url: string | null } | null> {
+  const r = await latestRelease();
+  return r && newer(r.latest, env().version) ? r : null;
+}
+
+/** agent 心跳回報的更新狀態（agents.update_info）。 */
+export interface AgentUpdateLike {
+  mode?: string | null;
+  owner?: string | null;
+  latest?: string | null;
+}
+
+/** 這台主機有沒有比它目前版本新的版本：看 agent 自己回報的，也看 Hub 查到的最新版，取較新的。沒有回 null。 */
+export function agentNewVersion(version: string, info: AgentUpdateLike | null | undefined, hubLatest: string | null | undefined): string | null {
+  if (!version) return null;
+  const found = [info?.latest, hubLatest].filter((v): v is string => !!v && newer(v, version));
+  if (!found.length) return null;
+  return found.reduce((a, b) => (newer(b, a) ? b : a));
 }

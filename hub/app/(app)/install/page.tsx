@@ -7,6 +7,7 @@ import { Hint } from '@/components/ui/Hint';
 import { requireAdmin } from '@/lib/auth/require';
 import { getDb } from '@/lib/db';
 import { mdnsStatus } from '@/lib/discovery/mdns';
+import { discoveryReport, gatherDiscovery, type Level } from '@/lib/discovery/status';
 import { srvCommands, srvInfo } from '@/lib/discovery/srv';
 import { hubIdentity, keylessEnabled } from '@/lib/enroll/identity';
 import { getAutoApproveCidrs, listRequests } from '@/lib/enroll/store';
@@ -29,6 +30,7 @@ export default async function InstallPage() {
   ]);
   const fp = identity?.fingerprint ?? null;
   const keyless = keylessEnabled();
+  const discovery = discoveryReport(await gatherDiscovery(db, hub, fp), t);
   const tip = {
     fingerprint: t('指紋是這個 Hub 專屬的一串代碼（由 Hub 的金鑰算出來）。電腦端第一次連上時會記住它，之後如果有人假冒 Hub，指紋就會對不上。'),
     cidr: t('CIDR 是寫一段 IP 範圍的方法：192.168.1.0/24 代表 192.168.1.0～192.168.1.255；只寫一個 IP 就只算那一台。'),
@@ -61,6 +63,8 @@ export default async function InstallPage() {
           <p className="text-sm text-red-700 dark:text-red-400">{t('讀不到 Hub 身分（資料庫連不上？）。')}</p>
         )}
       </Card>
+
+      <DiscoveryStatusCard report={discovery} hub={hub} />
 
       <Card title={t('待核准的主機')}>
         {!keyless ? (
@@ -135,6 +139,65 @@ export default async function InstallPage() {
         </>
       )}
     </div>
+  );
+}
+
+const LEVEL_CLASS: Record<Level, string> = {
+  ok: 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200',
+  warn: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+  bad: 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200',
+  info: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300',
+};
+const LEVEL_MARK: Record<Level, string> = { ok: '✓', warn: '!', bad: '✗', info: '·' };
+
+/** 「辦公室的電腦找得到這個 Hub 嗎？」：一句結論＋逐項說明＋怎麼改。 */
+async function DiscoveryStatusCard({ report, hub }: { report: ReturnType<typeof discoveryReport>; hub: string | null }) {
+  const { t } = await getT();
+  return (
+    <Card title={t('辦公室的電腦找得到這個 Hub 嗎？')}>
+      <p className={`mb-3 rounded-md border p-2 text-sm ${LEVEL_CLASS[report.level]}`}>{report.summary}</p>
+      <ul className="space-y-1.5 text-sm">
+        {report.checks.map((c, i) => (
+          <li key={`${c.id}-${i}`} className="flex gap-2">
+            <span
+              className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${LEVEL_CLASS[c.level]}`}
+              aria-hidden
+            >
+              {LEVEL_MARK[c.level]}
+            </span>
+            <span>
+              <span className="font-medium">{c.title}</span>
+              <span className="text-slate-600 dark:text-slate-300">：{c.text}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {!report.reachable ? (
+        <details className="mt-3 text-sm" open>
+          <summary className="cursor-pointer font-medium">{t('讓區網連得到（給全辦公室用）')}</summary>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-600 dark:text-slate-300">
+            <li>
+              {t('建議改用伺服器版：')} <code className="font-mono text-xs">docker compose -f docker/compose.yml --env-file .env up -d</code>
+              {t('（預設綁 0.0.0.0、開啟區網廣播）。')}
+            </li>
+            <li>
+              {t('或在單機版的 .env 加上')} <code className="font-mono text-xs">AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0</code> {t('與')}{' '}
+              <code className="font-mono text-xs">AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://&lt;{t('這台的區網 IP')}&gt;:8088</code>
+              {t('，再重新執行 docker compose up -d。')}
+            </li>
+            <li>{t('Windows／macOS 的防火牆要允許這個 port（預設 8088）連入。')}</li>
+          </ol>
+          <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {t('安全提醒：打開之後，同一個網路的任何人都看得到 Hub 的登入頁、也能呼叫上傳 API。一定要設管理員金鑰（單機版本來就必填）、只在公司內網使用；要從外面連，請放在 https 反向代理後面，不要直接開到網際網路。')}
+          </p>
+        </details>
+      ) : null}
+      {report.reachable && !report.findable && hub ? (
+        <p className="mt-3 text-xs text-slate-500">
+          {t('同事也可以直接用這個網址加入：')} <code className="font-mono">ai-security-monitor enroll --hub {hub}</code>
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

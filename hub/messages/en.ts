@@ -1,5 +1,75 @@
 // 繁中原文 → 英文。key 一律用單引號（scripts/i18n-scan.mjs 會比對頁面裡的 t('…') 是否都有收錄）。
 export const en: Record<string, string> = {
+  // ---- auto-update badge, last upload, LAN discovery status (0.4.0) ----
+  '自動更新': 'Auto-update',
+  '由桌面版負責': 'handled by the desktop app',
+  '這台的版本沒有回報': 'not reported by this version',
+  '最後上傳': 'Last upload',
+  '幫 Hub 廣播中：{url}': 'Advertising the Hub: {url}',
+  '設定了 {url}，但連不到 Hub：{e}': 'Set to {url}, but the Hub is unreachable: {e}',
+  '這台用的是桌面版：在那台電腦的桌面版按「設定 → 立即更新」（設成自動更新就會自己更新）。':
+    'This host uses the desktop app: on that computer press "Settings → Update now" in the desktop app (with auto-update on it updates itself).',
+  '這台設定為自動更新：背景服務會在一天內自己下載、驗證並更新。':
+    'This host is set to update automatically: its background service downloads, verifies and installs the update within a day.',
+  '到那台電腦執行 ai-security-monitor self-update --yes，或設定 ai-security-monitor config set update.mode auto 讓它自動更新。':
+    'On that computer run ai-security-monitor self-update --yes, or set ai-security-monitor config set update.mode auto to update automatically.',
+  '有新版 {v}': 'New version {v}',
+  '關閉': 'Off',
+  '有新版時通知': 'Notify when available',
+  '辦公室的電腦找得到這個 Hub 嗎？': 'Can office computers find this Hub?',
+  '讓區網連得到（給全辦公室用）': 'Make it reachable on the LAN (for the whole office)',
+  '建議改用伺服器版：': 'Recommended: switch to the server edition:',
+  '（預設綁 0.0.0.0、開啟區網廣播）。': ' (binds 0.0.0.0 and advertises on the LAN by default).',
+  '或在單機版的 .env 加上': 'Or add to the standalone .env:',
+  '與': 'and',
+  '這台的區網 IP': "this computer's LAN IP",
+  '，再重新執行 docker compose up -d。': ', then run docker compose up -d again.',
+  'Windows／macOS 的防火牆要允許這個 port（預設 8088）連入。': 'Allow inbound connections to this port (8088 by default) in the Windows/macOS firewall.',
+  '安全提醒：打開之後，同一個網路的任何人都看得到 Hub 的登入頁、也能呼叫上傳 API。一定要設管理員金鑰（單機版本來就必填）、只在公司內網使用；要從外面連，請放在 https 反向代理後面，不要直接開到網際網路。':
+    'Security note: once opened, anyone on the same network can see the Hub sign-in page and call the upload API. Always set an admin key (required for the standalone edition anyway) and use it only on the company network; for access from outside, put it behind an https reverse proxy instead of exposing it to the internet.',
+  '同事也可以直接用這個網址加入：': 'Colleagues can also join with this URL directly:',
+  '區網連不到這個 Hub': 'Not reachable from the LAN',
+  'Hub 只綁在 {bind}（只有這台電腦自己連得到）。': 'The Hub is bound to {bind} only (reachable from this computer only).',
+  '單機版預設只綁 127.0.0.1：只有跑 Hub 的這台電腦自己連得到，辦公室其他電腦連不到。':
+    'The standalone edition binds 127.0.0.1 by default: only the computer running the Hub can reach it, other office computers cannot.',
+  '區網連得到這個 Hub': 'Reachable from the LAN',
+  '應該連得到（伺服器版）': 'Should be reachable (server edition)',
+  'Hub 綁在 {bind}，同一個網路的電腦都能連進來（防火牆要放行這個 port）。': 'The Hub is bound to {bind}; computers on the same network can connect (the firewall must allow this port).',
+  '伺服器版預設綁 0.0.0.0（所有網路介面）；如果還是連不到，請檢查防火牆。': 'The server edition binds 0.0.0.0 (all interfaces) by default; if it still cannot be reached, check the firewall.',
+  '沒有設定對外網址': 'No public URL set',
+  '請設定 AI_SECURITY_MONITOR_HUB_PUBLIC_URL（例：http://192.168.1.10:8088），電腦端與廣播都要用這個網址。':
+    'Set AI_SECURITY_MONITOR_HUB_PUBLIC_URL (e.g. http://192.168.1.10:8088); computers and advertising use this URL.',
+  '對外網址是本機位址': 'The public URL is a local address',
+  '對外網址是 {url}：別台電腦照這個網址會連到自己。請改成這台的區網 IP 或 DNS 名稱（AI_SECURITY_MONITOR_HUB_PUBLIC_URL）。':
+    "The public URL is {url}: other computers following it would connect to themselves. Use this computer's LAN IP or DNS name instead (AI_SECURITY_MONITOR_HUB_PUBLIC_URL).",
+  '對外網址': 'Public URL',
+  'Hub 自己的區網廣播：關閉': "Hub's own LAN advertising: off",
+  '單機版預設關閉（AI_SECURITY_MONITOR_HUB_MDNS=on 可開啟）。': 'Off by default in the standalone edition (AI_SECURITY_MONITOR_HUB_MDNS=on turns it on).',
+  'Hub 自己的區網廣播：沒在運作': "Hub's own LAN advertising: not running",
+  'Hub 自己的區網廣播：在 Docker 裡，可能出不了區網': "Hub's own LAN advertising: inside Docker, it may not reach the LAN",
+  'Docker Desktop 與預設的 bridge 網路不會把廣播送到區網；Linux 可改用 network_mode: host，或讓一台電腦幫忙廣播（下一項）。':
+    'Docker Desktop and the default bridge network do not forward multicast to the LAN; on Linux use network_mode: host, or let a computer advertise it (next item).',
+  'Hub 自己的區網廣播：運作中': "Hub's own LAN advertising: running",
+  '同一個網段的電腦按「尋找公司的 Hub」就會看到它。': 'Computers on the same subnet see it when they press "Find your company\'s Hub".',
+  '有電腦在幫忙廣播': 'A computer is advertising it',
+  '沒有電腦在幫忙廣播': 'No computer is advertising it',
+  '在跑 Hub 的那台電腦（桌面版「設定 → 讓區網裡的電腦找到這台的 Hub」，或命令列 ai-security-monitor config set hub.advertise_url <區網網址>）打開，背景服務就會一直幫忙廣播。':
+    'Turn it on on the computer that runs the Hub (desktop app "Settings → Let computers on the LAN find the Hub on this computer", or ai-security-monitor config set hub.advertise_url <LAN URL>) and its background service keeps advertising it.',
+  '有電腦廣播的不是這個 Hub': 'A computer advertises a different Hub',
+  '{hosts} 廣播的指紋和這個 Hub 不同（可能是舊的 Hub）。': '{hosts} advertise a fingerprint different from this Hub (perhaps an old Hub).',
+  '公司 DNS：沒有檢查': 'Company DNS: not checked',
+  '對外網址不是公司網域底下的名稱，無法自動檢查 SRV 紀錄（跨網段的電腦要靠它）。':
+    'The public URL is not a name under a company domain, so the SRV record cannot be checked automatically (computers on other subnets rely on it).',
+  '公司 DNS：有 SRV 紀錄': 'Company DNS: SRV record found',
+  '公司 DNS：沒有 SRV 紀錄': 'Company DNS: no SRV record',
+  '加了之後跨網段的電腦也找得到（下面有現成指令）。': 'With it, computers on other subnets find the Hub too (ready-made commands below).',
+  '辦公室的電腦現在找不到、也連不到這個 Hub：它只開放給這台電腦自己。要給全辦公室用，請照下面「讓區網連得到」改設定。':
+    'Office computers can neither find nor reach this Hub: it is open to this computer only. To use it for the whole office, follow "Make it reachable on the LAN" below.',
+  '辦公室的電腦可以自動找到這個 Hub：在電腦上按「尋找公司的 Hub」或執行 ai-security-monitor enroll --auto 就會看到它。':
+    'Office computers can find this Hub automatically: pressing "Find your company\'s Hub" or running ai-security-monitor enroll --auto shows it.',
+  '辦公室的電腦連得到這個 Hub，但還不會自動找到它：請打開區網廣播或在公司 DNS 加 SRV 紀錄；在那之前，可以把網址直接給同事。':
+    'Office computers can reach this Hub but will not find it automatically yet: turn on LAN advertising or add the SRV record to the company DNS; until then, give colleagues the URL directly.',
+
   // ---- layout ----
   'ai-security-monitor 的中央儀表板：連線判定、威脅情資、防火牆、漏洞與 AI 分析':
     'Central dashboard for ai-security-monitor: connection verdicts, threat intel, firewall, vulnerabilities and AI analysis',

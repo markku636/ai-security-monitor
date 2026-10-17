@@ -4,6 +4,7 @@ import { ConnectionsView } from '@/components/security/ConnectionsView';
 import { FindingsView } from '@/components/security/FindingsView';
 import { IpLink } from '@/components/security/IpLink';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
+import { UpdateBadge, updateModeText } from '@/components/security/UpdateBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -23,6 +24,8 @@ import { AppHitsTable, HardeningTable, OsvTable, ScoreTrend, SupportBadge } from
 import { agentHardening, agentVuln, type VulnSummary } from '@/lib/queries/posture';
 import { FleetTrafficSection, HostPerfView, RangeChips } from '@/components/metrics/MetricsViews';
 import { parseRange, type Range } from '@/lib/queries/metrics';
+import { agentNewVersion, latestRelease } from '@/lib/update';
+import type { ReactNode } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,14 +48,28 @@ function tabLabel(t: TFn, tab: Tab): string {
   }[tab];
 }
 
+async function HeaderUpdateBadge({ t, a }: { t: TFn; a: Agent }) {
+  const release = await latestRelease().catch(() => null);
+  return <UpdateBadge t={t} latest={agentNewVersion(a.version, a.updateInfo, release?.latest)} info={a.updateInfo} />;
+}
+
 function StatusBadge({ t, a }: { t: TFn; a: Agent }) {
   if (a.status === 'online') return <Badge tone="ok">{t('線上')}</Badge>;
   if (a.status === 'stale') return <Badge tone="warn">{t('延遲')}</Badge>;
   return <Badge>{t('離線')}</Badge>;
 }
 
+/** 最後一次上傳（報告或快照）。 */
+function lastUpload(a: Agent): Date | null {
+  const list = [a.lastReportAt, a.lastSnapshotAt].filter((d): d is Date => !!d);
+  return list.length ? new Date(Math.max(...list.map((d) => d.getTime()))) : null;
+}
+
 async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
-  const [risky, history] = await Promise.all([riskyDestinations(10, a.id), agentReports(a.id, 60)]);
+  const [risky, history, release] = await Promise.all([riskyDestinations(10, a.id), agentReports(a.id, 60), latestRelease().catch(() => null)]);
+  const newer = agentNewVersion(a.version, a.updateInfo, release?.latest);
+  const uploaded = lastUpload(a);
+  const adv = a.advertising && Date.now() - Date.parse(a.advertising.at) <= 15 * 60_000 ? a.advertising : null;
   const risks = await cachedRisks(risky.map((d) => d.remoteIp));
   const trend = history
     .slice()
@@ -63,10 +80,29 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
       vulns: r.scannersRun.includes('vuln') ? r.score.vulns : undefined,
       hardening: r.scannersRun.includes('hardening') ? r.score.hardening : undefined,
     }));
-  const rows: [string, string][] = [
+  const rows: [string, ReactNode][] = [
     [t('系統'), [a.osName ?? a.osFamily, a.osVersion].filter(Boolean).join(' ')],
     [t('架構'), a.arch],
-    [t('ai-security-monitor 版本'), a.version],
+    [
+      t('ai-security-monitor 版本'),
+      <span key="v" className="inline-flex flex-wrap items-center gap-1">
+        {a.version}
+        <UpdateBadge t={t} latest={newer} info={a.updateInfo} />
+      </span>,
+    ],
+    [
+      t('自動更新'),
+      a.updateInfo
+        ? [
+            updateModeText(t, a.updateInfo.mode),
+            a.updateInfo.owner === 'desktop' ? t('由桌面版負責') : null,
+            a.updateInfo.note ? `（${a.updateInfo.note}）` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : t('這台的版本沒有回報'),
+    ],
+    [t('最後上傳'), uploaded ? `${utc(uploaded)}（${since(uploaded, t)}）` : '—'],
     [t('IP 位址'), a.ips.join(', ') || '—'],
     [t('執行身分'), a.elevated ? t('系統管理員') : t('一般使用者（部分資料可能缺漏）')],
     [t('執行方式'), a.serviceMode ? t('背景服務') : t('手動／排程')],
@@ -74,6 +110,9 @@ async function OverviewTab({ t, a }: { t: TFn; a: Agent }) {
     [t('首次出現'), utc(a.firstSeenAt)],
     [t('最後一份報告'), a.lastReportAt ? `${utc(a.lastReportAt)}（${since(a.lastReportAt, t)}）` : '—'],
     [t('最後一次快照'), a.lastSnapshotAt ? `${utc(a.lastSnapshotAt)}（${since(a.lastSnapshotAt, t)}）` : '—'],
+    ...(adv
+      ? ([[t('區網廣播'), adv.state === 'advertising' ? t('幫 Hub 廣播中：{url}', { url: adv.url }) : t('設定了 {url}，但連不到 Hub：{e}', { url: adv.url, e: adv.error ?? '—' })]] as [string, ReactNode][])
+      : []),
   ];
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -409,6 +448,7 @@ export default async function AgentPage({
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold">{a.hostname}</h1>
           <StatusBadge t={t} a={a} />
+          <HeaderUpdateBadge t={t} a={a} />
           {a.partial ? <Badge tone="info">{t('部分資料')}</Badge> : null}
           <Link
             href={`/ai?scope=agent&agent_id=${encodeURIComponent(a.id)}`}
