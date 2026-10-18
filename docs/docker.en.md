@@ -35,6 +35,24 @@ docker compose -f docker/compose.yml --env-file .env up -d
 - PostgreSQL is not published; it is only reachable inside the compose network.
 - Agents install and enroll with the one-liner from `https://hub.example.com/install`.
 
+## Adding protective DNS (optional)
+
+Each file has a variant that includes [protective DNS](dns-server.en.md) (a DNS server that blocks malicious domains): one extra `dns` service, everything else the same, same data.
+
+| Without protective DNS | With protective DNS |
+|---|---|
+| `compose.standalone.yml` | `compose.standalone.dns.yml` |
+| `compose.yml` | `compose.dns.yml` |
+
+```bash
+# also set AI_SECURITY_MONITOR_HUB_DNS_TOKEN in .env (openssl rand -hex 24); for the LAN also AI_SECURITY_MONITOR_HUB_DNS_BIND=<this machine's LAN IP>
+docker compose -f docker/compose.standalone.dns.yml --env-file .env up -d
+# back to the file without protective DNS:
+docker compose -f docker/compose.standalone.yml --env-file .env up -d --remove-orphans
+```
+
+Blocking switch, pointing devices at it and Linux host networking: see [dns-server.en.md](dns-server.en.md).
+
 ## Settings
 
 See [.env.example](../.env.example) for the full list. The important ones:

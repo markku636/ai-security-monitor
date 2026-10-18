@@ -540,9 +540,19 @@ jobs:
           printf 'AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=ci-admin\nAI_SECURITY_MONITOR_HUB_DB_PASSWORD=ci-db\nAI_SECURITY_MONITOR_HUB_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_HOST_PORT=18088\nAI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0\n' > ci.env
           # 只有舊名 ASA_HUB_* 的 .env（0.1.x）展開結果要跟新名完全一樣
           printf 'ASA_HUB_ADMIN_SECRET=ci-admin\nASA_HUB_DB_PASSWORD=ci-db\nASA_HUB_IMAGE_TAG=ci\nASA_HUB_HOST_PORT=18088\nASA_HUB_UPDATE_CHECK=0\n' > legacy.env
-          for f in compose.standalone.yml compose.yml; do
-            diff <(docker compose -f docker/$f --env-file ci.env config) <(docker compose -f docker/$f --env-file legacy.env config)
+          printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\n' > tok.env
+          for f in compose.standalone.yml compose.yml compose.standalone.dns.yml compose.dns.yml; do
+            diff <(docker compose -f docker/$f --env-file ci.env --env-file tok.env config) <(docker compose -f docker/$f --env-file legacy.env --env-file tok.env config)
           done
+          # 不含防護 DNS 的兩份沒有 dns 服務；含的兩份有，而且沒設權杖時拒絕展開
+          for f in compose.standalone.yml compose.yml; do
+            ! docker compose -f docker/$f --env-file ci.env config --services | grep -qx dns
+          done
+          for f in compose.standalone.dns.yml compose.dns.yml; do
+            docker compose -f docker/$f --env-file ci.env --env-file tok.env config --services | grep -qx dns
+            ! docker compose -f docker/$f --env-file ci.env config > /dev/null 2>&1
+          done
+          docker compose -f docker/compose.dns.yml -f docker/compose.dns-host.yml --env-file ci.env --env-file tok.env config | grep -q 'network_mode: host'
           docker compose -f docker/compose.standalone.yml --env-file legacy.env config | grep -q 'AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:ci-db@postgres:5432/asa_hub'
           docker compose -f docker/compose.standalone.yml --env-file ci.env up -d --wait --no-build
           B=http://127.0.0.1:18088
@@ -557,20 +567,20 @@ jobs:
           ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
           # 資料庫密碼空白（.env 沒設）也要拒絕
           ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:@postgres:5432/asa_hub -e AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=x ghcr.io/markku636/ai-security-monitor-hub:ci
-          # 防護 DNS（--profile dns）：容器健康、經加密 DNS 解析、Hub 開封鎖後擋自訂網域、Hub 看得到這台
+          # 防護 DNS（compose.standalone.dns.yml）：容器健康、經加密 DNS 解析、Hub 開封鎖後擋自訂網域、Hub 看得到這台
           cp ci.env dns.env
           printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\nAI_SECURITY_MONITOR_DNS_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_DNS_PORT=15353\n' >> dns.env
-          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns up -d --wait --no-build
+          docker compose -f docker/compose.standalone.dns.yml --env-file dns.env up -d --wait --no-build
           q() { python3 scripts/dnsq.py 127.0.0.1 15353 "$1"; }
           q example.com | tee d1.txt
           grep -q "rcode=0 answers=[1-9]" d1.txt
           curl -sf -X PUT -H 'authorization: Bearer ci-admin' -H 'content-type: application/json' -d '{"enabled":true,"block":["www.example.org"]}' $B/api/v1/admin/dns-protect > /dev/null
           ok=0
           for i in $(seq 1 30); do sleep 3; if q www.example.org | grep -q "rcode=3"; then ok=1; break; fi; done
-          test "$ok" = 1 || { docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns logs dns | tail -30; exit 1; }
+          test "$ok" = 1 || { docker compose -f docker/compose.standalone.dns.yml --env-file dns.env logs dns | tail -30; exit 1; }
           curl -sf -H 'authorization: Bearer ci-admin' $B/api/v1/admin/dns-protect | jq -e '.servers | map(select(.id == "env" and .online)) | length == 1' > /dev/null
-          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns exec -T dns /ai-security-monitor dns-server --healthcheck --listen 127.0.0.1:53
-          docker compose -f docker/compose.standalone.yml --env-file dns.env --profile dns down -v
+          docker compose -f docker/compose.standalone.dns.yml --env-file dns.env exec -T dns /ai-security-monitor dns-server --healthcheck --listen 127.0.0.1:53
+          docker compose -f docker/compose.standalone.dns.yml --env-file dns.env down -v
           echo "docker smoke ok"
 
   e2e:

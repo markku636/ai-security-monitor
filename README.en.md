@@ -87,6 +87,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 
 Open `http://<this machine's IP>:8088` in a browser and sign in with the `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` you just set.
 Just trying it on your own machine? Use `compose.standalone.yml` instead of `compose.yml`; it only listens on `http://127.0.0.1:8088`.
+To run [protective DNS](docs/dns-server.en.md) (a DNS server that blocks malicious domains) as well, use `compose.dns.yml` (standalone: `compose.standalone.dns.yml`) and also set `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` in `.env`.
 
 **Step 2: add computers**
 
@@ -451,7 +452,7 @@ ai-security-monitor/
 ├── desktop/               Desktop app AI Security Monitor (Tauri 2): Rust shell (src-tauri/) + plain HTML / CSS / JS UI (ui/)
 ├── contract/              JSON Schemas between agent and Hub (enrollment, reports, snapshots, remote actions)
 ├── feeds/                 data embedded in the binary: intel source list, known-good services, hardening rules (YAML), vulnerability and bugcheck notes
-├── docker/                Hub Dockerfile and compose files (standalone, server, dev database)
+├── docker/                Hub Dockerfile and compose files (standalone and server, each also with protective DNS; dev database)
 ├── scripts/               one-line installers, demo data, screenshots, version and changelog checks
 ├── docs/                  topic docs and README screenshots (docs/images)
 └── .github/workflows/     CI and release pipelines

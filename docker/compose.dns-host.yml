@@ -1,5 +1,5 @@
 # Linux：防護 DNS 改用 host 網路，看得到每個裝置的真實 IP（依裝置篩選紀錄、對到主機）。
-#   docker compose -f docker/compose.yml -f docker/compose.dns-host.yml --env-file .env --profile dns up -d
+#   docker compose -f docker/compose.dns.yml -f docker/compose.dns-host.yml --env-file .env up -d
 # host 網路下連 Hub 走這台發布的 port；監聽 0.0.0.0:53 與 [::]:53，被 systemd-resolved 佔住時自動改綁各網卡的位址。
 # Docker Desktop（Windows／macOS）的 host 網路不是真的主機網路，請改用原生的 ai-security-monitor dns-server。
 services:

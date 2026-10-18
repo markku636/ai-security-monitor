@@ -20,7 +20,7 @@ export function DnsHowTo({ t, open }: { t: TFn; open: boolean }) {
           <span className={CODE}>ai-security-monitor dns block bad.example</span>／<span className={CODE}>dns allow ok.example</span>
         </li>
         <li>
-          <b>{t('真的擋下來')}</b>：{t('在一台常開的電腦跑')} <span className={CODE}>ai-security-monitor dns-server</span>{t('（或 Hub compose 加 --profile dns），到')}{' '}
+          <b>{t('真的擋下來')}</b>：{t('在一台常開的電腦跑')} <span className={CODE}>ai-security-monitor dns-server</span>{t('（或改用 Hub 含防護 DNS 的 compose：compose.dns.yml），到')}{' '}
           <Link href="/admin?tab=dns" className="text-teal-700 hover:underline dark:text-teal-400">
             {t('設定與金鑰 → 防護 DNS')}
           </Link>{' '}

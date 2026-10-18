@@ -417,7 +417,7 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
             <p className="text-xs text-slate-500">{t('建議原生跑：看得到每個裝置的真實 IP。Windows／macOS 的 Docker Desktop 會把來源都變成同一個位址。')}</p>
             <p className="mt-1 text-slate-500">{t('已加入這個 Hub 的電腦，也可以交給背景服務帶起（掛掉自動重啟）：')}</p>
             <pre className="mt-1 overflow-x-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{'ai-security-monitor config set dns.server.enabled true'}</pre>
-            <p className="mt-1 text-slate-500">{t('或用 Hub 的 compose：.env 設 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（至少 32 字元）與 AI_SECURITY_MONITOR_HUB_DNS_BIND（這台的區網 IP），再加 --profile dns 啟動。')}</p>
+            <p className="mt-1 text-slate-500">{t('或用 Hub 的 compose：.env 設 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（至少 32 字元）與 AI_SECURITY_MONITOR_HUB_DNS_BIND（這台的區網 IP），改用含防護 DNS 的 docker/compose.dns.yml（單機版 compose.standalone.dns.yml）啟動。')}</p>
             {view.composeTokenConfigured ? <p className="text-xs text-emerald-700 dark:text-emerald-400">{t('這個 Hub 已設定 compose 的防護 DNS 權杖。')}</p> : null}
           </div>
           <div>

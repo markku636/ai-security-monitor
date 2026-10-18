@@ -8,7 +8,7 @@
 
 | | 預設 | 關掉時 |
 |---|---|---|
-| 部署 | 不起（compose 的 `dns` 服務在 `--profile dns`；原生跑要自己啟動或設 `dns.server.enabled`） | 沒有 DNS 伺服器 |
+| 部署 | 不起（`compose.yml`／`compose.standalone.yml` 沒有 dns 服務，要用含防護 DNS 的 `compose.dns.yml`／`compose.standalone.dns.yml`；原生跑要自己啟動或設 `dns.server.enabled`） | 沒有 DNS 伺服器 |
 | Hub「設定與金鑰 → 防護 DNS」封鎖開關 | **關**（只轉送） | 伺服器照常轉送、只是不封鎖，正在用它的裝置不會斷網 |
 | 每台電腦 `dns use-hub` | 不動系統 DNS | — |
 
@@ -57,11 +57,19 @@ Linux 用 `ufw allow 53` 或對應的 nftables 規則；macOS 的應用程式防
 
 ### 2. Hub 的 compose
 
-`.env` 設好 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`（至少 32 字元，Hub 與 dns 共用，例 `openssl rand -hex 24`）與 `AI_SECURITY_MONITOR_HUB_DNS_BIND`（這台的區網 IP），再加 `--profile dns`：
+`.env` 設好 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`（至少 32 字元，Hub 與 dns 共用，例 `openssl rand -hex 24`）與 `AI_SECURITY_MONITOR_HUB_DNS_BIND`（這台的區網 IP），改用含防護 DNS 的那份 compose：
 
 ```sh
-docker compose -f docker/compose.yml --env-file .env --profile dns up -d
+docker compose -f docker/compose.dns.yml --env-file .env up -d              # 伺服器版
+docker compose -f docker/compose.standalone.dns.yml --env-file .env up -d   # 單機版
 ```
+
+| 不含防護 DNS | 含防護 DNS |
+|---|---|
+| `compose.yml` | `compose.dns.yml` |
+| `compose.standalone.yml` | `compose.standalone.dns.yml` |
+
+含防護 DNS 的那份就是原本那份再多一個 `dns` 服務：同一個專案、同一份資料，兩份隨時可以換。換回不含防護 DNS 的那份時加 `--remove-orphans`，把 dns 容器收掉。
 
 映像 `ghcr.io/markku636/ai-security-monitor-dns` 只有 musl 靜態執行檔與 CA 憑證（FROM scratch，amd64／arm64，以 nobody 執行）。bridge 網路看不到裝置的真實 IP（Docker Desktop 全部變成同一個位址）；Linux 要分裝置請再加 `-f docker/compose.dns-host.yml`（host 網路）。
 

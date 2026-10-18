@@ -9,7 +9,7 @@ feature keeps working (each computer's own DNS monitoring and alerts are describ
 
 | | Default | When off |
 |---|---|---|
-| Deployment | not started (the compose `dns` service needs `--profile dns`; natively you start it yourself or set `dns.server.enabled`) | no DNS server |
+| Deployment | not started (`compose.yml` / `compose.standalone.yml` have no dns service; use `compose.dns.yml` / `compose.standalone.dns.yml`, which include it; natively you start it yourself or set `dns.server.enabled`) | no DNS server |
 | Hub "Settings & keys → Protective DNS" blocking switch | **off** (forward only) | the server keeps forwarding, it just stops blocking, so devices using it stay online |
 | Per computer `dns use-hub` | system DNS untouched | — |
 
@@ -58,11 +58,19 @@ On Linux use `ufw allow 53` or the equivalent nftables rule; the macOS applicati
 
 ### 2. The Hub's compose
 
-Set `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` (at least 32 characters, shared by the Hub and dns, e.g. `openssl rand -hex 24`) and `AI_SECURITY_MONITOR_HUB_DNS_BIND` (this machine's LAN IP) in `.env`, then add `--profile dns`:
+Set `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` (at least 32 characters, shared by the Hub and dns, e.g. `openssl rand -hex 24`) and `AI_SECURITY_MONITOR_HUB_DNS_BIND` (this machine's LAN IP) in `.env`, then start the compose file that includes protective DNS:
 
 ```sh
-docker compose -f docker/compose.yml --env-file .env --profile dns up -d
+docker compose -f docker/compose.dns.yml --env-file .env up -d              # server
+docker compose -f docker/compose.standalone.dns.yml --env-file .env up -d   # standalone
 ```
+
+| Without protective DNS | With protective DNS |
+|---|---|
+| `compose.yml` | `compose.dns.yml` |
+| `compose.standalone.yml` | `compose.standalone.dns.yml` |
+
+The file with protective DNS is the plain one plus a `dns` service: same project, same data, so you can switch at any time. When switching back to the file without it, add `--remove-orphans` to remove the dns container.
 
 The image `ghcr.io/markku636/ai-security-monitor-dns` contains only the musl static binary and CA certificates (FROM scratch, amd64/arm64, runs as nobody). A bridge network hides devices' real IPs (Docker Desktop turns them all into one address); on Linux add `-f docker/compose.dns-host.yml` (host networking) to tell devices apart.
 

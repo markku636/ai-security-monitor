@@ -2,6 +2,9 @@
 
 ## 未發佈
 
+- Hub 的 compose 分成兩份：不含防護 DNS（`compose.yml`、`compose.standalone.yml`）與含防護 DNS（`compose.dns.yml`、`compose.standalone.dns.yml`），不再用 `--profile dns`。兩份是同一個專案、同一份資料，可以隨時換；換回不含的那份時加 `--remove-orphans`。含防護 DNS 的那份沒設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` 時會直接說明要設，不會起一台連不上 Hub 的 DNS。dns 映像標籤沒另外設時跟 Hub 同一版（也認舊名 `ASA_HUB_IMAGE_TAG`）。
+  **升級注意**：之前用 `--profile dns` 跑防護 DNS 的，改用含防護 DNS 的那份（`-f docker/compose.dns.yml`，單機版 `compose.standalone.dns.yml`）。
+
 ## v0.7.0 — 2026-10-18
 
 **AI 分析與資安報告改成白話（先講要不要擔心、最後列出要做的事），AI 可直接拿到連線統計；依主機群組集中推送設定（Hub 簽章、主機驗章）；Windows 一鍵開啟各程式的網路流量；情資逐一手動更新；可選區間的資安報告；DNS 黑白名單。** 一般使用者請下載 `AI-Security-Monitor-0.7.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.6.0 的桌面版會自動提示更新。

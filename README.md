@@ -87,6 +87,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 
 用瀏覽器打開 `http://<這台的 IP>:8088`，用剛剛填的 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
 只想在自己這台試試看的話，把 `compose.yml` 換成 `compose.standalone.yml`，就只開在 `http://127.0.0.1:8088`。
+要一起跑[防護 DNS](docs/dns-server.md)（擋惡意網域的 DNS 伺服器）就改用 `compose.dns.yml`（單機版 `compose.standalone.dns.yml`），`.env` 另外設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`。
 
 **第二步：把電腦加進來**
 
@@ -451,7 +452,7 @@ ai-security-monitor/
 ├── desktop/               桌面版 AI Security Monitor（Tauri 2）：Rust 殼（src-tauri/）＋純 HTML／CSS／JS 介面（ui/）
 ├── contract/              agent ↔ Hub 的 JSON Schema（註冊、報告、快照、遠端動作）
 ├── feeds/                 隨執行檔內嵌的資料：情資來源清單、已知良好服務、硬化規則（YAML）、漏洞與藍屏說明
-├── docker/                Hub 的 Dockerfile 與 compose（單機版、伺服器版、開發用資料庫）
+├── docker/                Hub 的 Dockerfile 與 compose（單機版、伺服器版，各有含防護 DNS 的版本；開發用資料庫）
 ├── scripts/               一行安裝腳本、示範資料、截圖、版本與變更紀錄檢查
 ├── docs/                  各主題文件與 README 截圖（docs/images）
 └── .github/workflows/     CI 與發佈流程

@@ -35,6 +35,24 @@ docker compose -f docker/compose.yml --env-file .env up -d
 - PostgreSQL 不對外發佈，只在 compose 的網路裡。
 - agent 用 `https://hub.example.com/install` 頁產生的一行指令安裝並註冊。
 
+## 加上防護 DNS（選用）
+
+每一份都有含[防護 DNS](dns-server.md)（擋惡意網域的 DNS 伺服器）的版本：多一個 `dns` 服務，其餘一樣、同一份資料。
+
+| 不含防護 DNS | 含防護 DNS |
+|---|---|
+| `compose.standalone.yml` | `compose.standalone.dns.yml` |
+| `compose.yml` | `compose.dns.yml` |
+
+```bash
+# .env 另外設 AI_SECURITY_MONITOR_HUB_DNS_TOKEN（openssl rand -hex 24）；給區網用再設 AI_SECURITY_MONITOR_HUB_DNS_BIND=<這台的區網 IP>
+docker compose -f docker/compose.standalone.dns.yml --env-file .env up -d
+# 換回不含防護 DNS：
+docker compose -f docker/compose.standalone.yml --env-file .env up -d --remove-orphans
+```
+
+封鎖開關、把裝置指過去、Linux 的 host 網路見 [dns-server.md](dns-server.md)。
+
 ## 設定
 
 完整清單見 [.env.example](../.env.example)。重點：
