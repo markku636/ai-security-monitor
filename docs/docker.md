@@ -69,6 +69,8 @@ docker compose -f docker/compose.standalone.dns.yml -f docker/compose.noncommerc
 
 用了這兩個檔之一，Hub 網頁上的「威脅情資 → 情資來源授權」會鎖定；不加就在網頁上選。也可以直接在 `.env` 設 `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial`（或 `noncommercial`）。
 
+也可以直接用固定版本的映像（網頁上不能改）：`ghcr.io/markku636/ai-security-monitor-hub:<版本>-commercial`（公司用）或 `:<版本>-noncommercial`（個人用）；沒有後綴的 `:<版本>` 照網頁設定（預設個人用）。在 `.env` 設 `AI_SECURITY_MONITOR_HUB_IMAGE_TAG=<版本>-commercial` 就會用那個映像。
+
 ## 設定
 
 完整清單見 [.env.example](../.env.example)。重點：

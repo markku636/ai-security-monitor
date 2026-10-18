@@ -69,6 +69,8 @@ docker compose -f docker/compose.standalone.dns.yml -f docker/compose.noncommerc
 
 With either file the web setting (Threat intel → Threat intel licensing) is locked; without one you choose on the web page. Setting `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial` (or `noncommercial`) in `.env` does the same.
 
+Or use an image with the version built in (locked on the web page): `ghcr.io/markku636/ai-security-monitor-hub:<version>-commercial` (company use) or `:<version>-noncommercial` (personal use); plain `:<version>` follows the web setting (personal use by default). Set `AI_SECURITY_MONITOR_HUB_IMAGE_TAG=<version>-commercial` in `.env` to use it with the compose files.
+
 ## Settings
 
 See [.env.example](../.env.example) for the full list. The important ones:

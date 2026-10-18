@@ -220,6 +220,36 @@ jobs:
             ${{ env.LEGACY_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # 情資使用情境固定的版本（網頁上不能改）：:<版本>-commercial 只鏡像可以商用的來源、:<版本>-noncommercial 另外鏡像只限非商用的來源。
+      # 只有 ENV 不同，前面的層都從上一步的快取來。
+      - name: Hub image (commercial use)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            ASA_HUB_VERSION=${{ needs.verify.outputs.version }}
+            INTEL_USAGE=commercial
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}-commercial
+            ${{ env.IMAGE }}:commercial
+          cache-from: type=gha
+      - name: Hub image (non-commercial use)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            ASA_HUB_VERSION=${{ needs.verify.outputs.version }}
+            INTEL_USAGE=noncommercial
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}-noncommercial
+            ${{ env.IMAGE }}:noncommercial
+          cache-from: type=gha
       - name: Hub image (slim, no AI CLIs)
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

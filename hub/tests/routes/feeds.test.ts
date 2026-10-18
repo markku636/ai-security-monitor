@@ -202,6 +202,14 @@ describe('feed mirror', () => {
     expect((await put('noncommercial')).status).toBe(409);
     delete process.env.ASA_HUB_INTEL_USAGE;
     resetEnvForTests();
+    // 映像版本（:<版本>-commercial）：compose 把一般變數設成空字串時照樣生效
+    process.env.AI_SECURITY_MONITOR_HUB_IMAGE_INTEL_USAGE = 'commercial';
+    process.env.AI_SECURITY_MONITOR_HUB_INTEL_USAGE = '';
+    resetEnvForTests();
+    expect(await (await usageGet(req('/api/v1/admin/intel-usage', { headers: admin }))).json()).toEqual({ usage: 'commercial', source: 'env' });
+    delete process.env.AI_SECURITY_MONITOR_HUB_IMAGE_INTEL_USAGE;
+    delete process.env.AI_SECURITY_MONITOR_HUB_INTEL_USAGE;
+    resetEnvForTests();
     await put('commercial');
   });
 });

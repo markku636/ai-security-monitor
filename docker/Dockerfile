@@ -36,6 +36,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && if [ -n "$AI_CLIS" ]; then npm install -g --no-audit --no-fund $AI_CLIS && npm cache clean --force; fi \
  && mkdir -p /data/home && chown -R node:node /data
+# 情資使用情境的映像版本：-commercial／-noncommercial 標籤建置時帶 INTEL_USAGE（放在安裝之後，兩版共用前面的快取層）。
+# 用另一個變數名：compose 會把 AI_SECURITY_MONITOR_HUB_INTEL_USAGE 設成空字串，同名會被蓋掉；那個變數有值時優先。
+ARG INTEL_USAGE=""
+ENV AI_SECURITY_MONITOR_HUB_IMAGE_INTEL_USAGE=${INTEL_USAGE}
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
