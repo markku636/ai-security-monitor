@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { NavTracker } from '@/components/ui/BackButton';
 import type { ReactNode } from 'react';
 import { Sidebar, type NavGroup } from '@/components/layout/Sidebar';
 import { listActions } from '@/lib/actions/store';
@@ -95,6 +97,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             ) : null}
           </p>
         ) : null}
+        <Suspense fallback={null}>
+          <NavTracker />
+        </Suspense>
         {children}
       </main>
     </div>

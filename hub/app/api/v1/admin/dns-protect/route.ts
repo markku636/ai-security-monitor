@@ -2,7 +2,7 @@
 import { audit } from '@/lib/audit';
 import { actorOf, apiAdminRead, apiWrite } from '@/lib/auth/api';
 import { getDb } from '@/lib/db';
-import { pauseProtect, protectView, setProtect } from '@/lib/dns/protect';
+import { changeLists, ListChange, pauseProtect, protectView, setProtect } from '@/lib/dns/protect';
 import { BodyTooLarge, error, json, readJson, sourceIp } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
@@ -35,12 +35,24 @@ export async function PUT(req: Request): Promise<Response> {
   return json({ ok: true, settings: r.after });
 }
 
-/** 暫停封鎖：`{ pause_minutes: 5 }`；0＝立刻恢復。 */
+/**
+ * 暫停封鎖：`{ pause_minutes: 5 }`（0＝立刻恢復）；
+ * 單筆改清單：`{ block_add: [...], block_remove: [...], allow_add: [...], allow_remove: [...] }`。
+ */
 export async function POST(req: Request): Promise<Response> {
   const id = await apiWrite(req);
   if (id instanceof Response) return id;
   const b = await body(req);
   if (b instanceof Response) return b;
+  if (b.pause_minutes === undefined) {
+    const p = ListChange.safeParse(b);
+    if (!p.success) return error(400, 'bad_request', { rule: p.error.issues[0]?.path.join('.') ?? '' });
+    const actor = actorOf(id);
+    const r = await changeLists(getDb(), p.data, actor);
+    if ('error' in r) return error(400, r.error ?? 'bad_request');
+    await audit({ actor, actorRole: 'admin', action: 'dns_protect.lists_changed', targetType: 'settings', targetId: 'dns_protect', sourceIp: sourceIp(req), details: { ...p.data } });
+    return json({ ok: true, settings: r.settings, invalid: r.invalid });
+  }
   const m = Number(b.pause_minutes);
   if (!Number.isFinite(m) || m < 0) return error(400, 'bad_request', { rule: 'pause_minutes' });
   const actor = actorOf(id);

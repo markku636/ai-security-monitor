@@ -15,6 +15,7 @@ use super::args::{DnsArgs, DnsCmd};
 use super::render::{print_json, table};
 use super::Env;
 use crate::config;
+use crate::dns::blocklist::{Blocklist, Matcher};
 use crate::dns::model::{qtype_name, DnsEvent, DnsRecord};
 use crate::dns::store::{self, DnsStatus};
 use crate::dns::{collect, heuristics};
@@ -32,6 +33,9 @@ pub async fn run(env: &Env, a: DnsArgs) -> AppResult<()> {
             skip_check,
         }) => use_hub(env, server, dry_run, skip_check).await,
         Some(DnsCmd::Restore { dry_run }) => restore(env, dry_run).await,
+        Some(DnsCmd::Block { domains, note }) => block(env, &domains, &note),
+        Some(DnsCmd::Unblock { domains }) => unblock(env, &domains),
+        Some(DnsCmd::Blocklist) => blocklist(env),
         None if a.follow => follow(env, &a).await,
         None => list(env, &a).await,
     }
@@ -47,9 +51,12 @@ pub(crate) fn data_dir(env: &Env) -> (PathBuf, Option<String>) {
     )
 }
 
-/// 一列的可疑理由（情資命中、像亂數產生、少見頂級網域）；沒有就是空的。
-fn reasons(db: Option<&IntelDb>, name: &str) -> Vec<String> {
+/// 一列的可疑理由（黑名單、情資命中、像亂數產生、少見頂級網域）；沒有就是空的。
+fn reasons(db: Option<&IntelDb>, bl: &Matcher, name: &str) -> Vec<String> {
     let mut out = Vec::new();
+    if let Some((entry, src)) = bl.find(name) {
+        out.push(tf!("黑名單：{entry}（{source}）", entry = entry, source = src.label()));
+    }
     if let Some(db) = db {
         let hits = db.match_domain(name);
         let score = crate::intel::domain_score(&hits, heuristics::is_popular(name));
@@ -102,11 +109,12 @@ async fn list(env: &Env, a: &DnsArgs) -> AppResult<()> {
     } else {
         None
     };
+    let bl = Matcher::load(&env.config_dir);
     let mut rows: Vec<(DnsRecord, Vec<String>)> = recs
         .into_iter()
         .map(|r| {
             let why = if a.suspicious {
-                reasons(db.as_ref(), &r.name)
+                reasons(db.as_ref(), &bl, &r.name)
             } else {
                 Vec::new()
             };
@@ -334,6 +342,7 @@ async fn follow(env: &Env, a: &DnsArgs) -> AppResult<()> {
     } else {
         None
     };
+    let bl = Matcher::load(&env.config_dir);
     let mut procs = crate::dns::procname::ProcNames::new();
     let filter = a.process.as_ref().map(|p| p.to_ascii_lowercase());
     #[cfg(windows)]
@@ -354,7 +363,7 @@ async fn follow(env: &Env, a: &DnsArgs) -> AppResult<()> {
             }
         }
         let why = if a.suspicious {
-            reasons(db.as_ref(), &ev.name)
+            reasons(db.as_ref(), &bl, &ev.name)
         } else {
             Vec::new()
         };
@@ -599,4 +608,100 @@ async fn restore(env: &Env, dry_run: bool) -> AppResult<()> {
     }
     .await;
     finish(env, res)
+}
+
+fn block(env: &Env, domains: &[String], note: &str) -> AppResult<()> {
+    let mut b = Blocklist::load(&env.config_dir);
+    let (added, bad) = b.add(domains, note);
+    if !added.is_empty() {
+        b.save(&env.config_dir)?;
+    }
+    if env.global.json {
+        print_json(&json!({ "added": added, "invalid": bad, "total": b.entries.len() }));
+    } else {
+        for d in &added {
+            println!("{}", tf!("已加入黑名單：{domain}（含子網域）", domain = d.clone()));
+        }
+        for d in &bad {
+            eprintln!("{}", tf!("不是合法的網域，略過：{value}", value = d.clone()));
+        }
+        if added.is_empty() && bad.is_empty() {
+            println!("{}", t!("都已經在黑名單上了"));
+        }
+        if !added.is_empty() {
+            println!("  · {}", t!("這台查到就會告警；這台跑的防護 DNS 1 分鐘內開始擋"));
+            println!(
+                "  · {}",
+                t!("要全公司一起擋：在 Hub「設定與金鑰 → 防護 DNS」的自訂封鎖加入")
+            );
+        }
+    }
+    if added.is_empty() && !bad.is_empty() {
+        return Err(AppError::InvalidArg(t!("沒有加入任何網域").into()));
+    }
+    Ok(())
+}
+
+fn unblock(env: &Env, domains: &[String]) -> AppResult<()> {
+    let mut b = Blocklist::load(&env.config_dir);
+    let removed = b.remove(domains);
+    if !removed.is_empty() {
+        b.save(&env.config_dir)?;
+    }
+    if env.global.json {
+        print_json(&json!({ "removed": removed, "total": b.entries.len() }));
+    } else if removed.is_empty() {
+        println!("{}", t!("這些網域不在這台電腦的黑名單上（Hub 的黑名單要在 Hub 移除）"));
+    } else {
+        for d in &removed {
+            println!("{}", tf!("已從黑名單移除：{domain}", domain = d.clone()));
+        }
+    }
+    Ok(())
+}
+
+fn blocklist(env: &Env) -> AppResult<()> {
+    let local = Blocklist::load(&env.config_dir);
+    let hub = crate::dns::usehub::HubProtect::load(&env.config_dir);
+    let hub_list = hub.as_ref().map(|h| h.block.clone()).unwrap_or_default();
+    if env.global.json {
+        print_json(&json!({
+            "local": local.entries,
+            "hub": hub_list,
+            "hub_fetched_at": hub.as_ref().and_then(|h| h.fetched_at),
+        }));
+        return Ok(());
+    }
+    if local.entries.is_empty() && hub_list.is_empty() {
+        println!("{}", t!("黑名單是空的。加入：ai-security-monitor dns block <網域>"));
+        return Ok(());
+    }
+    let mut rows: Vec<Vec<String>> = local
+        .entries
+        .iter()
+        .map(|e| {
+            vec![
+                e.domain.clone(),
+                t!("這台電腦").to_string(),
+                e.added_at.format("%Y-%m-%d %H:%M").to_string(),
+                e.note.clone(),
+            ]
+        })
+        .collect();
+    rows.extend(
+        hub_list
+            .iter()
+            .map(|d| vec![d.clone(), "Hub".to_string(), String::new(), String::new()]),
+    );
+    println!(
+        "{}",
+        table(&[t!("網域（含子網域）"), t!("來源"), t!("加入時間"), t!("備註")], rows)
+    );
+    if hub.is_some() {
+        println!(
+            "  · {}",
+            t!("Hub 的黑名單在「設定與金鑰 → 防護 DNS」管理，這台每 10 分鐘同步一次")
+        );
+    }
+    Ok(())
 }

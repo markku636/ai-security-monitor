@@ -119,6 +119,13 @@ impl Lists {
             }
             l.loaded.push(f.id.clone());
         }
+        let local = crate::dns::blocklist::Blocklist::load(config_dir).domains();
+        if !local.is_empty() {
+            let idx = l.sources.len() as u32;
+            l.sources.push(t!("這台電腦的黑名單").to_string());
+            entries.extend(local.iter().map(|d| (domainset::hash(d), idx)));
+            l.loaded.push("local-blocklist".into());
+        }
         if !o.custom_block.is_empty() {
             let idx = l.sources.len() as u32;
             l.sources.push(t!("自訂封鎖").to_string());

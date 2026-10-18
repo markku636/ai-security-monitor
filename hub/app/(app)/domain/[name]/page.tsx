@@ -1,11 +1,15 @@
+import { BackButton } from '@/components/ui/BackButton';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BlocklistButtons } from '@/components/dns/BlocklistButtons';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
 import { sevText, statusText } from '@/components/security/Verdict';
 import { Badge } from '@/components/ui/Badge';
 import { Card, Stat } from '@/components/ui/Card';
 import { Hint } from '@/components/ui/Hint';
 import { requireAdmin } from '@/lib/auth/require';
+import { getDb } from '@/lib/db';
+import { getProtect, listedBy } from '@/lib/dns/protect';
 import { since } from '@/lib/format';
 import { getT } from '@/lib/i18n/server';
 import { domainDetail, normalizeDomain } from '@/lib/queries/dns';
@@ -30,7 +34,7 @@ export default async function DomainPage({ params }: { params: Promise<{ name: s
   const { t } = await getT();
   const name = normalizeDomain((await params).name);
   if (!name) notFound();
-  const d = await domainDetail(name);
+  const [d, protect] = await Promise.all([domainDetail(name), getProtect(getDb())]);
   const total = d.byHost.reduce((s, r) => s + r.queries, 0);
   const hosts = new Set(d.byHost.map((r) => r.agentId)).size;
   const maxHour = Math.max(1, ...d.hourly.map((h) => h.queries));
@@ -38,6 +42,9 @@ export default async function DomainPage({ params }: { params: Promise<{ name: s
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
+          <div className="mb-1">
+            <BackButton fallback="/dns" />
+          </div>
           <p className="text-xs text-slate-500">
             <Link href="/dns" className="hover:underline">
               {t('DNS')}
@@ -56,6 +63,7 @@ export default async function DomainPage({ params }: { params: Promise<{ name: s
           </Link>
         </div>
       </header>
+      <BlocklistButtons domain={name} blockedBy={listedBy(protect.block, name)} allowedBy={listedBy(protect.allow, name)} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t('查詢次數（7 天內）')} value={total.toLocaleString()} />
         <Stat label={t('查過的主機')} value={hosts} />

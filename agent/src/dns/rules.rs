@@ -9,6 +9,7 @@
 //! | `dns.nxdomain_burst` | 同一程式 5 分鐘內 ≥ 50 次 NXDOMAIN、涉及 ≥ 20 個不同網域 |
 //! | `dns.doh_bypass` | 瀏覽器與系統以外的程式查加密 DNS（DoH）端點 |
 //! | `dns.tunnel_service` | 查詢 Cloudflare Tunnel、Dev Tunnels、ngrok 等反向通道服務 |
+//! | `dns.blocklisted` | 查詢了黑名單上的網域（這台的或 Hub 的；條目含子網域） |
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -126,6 +127,60 @@ pub fn detect(records: &[DnsRecord], intel: Option<&IntelDb>, trusted: Trusted<'
     out.extend(tunnel_service(records));
     out.extend(window_rules(records, trusted));
     out
+}
+
+/// 查詢了黑名單上的網域（使用者自己加的，不看白名單與熱門網域）。同一（條目, 程式）報一次。
+pub fn blocklisted(records: &[DnsRecord], m: &super::blocklist::Matcher) -> Vec<Finding> {
+    if m.is_empty() {
+        return Vec::new();
+    }
+    type Hits = (u32, DateTime<Utc>, BTreeSet<String>, super::blocklist::Source);
+    let mut by: BTreeMap<(String, String), Hits> = BTreeMap::new();
+    for r in records {
+        let Some((entry, src)) = m.find(&r.name) else {
+            continue;
+        };
+        let e = by
+            .entry((entry.to_string(), proc_key(r)))
+            .or_insert((0, r.ts, BTreeSet::new(), src));
+        e.0 = e.0.saturating_add(r.count);
+        e.1 = e.1.min(r.ts);
+        if e.2.len() < SAMPLES {
+            e.2.insert(r.name.clone());
+        }
+    }
+    by.into_iter()
+        .map(|((entry, proc), (count, first, names, src))| {
+            let name = names.iter().next().cloned().unwrap_or_else(|| entry.clone());
+            Finding::new(
+                ScannerId::Dns,
+                "dns.blocklisted",
+                &format!("blocklist|{entry}|{proc}"),
+                Severity::High,
+                tf!("查詢了黑名單上的網域：{name}", name = name.clone()),
+                tf!(
+                    "{process} 查詢 {name} {count} 次；{entry}（含子網域）在{source}上。",
+                    process = proc_label(&proc),
+                    name = name.clone(),
+                    count = count,
+                    entry = entry.clone(),
+                    source = src.label()
+                ),
+                evidence(
+                    &name,
+                    registrable_domain(&name),
+                    &proc,
+                    count,
+                    Some(names.len() as u32),
+                    first,
+                    names.into_iter().collect(),
+                    vec![src.label().to_string()],
+                ),
+                t!("確認是哪個程式在連這個網域；用防護 DNS 的電腦會直接被擋。確認沒問題就從黑名單移除（ai-security-monitor dns unblock）"),
+            )
+            .with_tag("dns")
+        })
+        .collect()
 }
 
 fn intel_hits(records: &[DnsRecord], db: &IntelDb, trusted: Trusted<'_>) -> Vec<Finding> {
@@ -509,6 +564,26 @@ pub fn summary(records: &[DnsRecord]) -> serde_json::Value {
 mod tests {
     use super::super::model::Source;
     use super::*;
+
+    #[test]
+    fn blocklisted_domains_alert_per_entry_and_process() {
+        let m = super::super::blocklist::Matcher::new(&["bad.example".into()], &["hub-bad.example".into()]);
+        let recs = vec![
+            rec(1, "a.bad.example", Some("chrome.exe"), 1, "NOERROR", 2),
+            rec(2, "b.bad.example", Some("chrome.exe"), 1, "NOERROR", 2),
+            rec(2, "hub-bad.example", Some("curl.exe"), 1, "NOERROR", 1),
+            rec(3, "fine.example", Some("chrome.exe"), 1, "NOERROR", 5),
+        ];
+        let f = blocklisted(&recs, &m);
+        assert_eq!(f.len(), 2);
+        assert!(f
+            .iter()
+            .all(|x| x.rule == "dns.blocklisted" && x.severity == Severity::High));
+        assert!(f
+            .iter()
+            .any(|x| x.detail.contains("chrome.exe") && x.detail.contains(" 4 ")));
+        assert!(blocklisted(&recs, &super::super::blocklist::Matcher::default()).is_empty());
+    }
 
     fn rec(min: i64, name: &str, proc: Option<&str>, qtype: u16, rcode: &str, count: u32) -> DnsRecord {
         DnsRecord {

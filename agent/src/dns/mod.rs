@@ -2,6 +2,7 @@
 //! 連線表補上網域名稱；網域推測型判斷（DGA、熱門網域、可註冊網域）在 [`heuristics`]。
 
 pub mod agg;
+pub mod blocklist;
 pub mod collect;
 pub mod heuristics;
 pub mod model;

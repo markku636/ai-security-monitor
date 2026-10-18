@@ -3,7 +3,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { DirectionBadge, VerdictChip } from '@/components/security/Verdict';
 import { IpBatchBar, IpSelectAll, IpSelectCheckbox, IpSelectionProvider } from '@/components/security/IpBatchSelect';
-import { IpLink, ipHref } from '@/components/security/IpLink';
+import { InlineIpNote } from '@/components/security/InlineIpNote';
+import { IpLink } from '@/components/security/IpLink';
 import { IpRiskBadge, IpRiskLegend } from '@/components/security/IpRisk';
 import { Card } from '@/components/ui/Card';
 import { CountryFlag } from '@/components/ui/CountryFlag';
@@ -225,15 +226,7 @@ export function RiskyIpRanking({
                     )}
                   </td>
                   <td className={`${TD} max-w-[16rem] text-xs`}>
-                    {r.note ? (
-                      <span className="line-clamp-2" title={r.note}>
-                        📝 {r.note}
-                      </span>
-                    ) : (
-                      <Link href={ipHref(r.remoteIp)} className="text-slate-400 hover:text-teal-700 hover:underline">
-                        {t('加備註')}
-                      </Link>
-                    )}
+                    <InlineIpNote ip={r.remoteIp} note={r.note} />
                   </td>
                   <td className={`${TD} whitespace-nowrap text-xs text-slate-500`} title={t('第一次看到：{at}', { at: since(r.firstSeenAt, t) })}>
                     {since(r.lastSeenAt, t)}

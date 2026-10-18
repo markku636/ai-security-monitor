@@ -71,6 +71,8 @@ impl UseHubState {
 pub struct HubProtect {
     pub enabled: bool,
     pub resolver_ips: Vec<IpAddr>,
+    /// Hub「防護 DNS」的自訂封鎖（全公司的黑名單）。
+    pub block: Vec<String>,
     pub fetched_at: Option<DateTime<Utc>>,
 }
 
@@ -94,6 +96,16 @@ impl HubProtect {
                 .and_then(|x| x.as_array())
                 .map(|a| a.iter().filter_map(|s| s.as_str()?.parse().ok()).collect())
                 .unwrap_or_default(),
+            block: v
+                .get("block")
+                .and_then(|x| x.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|s| s.as_str().map(str::to_string))
+                        .take(10_000)
+                        .collect()
+                })
+                .unwrap_or_default(),
             fetched_at: Some(Utc::now()),
         }
     }
@@ -101,11 +113,26 @@ impl HubProtect {
 
 /// 對 `server:53` 查健康檢查名稱，有 NOERROR 回答就算活著。
 pub async fn probe(server: IpAddr) -> bool {
-    let target = SocketAddr::new(server, 53);
+    probe_addr(SocketAddr::new(server, probe_port())).await
+}
+
+/// 探測用的 port（正式一律 53；測試改成確定沒人聽的 port，不受這台有沒有在跑 DNS 影響）。
+static PROBE_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(53);
+
+fn probe_port() -> u16 {
+    PROBE_PORT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 用 connected UDP 送：沒人聽時（ICMP 不可達）馬上失敗，不必等逾時。
+async fn probe_addr(target: SocketAddr) -> bool {
+    let server = target.ip();
     let bind = if server.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
     let Ok(sock) = tokio::net::UdpSocket::bind(bind).await else {
         return false;
     };
+    if sock.connect(target).await.is_err() {
+        return false;
+    }
     let id: u16 = rand_id();
     let mut q = vec![(id >> 8) as u8, id as u8, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0];
     for l in HEALTH_NAME.split('.') {
@@ -113,12 +140,12 @@ pub async fn probe(server: IpAddr) -> bool {
         q.extend_from_slice(l.as_bytes());
     }
     q.extend_from_slice(&[0, 0, 1, 0, 1]);
-    if sock.send_to(&q, target).await.is_err() {
+    if sock.send(&q).await.is_err() {
         return false;
     }
     let mut buf = [0u8; 1500];
-    match tokio::time::timeout(Duration::from_secs(2), sock.recv_from(&mut buf)).await {
-        Ok(Ok((n, from))) => n >= 12 && from.ip() == server && buf[0..2] == q[0..2] && buf[3] & 0x0F == 0,
+    match tokio::time::timeout(Duration::from_secs(2), sock.recv(&mut buf)).await {
+        Ok(Ok(n)) => n >= 12 && buf[0..2] == q[0..2] && buf[3] & 0x0F == 0,
         _ => false,
     }
 }
@@ -798,8 +825,18 @@ Wi-Fi
         assert_eq!(p.resolver_ips.len(), 2);
     }
 
+    /// 一個確定沒人在聽的本機 UDP port（綁了再放掉）。
+    fn closed_port() -> u16 {
+        std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    }
+
     #[tokio::test]
     async fn watch_tick_restores_after_three_misses() {
+        PROBE_PORT.store(closed_port(), std::sync::atomic::Ordering::Relaxed);
         let dir = tempfile::tempdir().unwrap();
         let conf = dir.path().join("resolv.conf");
         std::fs::write(
@@ -861,7 +898,19 @@ nameserver 127.0.0.1
 
     #[tokio::test]
     async fn probe_needs_our_health_answer() {
-        // 127.0.0.1:53 沒有防護 DNS（就算有別的 DNS 在聽，.invalid 也只會回 NXDOMAIN）
-        assert!(!probe("127.0.0.1".parse().unwrap()).await);
+        // 沒人聽的 port：馬上失敗
+        assert!(!probe_addr(SocketAddr::new("127.0.0.1".parse().unwrap(), closed_port())).await);
+        // 有回答但不是 NOERROR（一般 DNS 對 .invalid 回 NXDOMAIN）：不算
+        let srv = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = srv.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 512];
+            if let Ok((n, from)) = srv.recv_from(&mut buf) {
+                buf[2] = 0x81;
+                buf[3] = 0x83; // NXDOMAIN
+                let _ = srv.send_to(&buf[..n], from);
+            }
+        });
+        assert!(!probe_addr(addr).await);
     }
 }

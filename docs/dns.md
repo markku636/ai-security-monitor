@@ -48,6 +48,21 @@ ai-security-monitor dns status          # 資料來源、事件數、最後一�
 
 白名單、known-good 與熱門網域（Majestic 前 1 萬名）不做推測型告警，但不會蓋掉信心 ≥ 70 的情資命中。可註冊網域依內嵌的 Public Suffix List 計算（`github.io`、`duckdns.org` 這類不會整批放行）。
 
+## 黑名單（自己加網域）
+
+條目一律含子網域。有兩份，效果一樣、合在一起看：
+
+| | 這台電腦的 | Hub 的（全公司） |
+|---|---|---|
+| 加入 | `ai-security-monitor dns block bad.example`（可以一次好幾個、可以貼網址、`--note` 備註）、桌面版 DNS 頁 | 網域分析頁「加入黑名單」、「設定與金鑰 → 防護 DNS」的自訂封鎖 |
+| 移除 | `dns unblock bad.example` | 網域分析頁「移出黑名單」、設定頁 |
+| 查看 | `dns blocklist`（兩份都列） | 設定頁；DNS 頁頂端有筆數 |
+
+效果：
+- **每台電腦查到就告警**（`dns.blocklisted`，高），就算沒用防護 DNS 也抓得到；Hub 的黑名單每 10 分鐘同步到各台。
+- **防護 DNS 直接擋**（回 NXDOMAIN）：Hub 的黑名單在下一次心跳（30 秒內）生效；跑防護 DNS 的那台自己的黑名單 1 分鐘內生效。
+- 誤擋了就加進 Hub 的允許清單（網域分析頁「加入允許清單」），防護 DNS 永遠不擋它。
+
 ## 竄改偵測
 
 | 規則 | 說明 |

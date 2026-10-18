@@ -512,6 +512,23 @@ pub enum DnsCmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// 把網域加進這台電腦的黑名單（含子網域）：查到就告警，這台的防護 DNS 直接擋
+    Block {
+        /// 網域（可以一次好幾個，也可以貼網址）
+        #[arg(required = true, value_name = "DOMAIN")]
+        domains: Vec<String>,
+        /// 備註（例：釣魚信裡的連結）
+        #[arg(long, default_value = "")]
+        note: String,
+    },
+    /// 從這台電腦的黑名單移除網域
+    Unblock {
+        /// 網域
+        #[arg(required = true, value_name = "DOMAIN")]
+        domains: Vec<String>,
+    },
+    /// 列出黑名單（這台電腦的＋Hub 的）
+    Blocklist,
 }
 
 #[derive(Args, Debug, Clone)]

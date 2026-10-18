@@ -68,6 +68,10 @@ impl Scanner for DnsScanner {
         let allow = &ctx.allowlist;
         let trusted = |d: &str| allow.match_domain(d).is_some() || kg.match_domain(d).is_some();
         let mut findings = rules::detect(&recs, intel.as_deref(), &trusted);
+        findings.extend(rules::blocklisted(
+            &recs,
+            &super::blocklist::Matcher::load(&ctx.config_dir),
+        ));
         findings.extend(
             tamper::check(
                 &ctx.config_dir,

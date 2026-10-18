@@ -97,6 +97,52 @@ export async function setProtect(
   return { before, after };
 }
 
+export const ListChange = z
+  .object({
+    block_add: z.array(z.string().max(300)).max(500).default([]),
+    block_remove: z.array(z.string().max(300)).max(500).default([]),
+    allow_add: z.array(z.string().max(300)).max(500).default([]),
+    allow_remove: z.array(z.string().max(300)).max(500).default([]),
+  })
+  .strict();
+export type ListChangeT = z.infer<typeof ListChange>;
+
+/** 使用者貼的網域或網址 → 網域（去掉 scheme、路徑、port、`*.`、結尾的點）；不合法回 null。 */
+export function cleanDomain(raw: string): string | null {
+  let s = raw.trim().toLowerCase();
+  const i = s.indexOf('://');
+  if (i >= 0) s = s.slice(i + 3);
+  s = s.split(/[/?#]/)[0] ?? '';
+  s = s.slice(s.lastIndexOf('@') + 1).split(':')[0] ?? '';
+  s = s.replace(/^\*\./, '').replace(/^\./, '').replace(/\.$/, '');
+  const p = domain.safeParse(s);
+  return p.success ? p.data : null;
+}
+
+/** 單筆加入／移除黑名單與允許清單（讀出→改→寫回，不會蓋掉別人同時加的其他條目）。 */
+export async function changeLists(db: DB, c: ListChangeT, actor: string) {
+  const cur = await getProtect(db);
+  const clean = (v: string[]) => v.map(cleanDomain).filter((d): d is string => !!d);
+  const [ba, br, aa, ar] = [clean(c.block_add), clean(c.block_remove), clean(c.allow_add), clean(c.allow_remove)];
+  const invalid = [...c.block_add, ...c.allow_add].filter((v) => !cleanDomain(v));
+  const block = [...new Set([...cur.block.filter((d) => !br.includes(d) && !aa.includes(d)), ...ba])];
+  const allow = [...new Set([...cur.allow.filter((d) => !ar.includes(d) && !ba.includes(d)), ...aa])];
+  if (block.length > 5000 || allow.length > 5000) return { error: 'too_many' as const };
+  const next = { ...cur, block, allow };
+  await save(db, next, actor);
+  return { settings: next, invalid };
+}
+
+/** 這個名稱有沒有被黑名單／允許清單涵蓋（名稱本身或任一上層）；回傳命中的條目。 */
+export function listedBy(list: string[], name: string): string | null {
+  const parts = name.toLowerCase().split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const cand = parts.slice(i).join('.');
+    if (list.includes(cand)) return cand;
+  }
+  return null;
+}
+
 /** 暫停封鎖 N 分鐘（0＝立刻恢復）。 */
 export async function pauseProtect(db: DB, minutes: number, actor: string, now = new Date()): Promise<ProtectSettingsT> {
   const cur = await getProtect(db);

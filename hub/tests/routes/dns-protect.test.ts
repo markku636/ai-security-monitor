@@ -11,7 +11,7 @@ import { dnsResolverQueries, dnsServers } from '@/drizzle/schema';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
 import { createApiToken } from '@/lib/auth/tokens';
 import type { DB } from '@/lib/db';
-import { resolverStats, validUpstream } from '@/lib/dns/protect';
+import { cleanDomain, listedBy, resolverStats, validUpstream } from '@/lib/dns/protect';
 import { resetEnvForTests } from '@/lib/env';
 import { createTestDb } from '../helpers/db';
 
@@ -125,6 +125,25 @@ describe('protective DNS: config', () => {
     expect(put.status).toBe(200);
     const cfg = await (await configGet(req('/api/v1/dns/config', { token: 'client-a', headers: { 'x-asa-agent-id': A } }))).json();
     expect(cfg.resolver_ips).toEqual(['192.168.1.5', 'fd00::5']);
+  });
+
+  it('adds and removes single blocklist / allow list entries without overwriting others', async () => {
+    await adminPut(req('/api/v1/admin/dns-protect', { method: 'PUT', token: 'test-admin', body: { block: ['keep.example'], allow: [] } }));
+    const add = await adminPause(req('/api/v1/admin/dns-protect', { method: 'POST', token: 'test-admin', body: { block_add: ['https://Phish.Example/login', 'not a domain'] } }));
+    expect(add.status).toBe(200);
+    const a = await add.json();
+    expect(a.settings.block).toEqual(['keep.example', 'phish.example']);
+    expect(a.invalid).toEqual(['not a domain']);
+    // 加進允許清單會從黑名單拿掉
+    const allow = await (await adminPause(req('/api/v1/admin/dns-protect', { method: 'POST', token: 'test-admin', body: { allow_add: ['phish.example'] } }))).json();
+    expect(allow.settings.block).toEqual(['keep.example']);
+    expect(allow.settings.allow).toEqual(['phish.example']);
+    const rm = await (await adminPause(req('/api/v1/admin/dns-protect', { method: 'POST', token: 'test-admin', body: { block_remove: ['keep.example'], allow_remove: ['phish.example'] } }))).json();
+    expect(rm.settings).toMatchObject({ block: [], allow: [] });
+    expect((await adminPause(req('/api/v1/admin/dns-protect', { method: 'POST', token: 'test-admin', body: { block_add: 'x' } }))).status).toBe(400);
+    expect(cleanDomain('*.Bad.Example.')).toBe('bad.example');
+    expect(listedBy(['bad.example'], 'a.b.bad.example')).toBe('bad.example');
+    expect(listedBy(['bad.example'], 'example')).toBeNull();
   });
 
   it('validates settings', async () => {

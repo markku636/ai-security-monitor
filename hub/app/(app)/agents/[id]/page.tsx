@@ -1,3 +1,4 @@
+import { BackButton } from '@/components/ui/BackButton';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ConnectionsView } from '@/components/security/ConnectionsView';
@@ -477,9 +478,7 @@ export default async function AgentPage({
   return (
     <div className="space-y-4">
       <header className="space-y-1">
-        <Link href="/agents" className="text-sm text-slate-500 hover:underline">
-          {t('← 主機')}
-        </Link>
+        <BackButton fallback="/agents" />
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold">{a.hostname}</h1>
           <StatusBadge t={t} a={a} />

@@ -1,5 +1,5 @@
 // 可疑 IP 完整清單：整份排名可翻頁、排序、時間範圍、主機與「只看未分析」篩選；勾選跨頁保留，可一鍵查全部未分析的外部情資。
-import Link from 'next/link';
+import { BackButton } from '@/components/ui/BackButton';
 import { RiskyIpRanking } from '@/components/security/RiskyIpRanking';
 import { FilterChip, FilterRow, Pager } from '@/components/ui/Filters';
 import { HostFilter } from '@/components/ui/HostFilter';
@@ -65,9 +65,7 @@ export default async function RiskyIpListPage({ searchParams }: { searchParams: 
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <Link href="/connections" className="text-xs text-slate-500 hover:text-teal-700 hover:underline">
-            {t('← 連線')}
-          </Link>
+          <BackButton fallback="/connections" />
           <h1 className="text-xl font-semibold">{t('可疑 IP 清單')}</h1>
           <p className="text-sm text-slate-500">
             {t('所有曾被判定可疑或危險的遠端 IP。可以翻頁勾選（換頁不會清掉），再一次查詢外部情資；或直接「查詢全部未分析」。')}

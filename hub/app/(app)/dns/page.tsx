@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DnsHowTo } from '@/components/dns/DnsHowTo';
 import { FindingsTable } from '@/components/security/FindingsTable';
 import { Badge } from '@/components/ui/Badge';
 import { Card, Stat } from '@/components/ui/Card';
@@ -91,6 +92,7 @@ export default async function DnsPage({ searchParams }: { searchParams: Promise<
         </div>
       </header>
       <HostFilter t={t} action="/dns" current={agentId} keep={{ days, q, nx: nx ? '1' : undefined }} />
+      <DnsHowTo t={t} open={empty} />
       {empty ? (
         <EmptyState title={t('還沒有 DNS 紀錄')}>
           {t('主機的背景服務會即時記錄 DNS 查詢並每分鐘上傳（需要 ai-security-monitor 0.6 以上；Windows 以系統服務執行才看得到是哪個程式查的）。')}
@@ -130,6 +132,12 @@ export default async function DnsPage({ searchParams }: { searchParams: Promise<
         ) : (
           <span className="text-slate-500">{t('還沒有防護 DNS 連上來')}</span>
         )}
+        <span>
+          ·{' '}
+          <Link className="hover:underline" href="/admin?tab=dns">
+            {t('黑名單 {n} 筆', { n: protect.block.length })}
+          </Link>
+        </span>
         <Link className="text-teal-700 hover:underline dark:text-teal-400" href="/admin?tab=dns">
           {t('設定 →')}
         </Link>

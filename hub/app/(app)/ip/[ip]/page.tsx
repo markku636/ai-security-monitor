@@ -1,3 +1,4 @@
+import { BackButton } from '@/components/ui/BackButton';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isIP } from 'node:net';
@@ -41,6 +42,9 @@ export default async function IpPage({ params }: { params: Promise<{ ip: string 
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
+          <div className="mb-1">
+            <BackButton fallback="/connections" />
+          </div>
           <p className="text-xs text-slate-500">
             <Link href="/connections" className="hover:underline">
               {t('連線')}
