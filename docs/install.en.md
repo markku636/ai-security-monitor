@@ -23,7 +23,7 @@ The installers are not code-signed, so the OS warns the first time:
 | Platform | Install | First launch |
 |---|---|---|
 | Windows 10/11 | Double-click `AI-Security-Monitor-<version>-windows-x64-setup.exe` (per-user install, no administrator) | "Windows protected your PC" → "More info" → "Run anyway" |
-| macOS | Open the `.dmg` and drag AI Security Monitor to Applications | Right-click → Open → Open; if it says it is damaged: `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| macOS | Recommended: `curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop` (not blocked); or open the `.dmg` and drag AI Security Monitor to Applications | If installed by hand: System Settings → Privacy & Security → "Open Anyway" (macOS 14 and earlier: right-click → Open); if it says it is damaged: `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
 | Linux | AppImage: `chmod +x`, then run; deb: `sudo apt install ./AI-Security-Monitor-<version>-linux-amd64.deb` | Just start it |
 
 Uninstall the old "AI Security Agent" desktop app (0.1.x) first; the new one does not replace it (see [desktop.en.md](desktop.en.md)).

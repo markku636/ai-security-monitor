@@ -8,6 +8,9 @@
 - Hub 的 compose 分成兩份：不含防護 DNS（`compose.yml`、`compose.standalone.yml`）與含防護 DNS（`compose.dns.yml`、`compose.standalone.dns.yml`），不再用 `--profile dns`。兩份是同一個專案、同一份資料，可以隨時換；換回不含的那份時加 `--remove-orphans`。含防護 DNS 的那份沒設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` 時會直接說明要設，不會起一台連不上 Hub 的 DNS。dns 映像標籤沒另外設時跟 Hub 同一版（也認舊名 `ASA_HUB_IMAGE_TAG`）。
   **升級注意**：之前用 `--profile dns` 跑防護 DNS 的，改用含防護 DNS 的那份（`-f docker/compose.dns.yml`，單機版 `compose.standalone.dns.yml`）。
 - 資安報告的危險／可疑 IP 表格：「判定」欄不再擠成一字一行，危險標紅、可疑標橘。README 截圖全部依 0.7.0 重拍（示範的防護 DNS 伺服器顯示在線）。
+- **macOS 桌面版不再顯示「已損毀」**：桌面版沒有 Apple 開發者簽章，改用 ad-hoc 簽章把整個 .app 簽好（發版時用 `codesign --verify` 檢查），Apple Silicon 上從「已損毀，無法打開」變成可以在「系統設定 → 隱私權與安全性」按「強制打開」。另外新增一行安裝：`curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop`，依晶片下載 dmg、比對 SHA256、裝進「應用程式」，用 curl 下載不會被加上隔離屬性，打開時完全不會被 Gatekeeper 擋。
+- **GitHub Release 說明加上「怎麼安裝」**：Windows、macOS、Linux 桌面版與伺服器命令列版各自一步一步寫清楚（含 SmartScreen「仍要執行」、macOS「強制打開」與「已損毀」的處理）。
+- `install.sh --service system`：沒指定 `--dir` 時一律裝到 `/usr/local/bin`（需要時用 sudo），不再裝到 `~/.local/bin`。系統服務以 root 執行，執行檔放在使用者可寫的位置等於讓一般權限的程式能換掉它。
 
 ## v0.7.0 — 2026-10-18
 

@@ -1,4 +1,4 @@
-// 產生 GitHub Release 說明：這版重點 → 該下載哪個檔（依這版實際的資產名）→ 一行安裝 → 升級 → CHANGELOG。
+// 產生 GitHub Release 說明：這版重點 → 該下載哪個檔（依這版實際的資產名）→ 各平台怎麼安裝 → 升級 → CHANGELOG。
 // 用法：
 //   node scripts/release-notes.mjs <version> <資產目錄>          # release.yml：dist/ 裡的檔案
 //   node scripts/release-notes.mjs <version> --names <檔名清單>   # 每行一個檔名（例如 gh release view 的資產）
@@ -87,29 +87,81 @@ function table() {
   ].join('\n');
 }
 
-const UNSIGNED = [
-  '桌面版安裝檔沒有程式碼簽章 · The desktop installers are not code-signed:',
-  '- **Windows**：SmartScreen 出現「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。 · Click "More info" → "Run anyway".',
-  '- **macOS**：第一次在「應用程式」裡對 AI Security Monitor 按右鍵 →「打開」→「打開」；或 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`。 · Right-click → Open the first time.',
-  '- **Linux**：AppImage 先 `chmod +x`；deb 用 `sudo apt install ./AI-Security-Monitor-*.deb`。',
-  '- 裝過舊的「AI Security Agent」桌面版（0.1.x）要先解除安裝，新版不會覆蓋它。 · Uninstall the old "AI Security Agent" desktop app first.',
-].join('\n');
+// 0.7.1 起 install.sh 有 --desktop（macOS 用 curl 安裝桌面版，不經過 Gatekeeper）、.app 有 ad-hoc 簽章
+const newer = (a, b) => {
+  const pa = a.split(/[.-]/).map(Number);
+  const pb = b.split(/[.-]/).map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return true;
+};
+const macScript = newer(version, '0.7.1');
+const raw = (n) => `https://github.com/${REPO}/releases/latest/download/${n}`;
 
-const INSTALL = [
-  '## 一行安裝（命令列版）· One-line install (command line)',
+const HOW = [
+  '## 怎麼安裝 · How to install',
+  '',
+  '> 桌面版沒有向 Microsoft／Apple 購買程式碼簽章，第一次打開時系統會警告「無法確認發行者」，照下面的步驟放行即可。所有檔案的 SHA256 都在 `SHA256SUMS`。',
+  '> The desktop apps are not code-signed by Microsoft / Apple, so the first launch shows a warning; follow the steps below. SHA256 of every file is in `SHA256SUMS`.',
+  '',
+  '### Windows 10／11（桌面版）',
+  '',
+  `1. 下載 \`${gui('windows-x64-setup.exe')}\`，雙擊安裝（裝在目前使用者，不需要系統管理員）。 · Download and double-click; no admin rights needed.`,
+  '2. 出現藍色的「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」。 · On "Windows protected your PC", click **More info** → **Run anyway**.',
+  '3. 裝好後會自動打開；右下角系統匣有 AI Security Monitor 圖示。 · It opens automatically and sits in the system tray.',
+  '',
+  '### macOS（桌面版）',
+  '',
+  ...(macScript
+    ? [
+        '**最簡單（建議）**：打開「終端機」貼上這行，會依你的晶片下載 dmg、比對 SHA256、裝進「應用程式」，**不會被 Gatekeeper 擋**：',
+        '**Easiest (recommended)**: paste this into Terminal. It picks the right dmg for your chip, verifies SHA256 and installs into Applications **without the Gatekeeper prompt**:',
+        '',
+        '```bash',
+        `curl -fsSL ${raw('install.sh')} | sh -s -- --desktop`,
+        '```',
+        '',
+        '**手動安裝 · Manual install**',
+        '',
+      ]
+    : []),
+  `1. Apple Silicon（M1、M2…）下載 \`${gui('macos-arm64.dmg')}\`，Intel 下載 \`${gui('macos-x64.dmg')}\`（蘋果選單 →「關於這台 Mac」看晶片）。 · Apple Silicon → arm64, Intel → x64.`,
+  '2. 打開 dmg，把「AI Security Monitor」拖到「應用程式」。 · Open the dmg and drag the app to Applications.',
+  '3. 第一次打開會說「無法打開」或「Apple 無法檢查是否含有惡意軟體」：按「完成」，到「**系統設定 → 隱私權與安全性**」往下捲，按「**強制打開**」，輸入密碼後再按「打開」。macOS 14 以前也可以在「應用程式」裡對它按右鍵 →「打開」。 · First launch is blocked: click Done, then **System Settings → Privacy & Security → Open Anyway** (macOS 14 and earlier: right-click → Open).',
+  `4. ${macScript ? '萬一還是顯示「**已損毀，無法打開**」（檔案其實沒壞，是隔離屬性造成的）' : '如果顯示「**已損毀，無法打開**」（這個版本在 Apple Silicon 上會這樣，檔案其實沒壞）'}：在終端機執行下面這行再打開。 · If it says the app **is damaged**, run this in Terminal, then open it again:`,
+  '',
+  '```bash',
+  'xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"',
+  '```',
+  '',
+  '### Linux（桌面版）',
+  '',
+  `- Debian／Ubuntu：\`sudo apt install ./${gui('linux-amd64.deb')}\`，之後從應用程式選單打開。 · then open it from the app menu.`,
+  `- 其他發行版（免安裝）· Other distros (portable)：\`chmod +x ${gui('linux-x64.AppImage')} && ./${gui('linux-x64.AppImage')}\``,
+  '',
+  '### 伺服器、沒有桌面的電腦（命令列版）· Servers and headless machines (command line)',
+  '',
+  '一行安裝：自動下載對應平台的命令列版、比對 SHA256、加進 PATH。 · One line: downloads the CLI for your platform, verifies SHA256, adds it to PATH.',
   '',
   '```bash',
   '# Linux / macOS',
-  `curl -fsSL https://github.com/${REPO}/releases/latest/download/install.sh | sh`,
+  `curl -fsSL ${raw('install.sh')} | sh`,
+  '# 裝成開機就啟動的系統服務 · as a system service started at boot',
+  `curl -fsSL ${raw('install.sh')} | sh -s -- --service system`,
   '```',
   '',
   '```powershell',
-  '# Windows / Windows Server（PowerShell）',
-  `irm https://github.com/${REPO}/releases/latest/download/install.ps1 | iex`,
+  '# Windows / Windows Server（PowerShell；系統服務請用「以系統管理員身分執行」· run as Administrator for a system service）',
+  `irm ${raw('install.ps1')} | iex`,
   '```',
   '',
-  '裝好後執行 `ai-security-monitor version` 確認；`ai-security-monitor service install --yes` 設定登入時自動啟動（伺服器加 `--system`）。',
-  'Check with `ai-security-monitor version`; `ai-security-monitor service install --yes` starts it at login (`--system` on servers).',
+  '裝好後執行 `ai-security-monitor doctor` 檢查環境、`ai-security-monitor scan` 掃一次；`ai-security-monitor service install --yes` 設定登入時自動啟動（伺服器加 `--system`）。',
+  'Then run `ai-security-monitor doctor` and `ai-security-monitor scan`; `ai-security-monitor service install --yes` starts it at login (`--system` on servers).',
+  '',
+  '### 集中看多台主機（Security Hub）',
+  '',
+  `用 Docker 跑 \`ghcr.io/${REPO.split('/')[0]}/ai-security-monitor-hub:${version}\`，步驟見 [docs/docker.md](https://github.com/${REPO}/blob/v${version}/docs/docker.md)。各台電腦的桌面版在「設定 → 加入 Hub」填 Hub 網址即可。 · Run the Docker image (see docs/docker.md), then join from each desktop app in Settings → Join a Hub.`,
+  '',
+  '> 裝過舊的「AI Security Agent」桌面版（0.1.x）要先解除安裝，新版不會覆蓋它。 · Uninstall the old "AI Security Agent" desktop app (0.1.x) first.',
 ].join('\n');
 
 const UPGRADE = [
@@ -136,9 +188,7 @@ if (tableOnly) {
     ...(highlights ? ['## 這版重點 · Highlights', '', highlights, ''] : []),
     table(),
     '',
-    UNSIGNED,
-    '',
-    INSTALL,
+    HOW,
     '',
     UPGRADE,
     '',

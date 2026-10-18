@@ -330,9 +330,18 @@ Once installed the window opens on the overview and the AI Security Monitor icon
 
 **Desktop app: macOS**
 
+The desktop app has no Apple developer signature, so Gatekeeper blocks a dmg downloaded in a browser. **The easiest way** is to paste this line into Terminal (0.7.1 and later): it downloads the dmg for your chip, verifies its SHA256 and installs it into Applications, and the app then opens without being blocked:
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop
+```
+
+To install by hand:
+
 1. On Apple Silicon (M1, M2, …) download `AI-Security-Monitor-<version>-macos-arm64.dmg`; on Intel `…-macos-x64.dmg`. Not sure? Apple menu → "About This Mac", look at "Chip" or "Processor".
 2. Open the dmg and drag "AI Security Monitor" to Applications.
-3. First launch: right-click it in Applications → "Open" → "Open". If it says the app "is damaged and can't be opened", run in Terminal:
+3. The first launch says it can't be opened: click "Done", then go to System Settings → Privacy & Security, scroll down and click "Open Anyway" (enter your password). On macOS 14 and earlier you can also right-click it in Applications → "Open".
+4. If it says the app "is damaged and can't be opened" (the file is fine; common with 0.7.0 and earlier on Apple Silicon), run this in Terminal, then open it again:
    `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
 
 **Desktop app: Linux**

@@ -11,8 +11,14 @@ Download from [Releases](https://github.com/markku636/ai-security-monitor/releas
 | Platform | File | First launch (the installers are not code-signed) |
 |---|---|---|
 | Windows 10/11 | `AI-Security-Monitor-<version>-windows-x64-setup.exe`, double-click; installs for the current user | "Windows protected your PC" → "More info" → "Run anyway" |
-| macOS Apple Silicon / Intel | `…-macos-arm64.dmg` / `…-macos-x64.dmg`, drag to Applications | Right-click → Open → Open, or `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| macOS Apple Silicon / Intel | `…-macos-arm64.dmg` / `…-macos-x64.dmg`, drag to Applications; or use the one-line install below (not blocked) | System Settings → Privacy & Security → "Open Anyway" (macOS 14 and earlier: right-click → Open); if it says it is damaged: `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
 | Linux | `…-linux-x64.AppImage` (`chmod +x`, then run) or `…-linux-amd64.deb` (`sudo apt install ./<file>.deb`) | Just start it |
+
+One-line install on macOS (0.7.1 and later; downloads the dmg for your chip, verifies SHA256 and copies the app into Applications; files downloaded with curl get no quarantine flag, so Gatekeeper does not block the app):
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop
+```
 
 After installing, the window opens on "Overview" and the AI Security Monitor icon appears in the system tray (menu bar on macOS).
 `ai-security-monitor-<version>-windows-x64.exe` is the command-line tool, not the desktop app; double-clicking it only shows a help message.

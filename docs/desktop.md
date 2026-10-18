@@ -11,8 +11,14 @@
 | 平台 | 檔案 | 第一次開啟（安裝檔沒有程式碼簽章） |
 |---|---|---|
 | Windows 10／11 | `AI-Security-Monitor-<版本>-windows-x64-setup.exe`，雙擊安裝到目前使用者 | 「Windows 已保護您的電腦」→「其他資訊」→「仍要執行」 |
-| macOS Apple Silicon／Intel | `…-macos-arm64.dmg`／`…-macos-x64.dmg`，拖到「應用程式」 | 右鍵 →「打開」→「打開」，或 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| macOS Apple Silicon／Intel | `…-macos-arm64.dmg`／`…-macos-x64.dmg`，拖到「應用程式」；或用下面的一行指令安裝（不會被擋） | 「系統設定 → 隱私權與安全性」按「強制打開」（macOS 14 以前可右鍵 →「打開」）；顯示「已損毀」時 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
 | Linux | `…-linux-x64.AppImage`（`chmod +x` 後執行）或 `…-linux-amd64.deb`（`sudo apt install ./檔名.deb`） | 直接開啟 |
+
+macOS 一行安裝（0.7.1 起；依晶片下載 dmg、比對 SHA256、裝進「應用程式」，用 curl 下載不會被加上隔離屬性，所以打開時不會被 Gatekeeper 擋）：
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop
+```
 
 裝好後視窗會開在「總覽」，系統匣（macOS 是選單列）出現 AI Security Monitor 圖示。
 `ai-security-monitor-<版本>-windows-x64.exe` 是命令列版，不是桌面版，雙擊只會顯示說明。

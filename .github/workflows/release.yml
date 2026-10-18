@@ -156,6 +156,11 @@ jobs:
               one nsis '*-setup.exe.sig' "AI-Security-Monitor-$V-windows-x64-setup.exe.sig"
               ;;
             macos-*)
+              # 沒有 Apple 開發者憑證，用 ad-hoc 簽章（tauri.conf.json signingIdentity "-"）：整個 .app 簽好、結構完整，
+              # Apple Silicon 上才不會顯示「已損毀」，而是可以在「隱私權與安全性」按「強制打開」
+              app=$(find "$B/macos" -maxdepth 1 -name "*.app" | head -n 1)
+              codesign --verify --deep --strict --verbose=2 "$app"
+              codesign -dv "$app" 2>&1 | tee /dev/stderr | grep -q "Signature=adhoc"
               one dmg '*.dmg' "AI-Security-Monitor-$V-${{ matrix.asset }}.dmg"
               one macos '*.app.tar.gz' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz"
               one macos '*.app.tar.gz.sig' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz.sig"

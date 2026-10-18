@@ -330,9 +330,18 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 
 **桌面版：macOS**
 
+桌面版沒有 Apple 的開發者簽章，從瀏覽器下載的 dmg 會被 Gatekeeper 擋。**最簡單的做法**是打開「終端機」貼上這行（0.7.1 起），它會依你的晶片下載 dmg、比對 SHA256、裝進「應用程式」，打開時不會被擋：
+
+```bash
+curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop
+```
+
+想手動安裝：
+
 1. Apple Silicon（M1、M2…）下載 `AI-Security-Monitor-<版本>-macos-arm64.dmg`，Intel 下載 `…-macos-x64.dmg`。不確定的話：蘋果選單 →「關於這台 Mac」，看「晶片」或「處理器」。
 2. 打開 dmg，把「AI Security Monitor」拖到「應用程式」。
-3. 第一次開啟：在「應用程式」對它按右鍵 →「打開」→ 再按「打開」。如果顯示「已損毀，無法打開」，在終端機執行：
+3. 第一次打開會說「無法打開」：按「完成」，到「系統設定 → 隱私權與安全性」往下捲，按「強制打開」並輸入密碼。macOS 14 以前也可以在「應用程式」對它按右鍵 →「打開」。
+4. 如果顯示「已損毀，無法打開」（檔案其實沒壞，0.7.0 以前的版本在 Apple Silicon 上常見），在終端機執行這行再打開：
    `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"`
 
 **桌面版：Linux**

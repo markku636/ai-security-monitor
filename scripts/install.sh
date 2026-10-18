@@ -4,6 +4,10 @@
 #   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh
 #   sh install.sh [--version 0.2.0] [--dir DIR] [--hub URL [--key KEY]] [--auto-enroll] [--wait 2m] [--service none|user|system]
 #
+#   macOS desktop app (the app has no Apple signature; installing it this way avoids the Gatekeeper prompt):
+#   curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop
+#
+#   --desktop                macOS: install the desktop app into /Applications (or --dir) instead of the command-line tool
 #   --hub URL without --key  keyless: send an enrollment request and wait for an administrator to approve it
 #                            (the script served by a Security Hub at /install.sh has its own URL prefilled)
 #   --auto-enroll            keyless without a URL: find the Hub via company DNS (SRV) or the local network (mDNS)
@@ -12,10 +16,10 @@
 # Environment variables (same meaning as the options; the old ASA_* names still work):
 #   AI_SECURITY_MONITOR_VERSION, AI_SECURITY_MONITOR_INSTALL_DIR, AI_SECURITY_MONITOR_HUB_URL,
 #   AI_SECURITY_MONITOR_ENROLL_KEY, AI_SECURITY_MONITOR_SERVICE, AI_SECURITY_MONITOR_AUTO_ENROLL=1,
-#   AI_SECURITY_MONITOR_ENROLL_WAIT,
+#   AI_SECURITY_MONITOR_ENROLL_WAIT, AI_SECURITY_MONITOR_DESKTOP=1,
 #   AI_SECURITY_MONITOR_DOWNLOAD_BASE  mirror that serves ai-security-monitor-<version>-<os>-<arch> and SHA256SUMS
 #
-# The binary is verified against the release's SHA256SUMS before it is installed.
+# Every download is verified against the release's SHA256SUMS before it is installed.
 set -eu
 
 REPO="markku636/ai-security-monitor"
@@ -28,6 +32,7 @@ SERVICE="${AI_SECURITY_MONITOR_SERVICE:-${ASA_SERVICE:-none}}"
 AUTO="${AI_SECURITY_MONITOR_AUTO_ENROLL:-${ASA_AUTO_ENROLL:-}}"
 WAIT="${AI_SECURITY_MONITOR_ENROLL_WAIT:-${ASA_ENROLL_WAIT:-2m}}"
 BASE="${AI_SECURITY_MONITOR_DOWNLOAD_BASE:-${ASA_DOWNLOAD_BASE:-}}"
+DESKTOP="${AI_SECURITY_MONITOR_DESKTOP:-}"
 # Security Hub 提供的 /install.sh 會把自己的網址填在這裡：沒給 --key 就送出免金鑰加入申請（等管理員核准）
 DEFAULT_HUB=""
 
@@ -43,7 +48,8 @@ while [ $# -gt 0 ]; do
     --service) SERVICE="${2:-}"; shift 2 ;;
     --auto-enroll) AUTO=1; shift ;;
     --wait) WAIT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
+    --desktop) DESKTOP=1; shift ;;
+    -h|--help) sed -n '2,25p' "$0" 2>/dev/null || true; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -70,6 +76,14 @@ sha256() {
   else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
+# 比對 SHA256SUMS 裡同名的那一行：verify_sum <資產名> <檔案>
+verify_sum() {
+  expected=$(awk -v n="$1" '{ f = $2; sub(/^\*/, "", f); if (f == n) { print tolower($1); exit } }' "$tmp/SHA256SUMS")
+  [ -n "$expected" ] || die "$1 is not listed in SHA256SUMS"
+  actual=$(sha256 "$2")
+  [ "$expected" = "$actual" ] || die "SHA256 mismatch for $1 (expected $expected, got $actual)"
+}
+
 os=$(uname -s)
 arch=$(uname -m)
 case "$os" in
@@ -84,7 +98,12 @@ case "$arch" in
 esac
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT INT TERM
+mnt=""
+cleanup() {
+  if [ -n "$mnt" ]; then hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true; fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT INT TERM
 
 if [ -z "$VERSION" ]; then
   fetch "https://api.github.com/repos/$REPO/releases/latest" "$tmp/latest.json"
@@ -95,17 +114,49 @@ VERSION=${VERSION#v}
 asset="$NAME-$VERSION-$os-$arch"
 [ -n "$BASE" ] || BASE="https://github.com/$REPO/releases/download/v$VERSION"
 
+# macOS 桌面版：桌面版沒有 Apple 開發者簽章，從瀏覽器下載的 dmg 會被 Gatekeeper 擋（「無法打開」或「已損毀」）。
+# 用 curl 下載的檔案不會被加上隔離屬性（com.apple.quarantine），比對 SHA256 後直接複製進「應用程式」就能正常打開。
+if [ "$DESKTOP" = 1 ]; then
+  [ "$os" = macos ] || die "--desktop is for macOS; on Linux download the .AppImage or .deb from https://github.com/$REPO/releases"
+  dmg="AI-Security-Monitor-$VERSION-macos-$arch.dmg"
+  say "downloading $dmg from $BASE"
+  fetch "$BASE/$dmg" "$tmp/app.dmg"
+  fetch "$BASE/SHA256SUMS" "$tmp/SHA256SUMS"
+  verify_sum "$dmg" "$tmp/app.dmg"
+  mkdir -p "$tmp/mnt"
+  hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$tmp/mnt" "$tmp/app.dmg" >/dev/null || die "could not open $dmg"
+  mnt="$tmp/mnt"
+  app=$(find "$mnt" -maxdepth 1 -name '*.app' | head -n 1)
+  [ -n "$app" ] || die "no .app inside $dmg"
+  name=$(basename "$app")
+  if [ -z "$DIR" ]; then
+    if [ -w /Applications ]; then DIR=/Applications; else DIR="$HOME/Applications"; fi
+  fi
+  SUDO=""
+  mkdir -p "$DIR" 2>/dev/null || true
+  if [ ! -w "$DIR" ]; then
+    command -v sudo >/dev/null 2>&1 || die "$DIR is not writable"
+    SUDO=sudo
+  fi
+  $SUDO rm -rf "${DIR:?}/$name"
+  $SUDO ditto "$app" "$DIR/$name"
+  $SUDO xattr -dr com.apple.quarantine "$DIR/$name" 2>/dev/null || true
+  say "installed $DIR/$name ($VERSION)"
+  say "done. Open it from Launchpad, or run: open \"$DIR/$name\""
+  exit 0
+fi
+
 say "downloading $asset from $BASE"
 fetch "$BASE/$asset" "$tmp/$NAME"
 fetch "$BASE/SHA256SUMS" "$tmp/SHA256SUMS"
-expected=$(awk -v n="$asset" '{ f = $2; sub(/^\*/, "", f); if (f == n) { print tolower($1); exit } }' "$tmp/SHA256SUMS")
-[ -n "$expected" ] || die "$asset is not listed in SHA256SUMS"
-actual=$(sha256 "$tmp/$NAME")
-[ "$expected" = "$actual" ] || die "SHA256 mismatch for $asset (expected $expected, got $actual)"
+verify_sum "$asset" "$tmp/$NAME"
 chmod 755 "$tmp/$NAME"
+# 從瀏覽器下載再手動執行時會帶隔離屬性；curl 下載的沒有，這行只是保險
+if [ "$os" = macos ]; then xattr -d com.apple.quarantine "$tmp/$NAME" 2>/dev/null || true; fi
 
+# 系統服務以 root 執行：執行檔必須放在只有 root 能改的地方（不用 ~/.local/bin），否則一般使用者權限的程式就能換掉它
 if [ -z "$DIR" ]; then
-  if [ "$(id -u)" = 0 ] || [ -w /usr/local/bin ]; then DIR=/usr/local/bin; else DIR="$HOME/.local/bin"; fi
+  if [ "$(id -u)" = 0 ] || [ -w /usr/local/bin ] || [ "$SERVICE" = system ]; then DIR=/usr/local/bin; else DIR="$HOME/.local/bin"; fi
 fi
 SUDO=""
 mkdir -p "$DIR" 2>/dev/null || true

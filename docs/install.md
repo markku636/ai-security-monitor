@@ -23,7 +23,7 @@
 | 平台 | 安裝 | 第一次開啟 |
 |---|---|---|
 | Windows 10／11 | 雙擊 `AI-Security-Monitor-<版本>-windows-x64-setup.exe`（裝到目前使用者，不需系統管理員） | 「Windows 已保護您的電腦」→「其他資訊」→「仍要執行」 |
-| macOS | 打開 `.dmg`，把 AI Security Monitor 拖到「應用程式」 | 右鍵 →「打開」→「打開」；顯示已損毀時 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
+| macOS | 建議：`curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop`（不會被擋）；或打開 `.dmg`，把 AI Security Monitor 拖到「應用程式」 | 手動安裝的：「系統設定 → 隱私權與安全性」按「強制打開」（macOS 14 以前可右鍵 →「打開」）；顯示已損毀時 `xattr -dr com.apple.quarantine "/Applications/AI Security Monitor.app"` |
 | Linux | AppImage：`chmod +x` 後執行；deb：`sudo apt install ./AI-Security-Monitor-<版本>-linux-amd64.deb` | 直接開啟 |
 
 裝過舊的「AI Security Agent」桌面版（0.1.x）要先解除安裝，新版不會覆蓋它（見 [desktop.md](desktop.md)）。
