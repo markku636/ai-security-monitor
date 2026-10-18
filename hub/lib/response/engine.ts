@@ -2,7 +2,7 @@
 // 安全護欄：全域開關預設關；只封公網 IP；私有／保留位址與白名單網段一律不封；同一台主機同一個 IP 同時只有一筆封鎖；
 // 每輪最多新增 MAX_NEW_PER_RUN 筆；每一步都寫稽核。重複觸犯（30 天內）封鎖時間 ×6、×24。
 import { randomUUID } from 'node:crypto';
-import { and, count, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, count, eq, gt, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { agentGroupMembers, agents, connections, findings, reports, responseBlocks, responseRules, securityEvents, settings } from '@/drizzle/schema';
 import { createAction, decideAction } from '@/lib/actions/store';
 import { audit } from '@/lib/audit';
@@ -60,7 +60,7 @@ async function candidates(db: DB, rule: Rule, now: Date): Promise<Candidate[]> {
       const rows = await db
         .select({ agentId: connections.agentId, ip: connections.remoteIp, feeds: connections.intelFeedIds })
         .from(connections)
-        .where(and(eq(connections.direction, 'inbound'), sql`jsonb_array_length(${connections.intelFeedIds}) > 0`, gt(connections.at, since)))
+        .where(and(eq(connections.direction, 'inbound'), sql`jsonb_array_length(${connections.intelFeedIds}) > 0`, gte(connections.at, since)))
         .limit(500);
       return rows.filter((r) => r.ip).map((r) => ({ agentId: r.agentId, ip: r.ip!, reason: `intel: ${(r.feeds ?? []).slice(0, 3).join(', ')}` }));
     }
@@ -74,7 +74,7 @@ async function candidates(db: DB, rule: Rule, now: Date): Promise<Candidate[]> {
             inArray(securityEvents.rule, ['failed_logon_burst', 'ntlm_failure_burst']),
             sql`${securityEvents.sourceIp} is not null`,
             sql`${securityEvents.count} >= ${threshold}`,
-            gt(securityEvents.lastAt, since),
+            gte(securityEvents.lastAt, since),
           ),
         )
         .limit(500);
@@ -87,7 +87,7 @@ async function candidates(db: DB, rule: Rule, now: Date): Promise<Candidate[]> {
         .select({ agentId: findings.agentId, ip: findings.indicator, rule: findings.rule })
         .from(findings)
         .innerJoin(reports, eq(reports.id, findings.firstReportId))
-        .where(and(eq(findings.status, 'open'), sql`${findings.indicator} is not null`, gt(reports.receivedAt, since)))
+        .where(and(eq(findings.status, 'open'), sql`${findings.indicator} is not null`, gte(reports.receivedAt, since)))
         .limit(1000);
       return rows.filter((r) => ruleMatches(pattern, r.rule)).map((r) => ({ agentId: r.agentId, ip: r.ip!, reason: r.rule }));
     }

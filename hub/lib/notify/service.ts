@@ -84,7 +84,7 @@ async function detect(db: DB, rule: Rule, now: Date, t: TFn): Promise<Item[]> {
             isNull(agents.deletedAt),
             eq(findings.status, 'open'),
             inArray(findings.severity, sevAtLeast(rule.minSeverity)),
-            gt(reports.receivedAt, since),
+            gte(reports.receivedAt, since),
             ...agentCond(findings.agentId),
           ),
         )
@@ -97,7 +97,7 @@ async function detect(db: DB, rule: Rule, now: Date, t: TFn): Promise<Item[]> {
         .select({ agentId: destinations.agentId, hostname: agents.hostname, ip: destinations.remoteIp, port: destinations.remotePort, direction: destinations.direction, process: destinations.processName })
         .from(destinations)
         .innerJoin(agents, eq(agents.id, destinations.agentId))
-        .where(and(isNull(agents.deletedAt), eq(destinations.worstVerdict, 'dangerous'), gt(destinations.lastRiskyAt, since), ...(rule.agentId ? [eq(destinations.agentId, rule.agentId)] : [])))
+        .where(and(isNull(agents.deletedAt), eq(destinations.worstVerdict, 'dangerous'), gte(destinations.lastRiskyAt, since), ...(rule.agentId ? [eq(destinations.agentId, rule.agentId)] : [])))
         .orderBy(desc(destinations.lastRiskyAt))
         .limit(200);
       return rows.map((r) => ({
@@ -141,7 +141,7 @@ async function detect(db: DB, rule: Rule, now: Date, t: TFn): Promise<Item[]> {
       const rows = await db
         .select({ id: agents.id, hostname: agents.hostname, os: agents.osName })
         .from(agents)
-        .where(and(isNull(agents.deletedAt), gt(agents.firstSeenAt, since)))
+        .where(and(isNull(agents.deletedAt), gte(agents.firstSeenAt, since)))
         .limit(200);
       return rows.map((r) => ({ key: `j:${r.id}`, line: `${r.hostname}${r.os ? `（${r.os}）` : ''}`, severity: 'info' }));
     }
@@ -150,7 +150,7 @@ async function detect(db: DB, rule: Rule, now: Date, t: TFn): Promise<Item[]> {
         .select({ id: actions.id, hostname: agents.hostname, kind: actions.kind, params: actions.params, reason: actions.reason })
         .from(actions)
         .innerJoin(agents, eq(agents.id, actions.agentId))
-        .where(and(eq(actions.status, 'pending'), gt(actions.createdAt, since), ...(rule.agentId ? [eq(actions.agentId, rule.agentId)] : [])))
+        .where(and(eq(actions.status, 'pending'), gte(actions.createdAt, since), ...(rule.agentId ? [eq(actions.agentId, rule.agentId)] : [])))
         .limit(200);
       return rows.map((r) => {
         const target = String(r.params?.ip ?? r.params?.port ?? '');
