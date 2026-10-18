@@ -139,9 +139,35 @@ export default async function Overview() {
   const db = await pingDb();
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">{t('總覽')}</h1>
-        <p className="text-sm text-slate-500">{t('所有端點的連線判定、威脅情資命中與弱點，集中在這裡。')}</p>
+      <header className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">{t('總覽')}</h1>
+          <p className="text-sm text-slate-500">{t('所有端點的連線判定、威脅情資命中與弱點，集中在這裡。')}</p>
+        </div>
+        {viewer.role === 'admin' ? (
+          <div className="flex flex-wrap items-center gap-1 text-xs">
+            <span className="mr-1 flex items-center text-slate-500">
+              {t('產生資安報告')}
+              <Hint text={t('整理一段期間的安全分數、新增與處理的問題、威脅情資命中、危險連線、DNS 與事件；可以列印、存成 PDF 或下載 Markdown。')} />
+            </span>
+            {[
+              [7, t('最近 7 天')],
+              [30, t('最近 30 天')],
+              [90, t('最近 90 天')],
+            ].map(([n, label]) => (
+              <Link
+                key={String(n)}
+                href={`/report?from=${new Date(Date.now() - (Number(n) - 1) * 86_400_000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`}
+                className="rounded-full border border-teal-600 px-2.5 py-1 text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950"
+              >
+                {label}
+              </Link>
+            ))}
+            <Link href="/report" className="rounded-full border border-slate-300 px-2.5 py-1 hover:border-teal-600 dark:border-slate-700">
+              {t('自訂期間…')}
+            </Link>
+          </div>
+        ) : null}
       </header>
       {db.status === 'ok' ? <FleetView t={t} isAdmin={viewer.role === 'admin'} /> : null}
       <HubFooter t={t} db={db} />

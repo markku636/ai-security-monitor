@@ -30,7 +30,7 @@ export function SidebarNav({ groups, menuLabel, header, footer }: { groups: NavG
   const [open, setOpen] = useState(false);
   const current = groups.flatMap((g) => g.items).find((i) => active(path, i.href));
   return (
-    <aside className="w-full bg-slate-900 text-slate-100 md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
+    <aside className="w-full bg-slate-900 text-slate-100 print:hidden md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
       <div className="flex items-center justify-between px-4 py-3 md:block md:py-4">
         {header}
         <button

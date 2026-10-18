@@ -86,9 +86,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar t={t} groups={groups} viewer={viewer} openMode={isOpenMode()} />
-      <main className="min-w-0 flex-1 p-4 md:p-6">
+      <main className="min-w-0 flex-1 p-4 md:p-6 print:p-0">
         {update ? (
-          <p className="mb-4 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
+          <p className="mb-4 rounded-lg border border-sky-300 bg-sky-50 print:hidden px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
             {t('Security Hub {v} 已發佈。更新：docker compose pull && docker compose up -d', { v: update.latest })}
             {update.url ? (
               <a className="ml-2 underline" href={update.url} target="_blank" rel="noreferrer">
