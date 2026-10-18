@@ -4,11 +4,12 @@ import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as syncRoute } from '@/app/api/v1/admin/feeds/sync/route';
+import { GET as usageGet, PUT as usagePut } from '@/app/api/v1/admin/intel-usage/route';
 import { POST as heartbeat } from '@/app/api/v1/agents/me/heartbeat/route';
 import { POST as register } from '@/app/api/v1/agents/register/route';
 import { GET as feedRoute } from '@/app/api/v1/feeds/[id]/route';
 import { GET as manifestRoute } from '@/app/api/v1/feeds/manifest/route';
-import { agents } from '@/drizzle/schema';
+import { agents, auditLog } from '@/drizzle/schema';
 import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
@@ -28,6 +29,7 @@ const registry = {
   feeds: [
     { id: 'test-plain', name: 'Plain', vendor: 'Test', urls: ['https://feeds.example/plain.txt'], format: 'plain-ip-per-line', kind: 'ip', direction: 'both', confidence: 90, license: { name: 'CC0', url: 'https://example/cc0', attribution_required: false, commercial_ok: true }, refresh_interval: '1h', requires_api_key: null, enabled_default: true, tags: [] },
     { id: 'test-off', name: 'Off', vendor: 'Test', urls: ['https://feeds.example/off.txt'], format: 'plain-ip-per-line', kind: 'ip', direction: 'both', confidence: 50, license: { name: 'CC0', url: 'https://example/cc0', attribution_required: false, commercial_ok: true }, refresh_interval: '1h', requires_api_key: null, enabled_default: false, tags: [] },
+    { id: 'test-nc', name: 'NonCommercial', vendor: 'Test', urls: ['https://feeds.example/nc.txt'], format: 'plain-ip-per-line', kind: 'ip', direction: 'both', confidence: 80, license: { name: 'CC BY-NC', url: 'https://example/nc', attribution_required: true, commercial_ok: false }, refresh_interval: '1h', requires_api_key: null, enabled_default: true, tags: [] },
     { id: 'test-lookup', name: 'Lookup', vendor: 'Test', urls: ['https://api.example/{ip}'], format: 'lookup-api', kind: 'lookup', direction: 'both', confidence: 50, license: { name: 'x', url: 'https://example', attribution_required: false, commercial_ok: false }, refresh_interval: '24h', requires_api_key: null, enabled_default: true, tags: [] },
   ],
 };
@@ -162,5 +164,36 @@ describe('feed mirror', () => {
     const [row] = await db.select().from(agents).where(eq(agents.id, AGENT_ID));
     expect(row.intelFeeds).toEqual({ ok: 17, total: 18, source: 'hub' });
     expect(row.intelCheckedAt).toBeInstanceOf(Date);
+  });
+
+  it('mirrors noncommercial-only feeds only when the Hub is set to noncommercial use', async () => {
+    const put = (usage: unknown, headers = admin) => usagePut(req('/api/v1/admin/intel-usage', { method: 'PUT', body: { usage }, headers }));
+    expect(await (await usageGet(req('/api/v1/admin/intel-usage', { headers: admin }))).json()).toEqual({ usage: 'commercial', source: 'default' });
+    // 商用（預設）：不同步、不給主機
+    expect((await syncFeeds({ force: true })).map((o) => o.feed_id)).not.toContain('test-nc');
+    expect((await feedRoute(req('/api/v1/feeds/test-nc', { headers: client }), { params: Promise.resolve({ id: 'test-nc' }) })).status).toBe(404);
+
+    expect((await put('noncommercial', client)).status).toBe(401);
+    expect((await put('bogus')).status).toBe(400);
+    const r = await put('noncommercial');
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ usage: 'noncommercial', source: 'settings' });
+    const [a] = await db.select().from(auditLog).where(eq(auditLog.action, 'intel_usage.updated'));
+    expect(a.details).toMatchObject({ before: 'commercial', after: 'noncommercial' });
+
+    resetMirrorStateForTests();
+    expect((await syncFeeds({ force: true })).map((o) => o.feed_id)).toContain('test-nc');
+    const man = (await (await manifestRoute(req('/api/v1/feeds/manifest', { headers: client }))).json()) as { feeds: { id: string }[] };
+    expect(man.feeds.map((x) => x.id)).toContain('test-nc');
+    expect((await feedRoute(req('/api/v1/feeds/test-nc', { headers: client }), { params: Promise.resolve({ id: 'test-nc' }) })).status).toBe(200);
+
+    // 環境變數鎖定：網頁上不能改
+    process.env.ASA_HUB_INTEL_USAGE = 'commercial';
+    resetEnvForTests();
+    expect(await (await usageGet(req('/api/v1/admin/intel-usage', { headers: admin }))).json()).toEqual({ usage: 'commercial', source: 'env' });
+    expect((await put('noncommercial')).status).toBe(409);
+    delete process.env.ASA_HUB_INTEL_USAGE;
+    resetEnvForTests();
+    await put('commercial');
   });
 });

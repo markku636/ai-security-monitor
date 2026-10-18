@@ -262,10 +262,30 @@ impl Default for ScanConfig {
     }
 }
 
+/// 情資的使用情境：只有非商業用途才能用的來源（DShield、URLhaus、ThreatFox、AbuseIPDB 免費版…）只在「非商用」時開。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum IntelUsage {
+    Commercial,
+    Noncommercial,
+}
+
+impl IntelUsage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IntelUsage::Commercial => "commercial",
+            IntelUsage::Noncommercial => "noncommercial",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct IntelConfig {
-    /// 允許把 `commercial_ok=false` 的來源（如 DShield）用於封鎖；預設只告警。
+    /// 使用情境（桌面版第一次打開時選，之後在設定頁改）；沒選過＝None，非商用來源先不開。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<IntelUsage>,
+    /// 舊設定（0.7.x 以前）：允許非商用授權的來源。沒設 `usage` 時沿用；`config set` 會一併改 `usage`。
     pub allow_noncommercial: bool,
     /// 對 unknown 公網 IP 做 keyed 名譽查詢（需設定 API key）。
     pub online_lookups: bool,
@@ -273,9 +293,26 @@ pub struct IntelConfig {
     pub refresh_on_scan: bool,
 }
 
+impl IntelConfig {
+    /// 能不能用只限非商業用途的來源（下載、比對、封鎖、線上查詢都看這個）。
+    pub fn noncommercial(&self) -> bool {
+        match self.usage {
+            Some(IntelUsage::Noncommercial) => true,
+            Some(IntelUsage::Commercial) => false,
+            None => self.allow_noncommercial,
+        }
+    }
+
+    pub fn set_usage(&mut self, u: IntelUsage) {
+        self.usage = Some(u);
+        self.allow_noncommercial = u == IntelUsage::Noncommercial;
+    }
+}
+
 impl Default for IntelConfig {
     fn default() -> Self {
         Self {
+            usage: None,
             allow_noncommercial: false,
             online_lookups: false,
             refresh_on_scan: true,
@@ -678,6 +715,7 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "fim.extra_paths",
     "fim.ignore",
     "scan.dns_names",
+    "intel.usage",
     "intel.allow_noncommercial",
     "intel.online_lookups",
     "intel.refresh_on_scan",
@@ -695,6 +733,17 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "update.mode",
     "hub.advertise_url",
 ];
+
+fn parse_usage(v: &str) -> AppResult<IntelUsage> {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "commercial" | "business" | "company" => Ok(IntelUsage::Commercial),
+        "noncommercial" | "non-commercial" | "personal" => Ok(IntelUsage::Noncommercial),
+        _ => Err(AppError::InvalidArg(tf!(
+            "intel.usage 只能是 commercial（公司／商業用途）或 noncommercial（個人／非商業用途）：{value}",
+            value = v
+        ))),
+    }
+}
 
 fn parse_bool(key: &str, v: &str) -> AppResult<bool> {
     match v.trim().to_ascii_lowercase().as_str() {
@@ -734,7 +783,12 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "fim.extra_paths" => cfg.fim.extra_paths = parse_list(value),
         "fim.ignore" => cfg.fim.ignore = parse_list(value),
         "scan.dns_names" => cfg.scan.dns_names = parse_bool(key, value)?,
-        "intel.allow_noncommercial" => cfg.intel.allow_noncommercial = parse_bool(key, value)?,
+        "intel.usage" => cfg.intel.set_usage(parse_usage(value)?),
+        "intel.allow_noncommercial" => cfg.intel.set_usage(if parse_bool(key, value)? {
+            IntelUsage::Noncommercial
+        } else {
+            IntelUsage::Commercial
+        }),
         "intel.online_lookups" => cfg.intel.online_lookups = parse_bool(key, value)?,
         "intel.refresh_on_scan" => cfg.intel.refresh_on_scan = parse_bool(key, value)?,
         "remote_actions.accept" => cfg.remote_actions.accept = parse_bool(key, value)?,

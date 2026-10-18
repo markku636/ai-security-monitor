@@ -252,7 +252,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 <details>
 <summary><b>可以免費商用嗎？</b></summary>
 
-程式碼是 MIT 授權，可以免費商用。但部分威脅情資來源本身只允許非商業使用（例如 DShield），在公司裡用時要留意哪些來源該關掉，詳見「[資料來源與授權](#資料來源與授權)」。
+程式碼是 MIT 授權，可以免費商用。但部分威脅情資來源本身只允許非商業使用（例如 DShield、URLhaus、ThreatFox、AbuseIPDB 免費版）。桌面版第一次打開時會問你是「公司／商業用途」還是「個人／非商業用途」：選公司就只用可以商用的來源，選個人才會另外開啟那些只限非商用的來源；之後可以在「設定 → 情資來源授權」改。命令列版用 `ai-security-monitor config set intel.usage commercial`（或 `noncommercial`），Hub 在「威脅情資 → 情資來源授權」設定（預設商用）。詳見「[資料來源與授權](#資料來源與授權)」。
 </details>
 
 <details>

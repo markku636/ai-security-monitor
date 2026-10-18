@@ -424,6 +424,10 @@ mod tests {
     /// 以 fixtures 建一個假的設定目錄（像是 `ai-security-monitor intel update` 跑過）。
     pub fn fixture_config_dir() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
+        // 測試資料含只限非商業用途的來源（DShield、URLhaus、ThreatFox）：使用情境設成非商用才會載入
+        let mut cfg = crate::config::AgentConfig::default();
+        cfg.intel.set_usage(crate::config::IntelUsage::Noncommercial);
+        crate::config::save(dir.path(), &cfg).unwrap();
         let fx = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/feeds");
         let pairs = [
             ("abusech-feodo", "feodo_recommended.txt"),
@@ -476,6 +480,36 @@ mod tests {
             bytes_out: None,
             domain: None,
         }
+    }
+
+    /// 商用情境（或還沒選）：只限非商業用途的來源不載入、不比對，線上查詢也不用。
+    #[test]
+    fn commercial_usage_skips_noncommercial_feeds() {
+        let dir = fixture_config_dir();
+        for usage in [None, Some(crate::config::IntelUsage::Commercial)] {
+            let mut cfg = crate::config::AgentConfig::default();
+            cfg.intel.usage = usage;
+            crate::config::save(dir.path(), &cfg).unwrap();
+            let reg = Registry::load(dir.path()).unwrap();
+            assert!(!reg.allow_noncommercial);
+            let ds = reg.get("dshield-block").unwrap();
+            assert!(!reg.is_enabled(ds) && reg.wanted(ds) && reg.license_blocked(ds));
+            let db = IntelDb::load(dir.path(), &reg);
+            let ids: Vec<&str> = db.feeds.iter().map(|f| f.entry.id.as_str()).collect();
+            for nc in ["dshield-block", "abusech-urlhaus-hosts", "abusech-threatfox-ipport"] {
+                assert!(!ids.contains(&nc), "{nc} loaded for {usage:?}");
+            }
+            assert!(ids.contains(&"abusech-feodo"));
+            assert!(!db.missing.iter().any(|m| m == "dshield-block"));
+            std::env::set_var("ABUSEIPDB_API_KEY", "test-key");
+            assert!(lookup::configured_providers(dir.path(), &reg).is_empty());
+            std::env::remove_var("ABUSEIPDB_API_KEY");
+        }
+        // 舊設定 allow_noncommercial=true（沒有 usage）照舊算非商用
+        let mut cfg = crate::config::AgentConfig::default();
+        cfg.intel.allow_noncommercial = true;
+        crate::config::save(dir.path(), &cfg).unwrap();
+        assert!(Registry::load(dir.path()).unwrap().allow_noncommercial);
     }
 
     #[test]

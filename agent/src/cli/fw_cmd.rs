@@ -498,7 +498,7 @@ pub async fn run(env: &Env, cmd: FwCmd) -> AppResult<()> {
                 &SelectOpts {
                     feeds: &feeds,
                     min_confidence,
-                    allow_noncommercial: cfg.intel.allow_noncommercial,
+                    allow_noncommercial: cfg.intel.noncommercial(),
                     max_entries: max.unwrap_or_else(|| select::max_entries_for(backend)),
                     local_ips: &local,
                     allowlist: &allowlist,
@@ -519,7 +519,7 @@ pub async fn run(env: &Env, cmd: FwCmd) -> AppResult<()> {
             }
             if !st.skipped_feeds_noncommercial.is_empty() {
                 preface.push(tf!(
-                    "  · 非商用授權來源不用於封鎖：{ids}（config intel.allow_noncommercial true 可改）",
+                    "  · 非商用授權來源不用於封鎖：{ids}（非商業用途可執行 config set intel.usage noncommercial）",
                     ids = st.skipped_feeds_noncommercial.join(", ")
                 ));
             }

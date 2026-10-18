@@ -702,11 +702,17 @@ async function pageIntel() {
     </div>
     <div class="card"><table><thead><tr><th>來源</th><th>種類</th><th>筆數</th><th>最後更新</th><th>授權</th></tr></thead><tbody>${feeds
       .map((f) => `<tr>
-        <td><a class="link" data-url="${esc(f.source_url)}"><b>${esc(f.vendor)}</b> ${esc(f.name)}</a>${f.enabled ? '' : ' <span class="chip neutral">已停用</span>'}</td>
+        <td><a class="link" data-url="${esc(f.source_url)}"><b>${esc(f.vendor)}</b> ${esc(f.name)}</a>${
+          f.license_blocked
+            ? ' <a class="chip neutral" href="#settings/intel" title="這個來源只准個人或非營利使用；這台電腦選的是公司／商業用途，所以沒有使用。到設定頁的「情資來源授權」可以改。">未使用（只限非商用）</a>'
+            : f.enabled
+              ? ''
+              : ' <span class="chip neutral">已停用</span>'
+        }</td>
         <td class="small">${esc(f.kind)}</td>
         <td class="small mono">${f.entries ? Number(f.entries).toLocaleString() : '—'}</td>
         <td class="small">${ago(f.fetched_at)}${f.from_hub ? ' <span class="chip dir">Hub</span>' : ''}${f.status === 'error' ? ` <span class="chip medium" title="${esc(f.error)}">失敗</span>` : ''}${f.status === 'never' ? ' <span class="chip neutral">未下載</span>' : ''}</td>
-        <td class="small muted">${esc(f.license)}</td>
+        <td class="small muted">${esc(f.license)}${f.commercial_ok ? '' : ' <span class="chip neutral" title="只准個人或非營利使用，公司或營利用途要另外向廠商買授權。">非商用</span>'}</td>
       </tr>`).join('')}</tbody></table></div>`;
   document.getElementById('upd').onclick = () => updateIntel(false);
   document.getElementById('force').onclick = () => updateIntel(true);
@@ -1213,6 +1219,7 @@ async function pageSettings(opts = {}) {
       <p class="small muted" style="margin:4px 0 0 24px" id="perf-state">${perfStateText(o.metrics?.performance)}</p>
     </div>
     <div class="card" id="set-dns"><h2>DNS</h2><p class="small muted">讀取中…</p></div>
+    <div class="card" id="set-intel"><h2>情資來源授權</h2><p class="small muted">讀取中…</p></div>
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
       <div>agent id</div><div class="mono">${esc(o.agent_id)}</div>
@@ -1227,7 +1234,9 @@ async function pageSettings(opts = {}) {
   renderLanSection(document.getElementById('set-lan'));
   const dnsEl = document.getElementById('set-dns');
   renderDnsSettings(dnsEl);
-  const focusEl = opts.focus === 'hub' ? hubEl : opts.focus === 'dns' ? dnsEl : null;
+  const intelEl = document.getElementById('set-intel');
+  renderIntelUsageSection(intelEl);
+  const focusEl = opts.focus === 'hub' ? hubEl : opts.focus === 'dns' ? dnsEl : opts.focus === 'intel' ? intelEl : null;
   if (focusEl) {
     focusEl.scrollIntoView({ block: 'start' });
     focusEl.classList.add('focus');
@@ -1466,7 +1475,7 @@ function renderLive() {
 const PAGES = { overview: pageOverview, connections: pageConnections, dns: pageDns, traffic: pageTrafficTabs, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
   let [page, section] = (location.hash || '#overview').slice(1).split('/');
-  let opts = section === 'hub' || section === 'dns' ? { focus: section } : { section };
+  let opts = section === 'hub' || section === 'dns' || section === 'intel' ? { focus: section } : { section };
   if (page === 'join') {
     // 舊的「加入公司 Hub」頁已經併進設定頁：換成設定頁的 Hub 區塊並直接開始尋找
     history.replaceState(null, '', HUB_SECTION);
@@ -1484,7 +1493,9 @@ async function route() {
 }
 window.addEventListener('hashchange', route);
 // 第一次開啟、還沒加入任何 Hub：先帶到設定頁的 Hub 區塊（按過「先不要」就不再自動帶）
+// 還沒選情資的使用情境（公司／個人）：蓋在畫面上問一次
 (async () => {
+  promptIntelUsageIfNeeded();
   if (!location.hash) {
     try {
       const st = await invoke('hub_status');

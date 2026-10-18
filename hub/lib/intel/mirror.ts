@@ -5,7 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { hasScope, type Identity } from '@/lib/auth/access';
 import { loadRegistry, type FeedEntry } from './registry';
+import { getDb } from '@/lib/db';
 import { readEnv } from '@/lib/env';
+import { allowNoncommercial } from './usage';
 
 const MAX_BYTES = 96 * 1024 * 1024;
 const CONCURRENCY = 4;
@@ -54,9 +56,12 @@ export function mirrorAllowed(id: Identity): boolean {
   return id.role === 'client' || id.role === 'admin' || hasScope(id, 'read') || hasScope(id, 'dns');
 }
 
-/** 只有能整份下載的清單才鏡像（即時查詢 API 不算）；依登錄的預設啟用。 */
-export function mirrorable(f: FeedEntry): boolean {
-  return f.enabled_default && f.urls.length > 0 && f.format !== 'lookup-api' && f.kind !== 'lookup';
+/**
+ * 只有能整份下載的清單才鏡像（即時查詢 API 不算）；依登錄的預設啟用。
+ * 只限非商業用途的來源要 Hub 設成「個人／非商業用途」（`noncommercial`，見 lib/intel/usage.ts）才鏡像。
+ */
+export function mirrorable(f: FeedEntry, noncommercial = false): boolean {
+  return f.enabled_default && f.urls.length > 0 && f.format !== 'lookup-api' && f.kind !== 'lookup' && (f.license.commercial_ok || noncommercial);
 }
 
 export function readMeta(id: string): MirrorMeta | null {
@@ -203,7 +208,8 @@ export function syncFeeds(opts: { force?: boolean; only?: string[]; fetchImpl?: 
   if (g.__asaFeedSync) return g.__asaFeedSync;
   const run = (async () => {
     const now = Date.now();
-    const targets = loadRegistry().filter((f) => mirrorable(f) && (!opts.only?.length || opts.only.includes(f.id)));
+    const nc = await allowNoncommercial(getDb());
+    const targets = loadRegistry().filter((f) => mirrorable(f, nc) && (!opts.only?.length || opts.only.includes(f.id)));
     const out: SyncOutcome[] = [];
     const queue = [...targets];
     const worker = async () => {
@@ -249,9 +255,9 @@ export interface ManifestEntry {
 }
 
 /** 給 agent 的清單：有資料的鏡像。 */
-export function manifest(): ManifestEntry[] {
+export function manifest(noncommercial = false): ManifestEntry[] {
   return loadRegistry()
-    .filter(mirrorable)
+    .filter((f) => mirrorable(f, noncommercial))
     .flatMap((f) => {
       const m = readMeta(f.id);
       if (!m?.sha256 || !dataPath(f.id)) return [];

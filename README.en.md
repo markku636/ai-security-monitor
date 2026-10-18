@@ -252,7 +252,7 @@ If nothing works, ask the administrator for the Hub URL: enter it under "Or ente
 <details>
 <summary><b>Can I use it commercially for free?</b></summary>
 
-The code is MIT licensed, so yes. Some threat intel sources, however, only allow non-commercial use (DShield, for example), so check which ones to turn off in a company setting; see [Data sources and licenses](#data-sources-and-licenses).
+The code is MIT licensed, so yes. Some threat intel sources, however, only allow non-commercial use (DShield, URLhaus, ThreatFox, the free AbuseIPDB plan, …). The desktop app asks on first launch whether it is for company / business or personal / non-commercial use: company uses only sources licensed for commercial use, personal also turns on the non-commercial-only ones; change it later under Settings → Threat intel licensing. On the command line use `ai-security-monitor config set intel.usage commercial` (or `noncommercial`); the Hub has the same setting under Threat intel → Threat intel licensing (business use by default). See [Data sources and licenses](#data-sources-and-licenses).
 </details>
 
 <details>

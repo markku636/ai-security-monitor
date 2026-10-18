@@ -3,6 +3,7 @@ import { boundToOtherAgent, identify } from '@/lib/auth/access';
 import { getDb } from '@/lib/db';
 import { error, json } from '@/lib/http';
 import { manifest, mirrorAllowed, syncInBackground, syncRunning } from '@/lib/intel/mirror';
+import { allowNoncommercial } from '@/lib/intel/usage';
 import { refreshRequestedAt } from '@/lib/intel/sync-state';
 
 export const dynamic = 'force-dynamic';
@@ -13,5 +14,5 @@ export async function GET(req: Request): Promise<Response> {
   if (boundToOtherAgent(id, req.headers.get('x-asa-agent-id')?.trim())) return error(403, 'key_bound_to_other_agent');
   syncInBackground();
   const requested = await refreshRequestedAt(getDb());
-  return json({ feeds: manifest(), syncing: syncRunning(), refresh_requested_at: requested?.toISOString() ?? null, server_time: new Date().toISOString() });
+  return json({ feeds: manifest(await allowNoncommercial(getDb())), syncing: syncRunning(), refresh_requested_at: requested?.toISOString() ?? null, server_time: new Date().toISOString() });
 }

@@ -149,6 +149,7 @@ fn status(env: &Env) -> AppResult<()> {
             "vendor": f.vendor,
             "kind": f.kind.as_str(),
             "enabled": reg.is_enabled(f),
+            "license_blocked": reg.license_blocked(f),
             "entries": m.as_ref().map(|m| m.entries).unwrap_or(0),
             "bytes": m.as_ref().map(|m| m.bytes).unwrap_or(0),
             "fetched_at": m.as_ref().and_then(|m| m.fetched_at),
@@ -171,7 +172,13 @@ fn status(env: &Env) -> AppResult<()> {
         .map(|f| {
             let m = FeedMeta::load(&env.config_dir, &f.id);
             vec![
-                if reg.is_enabled(f) { "✓".into() } else { "–".into() },
+                if reg.is_enabled(f) {
+                    "✓".into()
+                } else if reg.license_blocked(f) {
+                    t!("非商用").to_string()
+                } else {
+                    "–".into()
+                },
                 f.id.clone(),
                 f.vendor.clone(),
                 m.as_ref().map(|m| m.entries.to_string()).unwrap_or_else(|| "-".into()),
@@ -525,6 +532,14 @@ async fn lookup_cmd(env: &Env, indicator: &str, online: bool) -> AppResult<()> {
 
 fn toggle(env: &Env, id: &str, on: bool) -> AppResult<()> {
     Registry::set_enabled(&env.config_dir, id, on)?;
+    let reg = Registry::load(&env.config_dir)?;
+    if on && reg.get(id).is_some_and(|f| !reg.license_ok(f)) {
+        // 記住使用者的選擇，但要等使用情境改成非商用才會用
+        return Err(AppError::InvalidArg(tf!(
+            "{id} 只限非商業用途；個人／非商業使用請先執行 ai-security-monitor config set intel.usage noncommercial",
+            id = id
+        )));
+    }
     if env.global.json {
         print_json(&json!({ "id": id, "enabled": on }));
     } else if on {

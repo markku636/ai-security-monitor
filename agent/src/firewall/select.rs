@@ -143,6 +143,10 @@ mod tests {
 
     fn db_with(id: &str, body: &str) -> (tempfile::TempDir, IntelDb) {
         let dir = tempfile::tempdir().unwrap();
+        // 測試資料含只限非商業用途的來源（DShield、URLhaus、ThreatFox）：使用情境設成非商用才會載入
+        let mut cfg = crate::config::AgentConfig::default();
+        cfg.intel.set_usage(crate::config::IntelUsage::Noncommercial);
+        crate::config::save(dir.path(), &cfg).unwrap();
         let fdir = feed_dir(dir.path(), id);
         std::fs::create_dir_all(&fdir).unwrap();
         std::fs::write(fdir.join(DATA_FILE), body).unwrap();

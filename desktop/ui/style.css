@@ -331,3 +331,15 @@ fieldset.plain:disabled { opacity: .5; }
 .verdict-box.warn { background: var(--warn-soft); color: var(--warn); }
 .verdict-box.ok { background: var(--ok-soft); color: var(--ok); }
 .verdict-box.neutral { background: var(--border); }
+
+/* 第一次打開時的選擇視窗（情資的使用情境） */
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgb(15 23 42 / 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; max-width: 560px; width: 100%; max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 20px 50px rgb(0 0 0 / 0.3); }
+.dialog h2 { margin: 0 0 8px; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 10px; }
+.choice { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.choice:hover, .choice:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.choice span { font-size: 12px; opacity: 0.8; }
+.choice:disabled { opacity: 0.5; cursor: progress; }
+.usage-list { margin: 6px 0 0; padding-left: 18px; }
+@media (max-width: 520px) { .choices { grid-template-columns: 1fr; } }

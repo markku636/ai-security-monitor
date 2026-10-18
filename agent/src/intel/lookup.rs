@@ -117,7 +117,8 @@ pub const PROVIDERS: &[Provider] = &[
 
 /// API key：環境變數（registry 的 `requires_api_key`）＞ 密鑰庫 `intel.<id>`。
 pub fn api_key(config_dir: &Path, reg: &Registry, id: &str) -> Option<String> {
-    let entry = reg.get(id)?;
+    // 免費版只限非商業用途的服務（AbuseIPDB、GreyNoise…）：商用情境不查
+    let entry = reg.get(id).filter(|e| reg.license_ok(e))?;
     if let Some(env) = &entry.requires_api_key {
         if let Ok(v) = std::env::var(env) {
             if !v.trim().is_empty() {

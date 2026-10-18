@@ -4,6 +4,8 @@ import { boundToOtherAgent, identify } from '@/lib/auth/access';
 import { error } from '@/lib/http';
 import { dataPath, mirrorable, mirrorAllowed, readMeta } from '@/lib/intel/mirror';
 import { loadRegistry } from '@/lib/intel/registry';
+import { allowNoncommercial } from '@/lib/intel/usage';
+import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +15,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (boundToOtherAgent(who, req.headers.get('x-asa-agent-id')?.trim())) return error(403, 'key_bound_to_other_agent');
   const { id } = await ctx.params;
   const feed = loadRegistry().find((f) => f.id === id);
-  if (!feed || !mirrorable(feed)) return error(404, 'not_found');
+  if (!feed || !mirrorable(feed, await allowNoncommercial(getDb()))) return error(404, 'not_found');
   const meta = readMeta(feed.id);
   const file = dataPath(feed.id);
   if (!meta?.sha256 || !file) return error(404, 'not_mirrored');

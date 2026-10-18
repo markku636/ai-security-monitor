@@ -199,6 +199,8 @@ async fn intel_feeds(state: State<'_, AppState>) -> CmdResult<Value> {
                 "kind": f.kind.as_str(),
                 "enabled": reg.is_enabled(f),
                 "license": f.license.name,
+                "commercial_ok": f.license.commercial_ok,
+                "license_blocked": reg.license_blocked(f),
                 "source_url": f.source_url(),
                 "entries": m.as_ref().map(|m| m.entries).unwrap_or(0),
                 "fetched_at": m.as_ref().and_then(|m| m.fetched_at),
@@ -210,6 +212,44 @@ async fn intel_feeds(state: State<'_, AppState>) -> CmdResult<Value> {
         })
         .collect();
     Ok(json!({ "feeds": items }))
+}
+
+/// 情資的使用情境（還沒選＝null）與只限非商業用途的來源清單（第一次打開與設定頁用）。
+#[tauri::command]
+async fn intel_usage(state: State<'_, AppState>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let cfg = config::load(dir).map_err(err)?;
+    let reg = Registry::load(dir).map_err(err)?;
+    let sources: Vec<Value> = reg
+        .feeds
+        .iter()
+        .filter(|f| !f.license.commercial_ok)
+        .map(|f| {
+            json!({
+                "id": f.id,
+                "name": f.name,
+                "vendor": f.vendor,
+                "license": f.license.name,
+                "lookup": !fetch::downloadable(f),
+            })
+        })
+        .collect();
+    Ok(json!({
+        "usage": cfg.intel.usage.map(|u| u.as_str()),
+        "noncommercial": cfg.intel.noncommercial(),
+        "sources": sources,
+    }))
+}
+
+/// 設定使用情境（commercial／noncommercial）。換了就丟掉快取的情資，下次比對照新的來源。
+#[tauri::command]
+async fn set_intel_usage(state: State<'_, AppState>, usage: String) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let mut cfg = config::load_or_init(dir).map_err(err)?;
+    config::set_value(&mut cfg, "intel.usage", &usage).map_err(err)?;
+    config::save(dir, &cfg).map_err(err)?;
+    *state.intel.lock().await = None;
+    Ok(json!({ "usage": cfg.intel.usage.map(|u| u.as_str()) }))
 }
 
 /// 更新情資：已註冊 Hub 就先從 Hub 鏡像拿。
@@ -650,6 +690,8 @@ pub fn run(start_in_tray: bool) {
             scan_now,
             intel_feeds,
             intel_update,
+            intel_usage,
+            set_intel_usage,
             ai_providers,
             ai_ask,
             ai_auth::ai_auth_status,

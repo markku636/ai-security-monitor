@@ -184,6 +184,8 @@ pub struct Registry {
     pub feeds: Vec<FeedEntry>,
     pub state: FeedState,
     pub warnings: Vec<String>,
+    /// 設定的使用情境允許只限非商業用途的來源（`config.intel.noncommercial()`）；false 時那些來源一律當作關閉。
+    pub allow_noncommercial: bool,
 }
 
 fn valid_id(id: &str) -> bool {
@@ -221,15 +223,39 @@ impl Registry {
             feeds.push(f);
         }
         let state: FeedState = store::read_json_in(dir, STATE_FILE)?;
-        Ok(Registry { feeds, state, warnings })
+        let allow_noncommercial = crate::config::load(dir)
+            .map(|c| c.intel.noncommercial())
+            .unwrap_or(false);
+        Ok(Registry {
+            feeds,
+            state,
+            warnings,
+            allow_noncommercial,
+        })
     }
 
     pub fn get(&self, id: &str) -> Option<&FeedEntry> {
         self.feeds.iter().find(|f| f.id == id)
     }
 
+    /// 實際會用的來源：自己打開（或預設開）而且授權允許目前的使用情境。
     pub fn is_enabled(&self, f: &FeedEntry) -> bool {
+        self.wanted(f) && self.license_ok(f)
+    }
+
+    /// 使用者的開關（不看授權）。
+    pub fn wanted(&self, f: &FeedEntry) -> bool {
         self.state.enabled.get(&f.id).copied().unwrap_or(f.enabled_default)
+    }
+
+    /// 授權允許目前的使用情境（商用情境不能用只限非商業用途的來源）。
+    pub fn license_ok(&self, f: &FeedEntry) -> bool {
+        f.license.commercial_ok || self.allow_noncommercial
+    }
+
+    /// 開著但因為「只限非商業用途」而沒用的來源。
+    pub fn license_blocked(&self, f: &FeedEntry) -> bool {
+        self.wanted(f) && !self.license_ok(f)
     }
 
     pub fn enabled(&self) -> impl Iterator<Item = &FeedEntry> {

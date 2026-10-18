@@ -628,8 +628,15 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "選出 {n} 個網段（合併前 {before}）；略過：保留／私網 {reserved}、過寬 {wide}、本機／白名單／已知良性 {local}、信心不足 {low}" => {
             "Selected {n} networks ({before} before merging); skipped: reserved/private {reserved}, too wide {wide}, local/allowlisted/known-good {local}, low confidence {low}"
         }
-        "  · 非商用授權來源不用於封鎖：{ids}（config intel.allow_noncommercial true 可改）" => {
-            "  · Non-commercial feeds are not used for blocking: {ids} (set config intel.allow_noncommercial true to change)"
+        "非商用" => "non-comm.",
+        "{id} 只限非商業用途；個人／非商業使用請先執行 ai-security-monitor config set intel.usage noncommercial" => {
+            "{id} is for non-commercial use only; for personal / non-commercial use run ai-security-monitor config set intel.usage noncommercial first"
+        }
+        "intel.usage 只能是 commercial（公司／商業用途）或 noncommercial（個人／非商業用途）：{value}" => {
+            "intel.usage must be commercial (company / business use) or noncommercial (personal / non-commercial use): {value}"
+        }
+        "  · 非商用授權來源不用於封鎖：{ids}（非商業用途可執行 config set intel.usage noncommercial）" => {
+            "  · Non-commercial feeds are not used for blocking: {ids} (for non-commercial use run config set intel.usage noncommercial)"
         }
         "  · 超過後端上限，只同步前 {n} 個" => "  · Backend limit reached; only the first {n} are synced",
 

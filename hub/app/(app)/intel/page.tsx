@@ -15,6 +15,9 @@ import { mirrorable, readMeta, refreshMs, syncInBackground, type MirrorMeta } fr
 import { feedGroup, loadRegistry, type FeedEntry } from '@/lib/intel/registry';
 import { listAgents } from '@/lib/queries/agents';
 import { strParam } from '@/lib/queries/params';
+import { IntelUsageSetting } from '@/components/admin/IntelUsageSetting';
+import { getIntelUsage } from '@/lib/intel/usage';
+import { getDb } from '@/lib/db';
 import { feedHitStats } from '@/lib/queries/intel';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +39,11 @@ function NotMirrored({ t, f }: { t: TFn; f: FeedEntry }) {
   const api = f.format === 'lookup-api' || f.kind === 'lookup';
   let label: string;
   let hint: string;
-  if (!api && !f.enabled_default) {
+  if (!api && f.enabled_default && !f.license.commercial_ok) {
+    // 只限非商業用途：Hub 設成公司／商業用途時不下載
+    label = t('只限非商用，Hub 沒有下載');
+    hint = t('這份清單只准個人或非營利使用；Hub 選的是「公司／商業用途」，所以不下載也不給主機。要用的話在上方「情資來源授權」改成個人／非商業用途。');
+  } else if (!api && !f.enabled_default) {
     // 預設關閉的清單：Hub 不下載；哪台主機自己開了，就由那台直接向廠商下載
     label = t('預設關閉，Hub 不下載');
     hint = t('這份清單預設沒有啟用，所以 Hub 不會下載。在主機上啟用後，那台電腦會直接向廠商下載並照更新間隔自動更新。');
@@ -60,8 +67,8 @@ function NotMirrored({ t, f }: { t: TFn; f: FeedEntry }) {
 }
 
 /** 這份清單在 hub 鏡像的狀態（最後同步、大小、錯誤）。 */
-function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null }) {
-  if (!mirrorable(f)) return <NotMirrored t={t} f={f} />;
+function MirrorCell({ t, f, m, nc }: { t: TFn; f: FeedEntry; m: MirrorMeta | null; nc: boolean }) {
+  if (!mirrorable(f, nc)) return <NotMirrored t={t} f={f} />;
   if (!m)
     return (
       <div className="space-y-1">
@@ -92,7 +99,7 @@ function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null })
   );
 }
 
-function FeedTable({ t, feeds, stats }: { t: TFn; feeds: FeedEntry[]; stats: Stats }) {
+function FeedTable({ t, feeds, stats, nc }: { t: TFn; feeds: FeedEntry[]; stats: Stats; nc: boolean }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -134,13 +141,13 @@ function FeedTable({ t, feeds, stats }: { t: TFn; feeds: FeedEntry[]; stats: Sta
                     {f.license.name}
                   </a>
                   <div className="mt-0.5 flex flex-wrap gap-1">
-                    {f.license.commercial_ok ? <Badge tone="ok">{t('可商用')}</Badge> : <Badge tone="warn">{t('非商用：只告警不封鎖')}</Badge>}
+                    {f.license.commercial_ok ? <Badge tone="ok">{t('可商用')}</Badge> : <Badge tone="warn">{t('只限非商用')}</Badge>}
                     {f.license.attribution_required ? <Badge tone="info">{t('需標註來源')}</Badge> : null}
                   </div>
                 </td>
                 <td className="py-2 pr-3 text-xs whitespace-nowrap">{f.refresh_interval}</td>
                 <td className="py-2 pr-3 text-xs whitespace-nowrap">
-                  <MirrorCell t={t} f={f} m={readMeta(f.id)} />
+                  <MirrorCell t={t} f={f} m={readMeta(f.id)} nc={nc} />
                 </td>
                 <td className="py-2 pr-3 text-xs whitespace-nowrap">
                   {s ? (
@@ -170,7 +177,10 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
   const stats = await feedHitStats(7);
   syncInBackground();
   const hosts = await listAgents();
-  const mirrored = feeds.filter(mirrorable);
+  const usage = await getIntelUsage(getDb());
+  const nc = usage.usage === 'noncommercial';
+  const mirrored = feeds.filter((f) => mirrorable(f, nc));
+  const ncSources = feeds.filter((f) => !f.license.commercial_ok && f.enabled_default).map((f) => f.vendor + ' ' + f.name);
   const metas = mirrored.map((f) => readMeta(f.id));
   const okCount = metas.filter((m) => m?.sha256 && m.status === 'ok').length;
   const lastSync = metas.reduce<string | null>((a, m) => (m?.checked_at && (!a || m.checked_at > a) ? m.checked_at : a), null);
@@ -182,9 +192,12 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
       <header>
         <h1 className="text-xl font-semibold">{t('威脅情資')}</h1>
         <p className="text-sm text-slate-500">
-          {t('agent 用來判定連線的公開情資來源。每筆命中都附廠商、授權與原始清單網址；非商用授權的來源只告警，不會自動封鎖。')}
+          {t('agent 用來判定連線的公開情資來源。每筆命中都附廠商、授權與原始清單網址；只限非商業用途的來源只在選「個人／非商業用途」時使用。')}
         </p>
       </header>
+      <Card title={t('情資來源授權')}>
+        <IntelUsageSetting usage={usage.usage} locked={usage.source === 'env'} sources={ncSources} />
+      </Card>
       <Card title={t('同步情資資料庫')}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1 text-sm">
@@ -244,11 +257,11 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
             title={
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {groupTitle(t, x.g)}
-                {x.feeds.some(mirrorable) ? <FeedSyncButton only={x.feeds.filter(mirrorable).map((f) => f.id)} label={t('這一區全部更新')} compact /> : null}
+                {x.feeds.some((f) => mirrorable(f, nc)) ? <FeedSyncButton only={x.feeds.filter((f) => mirrorable(f, nc)).map((f) => f.id)} label={t('這一區全部更新')} compact /> : null}
               </span>
             }
           >
-            <FeedTable t={t} feeds={x.feeds} stats={stats} />
+            <FeedTable t={t} feeds={x.feeds} stats={stats} nc={nc} />
           </Card>
         ))
       ) : (
