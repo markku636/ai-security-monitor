@@ -293,26 +293,26 @@ pub async fn run(cfg: Config, config_dir: PathBuf, stop: Arc<Notify>, link: Opti
         )));
     }
     // 背景建封鎖清單（建好之前是純轉送）；每 10 分鐘、情資更新完、Hub 改了清單設定，
-    // 或這台的黑名單（dns block）改了（每分鐘看一次檔案時間）時重建
+    // 或這台的黑白名單（dns block／allow）改了（每分鐘看一次檔案時間）時重建
     {
         let (sh, live, dir, reload) = (sh.clone(), live.clone(), config_dir.clone(), reload.clone());
         tasks.push(tokio::spawn(async move {
             let mut tick = tokio::time::interval(Duration::from_secs(60));
             let mut last: Option<std::time::Instant> = None;
-            let mut seen_mtime = None;
+            let mut seen_mtime: Option<[Option<std::time::SystemTime>; 2]> = None;
             loop {
                 let forced = tokio::select! {
                     _ = tick.tick() => false,
                     _ = reload.notified() => true,
                 };
-                let mtime = std::fs::metadata(dir.join(crate::dns::blocklist::FILE))
-                    .and_then(|m| m.modified())
-                    .ok();
+                // 這台的黑名單與白名單（dns block／dns allow）任一個改了就重建
+                let mtime = [crate::dns::blocklist::FILE, crate::model::allowlist::ALLOWLIST_FILE]
+                    .map(|f| std::fs::metadata(dir.join(f)).and_then(|m| m.modified()).ok());
                 let due = last.is_none_or(|t| t.elapsed() >= RELOAD_EVERY);
-                if !forced && !due && mtime == seen_mtime {
+                if !forced && !due && Some(mtime) == seen_mtime {
                     continue;
                 }
-                seen_mtime = mtime;
+                seen_mtime = Some(mtime);
                 last = Some(std::time::Instant::now());
                 let Ok(c) = live.read().map(|c| c.clone()) else {
                     continue;
