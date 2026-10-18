@@ -47,6 +47,8 @@ pub struct AgentConfig {
     pub metrics: MetricsConfig,
     /// 檔案完整性＋開機自啟監控（`fim.*`）。
     pub fim: FimConfig,
+    /// 接受 Hub 依群組推下來的集中設定（`central.json`；只有掃描間隔、檔案監控等安全選項）。
+    pub central_config: bool,
     /// DNS 監看（`dns.*`）。
     pub dns: DnsConfig,
     /// 自動更新（`update.mode`）。
@@ -69,6 +71,7 @@ impl Default for AgentConfig {
             remote_actions: RemoteActionsConfig::default(),
             metrics: MetricsConfig::default(),
             fim: FimConfig::default(),
+            central_config: true,
             dns: DnsConfig::default(),
             update: UpdateConfig::default(),
             hub_advertise_url: None,
@@ -671,6 +674,7 @@ pub const SETTABLE_KEYS: &[&str] = &[
     "scan.scanners",
     "scan.online",
     "fim.enabled",
+    "central_config",
     "fim.extra_paths",
     "fim.ignore",
     "scan.dns_names",
@@ -726,6 +730,7 @@ pub fn set_value(cfg: &mut AgentConfig, key: &str, value: &str) -> AppResult<()>
         "scan.scanners" => cfg.scan.scanners = parse_list(value),
         "scan.online" => cfg.scan.online = parse_bool(key, value)?,
         "fim.enabled" => cfg.fim.enabled = parse_bool(key, value)?,
+        "central_config" => cfg.central_config = parse_bool(key, value)?,
         "fim.extra_paths" => cfg.fim.extra_paths = parse_list(value),
         "fim.ignore" => cfg.fim.ignore = parse_list(value),
         "scan.dns_names" => cfg.scan.dns_names = parse_bool(key, value)?,

@@ -54,6 +54,8 @@ pub async fn run_scan_full(
     no_online: bool,
 ) -> AppResult<(Report, Snapshot, Vec<crate::model::connection::Listener>)> {
     let mut cfg = config::load_or_init(&env.config_dir)?;
+    // Hub 的集中設定疊在本機設定上（不寫回 config.json）
+    crate::hub::central::apply(&mut cfg, &env.config_dir);
     if no_online {
         cfg.scan.online = false;
     }

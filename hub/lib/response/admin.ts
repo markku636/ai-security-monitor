@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { agentGroupMembers, agentGroups, agents, responseBlocks, responseRules } from '@/drizzle/schema';
-import { InputError } from '@/lib/admin-write';
+import { InputError, onlyGiven } from '@/lib/admin-write';
 import type { DB } from '@/lib/db';
+import { CentralConfig } from '@/lib/central/config';
 import { TRIGGERS, getResponseSettings } from './engine';
 
 export const MAX_RULES = 50;
@@ -36,6 +37,8 @@ export const GroupBody = z.object({
   name,
   description: z.string().trim().max(500).default(''),
   members: z.array(z.string().max(128)).max(5000).default([]),
+  /** 集中設定（只接受安全的選項）。 */
+  config: CentralConfig.default({}),
 });
 
 export async function responseView(db: DB) {
@@ -63,7 +66,7 @@ export async function responseView(db: DB) {
       expiresAt: b.expiresAt.toISOString(),
       releasedAt: b.releasedAt?.toISOString() ?? null,
     })),
-    groups: groups.map((g) => ({ id: g.id, name: g.name, description: g.description, members: members.filter((m) => m.groupId === g.id).map((m) => m.agentId) })),
+    groups: groups.map((g) => ({ id: g.id, name: g.name, description: g.description, config: g.config, members: members.filter((m) => m.groupId === g.id).map((m) => m.agentId) })),
     hosts: hosts.filter((h) => !h.deletedAt).map((h) => ({ id: h.id, hostname: h.hostname, acceptsActions: h.accept })),
   };
 }
@@ -90,7 +93,7 @@ export async function createResponseRule(db: DB, input: unknown, actor: string):
 }
 
 export async function updateResponseRule(db: DB, id: string, input: unknown): Promise<boolean> {
-  const b = RuleBody.partial().parse(input);
+  const b = onlyGiven(RuleBody.partial().parse(input), input);
   const [cur] = await db.select().from(responseRules).where(eq(responseRules.id, id)).limit(1);
   if (!cur) return false;
   await checkGroup(db, b.groupId);
@@ -125,18 +128,19 @@ export async function createGroup(db: DB, input: unknown, actor: string): Promis
   const b = GroupBody.parse(input);
   if ((await db.select({ id: agentGroups.id }).from(agentGroups)).length >= MAX_GROUPS) throw new InputError('too_many_groups');
   const id = randomUUID();
-  await db.insert(agentGroups).values({ id, name: b.name, description: b.description, createdBy: actor });
+  await db.insert(agentGroups).values({ id, name: b.name, description: b.description, config: b.config, createdBy: actor });
   await setMembers(db, id, b.members);
   return id;
 }
 
 export async function updateGroup(db: DB, id: string, input: unknown): Promise<boolean> {
-  const b = GroupBody.partial().parse(input);
+  const b = onlyGiven(GroupBody.partial().parse(input), input);
   const [cur] = await db.select().from(agentGroups).where(eq(agentGroups.id, id)).limit(1);
   if (!cur) return false;
   const patch: Partial<typeof agentGroups.$inferInsert> = {};
   if (b.name !== undefined) patch.name = b.name;
   if (b.description !== undefined) patch.description = b.description;
+  if (b.config !== undefined) patch.config = b.config;
   if (Object.keys(patch).length) await db.update(agentGroups).set(patch).where(eq(agentGroups.id, id));
   if (b.members !== undefined) await setMembers(db, id, b.members);
   return true;

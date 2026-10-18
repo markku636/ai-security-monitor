@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { notificationChannels, notificationLog, notificationRules, notificationSeen } from '@/drizzle/schema';
-import { InputError } from '@/lib/admin-write';
+import { InputError, onlyGiven } from '@/lib/admin-write';
 import type { DB } from '@/lib/db';
 import { CHANNEL_KINDS, maskConfig, prepareConfig, targetOf, type ChannelKind } from './channels';
 import { secretKey } from './secret';
@@ -157,7 +157,7 @@ export async function createRule(db: DB, input: unknown, actor: string): Promise
 }
 
 export async function updateRule(db: DB, id: string, input: unknown): Promise<boolean> {
-  const b = RulePatch.parse(input);
+  const b = onlyGiven(RulePatch.parse(input), input);
   const [cur] = await db.select().from(notificationRules).where(eq(notificationRules.id, id)).limit(1);
   if (!cur) return false;
   if (b.channelIds) await checkChannels(db, b.channelIds);

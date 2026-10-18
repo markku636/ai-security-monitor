@@ -36,3 +36,12 @@ export async function adminWrite(req: Request, fn: Handler, opts: { body?: boole
 export async function adminAudit(req: Request, actor: string, action: string, targetType: string, targetId: string, details: Record<string, unknown> = {}): Promise<void> {
   await audit({ actor, actorRole: 'admin', action, targetType, targetId, sourceIp: sourceIp(req), details });
 }
+
+/**
+ * 部分更新：zod v4 的 `.partial()` 仍會套用欄位的 `.default()`（沒送的欄位會被填成預設值、蓋掉原本的設定），
+ * 所以解析完只留下請求裡真的有送的欄位。
+ */
+export function onlyGiven<T extends Record<string, unknown>>(parsed: T, input: unknown): Partial<T> {
+  const given = input && typeof input === 'object' ? new Set(Object.keys(input)) : new Set<string>();
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => given.has(k))) as Partial<T>;
+}

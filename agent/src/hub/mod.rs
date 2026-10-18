@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod advertise;
+pub mod central;
 pub mod contract;
 pub mod discover;
 pub mod dns;
@@ -292,6 +293,11 @@ impl HubClient {
 
     pub async fn heartbeat(&self, hb: &HeartbeatPayload) -> AppResult<Value> {
         Ok(self.post("/api/v1/agents/me/heartbeat", hb).await?.body)
+    }
+
+    /// 集中設定（依群組合併、Hub 身分簽章；驗章在 [`central::accept`]）。
+    pub async fn central_config(&self) -> AppResult<Value> {
+        Ok(self.get("/api/v1/agents/me/config").await?.body)
     }
 
     /// hub 的情資鏡像清單（舊版 hub 沒有這個端點 → 錯誤，呼叫端改直接找廠商）。

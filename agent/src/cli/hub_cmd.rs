@@ -784,6 +784,48 @@ pub async fn status(env: &Env) -> AppResult<()> {
     Ok(())
 }
 
+/// 心跳回應的 `config_version` 跟手上的不同 → 向 Hub 取集中設定、驗章、存檔並疊到 `cfg`。回傳要寫進 log 的訊息（沒變就 None）。
+async fn sync_central(
+    env: &Env,
+    c: &HubClient,
+    cfg: &mut config::AgentConfig,
+    hb: &serde_json::Value,
+) -> Option<String> {
+    if !cfg.central_config || hb.get("config_version").is_none() {
+        return None;
+    }
+    let want = hb["config_version"].as_str().map(String::from);
+    if want == crate::hub::central::current_version(&env.config_dir) {
+        return None;
+    }
+    let body = match c.central_config().await {
+        Ok(b) => b,
+        Err(e) => return Some(tf!("取集中設定失敗：{e}", e = e.message())),
+    };
+    let pk = cfg.hub.as_ref().and_then(|h| h.public_key.clone());
+    match crate::hub::central::accept(&env.config_dir, &cfg.agent_id, pk.as_deref(), &body) {
+        Ok(Some(central)) => {
+            // 重新從本機設定開始疊，避免舊的集中設定殘留
+            if let Ok(mut fresh) = config::load(&env.config_dir) {
+                crate::hub::central::apply_values(&mut fresh, &central.config);
+                *cfg = fresh;
+            }
+            Some(tf!(
+                "已套用 Hub 集中設定（版本 {v}，群組：{g}）",
+                v = central.version,
+                g = central.groups.join("、")
+            ))
+        }
+        Ok(None) => {
+            if let Ok(fresh) = config::load(&env.config_dir) {
+                *cfg = fresh;
+            }
+            Some(t!("Hub 已取消集中設定，改回本機設定").to_string())
+        }
+        Err(e) => Some(e.message()),
+    }
+}
+
 /// 領取並執行 hub 核准的遠端動作；每個動作都回報結果（包含拒絕執行的原因）。
 async fn run_remote_actions(env: &Env, client: &HubClient, cfg: &config::AgentConfig) {
     if !cfg.remote_actions.accept {
@@ -1192,6 +1234,9 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
         }
     }
     let mut cfg = config::load_or_init(&env.config_dir)?;
+    if let Some(v) = crate::hub::central::apply(&mut cfg, &env.config_dir) {
+        log(env, &tf!("套用 Hub 集中設定（版本 {v}）", v = v));
+    }
     let mut client = if a.no_upload {
         None
     } else {
@@ -1454,6 +1499,20 @@ pub async fn watch(env: &Env, a: WatchArgs) -> AppResult<()> {
                                 }
                                 if v["pending_actions"].as_u64().unwrap_or(0) > 0 {
                                     run_remote_actions(env, c, &cfg).await;
+                                }
+                                // 集中設定換版本了 → 取新的、驗章、套用（間隔立刻生效）
+                                if let Some(msg) = sync_central(env, c, &mut cfg, &v).await {
+                                    log(env, &msg);
+                                    interval = crate::util::time::parse_duration(
+                                        a.interval.as_deref().unwrap_or(&cfg.scan.interval),
+                                    )
+                                    .unwrap_or(interval)
+                                    .max(Duration::from_secs(60));
+                                    snap_every = crate::util::time::parse_duration(
+                                        a.snapshot_interval.as_deref().unwrap_or(&cfg.scan.snapshot_interval),
+                                    )
+                                    .unwrap_or(snap_every)
+                                    .max(Duration::from_secs(10));
                                 }
                             }
                             Err(e) => log(env, &tf!("心跳失敗：{e}", e = e.message())),

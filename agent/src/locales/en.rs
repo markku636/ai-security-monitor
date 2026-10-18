@@ -7,6 +7,13 @@
 
 pub fn lookup(zh: &str) -> Option<&'static str> {
     Some(match zh {
+        // ---- central config ----
+        "沒有釘選 Hub 公鑰，不能驗證集中設定（重新加入 Hub 後就會有）" => "No pinned Hub public key, so central settings cannot be verified (re-join the Hub to get one)",
+        "集中設定的簽章驗證失敗，不套用" => "Central settings failed signature verification and were not applied",
+        "套用 Hub 集中設定（版本 {v}）" => "Applying Hub central settings (version {v})",
+        "取集中設定失敗：{e}" => "Could not fetch central settings: {e}",
+        "已套用 Hub 集中設定（版本 {v}，群組：{g}）" => "Applied Hub central settings (version {v}, groups: {g})",
+        "Hub 已取消集中設定，改回本機設定" => "The Hub removed central settings; back to local settings",
         // ---- service --admin-at-logon ----
         "排程工作，登入時以系統管理員權限啟動" => "scheduled task, starts with administrator rights at sign-in",
         "Windows：登入時以系統管理員權限啟動（排程工作），才量得到各程式的網路流量；會跳一次 UAC" => "Windows: start with administrator rights at sign-in (scheduled task) so per-app network traffic can be measured; asks for UAC once",

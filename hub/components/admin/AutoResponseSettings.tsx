@@ -51,11 +51,57 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+interface GroupForm {
+  id: string | null;
+  name: string;
+  members: string[];
+  scan_interval: string;
+  snapshot_interval: string;
+  fim_enabled: string;
+  dns_names: string;
+  fim_extra_paths: string;
+  fim_ignore: string;
+}
+
+const EMPTY_GROUP: GroupForm = { id: null, name: '', members: [], scan_interval: '', snapshot_interval: '', fim_enabled: '', dns_names: '', fim_extra_paths: '', fim_ignore: '' };
+
+function groupForm(g: ResponseView['groups'][number]): GroupForm {
+  const c = (g.config ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof c[k] === 'string' ? (c[k] as string) : '');
+  const bool = (k: string) => (typeof c[k] === 'boolean' ? String(c[k]) : '');
+  const lines = (k: string) => (Array.isArray(c[k]) ? (c[k] as string[]).join('\n') : '');
+  return {
+    id: g.id,
+    name: g.name,
+    members: g.members,
+    scan_interval: str('scan_interval'),
+    snapshot_interval: str('snapshot_interval'),
+    fim_enabled: bool('fim_enabled'),
+    dns_names: bool('dns_names'),
+    fim_extra_paths: lines('fim_extra_paths'),
+    fim_ignore: lines('fim_ignore'),
+  };
+}
+
+/** 表單 → 集中設定（空的欄位不送）。 */
+function centralOf(g: GroupForm): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (g.scan_interval.trim()) out.scan_interval = g.scan_interval.trim();
+  if (g.snapshot_interval.trim()) out.snapshot_interval = g.snapshot_interval.trim();
+  if (g.fim_enabled) out.fim_enabled = g.fim_enabled === 'true';
+  if (g.dns_names) out.dns_names = g.dns_names === 'true';
+  const lines = (v: string) => v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  if (lines(g.fim_extra_paths).length) out.fim_extra_paths = lines(g.fim_extra_paths);
+  if (lines(g.fim_ignore).length) out.fim_ignore = lines(g.fim_ignore);
+  return out;
+}
+
 function errorText(t: TFn, r: { status: number; data: Record<string, unknown> }): string {
   const code = String(r.data.error ?? '');
   if (code === 'bad_cidr' || code === 'cidr_too_broad') return t('白名單網段格式不對或範圍太大');
   if (code.startsWith('invalid_params')) return t('「指定的問題規則」要填規則名稱');
   if (code === 'unknown_group') return t('選的群組不存在');
+  if (code === 'bad_request' && String(r.data.field ?? '').startsWith('config')) return t('集中設定的格式不對：間隔要像 30m、2h，掃描最短 5 分鐘、快照最短 30 秒');
   if (code.startsWith('too_many')) return t('數量已達上限');
   return t('失敗（HTTP {n}）', { n: r.status });
 }
@@ -66,7 +112,7 @@ export function AutoResponseSettings({ view }: { view: ResponseView }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [allow, setAllow] = useState(view.settings.allowlist.join('\n'));
-  const [group, setGroup] = useState<{ id: string | null; name: string; members: string[] }>({ id: null, name: '', members: [] });
+  const [group, setGroup] = useState<GroupForm>(EMPTY_GROUP);
   const [rule, setRule] = useState({ name: '', trigger: 'bruteforce' as Trigger, threshold: '10', pattern: 'intel.inbound_match', blockMinutes: '60', escalate: true, groupId: '' });
   const groupName = (id: string | null) => view.groups.find((g) => g.id === id)?.name ?? '';
   const noAccept = view.hosts.filter((h) => !h.acceptsActions);
@@ -302,8 +348,13 @@ export function AutoResponseSettings({ view }: { view: ResponseView }) {
                     ? g.members.map((m) => view.hosts.find((h) => h.id === m)?.hostname ?? m).join('、')
                     : t('（沒有主機）')}
                 </span>
+                {Object.keys(g.config ?? {}).length ? (
+                  <span className="rounded bg-teal-50 px-1.5 py-0.5 text-xs text-teal-800 dark:bg-teal-950/50 dark:text-teal-300" title={JSON.stringify(g.config)}>
+                    {t('集中設定 {n} 項', { n: Object.keys(g.config).length })}
+                  </span>
+                ) : null}
                 <span className="ml-auto flex gap-1">
-                  <button type="button" className={SMALL} disabled={pending} onClick={() => setGroup({ id: g.id, name: g.name, members: g.members })}>
+                  <button type="button" className={SMALL} disabled={pending} onClick={() => setGroup(groupForm(g))}>
                     {t('修改')}
                   </button>
                   <button
@@ -337,6 +388,42 @@ export function AutoResponseSettings({ view }: { view: ResponseView }) {
               </label>
             ))}
           </fieldset>
+          <fieldset className="space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
+            <legend className="flex items-center text-xs font-medium text-slate-600 dark:text-slate-300">
+              {t('集中設定（推給這組主機）')}
+              <Hint text={t('留空＝不推，用那台電腦自己的設定。只能推這幾項安全的選項；效能蒐集、遠端動作只能在那台電腦上自己開。主機可以用 config set central_config false 拒收。設定用 Hub 的身分簽章，主機驗章後才套用。')} />
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <Field label={t('完整掃描間隔')} hint={t('例 30m、2h；最短 5 分鐘')}>
+                <input className={INPUT} value={group.scan_interval} onChange={(e) => setGroup({ ...group, scan_interval: e.target.value })} placeholder="10m" />
+              </Field>
+              <Field label={t('連線快照間隔')} hint={t('例 1m、5m；最短 30 秒')}>
+                <input className={INPUT} value={group.snapshot_interval} onChange={(e) => setGroup({ ...group, snapshot_interval: e.target.value })} placeholder="1m" />
+              </Field>
+              <Field label={t('檔案與開機自啟監控')}>
+                <select className={INPUT} value={group.fim_enabled} onChange={(e) => setGroup({ ...group, fim_enabled: e.target.value })}>
+                  <option value="">{t('不推（用主機自己的）')}</option>
+                  <option value="true">{t('開啟')}</option>
+                  <option value="false">{t('關閉')}</option>
+                </select>
+              </Field>
+              <Field label={t('快照附上網域名稱')}>
+                <select className={INPUT} value={group.dns_names} onChange={(e) => setGroup({ ...group, dns_names: e.target.value })}>
+                  <option value="">{t('不推（用主機自己的）')}</option>
+                  <option value="true">{t('開啟')}</option>
+                  <option value="false">{t('關閉')}</option>
+                </select>
+              </Field>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label={t('額外監看的路徑（一行一個）')}>
+                <textarea className={`${INPUT} font-mono`} rows={2} value={group.fim_extra_paths} onChange={(e) => setGroup({ ...group, fim_extra_paths: e.target.value })} />
+              </Field>
+              <Field label={t('不監看的路徑（一行一個，可用 *）')}>
+                <textarea className={`${INPUT} font-mono`} rows={2} value={group.fim_ignore} onChange={(e) => setGroup({ ...group, fim_ignore: e.target.value })} />
+              </Field>
+            </div>
+          </fieldset>
           <div className="flex gap-2">
             <button
               type="button"
@@ -346,17 +433,17 @@ export function AutoResponseSettings({ view }: { view: ResponseView }) {
                 act(
                   () =>
                     group.id
-                      ? send(`/api/v1/admin/groups/${group.id}`, 'PUT', { name: group.name.trim(), members: group.members })
-                      : send('/api/v1/admin/groups', 'POST', { name: group.name.trim(), members: group.members }),
+                      ? send(`/api/v1/admin/groups/${group.id}`, 'PUT', { name: group.name.trim(), members: group.members, config: centralOf(group) })
+                      : send('/api/v1/admin/groups', 'POST', { name: group.name.trim(), members: group.members, config: centralOf(group) }),
                   t('已儲存'),
-                  () => setGroup({ id: null, name: '', members: [] }),
+                  () => setGroup(EMPTY_GROUP),
                 )
               }
             >
               {group.id ? t('儲存') : t('新增群組')}
             </button>
             {group.id ? (
-              <button type="button" className={SMALL} onClick={() => setGroup({ id: null, name: '', members: [] })}>
+              <button type="button" className={SMALL} onClick={() => setGroup(EMPTY_GROUP)}>
                 {t('取消')}
               </button>
             ) : null}

@@ -1,4 +1,5 @@
 import { openActionCount } from '@/lib/actions/store';
+import { effectiveConfig } from '@/lib/central/config';
 import { env } from '@/lib/env';
 import { error, json } from '@/lib/http';
 import { applyHeartbeat } from '@/lib/ingest/apply';
@@ -19,7 +20,9 @@ export async function POST(req: Request): Promise<Response> {
       // 有人按了「叫所有主機更新情資」且這台還沒更新 → 叫它更新（舊版 agent 會忽略 commands）
       const checked = body.intel_checked_at ? new Date(body.intel_checked_at) : null;
       const commands = shouldRefresh(await refreshRequestedAt(db), checked) ? ['refresh_feeds'] : [];
-      return json({ ok: true, server_time: new Date().toISOString(), pending_actions: pending, commands });
+      // 集中設定的版本：跟 agent 手上的不同，agent 就來 /api/v1/agents/me/config 拿（舊版 agent 忽略）
+      const central = pin === 'pinned' ? (await effectiveConfig(db, body.agent_id)).version : null;
+      return json({ ok: true, server_time: new Date().toISOString(), pending_actions: pending, commands, config_version: central });
     },
   );
 }
