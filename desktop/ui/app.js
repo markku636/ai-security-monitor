@@ -609,9 +609,66 @@ const DNS_SOURCE = {
 const DNS_HINT = {
   nx: 'NXDOMAIN＝查無此網域。偶爾出現很正常；同一個程式短時間大量出現，常是用亂數網域找控制伺服器的惡意程式。',
   domains: '依「可註冊網域」計算：a.b.example.co.uk 算成 example.co.uk，同一家的子網域合成一個。',
-  suspicious: '威脅情資列名的網域、像亂數產生的網域、少見的頂級網域，或加密 DNS 端點（程式自己走加密 DNS 會繞過公司的 DNS）。',
-  protect: '公司的防護 DNS 會擋掉威脅情資列名的網域；用 ai-security-monitor dns use-hub 把這台的 DNS 指過去（防護 DNS 連不上時會自動改回）。',
+  suspicious: '威脅情資列名的網域、黑名單上的網域、像亂數產生的網域、少見的頂級網域，或加密 DNS 端點（程式自己走加密 DNS 會繞過公司的 DNS）。',
+  protect: '公司的防護 DNS 會擋掉威脅情資列名的網域；把這台的 DNS 指過去後，防護 DNS 連續 3 分鐘查不到時背景服務會自動改回原本的 DNS。',
+  enabled: '即時記錄這台查了哪些網域、是哪個程式查的，可疑的會變成掃描結果。關掉就不記錄、也不做 DNS 告警。',
+  upload: 'DNS 紀錄等於上網紀錄。「全部」＝每分鐘把紀錄送到公司的 Hub；「只傳告警」＝只送可疑的；「不傳」＝只留在這台。',
+  verify: '拿 3 個常見網域的答案跟 Cloudflare 的加密 DNS 比對，抓 DNS 被竄改。開了會把這 3 個網域送給 Cloudflare。',
+  server: '讓這台電腦當整個區網的防護 DNS（擋威脅情資列名的網域、上游走加密 DNS）。要背景服務在跑；其他裝置的 DNS 指到這台的區網 IP 才會用到。',
+  blocklist: '黑名單上的網域（含子網域）：這台查到就告警，用防護 DNS 的電腦會直接被擋。Hub 的黑名單是公司統一管理的，在 Hub「設定與金鑰 → 防護 DNS」修改。',
 };
+
+async function dnsDo(fn, okText) {
+  try {
+    const r = await fn();
+    if (okText) toast(okText);
+    return r;
+  } catch (e) {
+    toast(String(e), 6000);
+    return null;
+  }
+}
+
+function dnsSettingsCard(d) {
+  const sel = (v) => (d.upload === v ? 'selected' : '');
+  const usedHub = d.use_hub
+    ? `<p class="small">目前用的是公司的防護 DNS（<span class="mono">${esc(d.use_hub.servers.join('、'))}</span>，從 ${ago(d.use_hub.applied_at)} 起）。</p><button class="btn" id="dns-restore">改回原本的 DNS</button>`
+    : `<p class="small muted">${d.hub_protect?.resolver_ips?.length ? `公司的防護 DNS：<span class="mono">${esc(d.hub_protect.resolver_ips.join('、'))}</span>` : '還沒有公司的防護 DNS 位址（Hub「設定與金鑰 → 防護 DNS」的「裝置要用的 DNS 位址」），也可以自己填。'}</p>
+       <div class="row"><input type="text" id="dns-hub-ip" placeholder="${esc(d.hub_protect?.resolver_ips?.join(',') || '例：192.168.1.5')}" style="width:200px"/><button class="btn primary" id="dns-use-hub">把這台的 DNS 指過去</button></div>`;
+  return `<div class="card">
+    <h2>設定</h2>
+    <label class="row small" title="${esc(DNS_HINT.enabled)}"><input type="checkbox" id="dns-set-enabled" ${d.enabled ? 'checked' : ''}/> <b>記錄這台的 DNS 查詢</b> <span class="muted">(?)</span></label>
+    <label class="small row" style="margin-top:8px" title="${esc(DNS_HINT.upload)}">上傳到公司的 Hub <span class="muted">(?)</span>
+      <select id="dns-set-upload"><option value="all" ${sel('all')}>全部</option><option value="alerts" ${sel('alerts')}>只傳告警</option><option value="off" ${sel('off')}>不傳</option></select></label>
+    <label class="row small" style="margin-top:8px" title="${esc(DNS_HINT.verify)}"><input type="checkbox" id="dns-set-verify" ${d.verify_answers ? 'checked' : ''}/> 比對 DNS 答案（抓竄改） <span class="muted">(?)</span></label>
+    <label class="row small" style="margin-top:8px" title="${esc(DNS_HINT.server)}"><input type="checkbox" id="dns-set-server" ${d.dns_server ? 'checked' : ''}/> 這台當防護 DNS <span class="muted">(?)</span></label>
+    <div class="row small" style="margin-top:4px;${d.dns_server ? '' : 'display:none'}" id="dns-listen-row">監聽位址 <input type="text" id="dns-set-listen" value="${esc(d.dns_server_listen)}" placeholder="空白＝全部網卡的 53 port" style="width:200px"/><button class="btn" id="dns-save-listen">儲存</button></div>
+    <h2 style="margin-top:14px" title="${esc(DNS_HINT.protect)}">這台用公司的防護 DNS <span class="muted">(?)</span></h2>
+    ${usedHub}
+    <p class="small muted" style="margin-top:6px">改系統 DNS 需要系統管理員權限，會跳出確認視窗。</p>
+  </div>`;
+}
+
+function dnsBlocklistCard(d) {
+  const local = d.blocklist?.local ?? [];
+  const hub = d.blocklist?.hub ?? [];
+  return `<div class="card">
+    <h2 title="${esc(DNS_HINT.blocklist)}">黑名單 <span class="muted">(?)</span></h2>
+    <div class="row"><input type="text" id="dns-bl-add" placeholder="網域或網址，例：bad.example" style="width:200px"/><button class="btn primary" id="dns-bl-btn">加入</button></div>
+    ${local.length || hub.length ? `<table style="margin-top:8px"><tbody>
+      ${local.map((e) => `<tr><td class="mono small">${esc(e.domain)}${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ''}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unblock="${esc(e.domain)}" title="從這台的黑名單移除">✕</button></td></tr>`).join('')}
+      ${hub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`).join('')}
+    </tbody></table>` : '<p class="small muted" style="margin-top:6px">還沒有。也可以在下面的查詢紀錄按「封鎖」。</p>'}
+  </div>`;
+}
+
+const DNS_HOWTO = `<details class="card"><summary><b>DNS 防禦怎麼用</b></summary>
+  <ol class="small" style="line-height:1.8;margin:8px 0 0 18px;padding:0">
+    <li><b>看紀錄</b>：背景服務在跑時，這頁會列出這台查了哪些網域、哪個程式查的；可疑的會標出理由，也會出現在「掃描結果」。</li>
+    <li><b>加黑名單</b>：在右邊「黑名單」貼上網域，或在查詢紀錄按「封鎖」。這台查到就告警；用防護 DNS 的電腦會直接被擋。全公司一起擋請在 Hub「設定與金鑰 → 防護 DNS」加。</li>
+    <li><b>真的擋下來</b>：公司有防護 DNS 時，在「設定」按「把這台的 DNS 指過去」；防護 DNS 連不上會自動改回。想讓這台當防護 DNS，勾「這台當防護 DNS」。</li>
+    <li><b>隱私</b>：DNS 紀錄等於上網紀錄，「上傳到公司的 Hub」可以改成只傳告警或不傳。</li>
+  </ol></details>`;
 
 async function pageDns() {
   $main.innerHTML = `<h1>DNS</h1><p class="sub">載入中…</p>`;
@@ -625,11 +682,6 @@ async function pageDns() {
   const st = d.status;
   const src = st ? DNS_SOURCE[st.source] : null;
   const nxPct = d.total ? Math.round((d.nxdomain / d.total) * 1000) / 10 : 0;
-  const protect = d.use_hub
-    ? `<span class="chip ok" title="${esc(DNS_HINT.protect)}">已用公司的防護 DNS（${esc(d.use_hub.servers.join('、'))}）</span>`
-    : d.hub_protect?.enabled && d.hub_protect.resolver_ips?.length
-      ? `<span class="chip medium" title="${esc(DNS_HINT.protect)}">沒用公司的防護 DNS</span> <span class="small muted mono">ai-security-monitor dns use-hub --yes</span>`
-      : '';
   $main.innerHTML = `
     <div class="head">
       <div><h1>DNS</h1><p class="sub">這台電腦查了哪些網域、是哪個程式查的、哪些可疑。紀錄只留在這台電腦 7 天${d.upload === 'all' ? '，有加入公司 Hub 時每分鐘上傳' : ''}。</p></div>
@@ -638,7 +690,7 @@ async function pageDns() {
         <button class="btn" id="dns-refresh">重新整理</button>
       </div>
     </div>
-    ${d.enabled ? '' : `<div class="card"><p class="small">DNS 監看已關閉。開啟：<span class="mono">ai-security-monitor config set dns.enabled true</span></p></div>`}
+    ${d.enabled ? '' : `<div class="card"><p class="small">DNS 監看已關閉，在右邊「設定」勾「記錄這台的 DNS 查詢」就會開始記錄。</p></div>`}
     ${d.unreadable ? `<div class="card"><p class="small">背景服務的 DNS 紀錄要以系統管理員身分執行才讀得到。</p></div>` : ''}
     <div class="grid">
       <div class="stat"><div class="label">查詢次數</div><div class="value">${Number(d.total).toLocaleString()}</div><div class="hint">${src ? `<span title="${esc(src[1])}">來源：${esc(src[0])}</span>` : '背景服務還沒有紀錄'}</div></div>
@@ -646,7 +698,7 @@ async function pageDns() {
       <div class="stat"><div class="label" title="${esc(DNS_HINT.nx)}">NXDOMAIN ⓘ</div><div class="value">${nxPct}%</div><div class="hint">${Number(d.nxdomain).toLocaleString()} 次</div></div>
       <div class="stat"><div class="label" title="${esc(DNS_HINT.suspicious)}">可疑 ⓘ</div><div class="value" style="${d.suspicious ? 'color:var(--warn)' : ''}">${d.suspicious}</div><div class="hint">${st?.last_event_at ? `最後一筆 ${ago(st.last_event_at)}` : ''}</div></div>
     </div>
-    ${protect ? `<div class="card"><h2>公司的防護 DNS</h2><div class="row">${protect}</div></div>` : ''}
+    ${DNS_HOWTO}
     <div class="split">
       <div>
         <div class="card">
@@ -655,7 +707,7 @@ async function pageDns() {
             <label class="small row" title="${esc(DNS_HINT.suspicious)}"><input type="checkbox" id="dns-bad" ${dnsState.suspicious ? 'checked' : ''}/> 只看可疑的</label>
             <span class="muted small">${d.records.length >= 500 ? '只顯示最近 500 筆' : `${d.records.length} 筆`}</span>
           </div>
-          ${d.records.length ? `<div style="overflow-x:auto"><table><thead><tr><th class="nw">時間</th><th>網域</th><th class="nw">類型</th><th class="nw">結果</th><th>程式</th><th class="nw">次數</th></tr></thead><tbody>${d.records
+          ${d.records.length ? `<div style="overflow-x:auto"><table><thead><tr><th class="nw">時間</th><th>網域</th><th class="nw">類型</th><th class="nw">結果</th><th>程式</th><th class="nw">次數</th><th></th></tr></thead><tbody>${d.records
             .map((r) => `<tr>
               <td class="small muted nw">${ago(r.ts)}</td>
               <td><span class="mono small">${esc(r.name)}</span>${r.reasons.map((x) => ` <span class="chip medium">${esc(x)}</span>`).join('')}${r.answers?.length ? `<div class="small muted mono">${esc(r.answers.slice(0, 3).join(', '))}${r.answers.length > 3 ? '…' : ''}</div>` : ''}</td>
@@ -663,23 +715,68 @@ async function pageDns() {
               <td class="small nw">${r.rcode === 'NOERROR' ? '<span class="muted">有答案</span>' : r.rcode === 'NXDOMAIN' ? `<span title="${esc(DNS_HINT.nx)}">查無此網域</span>` : esc(r.rcode)}</td>
               <td class="small">${esc(r.process ?? '—')}</td>
               <td class="small mono nw">${r.count}</td>
+              <td class="nw"><button class="btn" data-block="${esc(r.name)}" title="把這個網域（含子網域）加進這台的黑名單">封鎖</button></td>
             </tr>`).join('')}</tbody></table></div>` : `<p class="muted small">這段期間沒有紀錄${d.enabled ? '（背景服務要在跑才會記錄；Windows 以系統管理員執行才看得到程式）' : ''}。</p>`}
         </div>
       </div>
       <div>
+        ${dnsSettingsCard(d)}
+        ${dnsBlocklistCard(d)}
         <div class="card"><h2>查詢最多的網域</h2>${d.top_domains.length ? `<table><tbody>${d.top_domains.map((t) => `<tr><td class="mono small">${esc(t.domain)}</td><td class="small muted">${esc(t.process || '')}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">沒有</p>'}</div>
         <div class="card"><h2>查詢最多的程式</h2>${d.top_processes.length ? `<table><tbody>${d.top_processes.map((t) => `<tr><td class="small">${esc(t.process)}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">看不到程式（Windows 以系統管理員執行背景服務才看得到）</p>'}</div>
       </div>
     </div>`;
-  document.getElementById('dns-refresh').onclick = () => pageDns();
-  document.getElementById('dns-min').onchange = (e) => { dnsState.minutes = Number(e.target.value); pageDns(); };
-  document.getElementById('dns-bad').onchange = (e) => { dnsState.suspicious = e.target.checked; pageDns(); };
+  const $ = (id) => document.getElementById(id);
+  $('dns-refresh').onclick = () => pageDns();
+  $('dns-min').onchange = (e) => { dnsState.minutes = Number(e.target.value); pageDns(); };
+  $('dns-bad').onchange = (e) => { dnsState.suspicious = e.target.checked; pageDns(); };
   let t = null;
-  document.getElementById('dns-q').oninput = (e) => {
+  $('dns-q').oninput = (e) => {
     dnsState.q = e.target.value;
     clearTimeout(t);
-    t = setTimeout(() => pageDns().then(() => { const el = document.getElementById('dns-q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }), 400);
+    t = setTimeout(() => pageDns().then(() => { const el = $('dns-q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }), 400);
   };
+  // 設定
+  const set = (key, value, ok) => dnsDo(() => invoke('dns_set', { key, value: String(value) }), ok);
+  $('dns-set-enabled').onchange = (e) => set('dns.enabled', e.target.checked, e.target.checked ? '已開始記錄 DNS 查詢（背景服務下一輪生效）' : '已停止記錄 DNS 查詢');
+  $('dns-set-upload').onchange = (e) => set('dns.upload', e.target.value, '已儲存');
+  $('dns-set-verify').onchange = (e) => set('dns.verify_answers', e.target.checked, '已儲存');
+  $('dns-set-server').onchange = async (e) => {
+    await set('dns.server.enabled', e.target.checked, e.target.checked ? '背景服務 1 分鐘內會帶起防護 DNS' : '背景服務 1 分鐘內會停掉防護 DNS');
+    $('dns-listen-row').style.display = e.target.checked ? '' : 'none';
+  };
+  $('dns-save-listen').onclick = () => set('dns.server.listen', $('dns-set-listen').value, '已儲存監聽位址');
+  if ($('dns-use-hub')) {
+    $('dns-use-hub').onclick = async () => {
+      const ip = $('dns-hub-ip').value.trim();
+      if (!window.confirm(`把這台的系統 DNS 改成${ip ? ` ${ip}` : '公司的防護 DNS'}？\n\n原本的設定會存起來，可以按「改回原本的 DNS」；防護 DNS 連不上時背景服務也會自動改回。`)) return;
+      const r = await dnsDo(() => invoke('dns_use_hub', { server: ip || null }));
+      if (r) { toast((r.lines || []).join('\n') || '已改好', 6000); pageDns(); }
+    };
+  }
+  if ($('dns-restore')) {
+    $('dns-restore').onclick = async () => {
+      if (!window.confirm('把這台的 DNS 改回原本的設定？')) return;
+      const r = await dnsDo(() => invoke('dns_restore'));
+      if (r) { toast('已改回原本的 DNS'); pageDns(); }
+    };
+  }
+  // 黑名單
+  const block = async (domains) => {
+    const r = await dnsDo(() => invoke('dns_block', { domains, note: null }));
+    if (!r) return;
+    if (r.added.length) toast(`已加入黑名單：${r.added.join('、')}（含子網域）`);
+    else if (r.invalid.length) toast(`不是合法的網域：${r.invalid.join('、')}`, 5000);
+    else toast('已經在黑名單上了');
+    pageDns();
+  };
+  $('dns-bl-btn').onclick = () => { const v = $('dns-bl-add').value.trim(); if (v) block(v.split(/[\s,]+/).filter(Boolean)); };
+  $('dns-bl-add').onkeydown = (e) => { if (e.key === 'Enter') $('dns-bl-btn').click(); };
+  $main.querySelectorAll('[data-block]').forEach((b) => (b.onclick = () => block([b.dataset.block])));
+  $main.querySelectorAll('[data-unblock]').forEach((b) => (b.onclick = async () => {
+    const r = await dnsDo(() => invoke('dns_unblock', { domains: [b.dataset.unblock] }));
+    if (r) { toast(`已移除：${b.dataset.unblock}`); pageDns(); }
+  }));
 }
 
 // ---------------- AI 分析 ----------------

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use asa_lib::dns::{heuristics, store, usehub};
+use asa_lib::dns::{blocklist, heuristics, store, usehub};
 use chrono::Utc;
 use serde_json::{json, Value};
 use tauri::State;
@@ -11,8 +11,11 @@ use tauri::State;
 use crate::{AppState, CmdResult};
 
 /// 一筆紀錄的可疑理由（情資分數 ≥ 60、像亂數產生、少見頂級網域）。
-fn reasons(db: Option<&asa_lib::intel::IntelDb>, name: &str) -> Vec<String> {
+fn reasons(db: Option<&asa_lib::intel::IntelDb>, bl: &blocklist::Matcher, name: &str) -> Vec<String> {
     let mut out = Vec::new();
+    if let Some((entry, src)) = bl.find(name) {
+        out.push(format!("黑名單：{entry}（{}）", src.label()));
+    }
     if let Some(db) = db {
         let hits = db.match_domain(name);
         let score = asa_lib::intel::domain_score(&hits, heuristics::is_popular(name));
@@ -48,6 +51,7 @@ pub async fn dns_recent(
     let intel = state.intel().await;
     let needle = q.unwrap_or_default().trim().to_ascii_lowercase();
     let only_bad = suspicious.unwrap_or(false);
+    let bl = blocklist::Matcher::load(&dir);
 
     let mut total = 0u64;
     let mut nx = 0u64;
@@ -70,7 +74,7 @@ pub async fn dns_recent(
         if let Some(p) = &r.process {
             *procs.entry(p.clone()).or_default() += n;
         }
-        let why = reasons(intel.as_deref(), &r.name);
+        let why = reasons(intel.as_deref(), &bl, &r.name);
         if !why.is_empty() {
             bad += 1;
         }
@@ -121,5 +125,98 @@ pub async fn dns_recent(
         "use_hub": usehub::UseHubState::load(&dir),
         "hub_protect": usehub::HubProtect::load(&dir),
         "dns_server": cfg.as_ref().map(|c| c.dns.server.enabled).unwrap_or(false),
+        "dns_server_listen": cfg.as_ref().map(|c| c.dns.server.listen.join(", ")).unwrap_or_default(),
+        "verify_answers": cfg.as_ref().map(|c| c.dns.verify_answers).unwrap_or(false),
+        "blocklist": {
+            "local": blocklist::Blocklist::load(&dir).entries,
+            "hub": usehub::HubProtect::load(&dir).map(|h| h.block).unwrap_or_default(),
+        },
     }))
+}
+
+/// DNS 設定頁可以改的鍵（其他鍵不收）。
+const SETTABLE: [&str; 5] = [
+    "dns.enabled",
+    "dns.upload",
+    "dns.verify_answers",
+    "dns.server.enabled",
+    "dns.server.listen",
+];
+
+#[tauri::command]
+pub async fn dns_set(state: State<'_, AppState>, key: String, value: String) -> CmdResult<Value> {
+    if !SETTABLE.contains(&key.as_str()) {
+        return Err(format!("不能從這裡改：{key}"));
+    }
+    let dir = &state.config_dir;
+    let mut cfg = asa_lib::config::load_or_init(dir).map_err(crate::err)?;
+    asa_lib::config::set_value(&mut cfg, &key, &value).map_err(crate::err)?;
+    asa_lib::config::save(dir, &cfg).map_err(crate::err)?;
+    Ok(json!({ "ok": true }))
+}
+
+#[tauri::command]
+pub async fn dns_block(state: State<'_, AppState>, domains: Vec<String>, note: Option<String>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let mut b = blocklist::Blocklist::load(dir);
+    let (added, invalid) = b.add(&domains, note.as_deref().unwrap_or(""));
+    if !added.is_empty() {
+        b.save(dir).map_err(crate::err)?;
+    }
+    Ok(json!({ "added": added, "invalid": invalid }))
+}
+
+#[tauri::command]
+pub async fn dns_unblock(state: State<'_, AppState>, domains: Vec<String>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let mut b = blocklist::Blocklist::load(dir);
+    let removed = b.remove(&domains);
+    if !removed.is_empty() {
+        b.save(dir).map_err(crate::err)?;
+    }
+    Ok(json!({ "removed": removed }))
+}
+
+/// 以系統管理員執行命令列版的 `dns use-hub`／`dns restore`（會跳出 UAC／密碼視窗）。
+async fn run_dns_elevated(dir: &std::path::Path, args: &[&str]) -> CmdResult<Value> {
+    let st = asa_lib::cli::service_cmd::user_service_status(dir)
+        .await
+        .map_err(crate::err)?;
+    let exe = st["exe"].as_str().map(std::path::PathBuf::from).ok_or_else(|| {
+        "找不到命令列版 ai-security-monitor（請先在「設定」開啟背景自動回報，或安裝命令列版）".to_string()
+    })?;
+    let mut argv: Vec<String> = vec![
+        exe.display().to_string(),
+        "--config-dir".into(),
+        dir.display().to_string(),
+    ];
+    argv.extend(args.iter().map(|s| s.to_string()));
+    let r = asa_lib::elevate::run_elevated(&exe, &argv, dir)
+        .await
+        .map_err(crate::err)?;
+    if !r.ok {
+        let msg = r
+            .error
+            .as_ref()
+            .and_then(|e| e["message"].as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| r.lines.join("\n"));
+        return Err(msg);
+    }
+    Ok(json!({ "lines": r.lines }))
+}
+
+#[tauri::command]
+pub async fn dns_use_hub(state: State<'_, AppState>, server: Option<String>) -> CmdResult<Value> {
+    let server = server.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let mut args = vec!["dns", "use-hub", "--yes"];
+    if let Some(s) = &server {
+        args.push("--server");
+        args.push(s);
+    }
+    run_dns_elevated(&state.config_dir, &args).await
+}
+
+#[tauri::command]
+pub async fn dns_restore(state: State<'_, AppState>) -> CmdResult<Value> {
+    run_dns_elevated(&state.config_dir, &["dns", "restore", "--yes"]).await
 }

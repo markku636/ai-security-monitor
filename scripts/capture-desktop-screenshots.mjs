@@ -362,8 +362,14 @@ const DATA = {
       enabled: true,
       upload: 'all',
       use_hub: null,
-      hub_protect: { enabled: true, resolver_ips: ['192.0.2.53'] },
+      hub_protect: { enabled: true, resolver_ips: ['192.0.2.53'], block: ['login.microsoft-verify.test'] },
       dns_server: false,
+      dns_server_listen: '',
+      verify_answers: false,
+      blocklist: {
+        local: [{ domain: 'cdn-update.example-malware.test', added_at: t(30), note: '釣魚信裡的連結' }],
+        hub: ['login.microsoft-verify.test'],
+      },
     };
   })(),
   ai_providers: {
