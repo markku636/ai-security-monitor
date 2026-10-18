@@ -2,6 +2,18 @@
 
 ## 未發佈
 
+## v0.8.0 — 2026-10-18
+
+**第一次打開時選「公司用」或「個人用」，只限非商業用途的情資來源（DShield、URLhaus、ThreatFox…）只在個人用時開啟，README 逐一說明；AbuseIPDB／CrowdSec 付費金鑰可以商用；一輪安全性修正（Windows 系統服務提權、Hub 開放模式 DNS rebinding、GitHub Actions 鎖定版本…）；macOS 桌面版改成 ad-hoc 簽章並提供一行安裝，Release 說明加上各平台安裝步驟。** 一般使用者請下載 `AI-Security-Monitor-0.8.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.7.0 的桌面版會自動提示更新。
+
+**升級注意**：
+- 這版沒有新的資料庫 migration。
+- **情資的使用情境**：桌面版打開新版時會問一次公司用或個人用。命令列版、伺服器還沒選過的一律當作公司用，URLhaus、ThreatFox、DShield、FireHOL level1 會停用；個人或非營利使用請執行 `ai-security-monitor config set intel.usage noncommercial`。
+- **Hub 預設個人／非商業用途**（會鏡像只限非商用的來源）；公司部署請在「威脅情資 → 情資來源授權」改成公司用，或用 `docker/compose.commercial.yml`、映像 `ai-security-monitor-hub:0.8.0-commercial`。
+- 免金鑰加入的「自動允許」模式：網段清單沒填時，公網 IP 送來的申請改成等管理員核准。
+- Hub 沒設管理員金鑰（開放模式）時只接受用 localhost／127.0.0.1 連進來；Docker 裡要在 docker 網路內用請設 `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1`。
+- Windows 系統服務的設定目錄（%ProgramData%\ai-security-monitor）收緊成只有 SYSTEM 與 Administrators 能存取；一般使用者看系統服務的紀錄要用系統管理員身分。
+
 - 桌面版連線頁：加「查詢」按鈕（輸入 IP 按查詢直接打開 IP 分析；Ctrl+F 跳到搜尋框），協定、狀態、理由、程式、國家、port 收進「更多篩選」（按鈕上顯示用了幾個條件），表格不再超出卡片；IP 分析改成右邊滑出的面板（✕ 或 Esc 關閉），任何頁面點 IP 都能開。選中的篩選鈕在深色模式下看得清楚；ESTABLISHED、TIME_WAIT 這類狀態、方向、判定都有滑鼠提示。沒有危險或可疑連線時直接說明，附「看全部連線」。
 - 桌面版 DNS 頁：輸入網域按「查詢」（或點紀錄裡的網域）打開網域分析：用這台的 DNS 現在解析到哪、黑白名單、威脅情資、像不像亂數網域、這台最近 7 天哪些程式查過，可以一鍵加入／移出黑白名單或請 AI 分析。DNS 設定與黑白名單搬到「設定 → DNS」，可以整個停用 DNS 監看；停用時 DNS 頁只顯示「未啟用」與啟用按鈕。「只看可疑的」旁的數字改成可疑的筆數，不再跟顯示筆數混在一起。
 

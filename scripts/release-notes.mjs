@@ -69,7 +69,7 @@ function table() {
     );
   }
   rows.push(
-    `| **集中看多台主機** · Security Hub | \`ghcr.io/${REPO.split('/')[0]}/ai-security-monitor-hub:${version}\` | Docker 映像（\`-slim\` 不含 AI CLI），見 docs/docker.md<br>Docker image (\`-slim\` without AI CLIs) |`,
+    `| **集中看多台主機** · Security Hub | \`ghcr.io/${REPO.split('/')[0]}/ai-security-monitor-hub:${version}\` | Docker 映像（\`-slim\` 不含 AI CLI；\`-commercial\`／\`-noncommercial\` 固定公司用／個人用的情資來源，沒有後綴照網頁設定、預設個人用），見 docs/docker.md<br>Docker image (\`-slim\` without AI CLIs; \`-commercial\` / \`-noncommercial\` fix the intel usage, plain tags follow the web setting, personal use by default) |`,
   );
   const asa = names.filter((n) => n.startsWith(`asa-${version}-`));
   if (asa.length) {

@@ -10,7 +10,7 @@ RUN apk add --no-cache ca-certificates && mkdir -p /data && chown 65534:65534 /d
 
 FROM scratch
 ARG TARGETARCH
-ARG ASA_VERSION=0.7.0
+ARG ASA_VERSION=0.8.0
 LABEL org.opencontainers.image.title="AI Security Monitor protective DNS" \
       org.opencontainers.image.description="Protective DNS server: blocks threat-intel domains, encrypted upstream DNS, managed by the Security Hub" \
       org.opencontainers.image.source="https://github.com/markku636/ai-security-monitor" \
