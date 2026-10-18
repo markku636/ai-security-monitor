@@ -177,7 +177,14 @@ pub struct RegistryFile {
 pub struct FeedState {
     #[serde(default)]
     pub enabled: BTreeMap<String, bool>,
+    /// 使用者表示這個來源用的是付費（可商用）方案的金鑰：公司用途也能用。只認 [`PAID_PLAN_SOURCES`]。
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub commercial_license: BTreeMap<String, bool>,
 }
+
+/// 付費方案和免費版用同一個 API、同一種金鑰，付費方案可以商用的來源（線上查詢服務）。
+/// URLhaus／ThreatFox 的商用版是 Spamhaus 另外的 API、DShield 沒有付費金鑰、GreyNoise 商用是另一套 API，所以不在這裡。
+pub const PAID_PLAN_SOURCES: &[&str] = &["abuseipdb", "crowdsec-cti"];
 
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
@@ -250,7 +257,31 @@ impl Registry {
 
     /// 授權允許目前的使用情境（商用情境不能用只限非商業用途的來源）。
     pub fn license_ok(&self, f: &FeedEntry) -> bool {
-        f.license.commercial_ok || self.allow_noncommercial
+        f.license.commercial_ok || self.allow_noncommercial || self.paid_plan(&f.id)
+    }
+
+    /// 這個來源標成付費（可商用）方案。
+    pub fn paid_plan(&self, id: &str) -> bool {
+        PAID_PLAN_SOURCES.contains(&id) && self.state.commercial_license.get(id).copied().unwrap_or(false)
+    }
+
+    /// 標記／取消「付費（可商用）方案」（寫 state.json）。
+    pub fn set_paid_plan(dir: &Path, id: &str, on: bool) -> AppResult<()> {
+        if !PAID_PLAN_SOURCES.contains(&id) {
+            return Err(AppError::InvalidArg(tf!(
+                "{id} 沒有和免費版共用 API 的付費方案；可以標成付費的：{ids}",
+                id = id,
+                ids = PAID_PLAN_SOURCES.join(", ")
+            )));
+        }
+        let mut state = Self::load(dir)?.state;
+        if on {
+            state.commercial_license.insert(id.to_string(), true);
+        } else {
+            state.commercial_license.remove(id);
+        }
+        store::ensure_dir(&dir.join("feeds"))?;
+        store::write_json_in(dir, STATE_FILE, &state)
     }
 
     /// 開著但因為「只限非商業用途」而沒用的來源。

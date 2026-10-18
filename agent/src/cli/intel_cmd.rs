@@ -556,7 +556,7 @@ fn toggle(env: &Env, id: &str, on: bool) -> AppResult<()> {
 fn key(env: &Env, cmd: IntelKeyCmd) -> AppResult<()> {
     let store = SecretStore::open(&env.config_dir);
     match cmd {
-        IntelKeyCmd::Set { id, value } => {
+        IntelKeyCmd::Set { id, value, paid } => {
             if !lookup::PROVIDERS.iter().any(|p| p.id == id) {
                 return Err(AppError::InvalidArg(tf!(
                     "不支援的名譽服務：{id}；可用：{ids}",
@@ -574,6 +574,11 @@ fn key(env: &Env, cmd: IntelKeyCmd) -> AppResult<()> {
             if v.is_empty() {
                 return Err(AppError::InvalidArg(t!("API key 不可為空").into()));
             }
+            if paid {
+                Registry::set_paid_plan(&env.config_dir, &id, true)?;
+            } else if crate::intel::registry::PAID_PLAN_SOURCES.contains(&id.as_str()) {
+                Registry::set_paid_plan(&env.config_dir, &id, false)?;
+            }
             store.set(&format!("intel.{id}"), &v)?;
             println!(
                 "{}",
@@ -590,6 +595,9 @@ fn key(env: &Env, cmd: IntelKeyCmd) -> AppResult<()> {
         }
         IntelKeyCmd::Delete { id } => {
             store.delete(&format!("intel.{id}"))?;
+            if crate::intel::registry::PAID_PLAN_SOURCES.contains(&id.as_str()) {
+                Registry::set_paid_plan(&env.config_dir, &id, false)?;
+            }
             println!("{}", tf!("已刪除 {id} 的 API key", id = id));
         }
     }

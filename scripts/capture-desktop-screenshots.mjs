@@ -327,6 +327,16 @@ const DATA = {
   connections: { connections: CONNECTIONS, listeners: [], intel_loaded: true },
   latest_report: REPORT,
   intel_feeds: { feeds: INTEL_FEEDS },
+  // 線上查詢金鑰：AbuseIPDB 用付費方案、GreyNoise 有免費金鑰、CrowdSec 沒設
+  intel_keys: {
+    online_lookups: true,
+    noncommercial: true,
+    providers: [
+      { id: 'abuseipdb', name: 'AbuseIPDB check', vendor: 'AbuseIPDB', license: 'AbuseIPDB ToS (free tier 1000/day, non-commercial)', commercial_ok: false, has_key: true, paid: true, paid_supported: true, usable: true },
+      { id: 'greynoise-community', name: 'GreyNoise Community', vendor: 'GreyNoise', license: 'GreyNoise Community ToS', commercial_ok: false, has_key: true, paid: false, paid_supported: false, usable: true },
+      { id: 'crowdsec-cti', name: 'CrowdSec CTI smoke', vendor: 'CrowdSec', license: 'CrowdSec CTI ToS (community key)', commercial_ok: false, has_key: false, paid: false, paid_supported: true, usable: false },
+    ],
+  },
   // 示範機是個人用：只限非商業用途的來源也開著（情資頁會標「非商用」）
   intel_usage: {
     usage: 'noncommercial',
@@ -485,6 +495,9 @@ function installMock(D) {
     latest_report: () => D.latest_report,
     intel_feeds: () => D.intel_feeds,
     intel_usage: () => D.intel_usage,
+    intel_keys: () => D.intel_keys,
+    set_intel_key: () => ({ ok: true }),
+    set_online_lookups: ({ enabled }) => enabled,
     set_intel_usage: ({ usage }) => {
       D.intel_usage = { ...D.intel_usage, usage, noncommercial: usage === 'noncommercial' };
       return { usage };

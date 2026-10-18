@@ -700,6 +700,7 @@ async function pageIntel() {
       <div><h1>威脅情資</h1><p class="sub">判定連線用的公開情資清單。已註冊 Hub 時優先從 Hub 下載，Hub 沒有才直接找廠商。</p></div>
       <div class="row"><button class="btn" id="upd">更新過期的</button><button class="btn primary" id="force">全部重新下載</button></div>
     </div>
+    <div class="card" id="intel-keys"><h2>線上查詢金鑰（選用）</h2><p class="small muted">讀取中…</p></div>
     <div class="card"><table><thead><tr><th>來源</th><th>種類</th><th>筆數</th><th>最後更新</th><th>授權</th></tr></thead><tbody>${feeds
       .map((f) => `<tr>
         <td><a class="link" data-url="${esc(f.source_url)}"><b>${esc(f.vendor)}</b> ${esc(f.name)}</a>${
@@ -714,6 +715,7 @@ async function pageIntel() {
         <td class="small">${ago(f.fetched_at)}${f.from_hub ? ' <span class="chip dir">Hub</span>' : ''}${f.status === 'error' ? ` <span class="chip medium" title="${esc(f.error)}">失敗</span>` : ''}${f.status === 'never' ? ' <span class="chip neutral">未下載</span>' : ''}</td>
         <td class="small muted">${esc(f.license)}${f.commercial_ok ? '' : ' <span class="chip neutral" title="只准個人或非營利使用，公司或營利用途要另外向廠商買授權。">非商用</span>'}</td>
       </tr>`).join('')}</tbody></table></div>`;
+  renderIntelKeys(document.getElementById('intel-keys'));
   document.getElementById('upd').onclick = () => updateIntel(false);
   document.getElementById('force').onclick = () => updateIntel(true);
 }

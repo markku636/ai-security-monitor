@@ -505,6 +505,20 @@ mod tests {
             assert!(lookup::configured_providers(dir.path(), &reg).is_empty());
             std::env::remove_var("ABUSEIPDB_API_KEY");
         }
+        // 標成付費（可商用）方案的線上查詢：公司用途也能用；DShield 這種沒有付費金鑰的不行
+        let mut cfg = crate::config::AgentConfig::default();
+        cfg.intel.set_usage(crate::config::IntelUsage::Commercial);
+        crate::config::save(dir.path(), &cfg).unwrap();
+        Registry::set_paid_plan(dir.path(), "abuseipdb", true).unwrap();
+        assert!(Registry::set_paid_plan(dir.path(), "dshield-block", true).is_err());
+        let reg = Registry::load(dir.path()).unwrap();
+        assert!(reg.paid_plan("abuseipdb") && reg.license_ok(reg.get("abuseipdb").unwrap()));
+        assert!(!reg.license_ok(reg.get("crowdsec-cti").unwrap()));
+        std::env::set_var("ABUSEIPDB_API_KEY", "test-key");
+        assert_eq!(lookup::configured_providers(dir.path(), &reg), vec!["abuseipdb"]);
+        std::env::remove_var("ABUSEIPDB_API_KEY");
+        Registry::set_paid_plan(dir.path(), "abuseipdb", false).unwrap();
+        assert!(!Registry::load(dir.path()).unwrap().paid_plan("abuseipdb"));
         // 舊設定 allow_noncommercial=true（沒有 usage）照舊算非商用
         let mut cfg = crate::config::AgentConfig::default();
         cfg.intel.allow_noncommercial = true;

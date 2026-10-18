@@ -16,11 +16,13 @@ use asa_lib::error::AppError;
 use asa_lib::hub::{discover, enroll as keyless, identity, watch};
 use asa_lib::intel::fetch::{self, FeedMeta, UpdateOpts};
 use asa_lib::intel::geo::GeoDb;
-use asa_lib::intel::registry::Registry;
+use asa_lib::intel::lookup;
+use asa_lib::intel::registry::{Registry, PAID_PLAN_SOURCES};
 use asa_lib::intel::IntelDb;
 use asa_lib::mcp::tools::READ_ONLY;
 use asa_lib::model::allowlist::Allowlist;
 use asa_lib::model::baseline::Baseline;
+use asa_lib::secrets::SecretStore;
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -250,6 +252,77 @@ async fn set_intel_usage(state: State<'_, AppState>, usage: String) -> CmdResult
     config::save(dir, &cfg).map_err(err)?;
     *state.intel.lock().await = None;
     Ok(json!({ "usage": cfg.intel.usage.map(|u| u.as_str()) }))
+}
+
+/// 線上查詢服務（AbuseIPDB、GreyNoise、CrowdSec）：有沒有金鑰（不回傳金鑰本身）、是不是付費方案、目前能不能用。
+#[tauri::command]
+async fn intel_keys(state: State<'_, AppState>) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    let cfg = config::load(dir).map_err(err)?;
+    let reg = Registry::load(dir).map_err(err)?;
+    let providers: Vec<Value> = lookup::PROVIDERS
+        .iter()
+        .filter_map(|p| reg.get(p.id).map(|f| (p, f)))
+        .map(|(p, f)| {
+            let has_key = !SecretStore::open(dir)
+                .get(&format!("intel.{}", p.id))
+                .ok()
+                .flatten()
+                .unwrap_or_default()
+                .is_empty()
+                || f.requires_api_key
+                    .as_ref()
+                    .is_some_and(|e| std::env::var(e).is_ok_and(|v| !v.trim().is_empty()));
+            json!({
+                "id": p.id,
+                "name": f.name,
+                "vendor": f.vendor,
+                "license": f.license.name,
+                "commercial_ok": f.license.commercial_ok,
+                "has_key": has_key,
+                "paid": reg.paid_plan(p.id),
+                "paid_supported": PAID_PLAN_SOURCES.contains(&p.id),
+                "usable": has_key && reg.license_ok(f),
+            })
+        })
+        .collect();
+    Ok(json!({
+        "online_lookups": cfg.intel.online_lookups,
+        "noncommercial": cfg.intel.noncommercial(),
+        "providers": providers,
+    }))
+}
+
+/// 設定線上查詢服務的金鑰：`key` 有值＝換金鑰、空字串＝刪除、沒給＝不動；`paid`＝付費（可商用）方案。
+#[tauri::command]
+async fn set_intel_key(state: State<'_, AppState>, id: String, key: Option<String>, paid: bool) -> CmdResult<Value> {
+    let dir = &state.config_dir;
+    if !lookup::PROVIDERS.iter().any(|p| p.id == id) {
+        return Err(format!("unknown provider: {id}"));
+    }
+    let store = SecretStore::open(dir);
+    match key.as_deref().map(str::trim) {
+        Some("") => {
+            store.delete(&format!("intel.{id}")).map_err(err)?;
+        }
+        Some(k) => store.set(&format!("intel.{id}"), k).map_err(err)?,
+        None => {}
+    }
+    let deleted = key.as_deref().is_some_and(|k| k.trim().is_empty());
+    if PAID_PLAN_SOURCES.contains(&id.as_str()) {
+        Registry::set_paid_plan(dir, &id, paid && !deleted).map_err(err)?;
+    }
+    Ok(json!({ "ok": true }))
+}
+
+/// 開／關掃描時對不認得的公網 IP 做線上查詢（intel.online_lookups）。
+#[tauri::command]
+async fn set_online_lookups(state: State<'_, AppState>, enabled: bool) -> CmdResult<bool> {
+    let dir = &state.config_dir;
+    let mut cfg = config::load_or_init(dir).map_err(err)?;
+    config::set_value(&mut cfg, "intel.online_lookups", if enabled { "true" } else { "false" }).map_err(err)?;
+    config::save(dir, &cfg).map_err(err)?;
+    Ok(cfg.intel.online_lookups)
 }
 
 /// 更新情資：已註冊 Hub 就先從 Hub 鏡像拿。
@@ -692,6 +765,9 @@ pub fn run(start_in_tray: bool) {
             intel_update,
             intel_usage,
             set_intel_usage,
+            intel_keys,
+            set_intel_key,
+            set_online_lookups,
             ai_providers,
             ai_ask,
             ai_auth::ai_auth_status,

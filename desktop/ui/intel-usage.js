@@ -98,3 +98,75 @@ async function renderIntelUsageSection(el) {
     };
   }
 }
+
+// ---------------- 線上查詢金鑰（威脅情資頁） ----------------
+const KEY_SIGNUP = {
+  "abuseipdb": "https://www.abuseipdb.com/account/api",
+  "crowdsec-cti": "https://app.crowdsec.net/settings/cti-api-keys",
+  "greynoise-community": "https://viz.greynoise.io/account/api-key"
+};
+const PAID_HINT =
+  '付費方案和免費版用同一把金鑰、同一個 API（只是額度變大），而且可以商用。勾了之後，這台電腦就算選「公司／商業用途」也會用它查。';
+
+/** 威脅情資頁的「線上查詢金鑰」卡：AbuseIPDB、CrowdSec（可標付費方案）、GreyNoise。 */
+async function renderIntelKeys(el) {
+  let info;
+  try {
+    info = await invoke('intel_keys');
+  } catch (e) {
+    el.innerHTML = `<h2>線上查詢金鑰</h2><p class="small muted">讀取失敗：${esc(e)}</p>`;
+    return;
+  }
+  const row = (p) => {
+    const state = !p.has_key
+      ? '<span class="chip neutral">沒有金鑰</span>'
+      : p.usable
+        ? `<span class="chip ok">使用中${p.paid ? '（付費方案）' : ''}</span>`
+        : '<a class="chip neutral" href="#settings/intel" title="免費版只限非商業用途；這台電腦選的是公司／商業用途。用付費方案的話勾「付費方案」。">未使用（只限非商用）</a>';
+    const paid = p.paid_supported
+      ? `<label class="row small" style="white-space:nowrap" title="${esc(PAID_HINT)}"><input type="checkbox" data-paid="${esc(p.id)}" ${p.paid ? 'checked' : ''} ${p.has_key ? '' : 'disabled'} /> 付費方案（可商用） <span class="muted">(?)</span></label>`
+      : '<span class="small muted" title="這家的商用版是另一套 API，目前只支援免費版金鑰。">只支援免費版金鑰</span>';
+    return `<tr>
+      <td><b>${esc(p.vendor)}</b> ${esc(p.name)}<div class="small muted">${esc(p.license)}</div></td>
+      <td>${state}</td>
+      <td><div class="row"><input type="password" data-key="${esc(p.id)}" placeholder="${p.has_key ? '已設定（輸入新的就換掉）' : '貼上 API 金鑰'}" autocomplete="off" style="min-width:200px" />
+        <button class="btn" data-save="${esc(p.id)}">儲存</button>${p.has_key ? `<button class="btn" data-del="${esc(p.id)}">刪除</button>` : ''}
+        <a class="link small" data-url="${esc(KEY_SIGNUP[p.id] ?? '')}">申請金鑰</a></div></td>
+      <td>${paid}</td>
+    </tr>`;
+  };
+  el.innerHTML = `<h2>線上查詢金鑰（選用）</h2>
+    <p class="small muted" style="margin:0 0 8px">掃描時把不認得的公網 IP 拿去這些服務查名聲（每天有額度上限，私有網段一律不送）。金鑰存在這台電腦的密鑰庫，不會上傳到 Hub。</p>
+    <label class="row"><input type="checkbox" id="online-lookups" ${info.online_lookups ? 'checked' : ''} /> <b>掃描時線上查詢不認得的公網 IP</b></label>
+    <table style="margin-top:8px"><thead><tr><th>服務</th><th>狀態</th><th>金鑰</th><th>方案</th></tr></thead><tbody>${info.providers.map(row).join('')}</tbody></table>
+    <p class="small muted" style="margin:8px 0 0">URLhaus、ThreatFox 的商用版是 Spamhaus 另外的 API，DShield 沒有付費金鑰，這幾個目前沒辦法用金鑰改成可商用；說明見 README「公司用還是個人用？」。</p>`;
+  const ol = el.querySelector('#online-lookups');
+  ol.onchange = async () => {
+    try {
+      ol.checked = await invoke('set_online_lookups', { enabled: ol.checked });
+      toast(ol.checked ? '掃描時會線上查詢' : '已關閉線上查詢');
+    } catch (e) {
+      toast(String(e), 8000);
+    }
+  };
+  const save = async (id, key, paid) => {
+    try {
+      await invoke('set_intel_key', { id, key, paid });
+      toast(key === '' ? '已刪除金鑰' : '已儲存');
+    } catch (e) {
+      toast(String(e), 8000);
+    }
+    renderIntelKeys(el);
+  };
+  const paidOf = (id) => !!el.querySelector(`[data-paid="${id}"]`)?.checked;
+  for (const b of el.querySelectorAll('[data-save]')) {
+    b.onclick = () => {
+      const id = b.dataset.save;
+      const v = el.querySelector(`[data-key="${id}"]`).value.trim();
+      if (!v) return toast('先貼上 API 金鑰');
+      save(id, v, paidOf(id));
+    };
+  }
+  for (const b of el.querySelectorAll('[data-del]')) b.onclick = () => save(b.dataset.del, '', false);
+  for (const c of el.querySelectorAll('[data-paid]')) c.onchange = () => save(c.dataset.paid, null, c.checked);
+}

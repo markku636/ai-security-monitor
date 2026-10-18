@@ -221,7 +221,8 @@ ai-security-monitor service install --system --yes  # 裝成開機就跑的系�
   ```
 
   也可以在 `.env` 設 `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial`（或 `noncommercial`），效果一樣。
-- **有買商用授權**：選「個人／非商業用途」把這些來源打開，再用 `ai-security-monitor intel disable <id>` 關掉沒買的那幾家。
+- **有付費（可商用）金鑰**：**AbuseIPDB** 和 **CrowdSec CTI** 的付費方案跟免費版用同一把金鑰、同一個 API。在桌面版「威脅情資」頁的「線上查詢金鑰」貼上金鑰、勾「付費方案（可商用）」，選公司用途時也會用它查（命令列：`ai-security-monitor intel key set abuseipdb <金鑰> --paid`）。GreyNoise 的商用版是另一套 API、URLhaus／ThreatFox 的商用版是 Spamhaus 另外的 API、DShield 沒有付費金鑰，這幾家目前沒辦法用金鑰改成可商用。
+- **其他來源有買商用授權**：選「個人／非商業用途」把這些來源打開，再用 `ai-security-monitor intel disable <id>` 關掉沒買的那幾家。
 
 ## 常見問題
 

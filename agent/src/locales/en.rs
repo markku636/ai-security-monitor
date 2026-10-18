@@ -425,6 +425,12 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "服務 id（abuseipdb、greynoise-community、crowdsec-cti）" => "Service id (abuseipdb, greynoise-community, crowdsec-cti)",
         "API key；- 表示從標準輸入讀取" => "API key; - reads it from stdin",
         "刪除 API key" => "Delete an API key",
+        "這是付費（可商用）方案的金鑰（abuseipdb、crowdsec-cti）：公司／商業用途也會使用" => {
+            "This key is for a paid (commercial-use) plan (abuseipdb, crowdsec-cti): used under company / business use too"
+        }
+        "{id} 沒有和免費版共用 API 的付費方案；可以標成付費的：{ids}" => {
+            "{id} has no paid plan on the same API as the free one; sources that can be marked paid: {ids}"
+        }
 
         // ---- util/cmd.rs ----
         "找不到指令：{program}" => "Command not found: {program}",

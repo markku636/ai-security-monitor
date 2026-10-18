@@ -221,7 +221,8 @@ So the desktop app asks once, the first time you open it:
   ```
 
   Setting `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial` (or `noncommercial`) in `.env` does the same.
-- **Bought a commercial licence?** Choose personal / non-commercial use to turn the sources on, then turn off the ones you did not license with `ai-security-monitor intel disable <id>`.
+- **Have a paid (commercial-use) key?** The paid plans of **AbuseIPDB** and **CrowdSec CTI** use the same key and API as the free one. Paste the key under *Online lookup keys* on the desktop app's Threat intel page and tick *Paid plan (commercial use)*; it is then used under company use too (command line: `ai-security-monitor intel key set abuseipdb <key> --paid`). GreyNoise's commercial product is a different API, URLhaus / ThreatFox are sold commercially through a separate Spamhaus API, and DShield has no paid key, so those cannot be switched to commercial use with a key yet.
+- **Bought a commercial licence for another source?** Choose personal / non-commercial use to turn the sources on, then turn off the ones you did not license with `ai-security-monitor intel disable <id>`.
 
 ## FAQ
 

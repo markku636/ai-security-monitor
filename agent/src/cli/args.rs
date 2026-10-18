@@ -664,6 +664,9 @@ pub enum IntelKeyCmd {
         id: String,
         /// API key；- 表示從標準輸入讀取
         value: String,
+        /// 這是付費（可商用）方案的金鑰（abuseipdb、crowdsec-cti）：公司／商業用途也會使用
+        #[arg(long)]
+        paid: bool,
     },
     /// 刪除 API key
     Delete {

@@ -139,7 +139,7 @@ a.link:hover, .link:hover { text-decoration: underline; }
 .fchip .n { margin-left: 5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .fchip.on .n { color: inherit; opacity: .75; }
 @media (prefers-color-scheme: dark) { .fchip.on { color: #042f2e; } }
-input[type=text], input[type=search], textarea, select {
+input[type=text], input[type=search], input[type=password], textarea, select {
   font: inherit; font-size: 13px; color: var(--text); background: var(--panel);
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
 }
