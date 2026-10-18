@@ -297,7 +297,7 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
       <section className={BOX}>
         <h3 className="mb-2 text-sm font-semibold">
           {t('最近被擋的查詢')}
-          <Hint text={t('擋錯了就按「放行」：把這個網域加進允許清單（含子網域），1 分鐘內所有防護 DNS 都會生效。')} />
+          <Hint text={t('擋錯了就按「放行」：把這個網域加進白名單（含子網域），1 分鐘內所有防護 DNS 都會生效。')} />
         </h3>
         {view.recentBlocked.length ? (
           <div className="overflow-x-auto">
@@ -363,7 +363,7 @@ export function DnsProtectSettings({ view, hubUrl }: { view: ProtectView; hubUrl
           <Field label={t('自訂封鎖（一行一個，含子網域）')}>
             <textarea className={INPUT} rows={4} value={form.block} onChange={(e) => setForm({ ...form, block: e.target.value })} />
           </Field>
-          <Field label={t('允許清單（一行一個，含子網域）')} hint={t('永遠不擋；情資清單誤判時加在這裡。')}>
+          <Field label={t('白名單（一行一個，含子網域）')} hint={t('永遠不擋；情資清單誤判時加在這裡。')}>
             <textarea className={INPUT} rows={4} value={form.allow} onChange={(e) => setForm({ ...form, allow: e.target.value })} />
           </Field>
         </div>

@@ -370,6 +370,7 @@ const DATA = {
         local: [{ domain: 'cdn-update.example-malware.test', added_at: t(30), note: '釣魚信裡的連結' }],
         hub: ['login.microsoft-verify.test'],
       },
+      allowlist: { local: ['intranet.corp.example'], hub: ['ok.example.com'] },
     };
   })(),
   ai_providers: {

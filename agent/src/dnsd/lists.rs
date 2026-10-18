@@ -139,9 +139,11 @@ impl Lists {
         l.entries = entries.len();
         l.block = DomainSet::build(entries);
         let kg = KnownGood::load();
+        let local_allow = crate::dns::blocklist::local_allow(config_dir);
         let allow: Vec<(u64, u32)> = o
             .custom_allow
             .iter()
+            .chain(local_allow.iter())
             .filter_map(|d| domainset::normalize(d))
             .chain(kg.domain_patterns().map(|d| d.trim_start_matches("*.").to_string()))
             .map(|d| (domainset::hash(&d), NO_META))

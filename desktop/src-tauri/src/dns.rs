@@ -131,6 +131,10 @@ pub async fn dns_recent(
             "local": blocklist::Blocklist::load(&dir).entries,
             "hub": usehub::HubProtect::load(&dir).map(|h| h.block).unwrap_or_default(),
         },
+        "allowlist": {
+            "local": blocklist::local_allow(&dir),
+            "hub": usehub::HubProtect::load(&dir).map(|h| h.allow).unwrap_or_default(),
+        },
     }))
 }
 
@@ -162,6 +166,7 @@ pub async fn dns_block(state: State<'_, AppState>, domains: Vec<String>, note: O
     let (added, invalid) = b.add(&domains, note.as_deref().unwrap_or(""));
     if !added.is_empty() {
         b.save(dir).map_err(crate::err)?;
+        blocklist::unallow(dir, &added).map_err(crate::err)?;
     }
     Ok(json!({ "added": added, "invalid": invalid }))
 }
@@ -174,6 +179,19 @@ pub async fn dns_unblock(state: State<'_, AppState>, domains: Vec<String>) -> Cm
     if !removed.is_empty() {
         b.save(dir).map_err(crate::err)?;
     }
+    Ok(json!({ "removed": removed }))
+}
+
+#[tauri::command]
+pub async fn dns_allow(state: State<'_, AppState>, domains: Vec<String>, note: Option<String>) -> CmdResult<Value> {
+    let (added, invalid) =
+        blocklist::allow(&state.config_dir, &domains, note.as_deref().unwrap_or("")).map_err(crate::err)?;
+    Ok(json!({ "added": added, "invalid": invalid }))
+}
+
+#[tauri::command]
+pub async fn dns_unallow(state: State<'_, AppState>, domains: Vec<String>) -> CmdResult<Value> {
+    let removed = blocklist::unallow(&state.config_dir, &domains).map_err(crate::err)?;
     Ok(json!({ "removed": removed }))
 }
 

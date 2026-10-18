@@ -73,6 +73,8 @@ pub struct HubProtect {
     pub resolver_ips: Vec<IpAddr>,
     /// Hub「防護 DNS」的自訂封鎖（全公司的黑名單）。
     pub block: Vec<String>,
+    /// Hub「防護 DNS」的白名單（永遠不擋、不告警）。
+    pub allow: Vec<String>,
     pub fetched_at: Option<DateTime<Utc>>,
 }
 
@@ -98,6 +100,16 @@ impl HubProtect {
                 .unwrap_or_default(),
             block: v
                 .get("block")
+                .and_then(|x| x.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|s| s.as_str().map(str::to_string))
+                        .take(10_000)
+                        .collect()
+                })
+                .unwrap_or_default(),
+            allow: v
+                .get("allow")
                 .and_then(|x| x.as_array())
                 .map(|a| {
                     a.iter()

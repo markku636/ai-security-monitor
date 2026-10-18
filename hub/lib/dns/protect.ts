@@ -119,7 +119,7 @@ export function cleanDomain(raw: string): string | null {
   return p.success ? p.data : null;
 }
 
-/** 單筆加入／移除黑名單與允許清單（讀出→改→寫回，不會蓋掉別人同時加的其他條目）。 */
+/** 單筆加入／移除黑名單與白名單（讀出→改→寫回，不會蓋掉別人同時加的其他條目）。 */
 export async function changeLists(db: DB, c: ListChangeT, actor: string) {
   const cur = await getProtect(db);
   const clean = (v: string[]) => v.map(cleanDomain).filter((d): d is string => !!d);
@@ -133,7 +133,7 @@ export async function changeLists(db: DB, c: ListChangeT, actor: string) {
   return { settings: next, invalid };
 }
 
-/** 這個名稱有沒有被黑名單／允許清單涵蓋（名稱本身或任一上層）；回傳命中的條目。 */
+/** 這個名稱有沒有被黑名單／白名單涵蓋（名稱本身或任一上層）；回傳命中的條目。 */
 export function listedBy(list: string[], name: string): string | null {
   const parts = name.toLowerCase().split('.');
   for (let i = 0; i < parts.length - 1; i++) {

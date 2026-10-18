@@ -252,6 +252,9 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | ![安全設定](docs/images/hardening.png) 安全設定：最常沒通過的檢查與各主機分數 | ![事件](docs/images/events.png) 當機與事件：藍屏代碼與可能原因、暴力破解來源 |
 | ![情資](docs/images/intel.png) 威脅情資：每台主機的名單新舊、授權、命中 | ![新增主機](docs/images/install.png) 新增主機：建立註冊金鑰並產生一行安裝指令 |
 | ![流量](docs/images/traffic.png) 流量：所有主機的頻寬圖、哪台與哪個程式用最多、各網卡 | ![效能](docs/images/agent-perf.png) 主機「效能」分頁（可選開啟）：CPU、記憶體、磁碟、電池、最吃資源的程式 |
+| ![DNS](docs/images/dns.png) DNS：每台查了哪些網域、哪個程式查的、DNS 告警、新出現的網域，直接加黑白名單 | ![網域分析](docs/images/domain.png) 網域分析：誰查過、解析到哪、相關告警，一鍵加入黑名單或白名單 |
+| ![資安報告](docs/images/report.png) 資安報告：選一段期間整理分數、問題、情資、連線、DNS 與事件，可列印或存成 PDF | ![防護 DNS 設定](docs/images/admin-dns.png) 防護 DNS：封鎖開關與暫停、伺服器狀態、被擋最多的網域、擋錯一鍵放行、黑白名單 |
+| ![可疑 IP 清單](docs/images/connections-ips.png) 可疑 IP 清單：完整排名、外部情資風險，備註直接點著改 | |
 
 > 截圖全部是示範資料（虛構主機、文件專用的保留 IP、example.com），Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 產生。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
 
@@ -265,10 +268,11 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 - **系統安全設定（硬化）**：60 條跨平台檢查（UAC、Defender、BitLocker、SMBv1、遠端桌面 NLA、SSH、核心參數、AppArmor／SELinux、FileVault、Gatekeeper…），自動分辨 Windows 用戶端、Server、Server Core 與網域控制站，可用 YAML 自訂。
 - **流量**：不抓封包也能看各程式連到哪裡；也能分析 Wireshark／tcpdump 存的 pcap／pcapng（DNS、TLS SNI、明文協定、大量上傳、定時連線）。
 - **流量統計與效能**：每分鐘記錄各網卡、各程式的上傳／下載量，Hub 畫出頻寬圖、哪台與哪個程式用最多；CPU、記憶體、磁碟、電池是**選用**的，預設關，要在那台電腦上自己開（桌面版設定或 `config set metrics.performance true`，Hub 無法從遠端開），磁碟快滿、CPU 長時間滿載會列成待處理問題。桌面版「流量與效能」頁用圖表看這台電腦：即時（每秒）、最近 1 小時、最近 24 小時（沒加入 Hub 也會在本機記 24 小時）。
-- **DNS 防禦**（[說明](docs/dns.md)）：每台電腦即時記錄查了哪些網域、是哪個程式查的（Windows ETW、Linux／macOS 封包監聽），偵測情資網域、DNS 通道、亂數產生的網域、大量查無此網域、程式自己改走加密 DNS；也抓 DNS 伺服器被改、hosts 檔被動手腳、WPAD、NXDOMAIN 被導走；`fw dns-lock` 擋程式直接連外部 DNS。網域情資擴充了 CERT Polska、HaGeZi、Phishing.Database。
+- **DNS 防禦**（[說明](docs/dns.md)）：每台電腦即時記錄查了哪些網域、是哪個程式查的（Windows ETW、Linux／macOS 封包監聽），偵測情資網域、DNS 通道、亂數產生的網域、大量查無此網域、程式自己改走加密 DNS；也抓 DNS 伺服器被改、hosts 檔被動手腳、WPAD、NXDOMAIN 被導走；`fw dns-lock` 擋程式直接連外部 DNS。可以自己加 DNS 黑白名單（含子網域；Hub 的全公司共用、每台也能自己加），黑名單上的網域任何一台查到都會告警。網域情資擴充了 CERT Polska、HaGeZi、Phishing.Database。
 - **防護 DNS 伺服器**（選用，預設不開，[說明](docs/dns-server.md)）：給整個區網用的 DNS，擋威脅情資列名的網域、上游走加密 DNS、有快取（約 12 萬 QPS、200 萬筆封鎖清單比對約 0.3 微秒）；由 Hub 的「防護 DNS」頁開關、暫停、放行；可以跑在任一台常開的電腦或 Hub 的 compose 裡；`dns use-hub` 把個別電腦指過去，連不上時自動改回。
 - **事件與當機**：Windows 事件記錄、藍屏 minidump、Linux journal、macOS 當機報告，整理出可能原因與處理方式；也抓暴力破解、帳號鎖定、從公網登入遠端桌面、新帳號、新服務、清除稽核記錄等資安事件。
 - **AI 與 MCP**：`ai ask`、`ai analyze` 交給 Claude Code 或 Codex CLI 解讀（只給唯讀工具）；`mcp` 讓 Claude Code／Codex／Cursor／VS Code 直接查這台電腦；Hub 也有全部主機層級的 MCP 和網頁上的 AI 助手。
+- **資安報告**：Hub 總覽「產生資安報告」，選一段期間（最近 7／30／90 天或自訂、可限定一台主機）整理安全分數、新增與處理的問題、威脅情資命中、危險 IP（含 IP 備註）、DNS、事件、封鎖與 MITRE ATT&CK，可以列印、存成 PDF 或下載 Markdown。
 - **Hub**：總覽、主機、連線、待處理問題、漏洞、安全設定、流量、事件、情資、封鎖審核（簽章、主機身分綁定）、免金鑰加入申請與核准（DNS SRV、區網 mDNS 自動尋找）、註冊金鑰、唯讀 API token、稽核、CSV 匯出、中英文、深色模式、手機版面。
 - **部署與更新**：開機自動啟動（Windows 服務／systemd／launchd 或登入時啟動）、`self-update`（比對 SHA256SUMS）、一行安裝腳本、Hub Docker 映像（amd64／arm64）。
 
@@ -397,7 +401,7 @@ ai-security-monitor service install --yes        # 登入後自動回報（伺�
 | `fw` | 防火牆狀態、稽核、封鎖／解除、情資同步 |
 | `vuln`、`harden` | 漏洞與更新、系統安全設定 |
 | `traffic`、`events` | 流量觀察與 pcap 分析、事件與當機原因 |
-| `dns`、`dns-server` | 這台查了哪些網域（`--follow` 即時看）、竄改基準、`dns use-hub`／`restore`；防護 DNS 伺服器 |
+| `dns`、`dns-server` | 這台查了哪些網域（`--follow` 即時看）、黑白名單（`dns block`／`allow`／`blocklist`）、竄改基準、`dns use-hub`／`restore`；防護 DNS 伺服器 |
 | `metrics` | 現在的上傳／下載速率（各網卡、各程式），開啟效能蒐集時另有 CPU、記憶體、磁碟 |
 | `ai`、`mcp` | Claude Code／Codex 分析、MCP server 與一鍵設定 |
 | `enroll`、`discover`、`unenroll`、`status`、`watch`、`service` | 找 Hub、加入 Hub、常駐回報、開機自動啟動 |

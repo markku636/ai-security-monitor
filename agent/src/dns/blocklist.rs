@@ -3,6 +3,9 @@
 //! - Hub 的（「防護 DNS」設定的自訂封鎖，背景服務每 10 分鐘拉一次，存在 `dns/hub-protect.json`）。
 //!
 //! 查到就告警（`dns.blocklisted`，就算這台沒用防護 DNS 也抓得到）；這台跑的防護 DNS 也直接擋（改了 1 分鐘內生效）。
+//!
+//! 白名單：這台的白名單是通用白名單（`allowlist`）裡的網域條目（`dns allow` 會加 `x` 與 `*.x` 兩筆，等於含子網域），
+//! 加上 Hub 的白名單。白名單上的網域不告警、這台的防護 DNS 不擋；同一個網域，後加的那一邊勝出。
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -111,14 +114,74 @@ impl Source {
     }
 }
 
-/// 兩個來源合起來比對：名稱本身或任一上層在清單上就算命中。
+/// 兩個來源合起來比對：名稱本身或任一上層在清單上就算命中；白名單（名稱本身或任一上層）優先。
 #[derive(Debug, Default)]
 pub struct Matcher {
     entries: HashMap<String, Source>,
+    allow: std::collections::HashSet<String>,
+}
+
+/// 這台白名單裡的網域（allowlist 的 domain 條目，`*.x` 與 `x` 都算成 `x`）。
+pub fn local_allow(config_dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = crate::model::allowlist::Allowlist::load(config_dir)
+        .map(|a| {
+            a.entries
+                .into_iter()
+                .filter(|e| e.kind == crate::model::allowlist::AllowKind::Domain)
+                .filter_map(|e| normalize(&e.value))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v.dedup();
+    v
+}
+
+/// 加進這台的白名單（含子網域：`x` 與 `*.x`），並從這台的黑名單拿掉。回傳（加入的, 不合法的）。
+pub fn allow(config_dir: &Path, raw: &[String], note: &str) -> AppResult<(Vec<String>, Vec<String>)> {
+    use crate::model::allowlist::{AllowKind, Allowlist};
+    let mut al = Allowlist::load(config_dir)?;
+    let mut bl = Blocklist::load(config_dir);
+    let (mut added, mut bad) = (Vec::new(), Vec::new());
+    let note = (!note.trim().is_empty()).then(|| note.trim().chars().take(200).collect::<String>());
+    for r in raw {
+        let Some(d) = normalize(r) else {
+            bad.push(r.clone());
+            continue;
+        };
+        al.add(Some(AllowKind::Domain), &d, note.clone())?;
+        al.add(Some(AllowKind::Domain), &format!("*.{d}"), note.clone())?;
+        added.push(d);
+    }
+    if !added.is_empty() {
+        al.save(config_dir)?;
+        if !bl.remove(&added).is_empty() {
+            bl.save(config_dir)?;
+        }
+    }
+    Ok((added, bad))
+}
+
+/// 從這台的白名單移除（`x` 與 `*.x`）。回傳移除了哪些網域。
+pub fn unallow(config_dir: &Path, raw: &[String]) -> AppResult<Vec<String>> {
+    let mut al = crate::model::allowlist::Allowlist::load(config_dir)?;
+    let mut removed = Vec::new();
+    for d in raw.iter().filter_map(|r| normalize(r)) {
+        let a = al.remove(&d);
+        let b = al.remove(&format!("*.{d}"));
+        if a || b {
+            removed.push(d);
+        }
+    }
+    if !removed.is_empty() {
+        al.save(config_dir)?;
+    }
+    Ok(removed)
 }
 
 impl Matcher {
-    pub fn new(local: &[String], hub: &[String]) -> Matcher {
+    /// `local`／`hub`＝黑名單；`allow`＝白名單（這台的＋Hub 的）。
+    pub fn new(local: &[String], hub: &[String], allow: &[String]) -> Matcher {
         let mut entries = HashMap::new();
         for d in hub.iter().filter_map(|d| normalize(d)) {
             entries.insert(d, Source::Hub);
@@ -127,23 +190,42 @@ impl Matcher {
         for d in local.iter().filter_map(|d| normalize(d)) {
             entries.insert(d, Source::Local);
         }
-        Matcher { entries }
+        let allow = allow.iter().filter_map(|d| normalize(d)).collect();
+        Matcher { entries, allow }
     }
 
     pub fn load(config_dir: &Path) -> Matcher {
         let local = Blocklist::load(config_dir).domains();
-        let hub = super::usehub::HubProtect::load(config_dir)
-            .map(|h| h.block)
-            .unwrap_or_default();
-        Matcher::new(&local, &hub)
+        let hub = super::usehub::HubProtect::load(config_dir);
+        let mut allow = local_allow(config_dir);
+        allow.extend(hub.as_ref().map(|h| h.allow.clone()).unwrap_or_default());
+        Matcher::new(&local, &hub.map(|h| h.block).unwrap_or_default(), &allow)
+    }
+
+    /// 名稱本身或任一上層在白名單上。
+    pub fn allowed(&self, name: &str) -> bool {
+        let n = name.trim_end_matches('.').to_ascii_lowercase();
+        let mut cur = n.as_str();
+        loop {
+            if self.allow.contains(cur) {
+                return true;
+            }
+            match cur.split_once('.') {
+                Some((_, rest)) if rest.contains('.') => cur = rest,
+                _ => return false,
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
-    /// 命中的條目與來源。
+    /// 命中的條目與來源（白名單上的不算）。
     pub fn find<'a>(&'a self, name: &str) -> Option<(&'a str, Source)> {
+        if self.allowed(name) {
+            return None;
+        }
         let n = name.trim_end_matches('.').to_ascii_lowercase();
         let mut cur = n.as_str();
         loop {
@@ -191,11 +273,36 @@ mod tests {
     }
 
     #[test]
+    fn allow_list_wins_and_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = Blocklist::default();
+        b.add(&["shared.example".into()], "");
+        b.save(dir.path()).unwrap();
+        let (added, bad) = allow(dir.path(), &["https://shared.example/x".into(), "??".into()], "誤判").unwrap();
+        assert_eq!(
+            (added, bad),
+            (vec!["shared.example".to_string()], vec!["??".to_string()])
+        );
+        // 加白名單會從這台黑名單拿掉
+        assert!(Blocklist::load(dir.path()).entries.is_empty());
+        assert_eq!(local_allow(dir.path()), vec!["shared.example".to_string()]);
+        let m = Matcher::load(dir.path());
+        assert!(m.allowed("a.shared.example"));
+        assert_eq!(
+            unallow(dir.path(), &["shared.example".into()]).unwrap(),
+            vec!["shared.example".to_string()]
+        );
+        assert!(local_allow(dir.path()).is_empty());
+    }
+
+    #[test]
     fn matcher_covers_subdomains_and_sources() {
         let m = Matcher::new(
             &["local.example".into()],
             &["hub.example".into(), "local.example".into()],
+            &["ok.hub.example".into()],
         );
+        assert_eq!(m.find("x.ok.hub.example"), None, "allow list wins");
         assert_eq!(m.find("a.b.local.example"), Some(("local.example", Source::Local)));
         assert_eq!(m.find("HUB.example."), Some(("hub.example", Source::Hub)));
         assert_eq!(m.find("example"), None);

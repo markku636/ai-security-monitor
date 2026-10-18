@@ -567,7 +567,7 @@ mod tests {
 
     #[test]
     fn blocklisted_domains_alert_per_entry_and_process() {
-        let m = super::super::blocklist::Matcher::new(&["bad.example".into()], &["hub-bad.example".into()]);
+        let m = super::super::blocklist::Matcher::new(&["bad.example".into()], &["hub-bad.example".into()], &[]);
         let recs = vec![
             rec(1, "a.bad.example", Some("chrome.exe"), 1, "NOERROR", 2),
             rec(2, "b.bad.example", Some("chrome.exe"), 1, "NOERROR", 2),

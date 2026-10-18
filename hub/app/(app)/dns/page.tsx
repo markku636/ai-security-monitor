@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DnsHowTo } from '@/components/dns/DnsHowTo';
+import { DnsListQuickAdd } from '@/components/dns/DnsListQuickAdd';
 import { FindingsTable } from '@/components/security/FindingsTable';
 import { Badge } from '@/components/ui/Badge';
 import { Card, Stat } from '@/components/ui/Card';
@@ -93,6 +94,7 @@ export default async function DnsPage({ searchParams }: { searchParams: Promise<
       </header>
       <HostFilter t={t} action="/dns" current={agentId} keep={{ days, q, nx: nx ? '1' : undefined }} />
       <DnsHowTo t={t} open={empty} />
+      <DnsListQuickAdd blocked={protect.block.length} allowed={protect.allow.length} />
       {empty ? (
         <EmptyState title={t('還沒有 DNS 紀錄')}>
           {t('主機的背景服務會即時記錄 DNS 查詢並每分鐘上傳（需要 ai-security-monitor 0.6 以上；Windows 以系統服務執行才看得到是哪個程式查的）。')}

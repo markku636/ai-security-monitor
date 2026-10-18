@@ -1590,6 +1590,17 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "備註（例：釣魚信裡的連結）" => "Note (e.g. a link from a phishing email)",
         "從這台電腦的黑名單移除網域" => "Remove domains from this computer's blocklist",
         "列出黑名單（這台電腦的＋Hub 的）" => "List the blocklist (this computer's + the Hub's)",
+        "已加入白名單：{domain}（含子網域）" => "Added to the allowlist: {domain} (including subdomains)",
+        "這台不會再為它告警；這台跑的防護 DNS 1 分鐘內不再擋它" => "This computer no longer alerts on it; a protective DNS running here stops blocking it within a minute",
+        "要全公司放行：在 Hub「設定與金鑰 → 防護 DNS」的白名單加入" => "To allow it company-wide, add it to the allowlist under \"Settings & keys → Protective DNS\" on the Hub",
+        "這些網域不在這台電腦的白名單上（Hub 的白名單要在 Hub 移除）" => "These domains are not on this computer's allowlist (remove entries of the Hub's allowlist on the Hub)",
+        "已從白名單移除：{domain}" => "Removed from the allowlist: {domain}",
+        "白名單" => "Allowlist",
+        "黑名單" => "Blocklist",
+        "把網域加進這台電腦的白名單（含子網域）：不告警，這台的防護 DNS 也不擋" => "Add domains to this computer's allowlist (subdomains included): no alerts, and a protective DNS running here never blocks them",
+        "備註（例：公司內部系統）" => "Note (e.g. an internal company system)",
+        "從這台電腦的白名單移除網域" => "Remove domains from this computer's allowlist",
+        "列出黑白名單（這台電腦的＋Hub 的）" => "List the blocklist and allowlist (this computer's + the Hub's)",
         _ => return None,
     })
 }

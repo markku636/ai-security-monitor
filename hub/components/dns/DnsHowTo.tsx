@@ -16,8 +16,8 @@ export function DnsHowTo({ t, open }: { t: TFn; open: boolean }) {
           {t('、亂數產生的網域、大量查無此網域）會變成上面的 DNS 告警。點網域可以看誰查過、解析到哪裡。')}
         </li>
         <li>
-          <b>{t('加黑名單')}</b>：{t('在網域分析頁按「加入黑名單」，或在「設定與金鑰 → 防護 DNS」的自訂封鎖貼上網域（含子網域）。之後任何一台電腦查到都會告警；用防護 DNS 的電腦會直接被擋。單台電腦也能自己加：')}
-          <span className={CODE}>ai-security-monitor dns block bad.example</span>
+          <b>{t('加黑白名單')}</b>：{t('在上面「黑白名單」或網域分析頁按「加入黑名單／加入白名單」（全公司、含子網域）。黑名單：任何一台電腦查到都會告警，用防護 DNS 的電腦直接被擋；白名單：不擋、不告警。單台電腦也能自己加：')}
+          <span className={CODE}>ai-security-monitor dns block bad.example</span>／<span className={CODE}>dns allow ok.example</span>
         </li>
         <li>
           <b>{t('真的擋下來')}</b>：{t('在一台常開的電腦跑')} <span className={CODE}>ai-security-monitor dns-server</span>{t('（或 Hub compose 加 --profile dns），到')}{' '}

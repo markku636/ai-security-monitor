@@ -786,7 +786,7 @@ async function seedDns(h, agentId, agentToken, key) {
 /** 一台防護 DNS（office-dns，192.0.2.53）：心跳、最近 2 小時的查詢與封鎖；Hub 開啟封鎖。 */
 async function seedProtectiveDns() {
   const { token } = await call('/api/v1/admin/tokens', { token: ADMIN, body: { name: 'office-dns', scopes: ['dns'] } });
-  await call('/api/v1/admin/dns-protect', { token: ADMIN, method: 'PUT', body: { enabled: true, resolver_ips: ['192.0.2.53'], allow: ['ok.example.com'] } });
+  await call('/api/v1/admin/dns-protect', { token: ADMIN, method: 'PUT', body: { enabled: true, resolver_ips: ['192.0.2.53'], allow: ['ok.example.com'], block: ['example-c2.test', 'login.microsoft-verify.test'] } });
   await call('/api/v1/dns/heartbeat', {
     token,
     body: {
@@ -908,4 +908,11 @@ for (const h of HOSTS) {
   console.log(`seeded ${h.hostname} (${agentId}; ${samples} traffic samples, ${dns} DNS records)`);
 }
 console.log(`seeded protective DNS (${await seedProtectiveDns()} resolver records)`);
+// IP 備註（可疑 IP 清單與報告會顯示）
+for (const [ip, note] of [
+  ['203.0.113.66', '財務部筆電中毒連到的 C2，已隔離並封鎖'],
+  ['198.51.100.23', '對 web-01 暴力破解 SSH 的來源'],
+]) {
+  await call('/api/v1/ip-notes', { token: ADMIN, body: { ip, note } });
+}
 console.log('done');

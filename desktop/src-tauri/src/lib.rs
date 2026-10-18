@@ -673,6 +673,8 @@ pub fn run(start_in_tray: bool) {
             dns::dns_set,
             dns::dns_block,
             dns::dns_unblock,
+            dns::dns_allow,
+            dns::dns_unallow,
             dns::dns_use_hub,
             dns::dns_restore,
             usage::metrics_history,

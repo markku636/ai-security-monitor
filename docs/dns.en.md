@@ -48,20 +48,21 @@ Each scan looks at the last 15 minutes in 5-minute windows keyed by (program, re
 
 Allow-listed, known-good and popular domains (Majestic top 10,000) are exempt from heuristic alerts, but never from threat-intel hits with confidence ≥ 70. Registrable domains come from the embedded Public Suffix List (so `github.io` or `duckdns.org` subdomains are not allowed wholesale).
 
-## Blocklist (your own domains)
+## Blocklist and allowlist (your own domains)
 
-Entries always include subdomains. There are two lists with the same effect, checked together:
+Entries always include subdomains. **Blocklist** = blocked and alerted; **allowlist** = never blocked, no alerts (for threat-intel false positives or internal systems). For the same domain, whichever side was added last wins. Each comes in two lists with the same effect, checked together:
 
 | | This computer's | The Hub's (company-wide) |
 |---|---|---|
-| Add | `ai-security-monitor dns block bad.example` (several at once, URLs fine, `--note`), desktop DNS page | "Add to blocklist" on a domain page, custom blocks under "Settings & keys → Protective DNS" |
-| Remove | `dns unblock bad.example` | "Remove from blocklist" on the domain page, settings page |
-| View | `dns blocklist` (lists both) | settings page; the DNS page shows the count |
+| Blocklist | `ai-security-monitor dns block bad.example` (several at once, URLs fine, `--note`), desktop "Add to blocklist" or "Block" on a lookup | DNS page "Blocklist / allowlist", "Add to blocklist" on a domain page, custom blocks under "Settings & keys → Protective DNS" |
+| Allowlist | `dns allow ok.example`, desktop "Add to allowlist" or "Allow" on a lookup | DNS page "Blocklist / allowlist", "Add to allowlist" on a domain page, the settings page allowlist |
+| Remove | `dns unblock` / `dns unallow` | "Remove from blocklist / allowlist" on the domain page, settings page |
+| View | `dns blocklist` (both lists, both sources) | settings page; counts on the DNS page |
 
 Effects:
 - **Every computer alerts on lookups** (`dns.blocklisted`, high), even without the protective DNS; the Hub's list is synced to each computer every 10 minutes.
 - **The protective DNS blocks them** (NXDOMAIN): the Hub's list takes effect with the next heartbeat (within 30 seconds); the local list of the computer running the protective DNS within a minute.
-- Blocked by mistake? Add it to the Hub's allow list ("Add to allow list" on the domain page) and the protective DNS never blocks it.
+- Blocked by mistake? Add it to the allowlist ("Add to allowlist" on the domain page or `dns allow`): never blocked, no alerts. This computer's allowlist is the domain entries of the general `allowlist`; `dns allow` adds both `x` and `*.x`.
 
 ## Tamper detection
 

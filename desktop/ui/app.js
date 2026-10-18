@@ -615,7 +615,7 @@ const DNS_HINT = {
   upload: 'DNS 紀錄等於上網紀錄。「全部」＝每分鐘把紀錄送到公司的 Hub；「只傳告警」＝只送可疑的；「不傳」＝只留在這台。',
   verify: '拿 3 個常見網域的答案跟 Cloudflare 的加密 DNS 比對，抓 DNS 被竄改。開了會把這 3 個網域送給 Cloudflare。',
   server: '讓這台電腦當整個區網的防護 DNS（擋威脅情資列名的網域、上游走加密 DNS）。要背景服務在跑；其他裝置的 DNS 指到這台的區網 IP 才會用到。',
-  blocklist: '黑名單上的網域（含子網域）：這台查到就告警，用防護 DNS 的電腦會直接被擋。Hub 的黑名單是公司統一管理的，在 Hub「設定與金鑰 → 防護 DNS」修改。',
+  blocklist: '黑名單上的網域（含子網域）：這台查到就告警，用防護 DNS 的電腦會直接被擋。白名單上的網域（含子網域）：這台不告警、這台跑的防護 DNS 也不擋（情資誤判、公司內部系統用）。Hub 的黑白名單是公司統一管理的，在 Hub「設定與金鑰 → 防護 DNS」修改。',
 };
 
 async function dnsDo(fn, okText) {
@@ -652,20 +652,30 @@ function dnsSettingsCard(d) {
 function dnsBlocklistCard(d) {
   const local = d.blocklist?.local ?? [];
   const hub = d.blocklist?.hub ?? [];
+  const allowLocal = d.allowlist?.local ?? [];
+  const allowHub = d.allowlist?.hub ?? [];
+  const rows = (items) => `<table style="margin-top:6px"><tbody>${items.join('')}</tbody></table>`;
   return `<div class="card">
-    <h2 title="${esc(DNS_HINT.blocklist)}">黑名單 <span class="muted">(?)</span></h2>
-    <div class="row"><input type="text" id="dns-bl-add" placeholder="網域或網址，例：bad.example" style="width:200px"/><button class="btn primary" id="dns-bl-btn">加入</button></div>
-    ${local.length || hub.length ? `<table style="margin-top:8px"><tbody>
-      ${local.map((e) => `<tr><td class="mono small">${esc(e.domain)}${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ''}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unblock="${esc(e.domain)}" title="從這台的黑名單移除">✕</button></td></tr>`).join('')}
-      ${hub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`).join('')}
-    </tbody></table>` : '<p class="small muted" style="margin-top:6px">還沒有。也可以在下面的查詢紀錄按「封鎖」。</p>'}
+    <h2 title="${esc(DNS_HINT.blocklist)}">黑白名單 <span class="muted">(?)</span></h2>
+    <div class="row"><input type="text" id="dns-bl-add" placeholder="網域或網址，例：bad.example" style="width:190px"/></div>
+    <div class="row" style="margin-top:6px"><button class="btn primary" id="dns-bl-btn">加入黑名單</button><button class="btn" id="dns-al-btn">加入白名單</button></div>
+    <h2 style="margin-top:12px">黑名單（擋下、告警）</h2>
+    ${local.length || hub.length ? rows([
+      ...local.map((e) => `<tr><td class="mono small">${esc(e.domain)}${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ''}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unblock="${esc(e.domain)}" title="從這台的黑名單移除">✕</button></td></tr>`),
+      ...hub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`),
+    ]) : '<p class="small muted">還沒有。也可以在查詢紀錄按「封鎖」。</p>'}
+    <h2 style="margin-top:12px">白名單（不擋、不告警）</h2>
+    ${allowLocal.length || allowHub.length ? rows([
+      ...allowLocal.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unallow="${esc(x)}" title="從這台的白名單移除">✕</button></td></tr>`),
+      ...allowHub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`),
+    ]) : '<p class="small muted">還沒有。情資誤判時可以在查詢紀錄按「放行」。</p>'}
   </div>`;
 }
 
 const DNS_HOWTO = `<details class="card"><summary><b>DNS 防禦怎麼用</b></summary>
   <ol class="small" style="line-height:1.8;margin:8px 0 0 18px;padding:0">
     <li><b>看紀錄</b>：背景服務在跑時，這頁會列出這台查了哪些網域、哪個程式查的；可疑的會標出理由，也會出現在「掃描結果」。</li>
-    <li><b>加黑名單</b>：在右邊「黑名單」貼上網域，或在查詢紀錄按「封鎖」。這台查到就告警；用防護 DNS 的電腦會直接被擋。全公司一起擋請在 Hub「設定與金鑰 → 防護 DNS」加。</li>
+    <li><b>加黑白名單</b>：在右邊「黑白名單」貼上網域，或在查詢紀錄按「封鎖」／「放行」。黑名單：這台查到就告警、用防護 DNS 的電腦直接被擋；白名單：不告警、不擋（情資誤判時用）。全公司一起生效請在 Hub「設定與金鑰 → 防護 DNS」加。</li>
     <li><b>真的擋下來</b>：公司有防護 DNS 時，在「設定」按「把這台的 DNS 指過去」；防護 DNS 連不上會自動改回。想讓這台當防護 DNS，勾「這台當防護 DNS」。</li>
     <li><b>隱私</b>：DNS 紀錄等於上網紀錄，「上傳到公司的 Hub」可以改成只傳告警或不傳。</li>
   </ol></details>`;
@@ -715,7 +725,7 @@ async function pageDns() {
               <td class="small nw">${r.rcode === 'NOERROR' ? '<span class="muted">有答案</span>' : r.rcode === 'NXDOMAIN' ? `<span title="${esc(DNS_HINT.nx)}">查無此網域</span>` : esc(r.rcode)}</td>
               <td class="small">${esc(r.process ?? '—')}</td>
               <td class="small mono nw">${r.count}</td>
-              <td class="nw"><button class="btn" data-block="${esc(r.name)}" title="把這個網域（含子網域）加進這台的黑名單">封鎖</button></td>
+              <td class="nw"><button class="btn" data-block="${esc(r.name)}" title="把這個網域（含子網域）加進這台的黑名單">封鎖</button> <button class="btn" data-allow="${esc(r.name)}" title="把這個網域（含子網域）加進這台的白名單：不告警、不擋">放行</button></td>
             </tr>`).join('')}</tbody></table></div>` : `<p class="muted small">這段期間沒有紀錄${d.enabled ? '（背景服務要在跑才會記錄；Windows 以系統管理員執行才看得到程式）' : ''}。</p>`}
         </div>
       </div>
@@ -770,9 +780,23 @@ async function pageDns() {
     else toast('已經在黑名單上了');
     pageDns();
   };
-  $('dns-bl-btn').onclick = () => { const v = $('dns-bl-add').value.trim(); if (v) block(v.split(/[\s,]+/).filter(Boolean)); };
+  const allow = async (domains) => {
+    const r = await dnsDo(() => invoke('dns_allow', { domains, note: null }));
+    if (!r) return;
+    if (r.added.length) toast(`已加入白名單：${r.added.join('、')}（含子網域）`);
+    else if (r.invalid.length) toast(`不是合法的網域：${r.invalid.join('、')}`, 5000);
+    pageDns();
+  };
+  const inputDomains = () => $('dns-bl-add').value.trim().split(/[\s,]+/).filter(Boolean);
+  $('dns-bl-btn').onclick = () => { const v = inputDomains(); if (v.length) block(v); };
+  $('dns-al-btn').onclick = () => { const v = inputDomains(); if (v.length) allow(v); };
   $('dns-bl-add').onkeydown = (e) => { if (e.key === 'Enter') $('dns-bl-btn').click(); };
   $main.querySelectorAll('[data-block]').forEach((b) => (b.onclick = () => block([b.dataset.block])));
+  $main.querySelectorAll('[data-allow]').forEach((b) => (b.onclick = () => allow([b.dataset.allow])));
+  $main.querySelectorAll('[data-unallow]').forEach((b) => (b.onclick = async () => {
+    const r = await dnsDo(() => invoke('dns_unallow', { domains: [b.dataset.unallow] }));
+    if (r) { toast(`已從白名單移除：${b.dataset.unallow}`); pageDns(); }
+  }));
   $main.querySelectorAll('[data-unblock]').forEach((b) => (b.onclick = async () => {
     const r = await dnsDo(() => invoke('dns_unblock', { domains: [b.dataset.unblock] }));
     if (r) { toast(`已移除：${b.dataset.unblock}`); pageDns(); }

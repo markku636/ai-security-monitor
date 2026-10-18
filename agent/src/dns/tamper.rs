@@ -718,6 +718,7 @@ mod tests {
             enabled: true,
             resolver_ips: vec!["192.168.1.5".parse().unwrap()],
             block: Vec::new(),
+            allow: Vec::new(),
             fetched_at: Some(now),
         }
         .save(dir.path())

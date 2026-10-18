@@ -527,7 +527,23 @@ pub enum DnsCmd {
         #[arg(required = true, value_name = "DOMAIN")]
         domains: Vec<String>,
     },
-    /// 列出黑名單（這台電腦的＋Hub 的）
+    /// 把網域加進這台電腦的白名單（含子網域）：不告警，這台的防護 DNS 也不擋
+    Allow {
+        /// 網域（可以一次好幾個，也可以貼網址）
+        #[arg(required = true, value_name = "DOMAIN")]
+        domains: Vec<String>,
+        /// 備註（例：公司內部系統）
+        #[arg(long, default_value = "")]
+        note: String,
+    },
+    /// 從這台電腦的白名單移除網域
+    Unallow {
+        /// 網域
+        #[arg(required = true, value_name = "DOMAIN")]
+        domains: Vec<String>,
+    },
+    /// 列出黑白名單（這台電腦的＋Hub 的）
+    #[command(alias = "lists")]
     Blocklist,
 }
 
