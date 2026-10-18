@@ -134,7 +134,12 @@ a.link:hover, .link:hover { text-decoration: underline; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .fchip { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
 .fchip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-input[type=text], textarea, select {
+.fchip:hover:not(.on) { border-color: var(--accent); }
+.fchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fchip .n { margin-left: 5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fchip.on .n { color: inherit; opacity: .75; }
+@media (prefers-color-scheme: dark) { .fchip.on { color: #042f2e; } }
+input[type=text], input[type=search], textarea, select {
   font: inherit; font-size: 13px; color: var(--text); background: var(--panel);
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
 }
@@ -294,3 +299,35 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .meter.hot > i { background: var(--danger); }
 .tabs-row { display: flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }
 .nw { white-space: nowrap; }
+/* 搜尋列、更多篩選、表格不超出卡片（連線頁、DNS 頁） */
+.filter-label { width: 40px; flex: none; }
+.search-row input[type=search] { flex: 1 1 260px; max-width: 420px; }
+.tbl-wrap { overflow-x: auto; }
+.adv { border-top: 1px dashed var(--border); padding-top: 10px; }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+@media (prefers-color-scheme: dark) { .badge { color: #042f2e; } }
+.empty .btn { margin-top: 8px; }
+fieldset.plain { border: 0; padding: 0; min-width: 0; }
+fieldset.plain:disabled { opacity: .5; }
+/* 功能沒啟用時的提示（DNS 頁） */
+.notice { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; }
+.notice-ic { font-size: 22px; line-height: 1; opacity: .7; }
+.notice-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.notice .small { margin: 0 0 12px; max-width: 620px; }
+/* 右側滑出的分析面板（IP 分析、網域分析） */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(440px, 94vw); overflow-y: auto; background: var(--panel); border-left: 1px solid var(--border); box-shadow: -14px 0 36px rgba(0, 0, 0, .28); padding: 14px 18px 28px; animation: drawer-in .18s ease-out; }
+@keyframes drawer-in { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.drawer-head h2 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.drawer h3 { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 18px 0 6px; }
+.drawer .kv { grid-template-columns: 110px 1fr; }
+.big { font-size: 16px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.icon-btn { border: 0; background: transparent; color: var(--muted); font-size: 16px; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; }
+.icon-btn:hover { background: var(--border); color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); }
+.verdict-box { border-radius: 10px; padding: 10px 12px; margin: 4px 0 2px; }
+.verdict-box.bad { background: var(--danger-soft); color: var(--danger); }
+.verdict-box.warn { background: var(--warn-soft); color: var(--warn); }
+.verdict-box.ok { background: var(--ok-soft); color: var(--ok); }
+.verdict-box.neutral { background: var(--border); }

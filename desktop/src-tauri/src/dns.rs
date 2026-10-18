@@ -1,7 +1,9 @@
-//! 桌面版「DNS」頁：這台電腦最近查了哪些網域（背景服務的紀錄）、可疑的、查最多的網域與程式、
-//! DNS 監看狀態，以及有沒有用公司的防護 DNS（`dns use-hub`）。
+//! 桌面版「DNS」頁：這台電腦最近查了哪些網域（背景服務的紀錄）、可疑的、查最多的網域與程式、網域查詢，
+//! 以及設定頁的 DNS 區塊（監看開關、上傳、防護 DNS、黑白名單、`dns use-hub`）。
 
 use std::collections::HashMap;
+use std::path::Path;
+use std::time::Duration;
 
 use asa_lib::dns::{blocklist, heuristics, store, usehub};
 use chrono::Utc;
@@ -109,8 +111,7 @@ pub async fn dns_recent(
     top.sort_by_key(|t| std::cmp::Reverse(t.1 .0));
     let mut top_procs: Vec<_> = procs.into_iter().collect();
     top_procs.sort_by_key(|t| std::cmp::Reverse(t.1));
-    let cfg = asa_lib::config::load_or_init(&dir).ok();
-    Ok(json!({
+    let mut out = json!({
         "records": rows,
         "total": total,
         "nxdomain": nx,
@@ -120,22 +121,144 @@ pub async fn dns_recent(
         "top_processes": top_procs.iter().take(10).map(|(p, n)| json!({ "process": p, "count": n })).collect::<Vec<_>>(),
         "status": store::read_status(&data),
         "unreadable": unreadable,
+    });
+    if let (Value::Object(m), Value::Object(s)) = (&mut out, settings_json(&dir)) {
+        m.extend(s);
+    }
+    Ok(out)
+}
+
+/// DNS 設定與黑白名單（設定頁的 DNS 區塊、DNS 頁共用）。
+fn settings_json(dir: &Path) -> Value {
+    let cfg = asa_lib::config::load_or_init(dir).ok();
+    let hub = usehub::HubProtect::load(dir);
+    json!({
         "enabled": cfg.as_ref().map(|c| c.dns.enabled).unwrap_or(true),
         "upload": cfg.as_ref().map(|c| c.dns.upload),
-        "use_hub": usehub::UseHubState::load(&dir),
-        "hub_protect": usehub::HubProtect::load(&dir),
+        "use_hub": usehub::UseHubState::load(dir),
+        "hub_protect": hub,
         "dns_server": cfg.as_ref().map(|c| c.dns.server.enabled).unwrap_or(false),
         "dns_server_listen": cfg.as_ref().map(|c| c.dns.server.listen.join(", ")).unwrap_or_default(),
         "verify_answers": cfg.as_ref().map(|c| c.dns.verify_answers).unwrap_or(false),
         "blocklist": {
-            "local": blocklist::Blocklist::load(&dir).entries,
-            "hub": usehub::HubProtect::load(&dir).map(|h| h.block).unwrap_or_default(),
+            "local": blocklist::Blocklist::load(dir).entries,
+            "hub": hub.as_ref().map(|h| h.block.clone()).unwrap_or_default(),
         },
         "allowlist": {
-            "local": blocklist::local_allow(&dir),
-            "hub": usehub::HubProtect::load(&dir).map(|h| h.allow).unwrap_or_default(),
+            "local": blocklist::local_allow(dir),
+            "hub": hub.as_ref().map(|h| h.allow.clone()).unwrap_or_default(),
+        },
+    })
+}
+
+#[tauri::command]
+pub async fn dns_settings(state: State<'_, AppState>) -> CmdResult<Value> {
+    Ok(settings_json(&state.config_dir))
+}
+
+/// 查一個網域：用這台的 DNS 現在解析到哪裡、黑白名單、威脅情資、像不像亂數網域，
+/// 以及這台最近 7 天哪些程式查過它（含子網域）。
+#[tauri::command]
+pub async fn lookup_domain(state: State<'_, AppState>, domain: String) -> CmdResult<Value> {
+    let name = blocklist::normalize(&domain).ok_or_else(|| format!("不是有效的網域：{}", domain.trim()))?;
+    let dir = state.config_dir.clone();
+
+    // 系統解析（這台用了防護 DNS 時，被擋的網域會查不到）
+    let resolved = match tokio::time::timeout(Duration::from_secs(4), tokio::net::lookup_host((name.as_str(), 0))).await
+    {
+        Ok(Ok(addrs)) => {
+            let mut ips: Vec<String> = addrs.map(|a| a.ip().to_string()).collect();
+            ips.sort();
+            ips.dedup();
+            json!({ "ok": true, "addrs": ips })
+        }
+        Ok(Err(e)) => json!({ "ok": false, "error": e.to_string() }),
+        Err(_) => json!({ "ok": false, "error": "4 秒內沒有回應" }),
+    };
+
+    let bl = blocklist::Matcher::load(&dir);
+    let local_allow = blocklist::local_allow(&dir);
+    let allowed_local = parents(&name)
+        .find(|p| local_allow.iter().any(|a| a == p))
+        .map(str::to_string);
+    let block = bl.find(&name).map(|(entry, src)| {
+        json!({ "entry": entry, "source": src.label(), "local": matches!(src, blocklist::Source::Local) })
+    });
+
+    let intel = state.intel().await;
+    let (hits, score, doh) = match intel.as_deref() {
+        Some(db) => {
+            let hits = db.match_domain(&name);
+            let score = asa_lib::intel::domain_score(&hits, heuristics::is_popular(&name));
+            (hits, score, db.doh_endpoint(&name).map(|(_, feed)| feed))
+        }
+        None => (Vec::new(), 0, None),
+    };
+
+    // 這台最近 7 天的查詢紀錄（名稱本身或子網域）
+    let (data, _) = store::pick_dir(&dir, false);
+    let since = Utc::now() - chrono::Duration::days(7);
+    let recs = tokio::task::spawn_blocking(move || store::read_since(&data, since, 200_000))
+        .await
+        .map_err(|e| e.to_string())?;
+    let suffix = format!(".{name}");
+    let mut total = 0u64;
+    let mut last = None;
+    let mut by_proc: HashMap<String, u64> = HashMap::new();
+    let mut by_rcode: HashMap<String, u64> = HashMap::new();
+    let mut names: HashMap<String, u64> = HashMap::new();
+    let mut answers = std::collections::BTreeSet::new();
+    for r in recs.iter().filter(|r| r.name == name || r.name.ends_with(&suffix)) {
+        let n = u64::from(r.count);
+        total += n;
+        last = last.max(Some(r.ts));
+        *by_proc.entry(r.process.clone().unwrap_or_default()).or_default() += n;
+        *by_rcode.entry(r.rcode.clone()).or_default() += n;
+        *names.entry(r.name.clone()).or_default() += n;
+        for a in r.answers.iter().take(8) {
+            if answers.len() < 12 {
+                answers.insert(a.to_string());
+            }
+        }
+    }
+    let ranked = |m: HashMap<String, u64>, k: &str| {
+        let mut v: Vec<_> = m.into_iter().collect();
+        v.sort_by_key(|x| std::cmp::Reverse(x.1));
+        v.into_iter()
+            .take(10)
+            .map(|(x, n)| json!({ k: x, "count": n }))
+            .collect::<Vec<_>>()
+    };
+
+    Ok(json!({
+        "domain": name,
+        "registrable": heuristics::registrable_domain(&name),
+        "popular": heuristics::is_popular(&name),
+        "resolved": resolved,
+        "use_hub": usehub::UseHubState::load(&dir).is_some(),
+        "block": block,
+        "allowed": bl.allowed(&name),
+        "allowed_local": allowed_local,
+        "intel": { "hits": hits, "score": score, "loaded": intel.is_some() },
+        "doh": doh,
+        "heuristic": heuristics::suspicious_domain(&name),
+        "recent": {
+            "total": total,
+            "last": last,
+            "processes": ranked(by_proc, "process"),
+            "rcodes": ranked(by_rcode, "rcode"),
+            "names": ranked(names, "name"),
+            "answers": answers,
         },
     }))
+}
+
+/// 名稱本身與各層上層（a.b.example.com → b.example.com → example.com）。
+fn parents(name: &str) -> impl Iterator<Item = &str> {
+    std::iter::successors(Some(name), |cur| match cur.split_once('.') {
+        Some((_, rest)) if rest.contains('.') => Some(rest),
+        _ => None,
+    })
 }
 
 /// DNS 設定頁可以改的鍵（其他鍵不收）。

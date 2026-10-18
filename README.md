@@ -270,11 +270,12 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 
 | | |
 |---|---|
-| ![桌面版連線](docs/images/windows-desktop-connections.png) 連線：每條連線的判定、理由和情資出處，點 IP 看國家、組織和被哪些名單列入 | ![桌面版 AI 分析](docs/images/windows-desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具查資料，再用白話解釋 |
+| ![桌面版連線](docs/images/windows-desktop-connections.png) 連線：每條連線的判定、理由和情資出處，可以搜尋與篩選，輸入 IP 按「查詢」或點 IP，右邊滑出國家、組織和被哪些名單列入 | ![桌面版 AI 分析](docs/images/windows-desktop-ai.png) AI 分析：本機的 Claude Code／Codex 透過唯讀工具查資料，再用白話解釋 |
 | ![桌面版掃描結果](docs/images/windows-desktop-findings.png) 掃描結果：依嚴重程度排序，展開看細節和修正方式 | ![桌面版深色模式](docs/images/windows-desktop-overview-dark.png) 深色模式：跟著 Windows 的設定 |
 | ![桌面版加入公司的 Hub](docs/images/windows-desktop-settings-join.png) 設定 → 公司的 Security Hub：自動找到公司的 Hub，核對指紋後按「申請加入」 | ![桌面版設定](docs/images/windows-desktop-settings.png) 設定：已加入的 Hub、背景自動回報、自動更新 |
 | ![桌面版流量與效能](docs/images/windows-desktop-usage.png) 流量與效能：最近 1 小時的網路速度、哪個程式用最多（也有即時與最近 24 小時） | ![桌面版 CPU、記憶體、磁碟](docs/images/windows-desktop-usage-perf.png) 開啟效能蒐集後：CPU、記憶體、磁碟、最吃資源的程式、電池 |
-| ![桌面版 DNS](docs/images/windows-desktop-dns.png) DNS：這台查了哪些網域、是哪個程式查的、哪些可疑（亂數網域、情資網域、加密 DNS 端點），以及有沒有用公司的防護 DNS | ![桌面版威脅情資](docs/images/windows-desktop-intel.png) 威脅情資：每份名單的筆數、最後更新、授權，可以立即更新 |
+| ![桌面版 DNS](docs/images/windows-desktop-dns.png) DNS：這台查了哪些網域、是哪個程式查的、哪些可疑；輸入網域按「查詢」（或點網域）看網域分析：解析到哪、情資、哪個程式查過，一鍵加黑白名單 | ![桌面版 DNS 設定](docs/images/windows-desktop-settings-dns.png) 設定 → DNS：DNS 監看開關、上傳到 Hub、用公司的防護 DNS、這台當防護 DNS、黑白名單 |
+| ![桌面版威脅情資](docs/images/windows-desktop-intel.png) 威脅情資：每份名單的筆數、最後更新、授權，可以立即更新 | |
 
 **Security Hub（網頁）**
 

@@ -34,6 +34,48 @@ function toast(msg, ms = 3500) {
   toast._t = setTimeout(() => (t.hidden = true), ms);
 }
 
+// 右側滑出的分析面板（IP 分析、網域分析）：✕ 或 Esc 關閉，換頁時自動關。
+// 回傳內容區；非同步查完要寫入前先確認 body.isConnected（期間換查別的就不寫）。
+function openDrawer(title, body) {
+  let d = document.getElementById('drawer');
+  if (!d) {
+    d = document.createElement('aside');
+    d.id = 'drawer';
+    d.className = 'drawer';
+    d.setAttribute('role', 'dialog');
+    document.body.appendChild(d);
+  }
+  d.setAttribute('aria-label', title);
+  d.hidden = false;
+  d.innerHTML = `<div class="drawer-head"><h2>${esc(title)}</h2><button class="icon-btn" id="drawer-close" title="關閉（Esc）" aria-label="關閉">✕</button></div><div id="drawer-body">${body}</div>`;
+  document.getElementById('drawer-close').onclick = closeDrawer;
+  return document.getElementById('drawer-body');
+}
+
+function closeDrawer() {
+  const d = document.getElementById('drawer');
+  if (d && !d.hidden) {
+    d.hidden = true;
+    d.innerHTML = '';
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDrawer();
+  // Ctrl+F 或 /：跳到這頁的搜尋框
+  const box = document.querySelector('#main [data-search]');
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+  if (box && ((e.key === 'f' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !typing))) {
+    e.preventDefault();
+    box.focus();
+    box.select();
+  }
+});
+window.addEventListener('hashchange', closeDrawer);
+
+const isIpLike = (s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || (/^[0-9a-f:]+$/i.test(s) && s.includes(':') && s.length > 2);
+const isDomainLike = (s) => !/\s/.test(s) && /^(?:[a-z][a-z0-9+.-]*:\/\/)?[^/\s]+\.[a-z0-9-]{2,}(?:[:/].*)?$/i.test(s);
+
 function ago(iso) {
   if (!iso) return '—';
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -76,6 +118,11 @@ document.addEventListener('click', (e) => {
   if (ip) {
     e.preventDefault();
     showIp(ip.dataset.ip);
+  }
+  const dom = e.target.closest('[data-domain]');
+  if (dom) {
+    e.preventDefault();
+    showDomain(dom.dataset.domain);
   }
 });
 
@@ -333,8 +380,8 @@ function connTable(rows, { sortable = true } = {}) {
           : '—';
       const geo = c.geo ? `${esc(c.geo.country ?? '')}<div class="muted small">${c.geo.asn ? `AS${esc(c.geo.asn)} ` : ''}${esc(c.geo.org ?? '')}</div>` : '<span class="muted">—</span>';
       return `<tr>
-        <td><span class="chip ${esc(c.verdict.level)}">${VERDICT[c.verdict.level] ?? esc(c.verdict.level)}</span></td>
-        <td><span class="chip dir">${DIRECTION[c.direction] ?? esc(c.direction)}</span><div class="muted small">${esc(c.proto)} · ${esc(c.state)}</div></td>
+        <td><span class="chip ${esc(c.verdict.level)}" title="${esc(VERDICT_HINT[c.verdict.level] ?? '')}">${VERDICT[c.verdict.level] ?? esc(c.verdict.level)}</span></td>
+        <td><span class="chip dir" title="${esc(DIR_HINT[c.direction] ?? '')}">${DIRECTION[c.direction] ?? esc(c.direction)}</span><div class="muted small nw" title="${esc(STATE_HINT[c.state] ?? '')}">${esc(c.proto)} · ${esc(c.state)}</div></td>
         <td>${remote}</td>
         <td class="small mono" style="text-align:right">${n}</td>
         <td class="small">${geo}</td>
@@ -357,6 +404,7 @@ const connState = {
   publicOnly: false,
   hideLoopback: false,
   q: '',
+  more: false,
   sort: { key: 'verdict', dir: 1 },
   auto: false,
   timer: null,
@@ -364,6 +412,24 @@ const connState = {
 
 const REASON_KIND = { intel: '情資', behavior: '行為', none: '沒有理由' };
 const REASON_HINT = { intel: '有威脅情資清單列名', behavior: 'asa 自己的行為判斷（例如週期性連線、新目的地）', none: '沒有任何可疑理由' };
+const VERDICT_HINT = { dangerous: '有可信的威脅情資列名，或多個可疑行為', suspicious: '有可疑的地方，值得看一下', unknown: '沒有情資列名、也沒有可疑行為，只是不認識', safe: '已知良好的服務、私有網路或本機' };
+const DIR_HINT = { outbound: '這台主動連出去的', inbound: '別台電腦連進這台的', listening: '這台開著 port，等別人連進來', local: '這台電腦裡的程式彼此連線（127.0.0.1 這類）' };
+const PROTO_HINT = { tcp: 'TCP：要先建立連線的協定（網頁、遠端桌面…）', udp: 'UDP：不必建立連線的協定（DNS、視訊、遊戲…），沒有連線狀態' };
+const STATE_HINT = {
+  ESTABLISHED: '連線中，正在傳資料',
+  LISTEN: '開著 port，等別人連進來',
+  BOUND: '已佔用 port（UDP 沒有連線狀態，綁好就是這個）',
+  TIME_WAIT: '剛結束的連線，系統稍等一下再回收（正常）',
+  CLOSE_WAIT: '對方已經關閉、這台的程式還沒關（大量出現可能是程式沒處理好）',
+  FIN_WAIT1: '這台要求結束連線，等對方回應',
+  FIN_WAIT2: '這台要求結束連線，等對方也關閉',
+  SYN_SENT: '正在嘗試連出去（大量出現可能是連不上，或在掃描）',
+  SYN_RECEIVED: '有人正在連進來，還沒連好',
+  SYN_RECV: '有人正在連進來，還沒連好',
+  LAST_ACK: '連線結束中，等最後確認',
+  CLOSING: '雙方同時在結束連線',
+  CLOSED: '已關閉',
+};
 
 /** 私有、保留、本機位址（不算公網）。 */
 function isPublicIp(ip) {
@@ -382,58 +448,98 @@ function isLoopback(c) {
   return ip.startsWith('127.') || ip === '::1' || ip.startsWith('::ffff:127.');
 }
 
+/** 「更多篩選」裡用了幾個條件（按鈕上的數字）。 */
+function advCount() {
+  return connState.proto.size + connState.state.size + connState.reason.size +
+    [connState.process, connState.country, connState.port, connState.publicOnly, connState.hideLoopback].filter(Boolean).length;
+}
+
+function moreLabel() {
+  const n = advCount();
+  return `更多篩選${n ? ` <span class="badge">${n}</span>` : ''} ${connState.more ? '▴' : '▾'}`;
+}
+
 async function pageConnections() {
   $main.innerHTML = `
     <div class="head">
-      <div><h1>連線</h1><p class="sub">這台電腦目前的連線，依威脅情資與異常行為判定；點 IP 可看詳細分析，點表頭可排序。</p></div>
+      <div><h1>連線</h1><p class="sub">這台電腦目前的連線，依威脅情資與異常行為判定；點 IP 看詳細分析，點表頭排序。</p></div>
       <div class="row">
-        <label class="small row"><input type="checkbox" id="auto" ${connState.auto ? 'checked' : ''}/> 每 10 秒更新</label>
+        <label class="small row" title="每 10 秒重新讀一次這台的連線"><input type="checkbox" id="auto" ${connState.auto ? 'checked' : ''}/> 每 10 秒更新</label>
         <button class="btn" id="refresh">重新整理</button>
         <button class="btn primary" id="ask">請 AI 分析可疑連線</button>
       </div>
     </div>
-    <div class="split">
-      <div>
-        <div class="card">
-          <div class="filters" id="f-verdict"></div>
-          <div class="filters" id="f-dir"></div>
-          <div class="filters" id="f-proto"></div>
-          <div class="filters" id="f-state"></div>
-          <div class="filters" id="f-reason"></div>
-          <div class="filters">
-            <label class="small">程式 <select id="f-process"></select></label>
-            <label class="small">國家 <select id="f-country"></select></label>
-            <label class="small">port <input type="text" id="f-port" inputmode="numeric" placeholder="例：443" value="${esc(connState.port)}" style="width:80px"/></label>
-            <label class="small row" title="只看連到網際網路上的位址（排除區網、本機、保留位址）"><input type="checkbox" id="f-public" ${connState.publicOnly ? 'checked' : ''}/> 只看公網位址</label>
-            <label class="small row" title="隱藏 127.0.0.1、::1 這類程式在自己電腦內部的連線"><input type="checkbox" id="f-loop" ${connState.hideLoopback ? 'checked' : ''}/> 隱藏本機迴路</label>
-          </div>
-          <div class="filters"><input type="text" id="q" placeholder="IP、程式或組織" value="${esc(connState.q)}" style="width:260px"/><button class="btn" id="f-clear">清除篩選</button><span class="muted small" id="count"></span></div>
-          <div id="tbl" class="muted">載入中…</div>
+    <div class="card">
+      <form class="filters search-row" id="f-search" autocomplete="off">
+        <input type="search" id="q" data-search placeholder="IP、程式或組織（輸入 IP 按查詢可直接分析）" value="${esc(connState.q)}" aria-label="搜尋連線"/>
+        <button class="btn primary" type="submit" title="套用篩選並重新讀取連線；輸入的是 IP 時另外打開 IP 分析（快速鍵 Ctrl+F）">查詢</button>
+        <button class="btn" type="button" id="f-clear">清除篩選</button>
+        <button class="btn" type="button" id="f-more" aria-expanded="${connState.more}" aria-controls="f-adv">${moreLabel()}</button>
+      </form>
+      <div class="filters" id="f-verdict"></div>
+      <div class="filters" id="f-dir"></div>
+      <div id="f-adv" class="adv" ${connState.more ? '' : 'hidden'}>
+        <div class="filters" id="f-proto"></div>
+        <div class="filters" id="f-state"></div>
+        <div class="filters" id="f-reason"></div>
+        <div class="filters">
+          <label class="small">程式 <select id="f-process"></select></label>
+          <label class="small">國家 <select id="f-country"></select></label>
+          <label class="small">port <input type="text" id="f-port" inputmode="numeric" placeholder="例：443" value="${esc(connState.port)}" style="width:80px"/></label>
+          <label class="small row" title="只看連到網際網路上的位址（排除區網、本機、保留位址）"><input type="checkbox" id="f-public" ${connState.publicOnly ? 'checked' : ''}/> 只看公網位址</label>
+          <label class="small row" title="隱藏 127.0.0.1、::1 這類程式在自己電腦內部的連線"><input type="checkbox" id="f-loop" ${connState.hideLoopback ? 'checked' : ''}/> 隱藏本機迴路</label>
         </div>
       </div>
-      <div id="ip-panel"></div>
+    </div>
+    <div class="card">
+      <p class="small muted" id="count" style="margin:0 0 6px">載入中…</p>
+      <div id="tbl" class="tbl-wrap"></div>
     </div>`;
-  document.getElementById('refresh').onclick = () => loadConns();
-  document.getElementById('ask').onclick = () => goAi('connections', '');
-  document.getElementById('q').oninput = (e) => { connState.q = e.target.value; renderConns(); };
-  document.getElementById('f-port').oninput = (e) => { connState.port = e.target.value.replace(/\D/g, ''); renderConns(); };
-  document.getElementById('f-public').onchange = (e) => { connState.publicOnly = e.target.checked; renderConns(); };
-  document.getElementById('f-loop').onchange = (e) => { connState.hideLoopback = e.target.checked; renderConns(); };
-  document.getElementById('f-process').onchange = (e) => { connState.process = e.target.value; renderConns(); };
-  document.getElementById('f-country').onchange = (e) => { connState.country = e.target.value; renderConns(); };
-  document.getElementById('f-clear').onclick = () => {
+  const $ = (id) => document.getElementById(id);
+  $('refresh').onclick = () => loadConns();
+  $('ask').onclick = () => goAi('connections', '');
+  $('f-search').onsubmit = (e) => {
+    e.preventDefault();
+    connState.q = $('q').value;
+    const v = connState.q.trim();
+    if (isIpLike(v)) showIp(v);
+    loadConns();
+  };
+  $('q').oninput = (e) => { connState.q = e.target.value; renderConns(); };
+  $('f-port').oninput = (e) => { connState.port = e.target.value.replace(/\D/g, ''); renderConns(); };
+  $('f-public').onchange = (e) => { connState.publicOnly = e.target.checked; renderConns(); };
+  $('f-loop').onchange = (e) => { connState.hideLoopback = e.target.checked; renderConns(); };
+  $('f-process').onchange = (e) => { connState.process = e.target.value; renderConns(); };
+  $('f-country').onchange = (e) => { connState.country = e.target.value; renderConns(); };
+  $('f-more').onclick = () => {
+    connState.more = !connState.more;
+    $('f-adv').hidden = !connState.more;
+    $('f-more').setAttribute('aria-expanded', String(connState.more));
+    $('f-more').innerHTML = moreLabel();
+  };
+  $('f-clear').onclick = () => {
     for (const k of ['verdict', 'direction', 'proto', 'state', 'reason']) connState[k].clear();
     Object.assign(connState, { process: '', country: '', port: '', publicOnly: false, hideLoopback: false, q: '' });
     pageConnections();
   };
-  document.getElementById('tbl').addEventListener('click', (e) => {
+  $('tbl').addEventListener('click', (e) => {
+    const act = e.target.closest('[data-act]');
+    if (act?.dataset.act === 'all') {
+      connState.verdict.clear();
+      renderConns();
+      return;
+    }
+    if (act?.dataset.act === 'clear') {
+      $('f-clear').click();
+      return;
+    }
     const th = e.target.closest('th[data-sort]');
     if (!th) return;
     const key = th.dataset.sort;
     connState.sort = connState.sort.key === key ? { key, dir: -connState.sort.dir } : { key, dir: key === 'n' ? -1 : 1 };
     renderConns();
   });
-  document.getElementById('auto').onchange = (e) => { connState.auto = e.target.checked; setAuto(); };
+  $('auto').onchange = (e) => { connState.auto = e.target.checked; setAuto(); };
   setAuto();
   await loadConns();
 }
@@ -450,7 +556,8 @@ async function loadConns() {
     fillSelects();
     renderConns();
   } catch (e) {
-    document.getElementById('tbl').textContent = String(e);
+    const t = document.getElementById('tbl');
+    if (t) t.innerHTML = `<p class="small" style="color:var(--danger)">${esc(e)}</p>`;
   }
 }
 
@@ -479,16 +586,16 @@ function renderConns() {
       counts.set(v, (counts.get(v) ?? 0) + 1);
     }
     document.getElementById(el).innerHTML =
-      `<span class="muted small" style="width:40px">${label}</span>` +
+      `<span class="muted small filter-label">${label}</span>` +
       entries(counts)
-        .map(([v, l]) => `<button class="fchip ${set.has(v) ? 'on' : ''}" data-set="${el}" data-v="${esc(v)}" ${hints[v] ? `title="${esc(hints[v])}"` : ''}>${esc(l)} <span class="muted">${counts.get(v) ?? 0}</span></button>`)
+        .map(([v, l]) => `<button type="button" class="fchip ${set.has(v) ? 'on' : ''}" data-set="${el}" data-v="${esc(v)}" aria-pressed="${set.has(v)}" ${hints[v] ? `title="${esc(hints[v])}"` : ''}>${esc(l)}<span class="n">${counts.get(v) ?? 0}</span></button>`)
         .join('');
   };
   const SETS = { 'f-verdict': connState.verdict, 'f-dir': connState.direction, 'f-proto': connState.proto, 'f-state': connState.state, 'f-reason': connState.reason };
-  chipRow('f-verdict', '判定', connState.verdict, () => Object.entries(VERDICT), (c) => c.verdict.level);
-  chipRow('f-dir', '方向', connState.direction, () => Object.entries(DIRECTION), (c) => c.direction);
-  chipRow('f-proto', '協定', connState.proto, (m) => [...m.keys()].sort().map((v) => [v, v.toUpperCase()]), (c) => String(c.proto ?? '').toLowerCase());
-  chipRow('f-state', '狀態', connState.state, (m) => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => [v, v || '—']), (c) => c.state ?? '');
+  chipRow('f-verdict', '判定', connState.verdict, () => Object.entries(VERDICT), (c) => c.verdict.level, VERDICT_HINT);
+  chipRow('f-dir', '方向', connState.direction, () => Object.entries(DIRECTION), (c) => c.direction, DIR_HINT);
+  chipRow('f-proto', '協定', connState.proto, (m) => [...m.keys()].sort().map((v) => [v, v.toUpperCase()]), (c) => String(c.proto ?? '').toLowerCase(), PROTO_HINT);
+  chipRow('f-state', '狀態', connState.state, (m) => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => [v, v || '—']), (c) => c.state ?? '', STATE_HINT);
   chipRow('f-reason', '理由', connState.reason, () => Object.entries(REASON_KIND), reasonKind, REASON_HINT);
   for (const b of document.querySelectorAll('.fchip[data-set]')) {
     b.onclick = () => {
@@ -497,6 +604,8 @@ function renderConns() {
       renderConns();
     };
   }
+  const more = document.getElementById('f-more');
+  if (more) more.innerHTML = moreLabel();
   const q = connState.q.trim().toLowerCase();
   const port = connState.port ? Number(connState.port) : null;
   const rows = lastConns.filter(
@@ -511,43 +620,49 @@ function renderConns() {
       (port === null || c.remote_port === port || c.local_port === port) &&
       (!connState.publicOnly || isPublicIp(c.remote_ip)) &&
       (!connState.hideLoopback || !isLoopback(c)) &&
-      (!q || [c.remote_ip, c.process?.name, c.geo?.org, c.geo?.country].some((x) => String(x ?? '').toLowerCase().includes(q))),
+      (!q || [c.remote_ip, c.local_ip, c.process?.name, c.geo?.org, c.geo?.country].some((x) => String(x ?? '').toLowerCase().includes(q))),
   );
   const groups = sortGroups(groupConns(rows));
-  document.getElementById('count').textContent = `${rows.length} 條連線（合併成 ${groups.length} 列）`;
-  document.getElementById('tbl').innerHTML = groups.length ? connTable(groups) : '<div class="empty">沒有符合的連線</div>';
+  document.getElementById('count').textContent = `${rows.length} 條連線（合併成 ${groups.length} 列）· 這台目前共 ${lastConns.length} 條`;
+  let empty = '';
+  if (!groups.length) {
+    const onlyRisky = connState.verdict.size && [...connState.verdict].every((v) => v === 'dangerous' || v === 'suspicious');
+    const noRisky = !lastConns.some((c) => c.verdict.level === 'dangerous' || c.verdict.level === 'suspicious');
+    empty = onlyRisky && noRisky
+      ? `<div class="empty"><b>目前沒有危險或可疑的連線</b><p class="small">情資和行為判斷都沒有發現問題。</p><button class="btn" data-act="all">看全部連線</button></div>`
+      : `<div class="empty">沒有符合的連線<p><button class="btn" data-act="clear">清除篩選</button></p></div>`;
+  }
+  document.getElementById('tbl').innerHTML = groups.length ? connTable(groups) : empty;
 }
 
 async function showIp(ip) {
-  if (location.hash !== '#connections') { location.hash = '#connections'; await new Promise((r) => setTimeout(r, 300)); }
-  const p = document.getElementById('ip-panel');
-  if (!p) return;
-  p.innerHTML = `<div class="card"><h2>IP 分析</h2><p class="mono">${esc(ip)}</p><p class="muted">查詢中…</p></div>`;
+  const body = openDrawer('IP 分析', `<p class="mono big">${esc(ip)}</p><p class="muted small"><span class="spin"></span> 查詢中…</p>`);
   try {
+    const conns = lastConns.length ? lastConns : await invoke('connections').then((x) => (lastConns = x.connections)).catch(() => []);
     const r = await invoke('lookup_ip', { ip });
-    const conns = lastConns.filter((c) => c.remote_ip === ip);
-    p.innerHTML = `<div class="card">
-      <h2>IP 分析</h2>
-      <p class="mono" style="font-size:16px;margin:0 0 8px">${esc(ip)}</p>
+    if (!body.isConnected) return;
+    const mine = conns.filter((c) => c.remote_ip === ip);
+    const level = mine.map((c) => c.verdict.level).sort((a, b) => (VERDICT_RANK[a] ?? 9) - (VERDICT_RANK[b] ?? 9))[0];
+    body.innerHTML = `
+      <p class="mono big">${esc(ip)} ${level ? `<span class="chip ${esc(level)}" title="${esc(VERDICT_HINT[level] ?? '')}">${VERDICT[level] ?? esc(level)}</span>` : ''}</p>
       <div class="kv">
         <div>國家</div><div>${esc(r.geo?.country ?? '—')}</div>
         <div>組織／ASN</div><div>${esc(r.geo?.org ?? '—')}${r.geo?.asn ? ` (AS${esc(r.geo.asn)})` : ''}</div>
         <div>位址類型</div><div>${esc(r.class)}</div>
       </div>
-      <h2 style="margin-top:14px">情資命中</h2>
+      <h3>情資命中</h3>
       ${r.hits.length ? r.hits.map((h) => `<div class="small" style="margin-bottom:4px"><a class="link" data-url="${esc(h.source_url)}">${esc(h.vendor)} · ${esc(h.name)}</a> <span class="muted">信心 ${esc(h.confidence)}% · ${esc(h.license ?? '')}</span></div>`).join('') : '<p class="muted small">沒有任何情資來源列名（若被判可疑，是行為判斷）。</p>'}
-      <h2 style="margin-top:14px">本機哪些程式連它</h2>
-      ${conns.length ? [...new Set(conns.map((c) => `${c.process?.name ?? '—'}（${c.state}）`))].map((x) => `<div class="small">${esc(x)}</div>`).join('') : '<p class="muted small">目前沒有連線。</p>'}
-      <div class="row" style="margin-top:14px">
+      <h3>這台哪些程式連它</h3>
+      ${mine.length ? [...new Set(mine.map((c) => `${c.process?.name ?? '—'}（${c.state}）`))].map((x) => `<div class="small">${esc(x)}</div>`).join('') : '<p class="muted small">目前沒有連線。</p>'}
+      <div class="row" style="margin-top:16px">
         <button class="btn primary" id="ip-ai">請 AI 分析這個 IP</button>
         <button class="btn" data-url="https://www.virustotal.com/gui/ip-address/${encodeURIComponent(ip)}">VirusTotal</button>
         <button class="btn" data-url="https://www.abuseipdb.com/check/${encodeURIComponent(ip)}">AbuseIPDB</button>
       </div>
-      <p class="muted small" style="margin-top:8px">外部網站只是連結，按了才會在瀏覽器開啟。</p>
-    </div>`;
+      <p class="muted small" style="margin-top:8px">外部網站只是連結，按了才會在瀏覽器開啟。</p>`;
     document.getElementById('ip-ai').onclick = () => goAi('free', `分析這個 IP：${ip}。用 lookup_ip 查情資與國家／ASN，用 list_connections 看本機哪些程式連它；判斷它大概是什麼服務、被判可疑的理由是情資還是行為判斷、是不是誤報，最後給出建議。`);
   } catch (e) {
-    p.innerHTML = `<div class="card">${esc(e)}</div>`;
+    if (body.isConnected) body.innerHTML = `<p class="small" style="color:var(--danger)">${esc(e)}</p>`;
   }
 }
 
@@ -611,7 +726,7 @@ const DNS_HINT = {
   domains: '依「可註冊網域」計算：a.b.example.co.uk 算成 example.co.uk，同一家的子網域合成一個。',
   suspicious: '威脅情資列名的網域、黑名單上的網域、像亂數產生的網域、少見的頂級網域，或加密 DNS 端點（程式自己走加密 DNS 會繞過公司的 DNS）。',
   protect: '公司的防護 DNS 會擋掉威脅情資列名的網域；把這台的 DNS 指過去後，防護 DNS 連續 3 分鐘查不到時背景服務會自動改回原本的 DNS。',
-  enabled: '即時記錄這台查了哪些網域、是哪個程式查的，可疑的會變成掃描結果。關掉就不記錄、也不做 DNS 告警。',
+  enabled: '即時記錄這台查了哪些網域、是哪個程式查的，可疑的會變成掃描結果。關掉就不記錄、也不做 DNS 告警，「DNS」頁會顯示未啟用。',
   upload: 'DNS 紀錄等於上網紀錄。「全部」＝每分鐘把紀錄送到公司的 Hub；「只傳告警」＝只送可疑的；「不傳」＝只留在這台。',
   verify: '拿 3 個常見網域的答案跟 Cloudflare 的加密 DNS 比對，抓 DNS 被竄改。開了會把這 3 個網域送給 Cloudflare。',
   server: '讓這台電腦當整個區網的防護 DNS（擋威脅情資列名的網域、上游走加密 DNS）。要背景服務在跑；其他裝置的 DNS 指到這台的區網 IP 才會用到。',
@@ -629,55 +744,118 @@ async function dnsDo(fn, okText) {
   }
 }
 
-function dnsSettingsCard(d) {
+/** 設定頁 DNS 區塊的黑白名單（這台的可以移除；Hub 的只能看）。 */
+function dnsListsHtml(d) {
+  const local = d.blocklist?.local ?? [];
+  const hub = d.blocklist?.hub ?? [];
+  const allowLocal = d.allowlist?.local ?? [];
+  const allowHub = d.allowlist?.hub ?? [];
+  const rows = (items) => `<div class="tbl-wrap"><table style="margin-top:4px"><tbody>${items.join('')}</tbody></table></div>`;
+  const hubCell = '<td class="small muted nw" title="公司統一管理，在 Hub「設定與金鑰 → 防護 DNS」修改">Hub</td><td></td>';
+  return `
+    <h3 class="sub-h" title="${esc(DNS_HINT.blocklist)}">黑白名單 <span class="muted">(?)</span></h3>
+    <div class="row"><input type="text" id="dns-bl-add" placeholder="網域或網址，例：bad.example" style="width:260px"/><button class="btn primary" id="dns-bl-btn">加入黑名單</button><button class="btn" id="dns-al-btn">加入白名單</button></div>
+    <div class="usage-grid" style="margin-top:10px">
+      <div><div class="small"><b>黑名單</b> <span class="muted">擋下、告警</span></div>
+        ${local.length || hub.length ? rows([
+          ...local.map((e) => `<tr><td class="mono small">${esc(e.domain)}${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ''}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unblock="${esc(e.domain)}" title="從這台的黑名單移除" aria-label="移除 ${esc(e.domain)}">✕</button></td></tr>`),
+          ...hub.map((x) => `<tr><td class="mono small">${esc(x)}</td>${hubCell}</tr>`),
+        ]) : '<p class="small muted">還沒有。也可以在「DNS」頁的查詢紀錄按「封鎖」。</p>'}</div>
+      <div><div class="small"><b>白名單</b> <span class="muted">不擋、不告警</span></div>
+        ${allowLocal.length || allowHub.length ? rows([
+          ...allowLocal.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unallow="${esc(x)}" title="從這台的白名單移除" aria-label="移除 ${esc(x)}">✕</button></td></tr>`),
+          ...allowHub.map((x) => `<tr><td class="mono small">${esc(x)}</td>${hubCell}</tr>`),
+        ]) : '<p class="small muted">還沒有。情資誤判時可以在「DNS」頁按「放行」。</p>'}</div>
+    </div>`;
+}
+
+/** 黑白名單的增刪（DNS 頁、設定頁、網域分析共用），做完呼叫 after。 */
+async function dnsListChange(cmd, domains, after) {
+  const r = await dnsDo(() => invoke(cmd, cmd === 'dns_block' || cmd === 'dns_allow' ? { domains, note: null } : { domains }));
+  if (!r) return;
+  const list = (x) => x.join('、');
+  if (cmd === 'dns_block') toast(r.added.length ? `已加入黑名單：${list(r.added)}（含子網域）` : r.invalid.length ? `不是合法的網域：${list(r.invalid)}` : '已經在黑名單上了', 5000);
+  if (cmd === 'dns_allow') toast(r.added.length ? `已加入白名單：${list(r.added)}（含子網域）` : r.invalid.length ? `不是合法的網域：${list(r.invalid)}` : '已經在白名單上了', 5000);
+  if (cmd === 'dns_unblock') toast(r.removed.length ? `已從黑名單移除：${list(r.removed)}` : '這台的黑名單上沒有它');
+  if (cmd === 'dns_unallow') toast(r.removed.length ? `已從白名單移除：${list(r.removed)}` : '這台的白名單上沒有它');
+  after?.();
+}
+
+/** 設定頁的「DNS」區塊：監看開關、上傳、比對答案、用公司的防護 DNS、這台當防護 DNS、黑白名單。 */
+async function renderDnsSettings(el) {
+  if (!el) return;
+  let d;
+  try {
+    d = await invoke('dns_settings');
+  } catch (e) {
+    el.innerHTML = `<h2>DNS</h2><p class="small" style="color:var(--danger)">${esc(e)}</p>`;
+    return;
+  }
   const sel = (v) => (d.upload === v ? 'selected' : '');
   const usedHub = d.use_hub
     ? `<p class="small">目前用的是公司的防護 DNS（<span class="mono">${esc(d.use_hub.servers.join('、'))}</span>，從 ${ago(d.use_hub.applied_at)} 起）。</p><button class="btn" id="dns-restore">改回原本的 DNS</button>`
     : `<p class="small muted">${d.hub_protect?.resolver_ips?.length ? `公司的防護 DNS：<span class="mono">${esc(d.hub_protect.resolver_ips.join('、'))}</span>` : '還沒有公司的防護 DNS 位址（Hub「設定與金鑰 → 防護 DNS」的「裝置要用的 DNS 位址」），也可以自己填。'}</p>
        <div class="row"><input type="text" id="dns-hub-ip" placeholder="${esc(d.hub_protect?.resolver_ips?.join(',') || '例：192.168.1.5')}" style="width:200px"/><button class="btn primary" id="dns-use-hub">把這台的 DNS 指過去</button></div>`;
-  return `<div class="card">
-    <h2>設定</h2>
-    <label class="row small" title="${esc(DNS_HINT.enabled)}"><input type="checkbox" id="dns-set-enabled" ${d.enabled ? 'checked' : ''}/> <b>記錄這台的 DNS 查詢</b> <span class="muted">(?)</span></label>
-    <label class="small row" style="margin-top:8px" title="${esc(DNS_HINT.upload)}">上傳到公司的 Hub <span class="muted">(?)</span>
-      <select id="dns-set-upload"><option value="all" ${sel('all')}>全部</option><option value="alerts" ${sel('alerts')}>只傳告警</option><option value="off" ${sel('off')}>不傳</option></select></label>
-    <label class="row small" style="margin-top:8px" title="${esc(DNS_HINT.verify)}"><input type="checkbox" id="dns-set-verify" ${d.verify_answers ? 'checked' : ''}/> 比對 DNS 答案（抓竄改） <span class="muted">(?)</span></label>
-    <label class="row small" style="margin-top:8px" title="${esc(DNS_HINT.server)}"><input type="checkbox" id="dns-set-server" ${d.dns_server ? 'checked' : ''}/> 這台當防護 DNS <span class="muted">(?)</span></label>
-    <div class="row small" style="margin-top:4px;${d.dns_server ? '' : 'display:none'}" id="dns-listen-row">監聽位址 <input type="text" id="dns-set-listen" value="${esc(d.dns_server_listen)}" placeholder="空白＝全部網卡的 53 port" style="width:200px"/><button class="btn" id="dns-save-listen">儲存</button></div>
-    <h2 style="margin-top:14px" title="${esc(DNS_HINT.protect)}">這台用公司的防護 DNS <span class="muted">(?)</span></h2>
-    ${usedHub}
-    <p class="small muted" style="margin-top:6px">改系統 DNS 需要系統管理員權限，會跳出確認視窗。</p>
-  </div>`;
-}
-
-function dnsBlocklistCard(d) {
-  const local = d.blocklist?.local ?? [];
-  const hub = d.blocklist?.hub ?? [];
-  const allowLocal = d.allowlist?.local ?? [];
-  const allowHub = d.allowlist?.hub ?? [];
-  const rows = (items) => `<table style="margin-top:6px"><tbody>${items.join('')}</tbody></table>`;
-  return `<div class="card">
-    <h2 title="${esc(DNS_HINT.blocklist)}">黑白名單 <span class="muted">(?)</span></h2>
-    <div class="row"><input type="text" id="dns-bl-add" placeholder="網域或網址，例：bad.example" style="width:190px"/></div>
-    <div class="row" style="margin-top:6px"><button class="btn primary" id="dns-bl-btn">加入黑名單</button><button class="btn" id="dns-al-btn">加入白名單</button></div>
-    <h2 style="margin-top:12px">黑名單（擋下、告警）</h2>
-    ${local.length || hub.length ? rows([
-      ...local.map((e) => `<tr><td class="mono small">${esc(e.domain)}${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ''}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unblock="${esc(e.domain)}" title="從這台的黑名單移除">✕</button></td></tr>`),
-      ...hub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`),
-    ]) : '<p class="small muted">還沒有。也可以在查詢紀錄按「封鎖」。</p>'}
-    <h2 style="margin-top:12px">白名單（不擋、不告警）</h2>
-    ${allowLocal.length || allowHub.length ? rows([
-      ...allowLocal.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw">這台</td><td class="nw"><button class="btn" data-unallow="${esc(x)}" title="從這台的白名單移除">✕</button></td></tr>`),
-      ...allowHub.map((x) => `<tr><td class="mono small">${esc(x)}</td><td class="small muted nw" title="公司統一管理，在 Hub 修改">Hub</td><td></td></tr>`),
-    ]) : '<p class="small muted">還沒有。情資誤判時可以在查詢紀錄按「放行」。</p>'}
-  </div>`;
+  el.innerHTML = `<h2>DNS</h2>
+    <label class="row" title="${esc(DNS_HINT.enabled)}"><input type="checkbox" id="dns-set-enabled" ${d.enabled ? 'checked' : ''}/> <b>啟用 DNS 監看</b> <span class="small muted">(?)</span></label>
+    <p class="small muted" style="margin:4px 0 0 24px">${d.enabled ? '記錄這台查了哪些網域、是哪個程式查的；可疑的會告警，紀錄在「DNS」頁。' : '目前沒有記錄，「DNS」頁會顯示未啟用。'}</p>
+    <fieldset class="plain" ${d.enabled ? '' : 'disabled'} style="margin:8px 0 0 24px">
+      <label class="small row" title="${esc(DNS_HINT.upload)}">上傳到公司的 Hub <span class="muted">(?)</span>
+        <select id="dns-set-upload"><option value="all" ${sel('all')}>全部</option><option value="alerts" ${sel('alerts')}>只傳告警</option><option value="off" ${sel('off')}>不傳</option></select></label>
+      <label class="row small" style="margin-top:8px" title="${esc(DNS_HINT.verify)}"><input type="checkbox" id="dns-set-verify" ${d.verify_answers ? 'checked' : ''}/> 比對 DNS 答案（抓竄改） <span class="muted">(?)</span></label>
+    </fieldset>
+    <div class="sub-section">
+      <h3 class="sub-h" style="margin-top:0" title="${esc(DNS_HINT.protect)}">這台用公司的防護 DNS <span class="muted">(?)</span></h3>
+      ${usedHub}
+      <p class="small muted" style="margin:6px 0 0">改系統 DNS 需要系統管理員權限，會跳出確認視窗。</p>
+    </div>
+    <div class="sub-section">
+      <label class="row small" title="${esc(DNS_HINT.server)}"><input type="checkbox" id="dns-set-server" ${d.dns_server ? 'checked' : ''}/> <b>這台當防護 DNS</b> <span class="muted">(?)</span></label>
+      <div class="row small" style="margin:6px 0 0 24px" id="dns-listen-row" ${d.dns_server ? '' : 'hidden'}>監聽位址 <input type="text" id="dns-set-listen" value="${esc(d.dns_server_listen)}" placeholder="空白＝全部網卡的 53 port" style="width:220px"/><button class="btn" id="dns-save-listen">儲存</button></div>
+    </div>
+    <div class="sub-section">${dnsListsHtml(d)}</div>`;
+  const $ = (id) => document.getElementById(id);
+  const again = () => renderDnsSettings(el);
+  const set = async (key, value, ok) => {
+    const r = await dnsDo(() => invoke('dns_set', { key, value: String(value) }), ok);
+    again();
+    return r;
+  };
+  $('dns-set-enabled').onchange = (e) => set('dns.enabled', e.target.checked, e.target.checked ? '已啟用 DNS 監看（背景服務下一輪開始記錄）' : '已停用 DNS 監看');
+  $('dns-set-upload').onchange = (e) => set('dns.upload', e.target.value, '已儲存');
+  $('dns-set-verify').onchange = (e) => set('dns.verify_answers', e.target.checked, '已儲存');
+  $('dns-set-server').onchange = (e) => set('dns.server.enabled', e.target.checked, e.target.checked ? '背景服務 1 分鐘內會帶起防護 DNS' : '背景服務 1 分鐘內會停掉防護 DNS');
+  $('dns-save-listen').onclick = () => set('dns.server.listen', $('dns-set-listen').value, '已儲存監聽位址');
+  if ($('dns-use-hub')) {
+    $('dns-use-hub').onclick = async () => {
+      const ip = $('dns-hub-ip').value.trim();
+      if (!window.confirm(`把這台的系統 DNS 改成${ip ? ` ${ip}` : '公司的防護 DNS'}？\n\n原本的設定會存起來，可以按「改回原本的 DNS」；防護 DNS 連不上時背景服務也會自動改回。`)) return;
+      const r = await dnsDo(() => invoke('dns_use_hub', { server: ip || null }));
+      if (r) { toast((r.lines || []).join('\n') || '已改好', 6000); again(); }
+    };
+  }
+  if ($('dns-restore')) {
+    $('dns-restore').onclick = async () => {
+      if (!window.confirm('把這台的 DNS 改回原本的設定？')) return;
+      const r = await dnsDo(() => invoke('dns_restore'));
+      if (r) { toast('已改回原本的 DNS'); again(); }
+    };
+  }
+  const inputDomains = () => $('dns-bl-add').value.trim().split(/[\s,]+/).filter(Boolean);
+  $('dns-bl-btn').onclick = () => { const v = inputDomains(); if (v.length) dnsListChange('dns_block', v, again); };
+  $('dns-al-btn').onclick = () => { const v = inputDomains(); if (v.length) dnsListChange('dns_allow', v, again); };
+  $('dns-bl-add').onkeydown = (e) => { if (e.key === 'Enter') $('dns-bl-btn').click(); };
+  el.querySelectorAll('[data-unblock]').forEach((b) => (b.onclick = () => dnsListChange('dns_unblock', [b.dataset.unblock], again)));
+  el.querySelectorAll('[data-unallow]').forEach((b) => (b.onclick = () => dnsListChange('dns_unallow', [b.dataset.unallow], again)));
 }
 
 const DNS_HOWTO = `<details class="card"><summary><b>DNS 防禦怎麼用</b></summary>
   <ol class="small" style="line-height:1.8;margin:8px 0 0 18px;padding:0">
     <li><b>看紀錄</b>：背景服務在跑時，這頁會列出這台查了哪些網域、哪個程式查的；可疑的會標出理由，也會出現在「掃描結果」。</li>
-    <li><b>加黑白名單</b>：在右邊「黑白名單」貼上網域，或在查詢紀錄按「封鎖」／「放行」。黑名單：這台查到就告警、用防護 DNS 的電腦直接被擋；白名單：不告警、不擋（情資誤判時用）。全公司一起生效請在 Hub「設定與金鑰 → 防護 DNS」加。</li>
-    <li><b>真的擋下來</b>：公司有防護 DNS 時，在「設定」按「把這台的 DNS 指過去」；防護 DNS 連不上會自動改回。想讓這台當防護 DNS，勾「這台當防護 DNS」。</li>
-    <li><b>隱私</b>：DNS 紀錄等於上網紀錄，「上傳到公司的 Hub」可以改成只傳告警或不傳。</li>
+    <li><b>查一個網域</b>：在搜尋框輸入網域按「查詢」（或點紀錄裡的網域），看它現在解析到哪裡、有沒有被威脅情資列名、這台哪些程式查過。</li>
+    <li><b>加黑白名單</b>：在紀錄按「封鎖」／「放行」，或在網域分析裡加。黑名單：這台查到就告警、用防護 DNS 的電腦直接被擋；白名單：不告警、不擋（情資誤判時用）。整份清單在「設定 → DNS」管理；全公司一起生效請在 Hub「設定與金鑰 → 防護 DNS」加。</li>
+    <li><b>真的擋下來</b>：公司有防護 DNS 時，到「設定 → DNS」按「把這台的 DNS 指過去」；防護 DNS 連不上會自動改回。想讓這台當防護 DNS，在同一處勾「這台當防護 DNS」。</li>
+    <li><b>隱私</b>：DNS 紀錄等於上網紀錄，「設定 → DNS」可以改成只傳告警或不傳，也可以整個停用。</li>
   </ol></details>`;
 
 async function pageDns() {
@@ -689,18 +867,36 @@ async function pageDns() {
     $main.innerHTML = `<h1>DNS</h1><div class="card"><p class="small" style="color:var(--danger)">${esc(e)}</p></div>`;
     return;
   }
+  const $ = (id) => document.getElementById(id);
+  if (!d.enabled) {
+    $main.innerHTML = `
+      <div class="head"><div><h1>DNS</h1><p class="sub">這台電腦查了哪些網域、是哪個程式查的、哪些可疑。</p></div></div>
+      <div class="card notice">
+        <div class="notice-ic" aria-hidden="true">⏸</div>
+        <div>
+          <p class="notice-title">未啟用 DNS 監看</p>
+          <p class="small">啟用後會記錄這台查了哪些網域、是哪個程式查的；威脅情資列名、黑名單上、像亂數產生的網域會告警。紀錄只留在這台 7 天，要不要上傳到公司的 Hub 可以在設定裡選。</p>
+          <div class="row"><button class="btn primary" id="dns-enable">啟用 DNS 監看</button><a class="btn" href="#settings/dns">到設定</a></div>
+        </div>
+      </div>`;
+    $('dns-enable').onclick = async () => {
+      if (await dnsDo(() => invoke('dns_set', { key: 'dns.enabled', value: 'true' }), '已啟用 DNS 監看（背景服務下一輪開始記錄）')) pageDns();
+    };
+    return;
+  }
   const st = d.status;
   const src = st ? DNS_SOURCE[st.source] : null;
   const nxPct = d.total ? Math.round((d.nxdomain / d.total) * 1000) / 10 : 0;
+  const domainLink = (name) => `<a class="link mono small" data-domain="${esc(name)}" title="點一下看網域分析">${esc(name)}</a>`;
   $main.innerHTML = `
     <div class="head">
       <div><h1>DNS</h1><p class="sub">這台電腦查了哪些網域、是哪個程式查的、哪些可疑。紀錄只留在這台電腦 7 天${d.upload === 'all' ? '，有加入公司 Hub 時每分鐘上傳' : ''}。</p></div>
       <div class="row">
         <label class="small">期間 <select id="dns-min">${[[15, '15 分鐘'], [60, '1 小時'], [360, '6 小時'], [1440, '24 小時'], [10080, '7 天']].map(([v, l]) => `<option value="${v}" ${v === dnsState.minutes ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <button class="btn" id="dns-refresh">重新整理</button>
+        <a class="btn" href="#settings/dns" title="DNS 監看開關、上傳到 Hub、防護 DNS、黑白名單">DNS 設定</a>
       </div>
     </div>
-    ${d.enabled ? '' : `<div class="card"><p class="small">DNS 監看已關閉，在右邊「設定」勾「記錄這台的 DNS 查詢」就會開始記錄。</p></div>`}
     ${d.unreadable ? `<div class="card"><p class="small">背景服務的 DNS 紀錄要以系統管理員身分執行才讀得到。</p></div>` : ''}
     <div class="grid">
       <div class="stat"><div class="label">查詢次數</div><div class="value">${Number(d.total).toLocaleString()}</div><div class="hint">${src ? `<span title="${esc(src[1])}">來源：${esc(src[0])}</span>` : '背景服務還沒有紀錄'}</div></div>
@@ -709,98 +905,120 @@ async function pageDns() {
       <div class="stat"><div class="label" title="${esc(DNS_HINT.suspicious)}">可疑 ⓘ</div><div class="value" style="${d.suspicious ? 'color:var(--warn)' : ''}">${d.suspicious}</div><div class="hint">${st?.last_event_at ? `最後一筆 ${ago(st.last_event_at)}` : ''}</div></div>
     </div>
     ${DNS_HOWTO}
-    <div class="split">
-      <div>
-        <div class="card">
-          <div class="filters">
-            <input type="text" id="dns-q" placeholder="網域或程式" value="${esc(dnsState.q)}" style="width:240px"/>
-            <label class="small row" title="${esc(DNS_HINT.suspicious)}"><input type="checkbox" id="dns-bad" ${dnsState.suspicious ? 'checked' : ''}/> 只看可疑的</label>
-            <span class="muted small">${d.records.length >= 500 ? '只顯示最近 500 筆' : `${d.records.length} 筆`}</span>
-          </div>
-          ${d.records.length ? `<div style="overflow-x:auto"><table><thead><tr><th class="nw">時間</th><th>網域</th><th class="nw">類型</th><th class="nw">結果</th><th>程式</th><th class="nw">次數</th><th></th></tr></thead><tbody>${d.records
-            .map((r) => `<tr>
-              <td class="small muted nw">${ago(r.ts)}</td>
-              <td><span class="mono small">${esc(r.name)}</span>${r.reasons.map((x) => ` <span class="chip medium">${esc(x)}</span>`).join('')}${r.answers?.length ? `<div class="small muted mono">${esc(r.answers.slice(0, 3).join(', '))}${r.answers.length > 3 ? '…' : ''}</div>` : ''}</td>
-              <td class="small nw">${esc(r.qtype)}</td>
-              <td class="small nw">${r.rcode === 'NOERROR' ? '<span class="muted">有答案</span>' : r.rcode === 'NXDOMAIN' ? `<span title="${esc(DNS_HINT.nx)}">查無此網域</span>` : esc(r.rcode)}</td>
-              <td class="small">${esc(r.process ?? '—')}</td>
-              <td class="small mono nw">${r.count}</td>
-              <td class="nw"><button class="btn" data-block="${esc(r.name)}" title="把這個網域（含子網域）加進這台的黑名單">封鎖</button> <button class="btn" data-allow="${esc(r.name)}" title="把這個網域（含子網域）加進這台的白名單：不告警、不擋">放行</button></td>
-            </tr>`).join('')}</tbody></table></div>` : `<p class="muted small">這段期間沒有紀錄${d.enabled ? '（背景服務要在跑才會記錄；Windows 以系統管理員執行才看得到程式）' : ''}。</p>`}
-        </div>
-      </div>
-      <div>
-        ${dnsSettingsCard(d)}
-        ${dnsBlocklistCard(d)}
-        <div class="card"><h2>查詢最多的網域</h2>${d.top_domains.length ? `<table><tbody>${d.top_domains.map((t) => `<tr><td class="mono small">${esc(t.domain)}</td><td class="small muted">${esc(t.process || '')}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">沒有</p>'}</div>
-        <div class="card"><h2>查詢最多的程式</h2>${d.top_processes.length ? `<table><tbody>${d.top_processes.map((t) => `<tr><td class="small">${esc(t.process)}</td><td class="small mono">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">看不到程式（Windows 以系統管理員執行背景服務才看得到）</p>'}</div>
-      </div>
+    <div class="card">
+      <form class="filters search-row" id="dns-search" autocomplete="off">
+        <input type="search" id="dns-q" data-search placeholder="網域或程式（輸入網域按查詢可看分析）" value="${esc(dnsState.q)}" aria-label="搜尋 DNS 紀錄"/>
+        <button class="btn primary" type="submit" title="篩選紀錄；輸入的是網域時另外打開網域分析（快速鍵 Ctrl+F）">查詢</button>
+        <label class="small row" title="${esc(DNS_HINT.suspicious)}"><input type="checkbox" id="dns-bad" ${dnsState.suspicious ? 'checked' : ''}/> 只看可疑的 <span class="muted">（${d.suspicious} 筆）</span></label>
+        <span class="muted small">${d.records.length >= 500 ? '顯示最近 500 筆' : `顯示 ${d.records.length} 筆`}</span>
+      </form>
+      ${d.records.length ? `<div class="tbl-wrap"><table><thead><tr><th class="nw">時間</th><th>網域</th><th class="nw">類型</th><th class="nw">結果</th><th class="nw">程式</th><th class="nw">次數</th><th></th></tr></thead><tbody>${d.records
+        .map((r) => `<tr>
+          <td class="small muted nw">${ago(r.ts)}</td>
+          <td>${domainLink(r.name)}${r.reasons.map((x) => ` <span class="chip medium">${esc(x)}</span>`).join('')}${r.answers?.length ? `<div class="small muted mono">${esc(r.answers.slice(0, 3).join(', '))}${r.answers.length > 3 ? '…' : ''}</div>` : ''}</td>
+          <td class="small nw">${esc(r.qtype)}</td>
+          <td class="small nw">${r.rcode === 'NOERROR' ? '<span class="muted">有答案</span>' : r.rcode === 'NXDOMAIN' ? `<span title="${esc(DNS_HINT.nx)}">查無此網域</span>` : esc(r.rcode)}</td>
+          <td class="small">${esc(r.process ?? '—')}</td>
+          <td class="small mono nw">${r.count}</td>
+          <td class="nw"><button class="btn" data-block="${esc(r.name)}" title="把這個網域（含子網域）加進這台的黑名單">封鎖</button> <button class="btn" data-allow="${esc(r.name)}" title="把這個網域（含子網域）加進這台的白名單：不告警、不擋">放行</button></td>
+        </tr>`).join('')}</tbody></table></div>` : `<p class="muted small">${dnsState.q || dnsState.suspicious ? '沒有符合的紀錄。' : '這段期間沒有紀錄（背景服務要在跑才會記錄；Windows 以系統管理員執行才看得到程式）。'}</p>`}
+    </div>
+    <div class="usage-grid">
+      <div class="card"><h2>查詢最多的網域</h2>${d.top_domains.length ? `<table><tbody>${d.top_domains.map((t) => `<tr><td>${domainLink(t.domain)}</td><td class="small muted">${esc(t.process || '')}</td><td class="small mono num">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">沒有</p>'}</div>
+      <div class="card"><h2>查詢最多的程式</h2>${d.top_processes.length ? `<table><tbody>${d.top_processes.map((t) => `<tr><td class="small">${esc(t.process)}</td><td class="small mono num">${Number(t.count).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">看不到程式（Windows 以系統管理員執行背景服務才看得到）</p>'}</div>
     </div>`;
-  const $ = (id) => document.getElementById(id);
   $('dns-refresh').onclick = () => pageDns();
   $('dns-min').onchange = (e) => { dnsState.minutes = Number(e.target.value); pageDns(); };
   $('dns-bad').onchange = (e) => { dnsState.suspicious = e.target.checked; pageDns(); };
+  const keepFocus = () => { const el = $('dns-q'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
   let t = null;
   $('dns-q').oninput = (e) => {
     dnsState.q = e.target.value;
     clearTimeout(t);
-    t = setTimeout(() => pageDns().then(() => { const el = $('dns-q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }), 400);
+    t = setTimeout(() => pageDns().then(keepFocus), 400);
   };
-  // 設定
-  const set = (key, value, ok) => dnsDo(() => invoke('dns_set', { key, value: String(value) }), ok);
-  $('dns-set-enabled').onchange = (e) => set('dns.enabled', e.target.checked, e.target.checked ? '已開始記錄 DNS 查詢（背景服務下一輪生效）' : '已停止記錄 DNS 查詢');
-  $('dns-set-upload').onchange = (e) => set('dns.upload', e.target.value, '已儲存');
-  $('dns-set-verify').onchange = (e) => set('dns.verify_answers', e.target.checked, '已儲存');
-  $('dns-set-server').onchange = async (e) => {
-    await set('dns.server.enabled', e.target.checked, e.target.checked ? '背景服務 1 分鐘內會帶起防護 DNS' : '背景服務 1 分鐘內會停掉防護 DNS');
-    $('dns-listen-row').style.display = e.target.checked ? '' : 'none';
+  $('dns-search').onsubmit = (e) => {
+    e.preventDefault();
+    clearTimeout(t);
+    dnsState.q = $('dns-q').value;
+    const v = dnsState.q.trim();
+    if (isIpLike(v)) showIp(v);
+    else if (isDomainLike(v)) showDomain(v);
+    pageDns().then(keepFocus);
   };
-  $('dns-save-listen').onclick = () => set('dns.server.listen', $('dns-set-listen').value, '已儲存監聽位址');
-  if ($('dns-use-hub')) {
-    $('dns-use-hub').onclick = async () => {
-      const ip = $('dns-hub-ip').value.trim();
-      if (!window.confirm(`把這台的系統 DNS 改成${ip ? ` ${ip}` : '公司的防護 DNS'}？\n\n原本的設定會存起來，可以按「改回原本的 DNS」；防護 DNS 連不上時背景服務也會自動改回。`)) return;
-      const r = await dnsDo(() => invoke('dns_use_hub', { server: ip || null }));
-      if (r) { toast((r.lines || []).join('\n') || '已改好', 6000); pageDns(); }
-    };
+  $main.querySelectorAll('[data-block]').forEach((b) => (b.onclick = () => dnsListChange('dns_block', [b.dataset.block], pageDns)));
+  $main.querySelectorAll('[data-allow]').forEach((b) => (b.onclick = () => dnsListChange('dns_allow', [b.dataset.allow], pageDns)));
+}
+
+/** 網域分析的一句話結論。 */
+function domainVerdict(r) {
+  if (r.allowed) return { tone: 'ok', title: '在白名單上', text: '不告警，也不會被這台跑的防護 DNS 擋下。' };
+  if (r.block) return { tone: 'bad', title: '在黑名單上', text: '這台查到就告警；用防護 DNS 的電腦會直接被擋。' };
+  if (r.intel.score >= 80) return { tone: 'bad', title: '威脅情資判定危險', text: `${r.intel.hits.length} 份情資清單列名（分數 ${r.intel.score}）。不認得的話建議加入黑名單。` };
+  if (r.intel.score >= 60) return { tone: 'warn', title: '威脅情資列為可疑', text: `情資清單列名（分數 ${r.intel.score}），可能是誤報，看一下是哪個程式查的。` };
+  if (r.doh) return { tone: 'warn', title: '加密 DNS 端點', text: '程式自己走加密 DNS 會繞過公司的 DNS 防護；瀏覽器以外的程式查它值得留意。' };
+  if (r.heuristic) return { tone: 'warn', title: '看起來可疑', text: r.heuristic };
+  if (r.popular) return { tone: 'ok', title: '熱門網域', text: '沒有情資列名，是常見的大型網站或服務。' };
+  return { tone: 'neutral', title: '沒有發現問題', text: '沒有情資列名、不在黑名單上，也不像亂數產生的網域。' };
+}
+
+async function showDomain(raw) {
+  const body = openDrawer('網域分析', `<p class="mono big">${esc(raw)}</p><p class="muted small"><span class="spin"></span> 查詢中…</p>`);
+  let r;
+  try {
+    r = await invoke('lookup_domain', { domain: raw });
+  } catch (e) {
+    if (body.isConnected) body.innerHTML = `<p class="mono big">${esc(raw)}</p><p class="small" style="color:var(--danger)">${esc(e)}</p>`;
+    return;
   }
-  if ($('dns-restore')) {
-    $('dns-restore').onclick = async () => {
-      if (!window.confirm('把這台的 DNS 改回原本的設定？')) return;
-      const r = await dnsDo(() => invoke('dns_restore'));
-      if (r) { toast('已改回原本的 DNS'); pageDns(); }
-    };
-  }
-  // 黑名單
-  const block = async (domains) => {
-    const r = await dnsDo(() => invoke('dns_block', { domains, note: null }));
-    if (!r) return;
-    if (r.added.length) toast(`已加入黑名單：${r.added.join('、')}（含子網域）`);
-    else if (r.invalid.length) toast(`不是合法的網域：${r.invalid.join('、')}`, 5000);
-    else toast('已經在黑名單上了');
-    pageDns();
-  };
-  const allow = async (domains) => {
-    const r = await dnsDo(() => invoke('dns_allow', { domains, note: null }));
-    if (!r) return;
-    if (r.added.length) toast(`已加入白名單：${r.added.join('、')}（含子網域）`);
-    else if (r.invalid.length) toast(`不是合法的網域：${r.invalid.join('、')}`, 5000);
-    pageDns();
-  };
-  const inputDomains = () => $('dns-bl-add').value.trim().split(/[\s,]+/).filter(Boolean);
-  $('dns-bl-btn').onclick = () => { const v = inputDomains(); if (v.length) block(v); };
-  $('dns-al-btn').onclick = () => { const v = inputDomains(); if (v.length) allow(v); };
-  $('dns-bl-add').onkeydown = (e) => { if (e.key === 'Enter') $('dns-bl-btn').click(); };
-  $main.querySelectorAll('[data-block]').forEach((b) => (b.onclick = () => block([b.dataset.block])));
-  $main.querySelectorAll('[data-allow]').forEach((b) => (b.onclick = () => allow([b.dataset.allow])));
-  $main.querySelectorAll('[data-unallow]').forEach((b) => (b.onclick = async () => {
-    const r = await dnsDo(() => invoke('dns_unallow', { domains: [b.dataset.unallow] }));
-    if (r) { toast(`已從白名單移除：${b.dataset.unallow}`); pageDns(); }
-  }));
-  $main.querySelectorAll('[data-unblock]').forEach((b) => (b.onclick = async () => {
-    const r = await dnsDo(() => invoke('dns_unblock', { domains: [b.dataset.unblock] }));
-    if (r) { toast(`已移除：${b.dataset.unblock}`); pageDns(); }
-  }));
+  if (!body.isConnected) return;
+  const v = domainVerdict(r);
+  const enc = encodeURIComponent(r.domain);
+  const intel = !r.intel.loaded
+    ? '<span class="muted">情資還沒下載（到「威脅情資」更新）</span>'
+    : r.intel.hits.length
+      ? r.intel.hits.map((h) => `<a class="link" data-url="${esc(h.source_url)}">${esc(h.vendor)} · ${esc(h.name)}</a> <span class="muted">信心 ${esc(h.confidence)}%</span>`).join('<br>') + `<div class="muted small">網域分數 ${r.intel.score}</div>`
+      : '沒有列名';
+  const rec = r.recent;
+  const acts = [
+    r.block?.local ? `<button class="btn" data-dom-act="dns_unblock" data-v="${esc(r.block.entry)}">移出黑名單</button>` : !r.block ? `<button class="btn" data-dom-act="dns_block" data-v="${esc(r.domain)}" title="這個網域（含子網域）加進這台的黑名單">加入黑名單</button>` : '',
+    r.allowed_local ? `<button class="btn" data-dom-act="dns_unallow" data-v="${esc(r.allowed_local)}">移出白名單</button>` : !r.allowed ? `<button class="btn" data-dom-act="dns_allow" data-v="${esc(r.domain)}" title="這個網域（含子網域）加進這台的白名單：不告警、不擋">加入白名單</button>` : '',
+  ].join('');
+  body.innerHTML = `
+    <p class="mono big">${esc(r.domain)}</p>
+    ${r.registrable && r.registrable !== r.domain ? `<p class="small muted" style="margin-top:-4px" title="${esc(DNS_HINT.domains)}">屬於 <span class="mono">${esc(r.registrable)}</span> (?)</p>` : ''}
+    <div class="verdict-box ${v.tone}"><b>${esc(v.title)}</b><div class="small">${esc(v.text)}</div></div>
+    <h3>現在解析到</h3>
+    ${r.resolved.ok
+      ? r.resolved.addrs.length ? `<div class="small">${r.resolved.addrs.map((ip) => `<a class="link mono" data-ip="${esc(ip)}" title="點一下分析這個 IP">${esc(ip)}</a>`).join('<br>')}</div>` : '<p class="small muted">沒有位址</p>'
+      : `<p class="small">查不到：${esc(r.resolved.error)}${r.use_hub ? '<br><span class="muted">這台用的是公司的防護 DNS，被擋下的網域也會查不到。</span>' : ''}</p>`}
+    <p class="small muted" style="margin-top:4px">用這台電腦目前的 DNS 查的。</p>
+    <h3>名單與情資</h3>
+    <div class="kv">
+      <div>黑名單</div><div>${r.block ? `在黑名單上（${esc(r.block.source)}：<span class="mono">${esc(r.block.entry)}</span>）` : '沒有'}</div>
+      <div>白名單</div><div>${r.allowed ? (r.allowed_local ? `在這台的白名單上（<span class="mono">${esc(r.allowed_local)}</span>）` : '在 Hub 的白名單上') : '沒有'}</div>
+      <div>威脅情資</div><div>${intel}</div>
+      <div title="程式自己走加密 DNS（DoH）會繞過公司的 DNS 防護">加密 DNS 端點 (?)</div><div>${r.doh ? `是（${esc(r.doh)}）` : '不是'}</div>
+      <div>其他判斷</div><div>${r.heuristic ? esc(r.heuristic) : r.popular ? '熱門網域' : '沒有'}</div>
+    </div>
+    <h3>這台最近 7 天</h3>
+    ${rec.total
+      ? `<p class="small">查了 ${Number(rec.total).toLocaleString()} 次（含子網域），最後一次 ${ago(rec.last)}。</p>
+         <table><thead><tr><th>程式</th><th class="num">次數</th></tr></thead><tbody>${rec.processes.map((p) => `<tr><td class="small">${esc(p.process || '（看不到程式）')}</td><td class="small mono num">${p.count}</td></tr>`).join('')}</tbody></table>
+         ${rec.names.length > 1 ? `<p class="small muted" style="margin:8px 0 2px">查過的名稱</p>${rec.names.map((n) => `<div class="mono small">${esc(n.name)} <span class="muted">× ${n.count}</span></div>`).join('')}` : ''}
+         ${rec.rcodes.some((x) => x.rcode !== 'NOERROR') ? `<p class="small muted" style="margin-top:6px">結果：${rec.rcodes.map((x) => `${esc(x.rcode === 'NOERROR' ? '有答案' : x.rcode === 'NXDOMAIN' ? '查無此網域' : x.rcode)} ${x.count}`).join('、')}</p>` : ''}`
+      : '<p class="small muted">這台最近 7 天沒有查過它（或當時沒有啟用 DNS 監看）。</p>'}
+    <div class="row" style="margin-top:16px">${acts}<button class="btn primary" id="dom-ai">請 AI 分析這個網域</button></div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" data-url="https://www.virustotal.com/gui/domain/${enc}">VirusTotal</button>
+      <button class="btn" data-url="https://urlscan.io/search/#domain:${enc}">urlscan.io</button>
+    </div>
+    <p class="muted small" style="margin-top:8px">外部網站只是連結，按了才會在瀏覽器開啟；ai-security-monitor 不會自動把網域送出去。</p>`;
+  body.querySelectorAll('[data-dom-act]').forEach((b) => (b.onclick = () => dnsListChange(b.dataset.domAct, [b.dataset.v], () => {
+    showDomain(r.domain);
+    if (location.hash === '#dns') pageDns();
+  })));
+  document.getElementById('dom-ai').onclick = () => goAi('free', `分析這個網域：${r.domain}。用 lookup_ip 查它的威脅情資（indicator 填網域），用 list_connections 看本機有沒有程式正連到它解析出的位址（${r.resolved.addrs?.join('、') || '查不到位址'}）；判斷它大概是什麼服務、是不是誤報，最後給出建議（要不要加黑名單）。`);
 }
 
 // ---------------- AI 分析 ----------------
@@ -994,6 +1212,7 @@ async function pageSettings(opts = {}) {
       <label class="row" title="${esc(PERF_TOGGLE_HINT)}"><input type="checkbox" id="perf-toggle" ${o.metrics?.performance ? 'checked' : ''} /> <b>蒐集這台電腦的效能（CPU、記憶體、磁碟）</b> <span class="small muted">(?)</span></label>
       <p class="small muted" style="margin:4px 0 0 24px" id="perf-state">${perfStateText(o.metrics?.performance)}</p>
     </div>
+    <div class="card" id="set-dns"><h2>DNS</h2><p class="small muted">讀取中…</p></div>
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
       <div>agent id</div><div class="mono">${esc(o.agent_id)}</div>
@@ -1006,10 +1225,13 @@ async function pageSettings(opts = {}) {
   renderHubSection(hubEl, st, opts);
   renderUpdateSection(document.getElementById('set-update'));
   renderLanSection(document.getElementById('set-lan'));
-  if (opts.focus === 'hub') {
-    hubEl.scrollIntoView({ block: 'start' });
-    hubEl.classList.add('focus');
-    setTimeout(() => hubEl.classList.remove('focus'), 1600);
+  const dnsEl = document.getElementById('set-dns');
+  renderDnsSettings(dnsEl);
+  const focusEl = opts.focus === 'hub' ? hubEl : opts.focus === 'dns' ? dnsEl : null;
+  if (focusEl) {
+    focusEl.scrollIntoView({ block: 'start' });
+    focusEl.classList.add('focus');
+    setTimeout(() => focusEl.classList.remove('focus'), 1600);
   }
 
   // 開機自動啟動：兩個開關各自讀狀態
@@ -1239,12 +1461,12 @@ function renderLive() {
 }
 
 // ---------------- 路由 ----------------
-// 網址是 #頁面 或 #頁面/區塊：#settings/hub＝設定頁的 Hub 區塊；#traffic/1h、#traffic/24h＝流量與效能的歷史分頁（#traffic 是即時）
+// 網址是 #頁面 或 #頁面/區塊：#settings/hub、#settings/dns＝設定頁的 Hub／DNS 區塊；#traffic/1h、#traffic/24h＝流量與效能的歷史分頁（#traffic 是即時）
 // 「流量與效能」（traffic）由 usage.js 的 pageTrafficTabs 分成即時／最近 1 小時／最近 24 小時三個分頁
 const PAGES = { overview: pageOverview, connections: pageConnections, dns: pageDns, traffic: pageTrafficTabs, findings: pageFindings, intel: pageIntel, ai: pageAi, settings: pageSettings };
 async function route() {
   let [page, section] = (location.hash || '#overview').slice(1).split('/');
-  let opts = section === 'hub' ? { focus: 'hub' } : { section };
+  let opts = section === 'hub' || section === 'dns' ? { focus: section } : { section };
   if (page === 'join') {
     // 舊的「加入公司 Hub」頁已經併進設定頁：換成設定頁的 Hub 區塊並直接開始尋找
     history.replaceState(null, '', HUB_SECTION);

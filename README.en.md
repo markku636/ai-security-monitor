@@ -270,11 +270,12 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 
 | | |
 |---|---|
-| ![Desktop connections](docs/images/windows-desktop-connections.png) Connections: verdict, reasons and intel source for every connection; click an IP for its country, organisation and which lists include it | ![Desktop AI analysis](docs/images/windows-desktop-ai.png) AI analysis: the local Claude Code / Codex looks things up through read-only tools and explains in plain language |
+| ![Desktop connections](docs/images/windows-desktop-connections.png) Connections: verdict, reasons and intel source for every connection; search and filter; type an IP and click *Search* or click an IP and a side panel shows its country, organisation and which lists include it | ![Desktop AI analysis](docs/images/windows-desktop-ai.png) AI analysis: the local Claude Code / Codex looks things up through read-only tools and explains in plain language |
 | ![Desktop scan results](docs/images/windows-desktop-findings.png) Scan results: sorted by severity, expand for detail and how to fix | ![Desktop dark mode](docs/images/windows-desktop-overview-dark.png) Dark mode follows the Windows setting |
 | ![Desktop: join the company Hub](docs/images/windows-desktop-settings-join.png) Settings → Company Security Hub: finds the company Hub by itself; check the fingerprint and click *Request to join* | ![Desktop settings](docs/images/windows-desktop-settings.png) Settings: the joined Hub, background reporting, automatic updates |
 | ![Desktop traffic and performance](docs/images/windows-desktop-usage.png) Traffic & performance: network speed over the last hour and which programs use the most (also live and last 24 hours) | ![Desktop CPU, memory, disk](docs/images/windows-desktop-usage-perf.png) With performance collection on: CPU, memory, disk, top programs, battery |
-| ![Desktop DNS](docs/images/windows-desktop-dns.png) DNS: which domains this computer looks up, which program asked, what looks suspicious (generated domains, threat-intel domains, encrypted DNS endpoints), and whether it uses the company protective DNS | ![Desktop threat intel](docs/images/windows-desktop-intel.png) Threat intel: entries, last update and licence of each list, update now |
+| ![Desktop DNS](docs/images/windows-desktop-dns.png) DNS: which domains this computer looks up, which program asked, what looks suspicious; type a domain and click *Search* (or click a domain) for domain analysis: where it resolves, threat intel, which programs looked it up, one-click blocklist/allowlist | ![Desktop DNS settings](docs/images/windows-desktop-settings-dns.png) Settings → DNS: DNS monitoring on/off, upload to the Hub, use the company protective DNS, run protective DNS here, blocklist/allowlist |
+| ![Desktop threat intel](docs/images/windows-desktop-intel.png) Threat intel: entries, last update and licence of each list, update now | |
 
 **Security Hub (web)**
 

@@ -54,10 +54,10 @@ ai-security-monitor dns status          # 資料來源、事件數、最後一�
 
 | | 這台電腦的 | Hub 的（全公司） |
 |---|---|---|
-| 加黑名單 | `ai-security-monitor dns block bad.example`（可以一次好幾個、可以貼網址、`--note` 備註）、桌面版 DNS 頁「加入黑名單」或每筆查詢的「封鎖」 | DNS 頁「黑白名單」、網域分析頁「加入黑名單」、「設定與金鑰 → 防護 DNS」的自訂封鎖 |
-| 加白名單 | `dns allow ok.example`、桌面版「加入白名單」或每筆查詢的「放行」 | DNS 頁「黑白名單」、網域分析頁「加入白名單」、設定頁的白名單 |
-| 移除 | `dns unblock`／`dns unallow` | 網域分析頁「移出黑名單／移出白名單」、設定頁 |
-| 查看 | `dns blocklist`（黑白名單、兩份都列） | 設定頁；DNS 頁有筆數 |
+| 加黑名單 | `ai-security-monitor dns block bad.example`（可以一次好幾個、可以貼網址、`--note` 備註）、桌面版「設定 → DNS」的黑白名單、DNS 頁每筆查詢的「封鎖」或網域分析的「加入黑名單」 | DNS 頁「黑白名單」、網域分析頁「加入黑名單」、「設定與金鑰 → 防護 DNS」的自訂封鎖 |
+| 加白名單 | `dns allow ok.example`、桌面版「設定 → DNS」、每筆查詢的「放行」或網域分析的「加入白名單」 | DNS 頁「黑白名單」、網域分析頁「加入白名單」、設定頁的白名單 |
+| 移除 | `dns unblock`／`dns unallow`、桌面版「設定 → DNS」或網域分析的「移出黑名單／移出白名單」 | 網域分析頁「移出黑名單／移出白名單」、設定頁 |
+| 查看 | `dns blocklist`（黑白名單、兩份都列）、桌面版「設定 → DNS」 | 設定頁；DNS 頁有筆數 |
 
 效果：
 - **每台電腦查到就告警**（`dns.blocklisted`，高），就算沒用防護 DNS 也抓得到；Hub 的黑名單每 10 分鐘同步到各台。

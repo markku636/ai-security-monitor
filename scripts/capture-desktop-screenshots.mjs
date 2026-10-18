@@ -1,6 +1,7 @@
 // README 截圖（桌面版）：在本機用靜態伺服器提供 desktop/ui，注入假的 window.__TAURI__（示範資料），
 // 再用無頭 Chrome／Edge（CDP）擷取各頁。完全不碰真實設定目錄、不跑真的掃描、不呼叫 AI。
 //   node scripts/capture-desktop-screenshots.mjs [--out docs/images] [--browser <path>] [--only desktop-overview,…]
+//   檢查別的視窗大小：--size 1200x810 [--dark]（全部頁面用這個大小、深色；搭配 --out 存到別處，別蓋掉 README 的圖）
 //   node scripts/capture-desktop-screenshots.mjs --frame windows
 //     → 改輸出 windows-desktop-*.png：把畫面套上 Windows 11 風格的視窗外框（標題列、最小化／最大化／關閉、圓角、陰影），
 //       另外產生 windows-desktop-hero(-dark).png：視窗放在純漸層桌布上，下方有工作列與系統匣圖示。
@@ -21,6 +22,8 @@ const args = Object.fromEntries(
 );
 const OUT = path.resolve(args.out ?? path.join(ROOT, 'docs', 'images'));
 const FRAME = args.frame ?? null;
+const SIZE = args.size?.match(/^(\d+)x(\d+)$/)?.slice(1).map(Number) ?? null;
+const FORCE_DARK = 'dark' in args;
 if (FRAME && FRAME !== 'windows') {
   console.error(`unknown --frame ${FRAME} (supported: windows)`);
   process.exit(1);
@@ -373,6 +376,34 @@ const DATA = {
       allowlist: { local: ['intranet.corp.example'], hub: ['ok.example.com'] },
     };
   })(),
+  // 網域分析（DNS 頁點網域或輸入網域按查詢）
+  domains: {
+    'cdn-update.example-malware.test': {
+      domain: 'cdn-update.example-malware.test',
+      registrable: 'example-malware.test',
+      popular: false,
+      resolved: { ok: true, addrs: ['203.0.113.66'] },
+      use_hub: false,
+      block: { entry: 'cdn-update.example-malware.test', source: '這台電腦的黑名單', local: true },
+      allowed: false,
+      allowed_local: null,
+      intel: {
+        loaded: true,
+        score: 85,
+        hits: [{ feed_id: 'certpl-domains', name: '警示清單', vendor: 'CERT Polska', confidence: 85, license: 'CERT.PL terms', source_url: 'https://cert.pl/en/warning-list/', matched: 'cdn-update.example-malware.test' }],
+      },
+      doh: null,
+      heuristic: null,
+      recent: {
+        total: 37,
+        last: new Date(Date.now() - 4 * 60_000).toISOString(),
+        processes: [{ process: 'updater.exe', count: 35 }, { process: 'chrome.exe', count: 2 }],
+        rcodes: [{ rcode: 'NOERROR', count: 37 }],
+        names: [{ name: 'cdn-update.example-malware.test', count: 37 }],
+        answers: ['203.0.113.66'],
+      },
+    },
+  },
   ai_providers: {
     providers: [
       { id: 'claude', label: 'Claude Code', found: true, path: 'C:\\Users\\demo\\AppData\\Roaming\\npm\\claude.cmd', logged_in: true },
@@ -442,6 +473,9 @@ function installMock(D) {
     latest_report: () => D.latest_report,
     intel_feeds: () => D.intel_feeds,
     dns_recent: () => D.dns,
+    dns_settings: () => D.dns,
+    lookup_domain: ({ domain }) =>
+      D.domains[domain] ?? { domain, registrable: domain, popular: false, resolved: { ok: true, addrs: [] }, use_hub: false, block: null, allowed: false, allowed_local: null, intel: { loaded: true, score: 0, hits: [] }, doh: null, heuristic: null, recent: { total: 0, last: null, processes: [], rcodes: [], names: [], answers: [] } },
     ai_providers: () => D.ai_providers,
     ai_auth_status: () => ({
       providers: [
@@ -641,7 +675,17 @@ const SHOTS = [
       );
     },
   ],
-  ['desktop-dns', 'dns', false, async () => waitFor(`document.querySelector('#main table')`)],
+  // DNS：點一個被情資列名的網域，右邊滑出網域分析
+  [
+    'desktop-dns',
+    'dns',
+    false,
+    async () => {
+      await waitFor(`document.querySelector('#main table')`);
+      await evaluate(`document.querySelector('[data-domain="cdn-update.example-malware.test"]').click()`);
+      await waitFor(`document.getElementById('dom-ai')`);
+    },
+  ],
   ['desktop-intel', 'intel', false, async () => waitFor(`document.querySelector('#main table')`)],
   [
     'desktop-ai',
@@ -654,6 +698,17 @@ const SHOTS = [
     },
   ],
   ['desktop-settings', 'settings', false, async () => waitFor(`document.getElementById('auto-bg') && !document.getElementById('auto-bg').disabled && !document.getElementById('auto-tray').disabled`)],
+  // 設定頁的 DNS 區塊：監看開關、上傳、防護 DNS、黑白名單
+  [
+    'desktop-settings-dns',
+    'settings/dns',
+    false,
+    async () => {
+      await waitFor(`document.getElementById('dns-set-enabled') && !document.getElementById('auto-bg').disabled`);
+      await evaluate(`document.getElementById('set-dns').scrollIntoView(); true`);
+      await sleep(1700);
+    },
+  ],
   // 還沒加入 Hub：設定頁的 Hub 區塊自動尋找，列出找到的 Hub
   ['desktop-settings-join', 'settings', false, async () => waitFor(`document.querySelector('#join-found table') && !document.getElementById('join-search').disabled`)],
   [
@@ -704,14 +759,14 @@ const only = args.only ? new Set(args.only.split(',')) : null;
 const captured = [];
 for (const [name, page, dark, prepare] of SHOTS) {
   if (only && !only.has(name)) continue;
-  // 桌面版視窗預設 1200×780（tauri.conf.json）；連線頁右邊有 IP 分析欄，用放大後的視窗
+  // 桌面版視窗預設 1200×780（tauri.conf.json）；連線頁右邊會滑出 IP 分析面板，用放大後的視窗
   // 流量與效能的歷史分頁比較長：用加高的視窗
-  const [width, height] = page === 'connections' ? [1440, 860] : page.startsWith('traffic/') ? [1200, 960] : [1200, 780];
+  const [width, height] = SIZE ?? (page === 'connections' ? [1440, 860] : page.startsWith('traffic/') ? [1200, 960] : [1200, 780]);
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   // 減少動態效果：略過啟動畫面（splash.js），截到的是頁面本身
   await send('Emulation.setEmulatedMedia', {
     features: [
-      { name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' },
+      { name: 'prefers-color-scheme', value: dark || FORCE_DARK ? 'dark' : 'light' },
       { name: 'prefers-reduced-motion', value: 'reduce' },
     ],
   });

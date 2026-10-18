@@ -2,6 +2,9 @@
 
 ## 未發佈
 
+- 桌面版連線頁：加「查詢」按鈕（輸入 IP 按查詢直接打開 IP 分析；Ctrl+F 跳到搜尋框），協定、狀態、理由、程式、國家、port 收進「更多篩選」（按鈕上顯示用了幾個條件），表格不再超出卡片；IP 分析改成右邊滑出的面板（✕ 或 Esc 關閉），任何頁面點 IP 都能開。選中的篩選鈕在深色模式下看得清楚；ESTABLISHED、TIME_WAIT 這類狀態、方向、判定都有滑鼠提示。沒有危險或可疑連線時直接說明，附「看全部連線」。
+- 桌面版 DNS 頁：輸入網域按「查詢」（或點紀錄裡的網域）打開網域分析：用這台的 DNS 現在解析到哪、黑白名單、威脅情資、像不像亂數網域、這台最近 7 天哪些程式查過，可以一鍵加入／移出黑白名單或請 AI 分析。DNS 設定與黑白名單搬到「設定 → DNS」，可以整個停用 DNS 監看；停用時 DNS 頁只顯示「未啟用」與啟用按鈕。「只看可疑的」旁的數字改成可疑的筆數，不再跟顯示筆數混在一起。
+
 - Hub 的 compose 分成兩份：不含防護 DNS（`compose.yml`、`compose.standalone.yml`）與含防護 DNS（`compose.dns.yml`、`compose.standalone.dns.yml`），不再用 `--profile dns`。兩份是同一個專案、同一份資料，可以隨時換；換回不含的那份時加 `--remove-orphans`。含防護 DNS 的那份沒設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` 時會直接說明要設，不會起一台連不上 Hub 的 DNS。dns 映像標籤沒另外設時跟 Hub 同一版（也認舊名 `ASA_HUB_IMAGE_TAG`）。
   **升級注意**：之前用 `--profile dns` 跑防護 DNS 的，改用含防護 DNS 的那份（`-f docker/compose.dns.yml`，單機版 `compose.standalone.dns.yml`）。
 - 資安報告的危險／可疑 IP 表格：「判定」欄不再擠成一字一行，危險標紅、可疑標橘。README 截圖全部依 0.7.0 重拍（示範的防護 DNS 伺服器顯示在線）。

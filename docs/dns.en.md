@@ -54,10 +54,10 @@ Entries always include subdomains. **Blocklist** = blocked and alerted; **allowl
 
 | | This computer's | The Hub's (company-wide) |
 |---|---|---|
-| Blocklist | `ai-security-monitor dns block bad.example` (several at once, URLs fine, `--note`), desktop "Add to blocklist" or "Block" on a lookup | DNS page "Blocklist / allowlist", "Add to blocklist" on a domain page, custom blocks under "Settings & keys → Protective DNS" |
-| Allowlist | `dns allow ok.example`, desktop "Add to allowlist" or "Allow" on a lookup | DNS page "Blocklist / allowlist", "Add to allowlist" on a domain page, the settings page allowlist |
-| Remove | `dns unblock` / `dns unallow` | "Remove from blocklist / allowlist" on the domain page, settings page |
-| View | `dns blocklist` (both lists, both sources) | settings page; counts on the DNS page |
+| Blocklist | `ai-security-monitor dns block bad.example` (several at once, URLs fine, `--note`), the desktop app's Settings → DNS, "Block" on a lookup or "Add to blocklist" in domain analysis | DNS page "Blocklist / allowlist", "Add to blocklist" on a domain page, custom blocks under "Settings & keys → Protective DNS" |
+| Allowlist | `dns allow ok.example`, the desktop app's Settings → DNS, "Allow" on a lookup or "Add to allowlist" in domain analysis | DNS page "Blocklist / allowlist", "Add to allowlist" on a domain page, the settings page allowlist |
+| Remove | `dns unblock` / `dns unallow`, the desktop app's Settings → DNS or "Remove from blocklist / allowlist" in domain analysis | "Remove from blocklist / allowlist" on the domain page, settings page |
+| View | `dns blocklist` (both lists, both sources), the desktop app's Settings → DNS | settings page; counts on the DNS page |
 
 Effects:
 - **Every computer alerts on lookups** (`dns.blocklisted`, high), even without the protective DNS; the Hub's list is synced to each computer every 10 minutes.

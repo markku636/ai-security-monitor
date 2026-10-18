@@ -671,6 +671,8 @@ pub fn run(start_in_tray: bool) {
             usage::metrics_now,
             dns::dns_recent,
             dns::dns_set,
+            dns::dns_settings,
+            dns::lookup_domain,
             dns::dns_block,
             dns::dns_unblock,
             dns::dns_allow,
