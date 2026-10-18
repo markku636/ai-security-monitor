@@ -1510,4 +1510,6 @@ export const en: Record<string, string> = {
   '現在就向廠商下載這份清單（不管更新間隔），並叫所有主機下次心跳時改用新的。': 'Download this list from the vendor now (regardless of the update interval) and tell all hosts to switch to it on their next heartbeat.',
   '更新中…': 'Updating…',
   '立即更新': 'Update now',
+  '預設關閉，Hub 不下載': 'Off by default, not downloaded by the Hub',
+  '這份清單預設沒有啟用，所以 Hub 不會下載。在主機上啟用後，那台電腦會直接向廠商下載並照更新間隔自動更新。': 'This list is off by default, so the Hub does not download it. When a host turns it on, that computer downloads it directly from the vendor and keeps it updated on the listed interval.',
 };

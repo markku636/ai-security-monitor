@@ -31,23 +31,37 @@ function groupTitle(t: TFn, g: ReturnType<typeof feedGroup>): string {
   }[g];
 }
 
+/** Hub 不鏡像的來源：說明為什麼、要怎麼更新。 */
+function NotMirrored({ t, f }: { t: TFn; f: FeedEntry }) {
+  const api = f.format === 'lookup-api' || f.kind === 'lookup';
+  let label: string;
+  let hint: string;
+  if (!api && !f.enabled_default) {
+    // 預設關閉的清單：Hub 不下載；哪台主機自己開了，就由那台直接向廠商下載
+    label = t('預設關閉，Hub 不下載');
+    hint = t('這份清單預設沒有啟用，所以 Hub 不會下載。在主機上啟用後，那台電腦會直接向廠商下載並照更新間隔自動更新。');
+  } else if (f.kind === 'lookup') {
+    // 線上名譽查詢：查某個 IP 時才問廠商
+    label = t('查詢時即時取得');
+    hint = t('這是線上查詢服務，沒有清單要下載：查某個 IP 時才去問廠商，拿到的就是最新結果，不需要手動更新。');
+  } else if (api) {
+    // 線上漏洞資料庫：每次掃描都直接查
+    label = t('掃描時即時查詢');
+    hint = t('這是線上資料庫，沒有清單要下載：主機每次漏洞掃描都直接查最新資料，不需要手動更新。要現在就重查，在那台電腦執行 ai-security-monitor scan，或按桌面版的「立即掃描」。');
+  } else {
+    return <span className="text-slate-400">{t('不鏡像')}</span>;
+  }
+  return (
+    <span className="inline-flex items-center text-slate-500">
+      {label}
+      <Hint text={hint} />
+    </span>
+  );
+}
+
 /** 這份清單在 hub 鏡像的狀態（最後同步、大小、錯誤）。 */
 function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null }) {
-  if (!mirrorable(f)) {
-    // 線上 API（漏洞資料庫、名譽查詢）：沒有清單可下載，每次掃描／查詢都直接問廠商，本來就是最新的
-    return (
-      <span className="inline-flex items-center text-slate-500">
-        {f.kind === 'lookup' ? t('查詢時即時取得') : t('掃描時即時查詢')}
-        <Hint
-          text={
-            f.kind === 'lookup'
-              ? t('這是線上查詢服務，沒有清單要下載：查某個 IP 時才去問廠商，拿到的就是最新結果，不需要手動更新。')
-              : t('這是線上資料庫，沒有清單要下載：主機每次漏洞掃描都直接查最新資料，不需要手動更新。要現在就重查，在那台電腦執行 ai-security-monitor scan，或按桌面版的「立即掃描」。')
-          }
-        />
-      </span>
-    );
-  }
+  if (!mirrorable(f)) return <NotMirrored t={t} f={f} />;
   if (!m)
     return (
       <div className="space-y-1">
