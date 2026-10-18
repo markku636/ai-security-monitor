@@ -178,6 +178,12 @@ describe('hub MCP', () => {
     expect(findings.total).toBe(2);
     const conns = JSON.parse((await text('list_connections', { verdict: ['dangerous'] })).content[0].text);
     expect(conns.items[0].remoteIp).toBe('203.0.113.66');
+    // 統計工具：AI 不用自己數
+    const stats = JSON.parse((await text('connection_stats', { verdict: ['dangerous'] })).content[0].text);
+    expect(stats.total).toBeGreaterThan(0);
+    expect(stats.by_verdict.groups).toEqual([{ key: 'dangerous', count: stats.total }]);
+    expect(stats.by_remote_ip.groups[0].key).toBe('203.0.113.66');
+    expect(stats.by_host.groups[0].count).toBe(stats.total);
     // 通知 → 202；未知 session → 404；DELETE 結束 session
     expect((await call({ jsonrpc: '2.0', method: 'notifications/initialized' }, s)).status).toBe(202);
     expect((await call({ jsonrpc: '2.0', id: 9, method: 'ping' }, { authorization: 'Bearer test-admin', 'mcp-session-id': 'nope' })).status).toBe(404);

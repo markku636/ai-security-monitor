@@ -7,6 +7,7 @@ import { ipContext } from '@/lib/ai/context';
 import { getDb } from '@/lib/db';
 import { feedsDir, loadRegistry } from '@/lib/intel/registry';
 import { averageScore, fleetSummary, listAgents } from '@/lib/queries/agents';
+import { connectionStats } from '@/lib/queries/connection-stats';
 import { inboundAttackers, listConnections, parseConnectionFilter } from '@/lib/queries/connections';
 import { bruteForceSources, recentCrashes, securityHits, topBugchecks } from '@/lib/queries/events';
 import { listFindings, parseFindingFilter, toFindingView } from '@/lib/queries/findings';
@@ -50,6 +51,15 @@ export const TOOLS: ToolDef[] = [
       verdict: { type: 'array', items: { type: 'string', enum: ['dangerous', 'suspicious', 'unknown', 'safe'] } },
       q: { type: 'string', description: 'IP, process, organization or hostname' },
       limit: { type: 'integer', minimum: 1, maximum: 200 },
+    }),
+  },
+  {
+    name: 'connection_stats',
+    description: 'Counts of current connections (no need to count yourself): total, plus counts grouped by verdict, direction, state, protocol, process, country, remote port, remote IP and host (top 15 each). Optionally filter by agent, direction and verdict.',
+    inputSchema: obj({
+      agent_id: agent,
+      direction: { type: 'array', items: { type: 'string', enum: ['outbound', 'inbound', 'listening', 'local'] } },
+      verdict: { type: 'array', items: { type: 'string', enum: ['dangerous', 'suspicious', 'unknown', 'safe'] } },
     }),
   },
   { name: 'inbound_attackers', description: 'Remote IPs currently connected inbound and rated suspicious/dangerous, aggregated across hosts.', inputSchema: obj({}) },
@@ -161,6 +171,8 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
       const r = await listConnections(f);
       return toText({ total: r.total, facets: r.facets, items: r.items });
     }
+    case 'connection_stats':
+      return toText(await connectionStats({ agentId: str(args, 'agent_id'), direction: list(args, 'direction')?.split(',').filter(Boolean), verdict: list(args, 'verdict')?.split(',').filter(Boolean) }));
     case 'inbound_attackers':
       return toText(await inboundAttackers(30));
     case 'lookup_indicator': {

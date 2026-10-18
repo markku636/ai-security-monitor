@@ -10,7 +10,7 @@ import { getT } from '@/lib/i18n/server';
 import type { TFn } from '@/lib/i18n/core';
 import { strParam, toQuery } from '@/lib/queries/params';
 import { buildReport, MAX_DAYS, parsePeriod, SEVERITIES, sevTotal, type SecurityReport } from '@/lib/report/build';
-import { highlights, periodText, sevLabel } from '@/lib/report/text';
+import { highlights, periodText, sevLabel, todo, verdict } from '@/lib/report/text';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +100,7 @@ function Report({ r, t }: { r: SecurityReport; t: TFn }) {
           {t('區間')}：{p.from} ～ {p.to}（{t('{n} 天', { n: r.days })}）· {t('主機')} {r.hosts.total}（{t('有回報 {n} 台', { n: r.hosts.reporting })}）· {t('產生時間')}{' '}
           {r.generatedAt.slice(0, 16).replace('T', ' ')} UTC
         </p>
+        <ReportVerdict t={t} r={r} />
         <h3 className="mt-3 text-sm font-semibold">{t('重點')}</h3>
         <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
           {highlights(r, t).map((h) => (
@@ -328,6 +329,33 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
         <HostFilter t={t} action="/report" current={agentId} keep={{ from: p?.from, to: p?.to }} />
       </header>
       {r ? <Report r={r} t={t} /> : <p className="text-sm text-red-600">{t('期間不正確（開始要早於結束、最長 {n} 天）。', { n: MAX_DAYS })}</p>}
+    </div>
+  );
+}
+
+/** 報告開頭：一句話結論（顏色依輕重）與「建議你先做」。 */
+function ReportVerdict({ t, r }: { t: TFn; r: Parameters<typeof verdict>[0] }) {
+  const v = verdict(r, t);
+  const steps = todo(r, t);
+  const tone =
+    v.tone === 'bad'
+      ? 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100'
+      : v.tone === 'warn'
+        ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100'
+        : 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
+  return (
+    <div className={`mt-3 rounded-lg border p-3 ${tone}`}>
+      <p className="font-medium">{v.text}</p>
+      {steps.length ? (
+        <>
+          <h3 className="mt-2 text-sm font-semibold">{t('建議你先做')}</h3>
+          <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
+            {steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ol>
+        </>
+      ) : null}
     </div>
   );
 }

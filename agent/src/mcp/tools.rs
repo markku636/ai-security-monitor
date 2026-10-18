@@ -29,6 +29,7 @@ pub const MAX_TEXT: usize = 60 * 1024;
 
 pub const READ_ONLY: &[&str] = &[
     "list_connections",
+    "connection_stats",
     "lookup_ip",
     "inbound_attackers",
     "intel_sources",
@@ -64,6 +65,17 @@ pub fn read_only_defs() -> Vec<ToolDef> {
                     "direction": { "type": "string", "enum": ["outbound", "inbound", "listening", "local"] },
                     "verdict": { "type": "array", "items": { "type": "string", "enum": ["safe", "unknown", "suspicious", "dangerous"] } },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 300 }
+                }),
+                &[],
+            ),
+        },
+        ToolDef {
+            name: "connection_stats",
+            description: t!("目前連線的統計（不用自己數）：總數，以及依判定、方向、狀態、協定、程式、國家、遠端 port、遠端 IP 分組的條數（前 15 名）。可先用 direction／verdict 篩選。").into(),
+            input_schema: obj(
+                json!({
+                    "direction": { "type": "string", "enum": ["outbound", "inbound", "listening", "local"] },
+                    "verdict": { "type": "array", "items": { "type": "string", "enum": ["safe", "unknown", "suspicious", "dangerous"] } }
                 }),
                 &[],
             ),
@@ -270,6 +282,42 @@ fn conn_brief(c: &Connection) -> Value {
     })
 }
 
+/// 依某個欄位分組計數，回傳前 `top` 名（條數多的在前，同數依名稱）。
+fn group_count(items: impl Iterator<Item = String>, top: usize) -> Value {
+    let mut m: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for k in items {
+        *m.entry(k).or_default() += 1;
+    }
+    let mut v: Vec<(String, usize)> = m.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let rest = v.len().saturating_sub(top);
+    json!({
+        "groups": v.into_iter().take(top).map(|(k, n)| json!({ "key": k, "count": n })).collect::<Vec<_>>(),
+        "other_groups": rest,
+    })
+}
+
+/// `connection_stats` 的內容（純函式，測試用）。
+pub fn connection_stats(list: &[&Connection]) -> Value {
+    let name = |v: Value| v.as_str().map(String::from).unwrap_or_else(|| v.to_string());
+    let public = list
+        .iter()
+        .filter(|c| c.remote_ip.is_some_and(|ip| crate::util::net::classify(ip).is_public()))
+        .count();
+    json!({
+        "total": list.len(),
+        "public_remote": public,
+        "by_verdict": group_count(list.iter().map(|c| name(json!(c.verdict.level))), 15),
+        "by_direction": group_count(list.iter().map(|c| name(json!(c.direction))), 15),
+        "by_state": group_count(list.iter().map(|c| if c.state.is_empty() { "-".to_string() } else { c.state.clone() }), 15),
+        "by_proto": group_count(list.iter().map(|c| name(json!(c.proto))), 15),
+        "by_process": group_count(list.iter().map(|c| c.process.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "?".into())), 15),
+        "by_country": group_count(list.iter().filter_map(|c| c.geo.as_ref().and_then(|g| g.country.clone())), 15),
+        "by_remote_port": group_count(list.iter().filter_map(|c| c.remote_port.map(|p| p.to_string())), 15),
+        "by_remote_ip": group_count(list.iter().filter_map(|c| c.remote_ip.map(|ip| ip.to_string())), 15),
+    })
+}
+
 fn verdict_of(s: &str) -> Option<VerdictLevel> {
     serde_json::from_value(json!(s)).ok()
 }
@@ -326,6 +374,22 @@ pub async fn call(ctx: &ToolCtx, name: &str, args: &Value) -> Result<String, Str
                 "shown": total.min(limit),
                 "connections": list.into_iter().take(limit).map(conn_brief).collect::<Vec<_>>(),
             })))
+        }
+        "connection_stats" => {
+            let snap = snapshot(ctx).await?;
+            let dir = s("direction").and_then(direction_of);
+            let verdicts: Vec<VerdictLevel> = args
+                .get("verdict")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|v| v.as_str().and_then(verdict_of)).collect())
+                .unwrap_or_default();
+            let list: Vec<&Connection> = snap
+                .connections
+                .iter()
+                .filter(|c| dir.is_none_or(|d| c.direction == d))
+                .filter(|c| verdicts.is_empty() || verdicts.contains(&c.verdict.level))
+                .collect();
+            Ok(to_text(&connection_stats(&list)))
         }
         "lookup_ip" => {
             let ind = s("indicator").ok_or_else(|| t!("缺少 indicator").to_string())?;
@@ -765,4 +829,26 @@ async fn execute_action(ctx: &ToolCtx, args: &Value) -> Result<String, String> {
     Ok(to_text(
         &json!({ "ok": rep.ok, "action": rep.action, "backend": rep.backend, "steps": rep.steps, "notes": rep.notes }),
     ))
+}
+
+#[cfg(test)]
+mod stats_tests {
+    use super::*;
+
+    #[test]
+    fn connection_stats_groups_and_counts() {
+        let mut a = crate::model::contract::sample_connection();
+        a.remote_ip = Some("8.8.8.8".parse().unwrap());
+        let mut b = a.clone();
+        b.remote_ip = Some("10.0.0.2".parse().unwrap());
+        b.process = None;
+        let c = a.clone();
+        let v = connection_stats(&[&a, &b, &c]);
+        assert_eq!(v["total"], 3);
+        assert_eq!(v["public_remote"], 2);
+        assert_eq!(v["by_remote_ip"]["groups"][0], json!({ "key": "8.8.8.8", "count": 2 }));
+        let procs = v["by_process"]["groups"].as_array().unwrap();
+        assert!(procs.iter().any(|g| g["key"] == "?" && g["count"] == 1));
+        assert_eq!(v["by_verdict"]["groups"][0]["count"], 3);
+    }
 }

@@ -9,7 +9,7 @@ import { resetEnvForTests } from '@/lib/env';
 import { makeT } from '@/lib/i18n/core';
 import { resetThrottleForTests } from '@/lib/ingest/route';
 import { buildReport, parsePeriod, sevTotal } from '@/lib/report/build';
-import { highlights, toMarkdown } from '@/lib/report/text';
+import { highlights, todo, toMarkdown, verdict } from '@/lib/report/text';
 import { createTestDb } from '../helpers/db';
 
 const CONTRACT = path.resolve(__dirname, '../../../contract');
@@ -75,6 +75,30 @@ describe('security report', () => {
     expect(md).toContain('2026-10-10 ～ 2026-10-16');
     expect(md).toContain('| 嚴重 |');
     expect(toMarkdown(r, makeT('en'))).toContain('# Security report');
+    // 白話：先講結論，再列建議你先做
+    expect(md).toContain('## 結論');
+    expect(md.indexOf('## 結論')).toBeLessThan(md.indexOf('## 重點'));
+  });
+
+  it('says in one sentence whether to worry and lists what to do first', () => {
+    const t = makeT('zh-TW');
+    const sev = (o: Partial<Record<'critical' | 'high' | 'medium' | 'low' | 'info', number>>) => ({ critical: 0, high: 0, medium: 0, low: 0, info: 0, ...o });
+    const base = {
+      hosts: { total: 2, reporting: 2 },
+      findings: { openEndBySev: sev({}) },
+      connections: { dangerous: 0, suspicious: 0 },
+      dns: { alerts: 0 },
+      events: { total: 0 },
+    } as unknown as Parameters<typeof verdict>[0];
+    expect(verdict(base, t).tone).toBe('ok');
+    expect(todo(base, t)).toEqual([]);
+    const bad = { ...base, findings: { openEndBySev: sev({ critical: 1, high: 2 }) }, connections: { dangerous: 1, suspicious: 0 } } as typeof base;
+    expect(verdict(bad, t)).toMatchObject({ tone: 'bad' });
+    expect(verdict(bad, t).text).toContain('3 個嚴重或高風險問題');
+    expect(todo(bad, t)[0]).toContain('危險');
+    const quiet = { ...base, hosts: { total: 2, reporting: 1 }, findings: { openEndBySev: sev({ low: 3 }) } } as typeof base;
+    expect(verdict(quiet, t).tone).toBe('ok');
+    expect(todo(quiet, t).join('')).toContain('1 台主機這段期間沒有回報');
   });
 
   it('serves Markdown and JSON downloads to admins only', async () => {

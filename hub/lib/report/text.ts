@@ -32,17 +32,47 @@ export function highlights(r: SecurityReport, t: TFn): string[] {
     );
   }
   if (r.intel.hits) {
-    out.push(t('{h} 台主機碰到威脅情資列名的 IP 或網域，共 {n} 筆命中、{i} 個不同指標。', { h: r.intel.hosts, n: r.intel.hits, i: r.intel.indicators }));
+    out.push(t('{h} 台主機連到被資安單位列入黑名單（威脅情資）的 IP 或網域，共 {n} 次、{i} 個不同位址。', { h: r.intel.hosts, n: r.intel.hits, i: r.intel.indicators }));
   }
   if (r.connections.dangerous || r.connections.suspicious) {
-    out.push(t('有 {d} 個危險、{s} 個可疑的遠端 IP。', { d: r.connections.dangerous, s: r.connections.suspicious }));
+    out.push(t('有 {d} 個危險、{s} 個可疑的連線對象（電腦連到或被連進來的外部位址）。', { d: r.connections.dangerous, s: r.connections.suspicious }));
   }
-  if (r.dns.alerts) out.push(t('DNS 告警 {n} 則（亂數網域、DNS 通道、黑名單網域等）。', { n: r.dns.alerts }));
-  if (r.dns.blocked) out.push(t('防護 DNS 擋下 {n} 次查詢。', { n: r.dns.blocked }));
-  if (r.events.total) out.push(t('資安事件 {n} 次，來自 {s} 個不同來源 IP。', { n: r.events.total, s: r.events.sources }));
+  if (r.dns.alerts) out.push(t('查網址（DNS）時的告警 {n} 則：例如連去黑名單網域、看起來是惡意程式亂產生的網域，或把資料藏在網址裡偷傳（DNS 通道）。', { n: r.dns.alerts }));
+  if (r.dns.blocked) out.push(t('防護 DNS 擋下 {n} 次連往危險網站的查詢（擋下＝沒連上，已經保護到）。', { n: r.dns.blocked }));
+  if (r.events.total) out.push(t('資安事件 {n} 次（例如有人一直試密碼登入、新增帳號、清掉紀錄），來自 {s} 個不同來源 IP。', { n: r.events.total, s: r.events.sources }));
   if (r.actions.autoBlocks) out.push(t('自動回應封鎖了 {n} 次。', { n: r.actions.autoBlocks }));
   const low = r.score.lowest[0];
   if (low && !r.agent) out.push(t('分數最低的主機是 {h}（{s} 分）。', { h: low.hostname, s: low.overall }));
+  return out;
+}
+
+/** 一句話結論：整體要不要擔心。 */
+export function verdict(r: SecurityReport, t: TFn): { tone: 'ok' | 'warn' | 'bad'; text: string } {
+  const open = r.findings.openEndBySev;
+  const urgent = open.critical + open.high;
+  if (open.critical > 0 || r.connections.dangerous > 0) {
+    return { tone: 'bad', text: t('有需要盡快處理的事：{c} 個嚴重或高風險問題還沒處理、{d} 個危險的連線對象。請先看下面「建議你先做」。', { c: urgent, d: r.connections.dangerous }) };
+  }
+  if (urgent > 0 || r.connections.suspicious > 0 || r.dns.alerts > 0 || r.events.total > 0) {
+    return { tone: 'warn', text: t('沒有緊急狀況，但有幾件事值得這週看一下。') };
+  }
+  if (r.hosts.total > 0 && r.hosts.reporting === 0) {
+    return { tone: 'warn', text: t('這段期間沒有主機回報資料，所以報告是空的；請確認各台電腦的背景服務有在執行。') };
+  }
+  return { tone: 'ok', text: t('這段期間整體狀況良好，沒有需要處理的事。') };
+}
+
+/** 建議你先做（依急迫程度；只列有發生的）。 */
+export function todo(r: SecurityReport, t: TFn): string[] {
+  const out: string[] = [];
+  const open = r.findings.openEndBySev;
+  if (r.connections.dangerous > 0) out.push(t('看「連線 → 可疑 IP 清單」裡判定「危險」的位址，確認是哪個程式在連；不認得就在「封鎖審核」核准封鎖。'));
+  if (open.critical + open.high > 0) out.push(t('到「待處理問題」篩選「嚴重」「高」，依每一項的「建議」處理（{n} 個）。', { n: open.critical + open.high }));
+  if (r.events.total > 0) out.push(t('看「當機與事件」的資安事件：有人一直試密碼的來源 IP 可以封鎖，不認得的新帳號要停用。'));
+  if (r.dns.alerts > 0) out.push(t('看「DNS」頁的告警，確認是哪台電腦、哪個程式查了可疑網域。'));
+  if (r.connections.suspicious > 0 && r.connections.dangerous === 0) out.push(t('「可疑」的連線對象可以用「查詢全部未分析」查外部情資，多半是誤報，確認後加備註即可。'));
+  if (r.hosts.reporting < r.hosts.total) out.push(t('{n} 台主機這段期間沒有回報，確認它們有開機、背景服務有在執行。', { n: r.hosts.total - r.hosts.reporting }));
+  if (open.medium + open.low > 0 && open.critical + open.high === 0) out.push(t('有空時處理「中」「低」風險的問題（{n} 個），多半是設定建議。', { n: open.medium + open.low }));
   return out;
 }
 
@@ -61,6 +91,9 @@ export function toMarkdown(r: SecurityReport, t: TFn): string {
   parts.push(
     `${t('區間')}：${p.from} ～ ${p.to}（${t('{n} 天', { n: r.days })}）　${t('主機')}：${r.hosts.total}（${t('有回報 {n} 台', { n: r.hosts.reporting })}）　${t('產生時間')}：${r.generatedAt.slice(0, 16).replace('T', ' ')} UTC`,
   );
+  parts.push(`## ${t('結論')}\n\n${verdict(r, t).text}`);
+  const steps = todo(r, t);
+  if (steps.length) parts.push(`## ${t('建議你先做')}\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`);
   parts.push(`## ${t('重點')}\n\n${highlights(r, t).map((h) => `- ${h}`).join('\n')}`);
   parts.push(
     `## ${t('問題')}\n\n` +

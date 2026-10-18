@@ -7,6 +7,8 @@
 
 pub fn lookup(zh: &str) -> Option<&'static str> {
     Some(match zh {
+        // ---- mcp connection_stats ----
+        "目前連線的統計（不用自己數）：總數，以及依判定、方向、狀態、協定、程式、國家、遠端 port、遠端 IP 分組的條數（前 15 名）。可先用 direction／verdict 篩選。" => "Statistics of current connections (no counting needed): the total, plus counts grouped by verdict, direction, state, protocol, program, country, remote port and remote IP (top 15). Filter first with direction / verdict if needed.",
         // ---- central config ----
         "沒有釘選 Hub 公鑰，不能驗證集中設定（重新加入 Hub 後就會有）" => "No pinned Hub public key, so central settings cannot be verified (re-join the Hub to get one)",
         "集中設定的簽章驗證失敗，不套用" => "Central settings failed signature verification and were not applied",
