@@ -147,7 +147,14 @@ describe('feed mirror', () => {
     expect((await syncRoute(req('/api/v1/admin/feeds/sync', { method: 'POST', body: {}, headers: client }))).status).toBe(401);
     const s = await syncRoute(req('/api/v1/admin/feeds/sync', { method: 'POST', body: {}, headers: admin }));
     expect(s.status).toBe(200);
-    expect(((await s.json()) as { outcomes: unknown[] }).outcomes).toHaveLength(1);
+    const all = ((await s.json()) as { outcomes: { feed_id: string }[] }).outcomes;
+    expect(all).toHaveLength(1);
+    // 只更新指定的來源（每一列的「立即更新」）；不存在的 id 不會更新任何東西，格式不對回 400
+    const sync = (body: unknown) => syncRoute(req('/api/v1/admin/feeds/sync', { method: 'POST', body, headers: admin }));
+    const one = await sync({ only: [all[0].feed_id], refresh_agents: false });
+    expect(((await one.json()) as { outcomes: { feed_id: string }[] }).outcomes.map((o) => o.feed_id)).toEqual([all[0].feed_id]);
+    expect(((await (await sync({ only: ['no-such-feed'], refresh_agents: false })).json()) as { outcomes: unknown[] }).outcomes).toEqual([]);
+    expect((await sync({ only: ['../etc/passwd'] })).status).toBe(400);
 
     expect(((await (await hb({ intel_checked_at: '2026-01-01T00:00:00Z' })).json()) as { commands: string[] }).commands).toEqual(['refresh_feeds']);
     const fresh = await hb({ intel_checked_at: new Date(Date.now() + 1000).toISOString(), intel_feeds: { ok: 17, total: 18, source: 'hub' } });

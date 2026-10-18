@@ -3,6 +3,7 @@ import { FeedSyncButton } from '@/components/security/FeedSyncButton';
 import { IndicatorDetails } from '@/components/security/IndicatorDetails';
 import { DirectionBadge, VerdictChip, directionLabel } from '@/components/security/Verdict';
 import { Badge } from '@/components/ui/Badge';
+import { Hint } from '@/components/ui/Hint';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchBox } from '@/components/ui/Filters';
@@ -32,8 +33,30 @@ function groupTitle(t: TFn, g: ReturnType<typeof feedGroup>): string {
 
 /** 這份清單在 hub 鏡像的狀態（最後同步、大小、錯誤）。 */
 function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null }) {
-  if (!mirrorable(f)) return <span className="text-slate-400">{t('不鏡像')}</span>;
-  if (!m) return <span className="text-slate-400">{t('尚未同步')}</span>;
+  if (!mirrorable(f)) {
+    // 線上 API（漏洞資料庫、名譽查詢）：沒有清單可下載，每次掃描／查詢都直接問廠商，本來就是最新的
+    return (
+      <span className="inline-flex items-center text-slate-500">
+        {f.kind === 'lookup' ? t('查詢時即時取得') : t('掃描時即時查詢')}
+        <Hint
+          text={
+            f.kind === 'lookup'
+              ? t('這是線上查詢服務，沒有清單要下載：查某個 IP 時才去問廠商，拿到的就是最新結果，不需要手動更新。')
+              : t('這是線上資料庫，沒有清單要下載：主機每次漏洞掃描都直接查最新資料，不需要手動更新。要現在就重查，在那台電腦執行 ai-security-monitor scan，或按桌面版的「立即掃描」。')
+          }
+        />
+      </span>
+    );
+  }
+  if (!m)
+    return (
+      <div className="space-y-1">
+        <span className="text-slate-400">{t('尚未同步')}</span>
+        <div>
+          <FeedSyncButton only={[f.id]} compact />
+        </div>
+      </div>
+    );
   const stale = m.checked_at ? Date.now() - Date.parse(m.checked_at) > refreshMs(f.refresh_interval) * 3 : true;
   return (
     <>
@@ -48,6 +71,9 @@ function MirrorCell({ t, f, m }: { t: TFn; f: FeedEntry; m: MirrorMeta | null })
       ) : stale ? (
         <Badge tone="warn">{t('過期')}</Badge>
       ) : null}
+      <div className="mt-1">
+        <FeedSyncButton only={[f.id]} compact />
+      </div>
     </>
   );
 }
@@ -199,7 +225,15 @@ export default async function IntelPage({ searchParams }: { searchParams: Promis
       {q ? <IndicatorDetails t={t} q={q} /> : null}
       {groups.length ? (
         groups.map((x) => (
-          <Card key={x.g} title={groupTitle(t, x.g)}>
+          <Card
+            key={x.g}
+            title={
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {groupTitle(t, x.g)}
+                {x.feeds.some(mirrorable) ? <FeedSyncButton only={x.feeds.filter(mirrorable).map((f) => f.id)} label={t('這一區全部更新')} compact /> : null}
+              </span>
+            }
+          >
             <FeedTable t={t} feeds={x.feeds} stats={stats} />
           </Card>
         ))
