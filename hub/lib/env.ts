@@ -97,7 +97,7 @@ export function loadEnv(): HubEnv {
     publicDashboard: flag('ASA_HUB_PUBLIC_DASHBOARD'),
     trustProxy: flag('ASA_HUB_TRUST_PROXY'),
     edition: raw('ASA_HUB_EDITION') === 'server' ? 'server' : 'standalone',
-    version: raw('ASA_HUB_VERSION') || process.env.npm_package_version || '0.5.0',
+    version: raw('ASA_HUB_VERSION') || process.env.npm_package_version || '0.6.0',
     reportMinIntervalMs: num('ASA_HUB_INGEST_MIN_INTERVAL_MS', 60_000),
     snapshotMinIntervalMs: num('ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS', 10_000),
     staleAfterMs: num('ASA_HUB_STALE_AFTER_MS', 30 * 60_000),

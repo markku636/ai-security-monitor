@@ -2,6 +2,16 @@
 
 ## 未發佈
 
+## v0.6.0 — 2026-10-18
+
+**DNS 防禦：每台電腦即時看查了哪些網域、哪個程式查的，偵測 DNS 通道、亂數網域、被竄改的 DNS 與 hosts；選用的防護 DNS 伺服器（自己寫的 Rust，約 12 萬 QPS），由 Hub 開關、暫停、放行，`dns use-hub` 一鍵把電腦指過去、連不上自動改回；另有檔案完整性與開機自啟監控、通知（Email／Slack／Discord／Teams／Webhook／Syslog）、自動回應、MITRE ATT&CK 與法規對照、IP 反查網域。** 一般使用者請下載 `AI-Security-Monitor-0.6.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.5.0 的桌面版會自動提示更新。防護 DNS 可以用命令列版的 `ai-security-monitor dns-server`，或新的 Docker 映像 `ghcr.io/markku636/ai-security-monitor-dns`（Hub compose 加 `--profile dns`）。
+
+**升級注意**：
+- **DNS 查詢紀錄預設會上傳到加入的 Hub**（`dns.enabled` 與 `dns.upload=all` 預設開）。DNS 紀錄等於上網紀錄，公司部署前請先告知員工；那台電腦可以 `ai-security-monitor config set dns.upload alerts`（只傳告警）或 `off`，Hub 保留天數用 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS`（預設 7 天）調整。
+- 新掃描器 `files`（檔案完整性＋開機自啟監控）預設開，第一次只建基準、不告警。
+- abuse.ch URLhaus／ThreatFox 依 2025-11-04 的新條款改標非商用：照樣告警，但不再拿來自動封鎖。
+- Hub 資料庫 migration 0013–0017 會在啟動時自動套用。要用 compose 內建的防護 DNS，`.env` 加 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`（至少 32 字元）。
+
 - **桌面版「DNS」頁＋文件與授權**：側欄新增「DNS」：這台查了哪些網域、是哪個程式查的、結果、解析到的 IP，可疑的（情資網域、像亂數產生的網域、少見頂級網域、加密 DNS 端點）標出理由，可選期間（15 分鐘到 7 天）、搜尋網域或程式、只看可疑；查詢次數、不同網域、NXDOMAIN 比例、資料來源；查詢最多的網域與程式；公司有防護 DNS 而這台沒用時提示 `dns use-hub`。README 補 DNS 防禦與防護 DNS、命令速查、文件連結與桌面版截圖（重拍全部桌面版截圖）；THIRD_PARTY_NOTICES 補 CERT Polska、HaGeZi（GPL-3.0）、Phishing.Database、Block List Project、Phishing Army、Public Suffix List（MPL-2.0）、Majestic Million（CC BY 3.0），abuse.ch URLhaus／ThreatFox 改標非商用。示範資料（`scripts/demo-seed.mjs`）加 DNS 查詢、fin-laptop-07 的亂數網域與 DNS 通道告警，以及一台連上 Hub 的防護 DNS。修正：`dns use-hub` 在 Windows 只挑有 DNS 用戶端設定的網卡（有些虛擬網卡啟用中卻沒有 DNS 設定，改它會失敗）；任何方式改到一半失敗時，先把已經改過的改回去再回報錯誤。
 - **防護 DNS 效能量測＋文件**：新壓測程式 `cargo run --release --example dnsbench`（同一個行程裡起伺服器、本機假上游與 64 個用戶端）：開發機約 12.3 萬 QPS（快取命中＋封鎖混合）、命中 p99 0.56 ms、200 萬筆封鎖清單比對約 300 ns、重建 0.16 秒、常駐記憶體約 40 MB。封鎖比對加了分桶索引（雜湊高位元選桶、桶內二分搜尋；雜湊最後多混一次讓高位元均勻），200 萬筆時從約 1 µs 降到約 0.3 µs。CI 新 job `dnsbench` 每次在 Linux runner 跑 15 秒、把數字寫進 job summary，只有嚴重退步才失敗。新文件 [docs/dns.md](docs/dns.md)（每台電腦的 DNS 監看、規則、竄改偵測、dns-lock、硬化）與 [docs/dns-server.md](docs/dns-server.md)（防護 DNS 的運作、三種部署、`dns use-hub`、Hub 管理、效能、隱私），都有英文版。
 - **`dns use-hub`／`dns restore`：把這台的 DNS 指到防護 DNS**：`ai-security-monitor dns use-hub [--server IP,…] [--dry-run]`（省略 `--server`＝Hub「防護 DNS」新設定「裝置要用的 DNS 位址」，設定頁會依在線伺服器建議）先確認防護 DNS 查得到（查不到就不改，避免斷網），照樣預演、確認、提權，記下原本的設定再改：Windows 每張啟用中的網卡 `Set-DnsClientServerAddress`（原本手動還是 DHCP 從登錄判斷）、macOS 每個網路服務 `networksetup`、Linux 依偵測到的管理程式用 NetworkManager（持久）、systemd-resolved（重開機後失效）或直接改 `/etc/resolv.conf`。`dns restore` 改回原狀。**保險**：背景服務每分鐘對這些位址查健康檢查名稱，連續 3 次查不到就自動改回原本的 DNS 並留下紀錄（`dns.protect_restored`，中）。新規則 `dns.not_protected`（低）：Hub 開啟防護 DNS 且設了「裝置要用的 DNS 位址」，但這台的 DNS 不是它（這台自己就是防護 DNS 時指向 loopback 也算）。CI 在 Windows（兩個版本）、macOS、Linux runner 真的切換：本機起一台擋 `www.example.org` 的防護 DNS、`use-hub` 後系統解析被擋、一般網域照常，`restore` 後 DNS 設定跟改之前完全一樣。
