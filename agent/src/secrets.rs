@@ -166,8 +166,12 @@ impl SecretStore {
     }
 
     fn write_file(&self, m: &BTreeMap<String, String>) -> AppResult<()> {
-        store::write_json_in(&self.dir, SECRETS_FILE, m)?;
-        store::restrict_permissions(&self.dir.join(SECRETS_FILE))
+        let bytes = serde_json::to_vec_pretty(m)
+            .map_err(|e| AppError::Storage(tf!("序列化 {file} 失敗：{e}", file = SECRETS_FILE, e = e)))?;
+        store::ensure_dir(&self.dir)?;
+        let path = self.dir.join(SECRETS_FILE);
+        store::write_private_atomic(&path, &bytes)?;
+        store::restrict_permissions(&path)
     }
 
     #[cfg(all(feature = "keychain", any(windows, target_os = "macos")))]

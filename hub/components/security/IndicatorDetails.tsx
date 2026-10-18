@@ -7,6 +7,7 @@ import { lookupIndicator } from '@/lib/queries/intel';
 import type { Reason } from '@/lib/queries/connections';
 import { DirectionBadge, ReasonList, VerdictChip } from './Verdict';
 import { CountryFlag } from '@/components/ui/CountryFlag';
+import { httpsHref } from '@/lib/links';
 
 export async function IndicatorDetails({ t, q, title }: { t: TFn; q: string; title?: string }) {
   const r = await lookupIndicator(q);
@@ -20,7 +21,7 @@ export async function IndicatorDetails({ t, q, title }: { t: TFn; q: string; tit
           <ul className="space-y-1 text-sm">
             {r.hits.map((h, i) => (
               <li key={i} className="flex flex-wrap items-center gap-2">
-                <a href={h.sourceUrl} target="_blank" rel="noreferrer noopener" className="font-medium hover:underline">
+                <a href={httpsHref(h.sourceUrl)} target="_blank" rel="noreferrer noopener" className="font-medium hover:underline">
                   {h.vendor} · {h.feedName}
                 </a>
                 <span className="text-xs text-slate-500">

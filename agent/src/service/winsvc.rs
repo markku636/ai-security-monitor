@@ -45,6 +45,11 @@ pub async fn run(global: GlobalArgs, config_dir: PathBuf, interval: Option<Strin
         })
 }
 
+fn is_system_dir(dir: &std::path::Path) -> bool {
+    let os = super::Os::Windows;
+    dir == super::system_config_dir(os) || dir == super::legacy_system_config_dir(os)
+}
+
 fn service_main(_args: Vec<OsString>) {
     let Some(ctx) = CTX.get() else { return };
     let handler = |c: ServiceControl| match c {
@@ -73,6 +78,13 @@ fn service_main(_args: Vec<OsString>) {
         ServiceState::Running,
         ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN,
     );
+    // 系統服務以 SYSTEM 執行：設定目錄要先收緊成只有 SYSTEM／Administrators 能寫（舊版安裝的也在這裡補上）
+    if is_system_dir(&ctx.config_dir) {
+        if let Err(e) = crate::store::harden_system_dir(&ctx.config_dir) {
+            super::instance::init_log(&ctx.config_dir);
+            super::instance::write_log(&e.message());
+        }
+    }
     let env = crate::cli::Env {
         global: ctx.global.clone(),
         config_dir: ctx.config_dir.clone(),

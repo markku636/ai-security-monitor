@@ -168,15 +168,25 @@ function sendSyslog(cfg: Record<string, unknown>, line: string): Promise<void> {
   });
 }
 
+/** Slack 的 mrkdwn：`<…>` 是連結與 @提及，主機傳來的文字要跳脫。 */
+export function slackEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /** 送一則訊息；失敗丟例外（呼叫端記錄並重試）。`config` 已解密。 */
 export async function sendTo(kind: ChannelKind, config: Record<string, unknown>, m: NotifyMessage, linkLabel: string, deps: SendDeps = {}): Promise<void> {
   const f = deps.fetch ?? fetch;
   switch (kind) {
     case 'slack':
-      return post(f, String(config.url), JSON.stringify({ text: `*${m.title}*\n${m.lines.join('\n')}${m.link ? `\n<${m.link}|${linkLabel}>` : ''}` }));
+      return post(
+        f,
+        String(config.url),
+        JSON.stringify({ text: `*${slackEscape(m.title)}*\n${m.lines.map(slackEscape).join('\n')}${m.link ? `\n<${m.link}|${slackEscape(linkLabel)}>` : ''}` }),
+      );
     case 'discord': {
       const text = `**${m.title}**\n${m.lines.join('\n')}${m.link ? `\n${m.link}` : ''}`;
-      return post(f, String(config.url), JSON.stringify({ username: 'ai-security-monitor', content: text.slice(0, 1990) }));
+      // allowed_mentions 空的：主機名稱寫成 @everyone 也不會真的通知整個頻道
+      return post(f, String(config.url), JSON.stringify({ username: 'ai-security-monitor', content: text.slice(0, 1990), allowed_mentions: { parse: [] } }));
     }
     case 'teams':
       return post(
@@ -223,7 +233,7 @@ export async function sendTo(kind: ChannelKind, config: Record<string, unknown>,
         greetingTimeout: TIMEOUT_MS,
         socketTimeout: TIMEOUT_MS,
       };
-      const transport = deps.smtpTransport ? deps.smtpTransport(transportCfg) : nodemailer.createTransport(transportCfg as nodemailer.TransportOptions);
+      const transport = deps.smtpTransport ? deps.smtpTransport(transportCfg) : nodemailer.createTransport(transportCfg as Parameters<typeof nodemailer.createTransport>[0]);
       await transport.sendMail({
         from: String(config.from),
         to: (config.to as string[]).join(', '),

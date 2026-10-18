@@ -1644,4 +1644,6 @@ export const en: Record<string, string> = {
   '{n} 台主機這段期間沒有回報，確認它們有開機、背景服務有在執行。': '{n} hosts did not report in this period; check that they are switched on and the background service is running.',
   '有空時處理「中」「低」風險的問題（{n} 個），多半是設定建議。': 'When you have time, deal with the medium and low-risk problems ({n}); most are configuration suggestions.',
   '結論': 'Bottom line',
+  'Hub 是「自動允許加入」模式，而且申請來自區網：一送出就核准了。': 'The Hub is in "allow automatically" mode and the request came from the local network, so it was approved as soon as it arrived.',
+  '連得到這個 Hub 的區網電腦都能直接加入；從網際網路（公網 IP）送來的申請不會自動核准，會留在待核准清單等你按。若 Hub 開放到網際網路，也可以改「審核加入」，或在下面填「自動核准的網段」。': 'Computers on the local network that can reach this Hub join directly; requests from the internet (public IPs) are not approved automatically and wait in the pending list for you. If the Hub is reachable from the internet you can also switch to "Review" or fill in "auto-approve networks" below.',
 };

@@ -12,6 +12,7 @@ import { readEnv } from '@/lib/env';
 import { AgentInfo } from '@/lib/ingest/schema';
 import { matchCidr, normalizeCidrList, type CidrError } from './cidr';
 import { approvalMessage, hubIdentity, requestCodeOf, sign } from './identity';
+import { isPublicIp } from '@/lib/ipintel/ip';
 
 export const REQUEST_TTL_MS = 7 * 86_400_000;
 export const CLAIM_WINDOW_MS = 10 * 60_000;
@@ -232,7 +233,8 @@ export async function createRequest(
 /**
  * 自動核准：
  * - 來源（TCP 對端，不是 X-Forwarded-For）在自動核准網段內 → 兩種模式都直接核准（decided_by＝auto:<網段>）。
- * - 自動允許模式且網段清單是空的 → 任何人都直接核准（auto:all，不需要知道來源 IP）；
+ * - 自動允許模式且網段清單是空的 → 直接核准（auto:all）；但來源是公網 IP 的等管理員：
+ *   Hub 開放到網際網路時，陌生人不能直接加入（不知道來源 IP 時照舊核准）；
  *   網段清單有填 → 只有網段內的自動，其他等管理員（「只讓公司網段自動加入」）。
  * 已登記但還沒釘選身分的舊主機一律不自動核准：那種情況光靠 agent token 擋不住冒名，要人看過。
  * 自動核准有煞車（每 10 分 60 筆、未領取 500 筆），踩到就改成等人工核准並記稽核。
@@ -241,7 +243,8 @@ async function maybeAutoApprove(db: DB, row: EnrollRow, meta: { sourceIp: string
   const { mode } = await getJoinMode(db);
   const cidrs = await getAutoApproveCidrs(db);
   const cidr = meta.peerIp ? matchCidr(meta.peerIp, cidrs) : null;
-  const actor = cidr ? `auto:${cidr}` : mode === 'auto' && cidrs.length === 0 ? 'auto:all' : null;
+  const fromInternet = !!meta.peerIp && isPublicIp(meta.peerIp);
+  const actor = cidr ? `auto:${cidr}` : mode === 'auto' && cidrs.length === 0 && !fromInternet ? 'auto:all' : null;
   if (!actor) return null;
   const known = (await db.select({ tokenHash: agents.tokenHash, deletedAt: agents.deletedAt }).from(agents).where(eq(agents.id, row.agentId)).limit(1))[0];
   if (known && (!known.tokenHash || known.deletedAt)) return null;

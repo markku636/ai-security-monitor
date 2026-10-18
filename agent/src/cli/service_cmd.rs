@@ -145,6 +145,10 @@ async fn apply_plan(
             ))
         };
     }
+    // Windows 系統服務：設定目錄先收緊成只有 SYSTEM／Administrators 能寫，再讓服務開始讀它
+    if install && scope == Scope::System && target.os == Os::Windows {
+        crate::store::harden_system_dir(&target.config_dir)?;
+    }
     let res = service::apply(&plan, &RealRunner).await;
     let out = match &res {
         Ok(lines) => {

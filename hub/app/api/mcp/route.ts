@@ -3,7 +3,7 @@
 //   claude mcp add --transport http asahub http://<hub>/api/mcp --header "Authorization: Bearer <token>"
 import crypto from 'node:crypto';
 import { safeEqual } from '@/lib/auth/crypto';
-import { bearer } from '@/lib/auth/access';
+import { bearer, isLoopbackHost } from '@/lib/auth/access';
 import { isApiTokenShape, verifyApiToken } from '@/lib/auth/tokens';
 import { env, isOpenMode, readEnv } from '@/lib/env';
 import { readJson } from '@/lib/http';
@@ -19,12 +19,7 @@ const MAX_BODY = 4 * 1024 * 1024;
 const g = globalThis as unknown as { __asaMcpSessions?: string[] };
 const sessions = () => (g.__asaMcpSessions ??= []);
 
-function loopback(h: string | null): boolean {
-  if (!h) return false;
-  const host = h.replace(/^https?:\/\//, '').split('/')[0];
-  const name = host.startsWith('[') ? host.slice(1, host.indexOf(']')) : host.split(':')[0];
-  return name === 'localhost' || name === '127.0.0.1' || name === '::1';
-}
+const loopback = isLoopbackHost;
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(body === null ? null : JSON.stringify(body), {

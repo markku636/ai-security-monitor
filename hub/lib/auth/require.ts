@@ -9,7 +9,7 @@ export async function getViewer(): Promise<Identity> {
   const h = await headers();
   const auth = h.get('authorization') ?? '';
   const m = /^Bearer\s+(.+)$/i.exec(auth.trim());
-  return identifyByCredentials(m?.[1], c.get(SESSION_COOKIE)?.value);
+  return identifyByCredentials(m?.[1], c.get(SESSION_COOKIE)?.value, h.get('host'));
 }
 
 /** 未登入就導到 /login。 */

@@ -109,7 +109,9 @@ pub fn check(
     if !allowed.contains(&a.kind.as_str()) {
         return Err(tf!("本機設定不允許遠端執行 {kind}", kind = a.kind));
     }
-    if a.destructive && !cfg.allow_destructive {
+    // 是否「破壞性」由本機依種類判斷，不只信 Hub 給的標記（那個欄位不在簽章內）
+    let destructive = a.destructive || a.kind == "close_port";
+    if destructive && !cfg.allow_destructive {
         return Err(t!("本機設定不允許破壞性的遠端動作").into());
     }
     match a.kind.as_str() {

@@ -15,6 +15,7 @@ import type { listAgents } from '@/lib/queries/agents';
 import type { inboundAttackers, listConnections } from '@/lib/queries/connections';
 import type { topIntelFeeds } from '@/lib/queries/intel';
 import { SCORE_KEYS, scoreHints, scoreLabels } from './scoreHints';
+import { httpsHref } from '@/lib/links';
 
 const MORE = 'mt-2 inline-block text-sm text-teal-700 hover:underline dark:text-teal-400';
 
@@ -133,7 +134,7 @@ export function IntelFeedsCard({ t, feeds }: { t: TFn; feeds: Feeds }) {
           {feeds.map((f) => (
             <tr key={f.feedId} className="border-t border-slate-100 dark:border-slate-800">
               <td className="py-1.5">
-                <a href={f.sourceUrl} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                <a href={httpsHref(f.sourceUrl)} target="_blank" rel="noreferrer noopener" className="hover:underline">
                   <span className="font-medium">{f.vendor}</span> <span className="text-slate-500">{f.feedName}</span>
                 </a>
               </td>

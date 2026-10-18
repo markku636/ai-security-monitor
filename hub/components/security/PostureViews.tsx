@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { sevLabel } from '@/components/ui/Severity';
 import type { TFn } from '@/lib/i18n/core';
 import type { AppHit, HostRef, Outcome, VulnSummary } from '@/lib/queries/posture';
+import { httpsHref } from '@/lib/links';
 
 const TABLE = 'overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900';
 const HEAD = 'border-b border-slate-200 text-xs text-slate-500 dark:border-slate-800 [&_th]:whitespace-nowrap';
@@ -236,7 +237,7 @@ function WhyAndFix({ t, o }: { t: TFn; o: Outcome }) {
       {o.remediation ? <p className="mt-1">→ {o.remediation}</p> : null}
       <p className="mt-1 flex flex-wrap gap-x-2">
         {o.references.map((u) => (
-          <a key={u} className={LINK} href={u} target="_blank" rel="noreferrer">
+          <a key={u} className={LINK} href={httpsHref(u)} target="_blank" rel="noreferrer">
             {hostOf(u)}
           </a>
         ))}

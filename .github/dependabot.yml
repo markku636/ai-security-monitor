@@ -1,0 +1,10 @@
+# 讓鎖定 SHA 的 GitHub Actions 維持在新版（每月一次 PR）
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

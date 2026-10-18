@@ -467,6 +467,15 @@ describe('join mode (auto by default, or admin review)', () => {
     expect((await (await poll(j.request_id, body.request_secret)).json()).credentials.agent_id).toBe(body.agent.id);
   });
 
+  it('automatic mode does not auto-approve requests from the internet', async () => {
+    setPeerIpHookForTests(true);
+    const outside = await (await create(newRequest(), { 'x-asa-peer-ip': '8.8.8.8' })).json();
+    expect(outside.status).toBe('pending');
+    const lan = await (await create(newRequest(), { 'x-asa-peer-ip': '192.168.1.23' })).json();
+    expect(lan).toMatchObject({ status: 'approved', auto_approved: true });
+    setPeerIpHookForTests(false);
+  });
+
   it('switches to review: new requests wait for an admin (audited)', async () => {
     const r = await setMode('review');
     expect(r.status).toBe(200);

@@ -9,6 +9,16 @@
   **升級注意**：之前用 `--profile dns` 跑防護 DNS 的，改用含防護 DNS 的那份（`-f docker/compose.dns.yml`，單機版 `compose.standalone.dns.yml`）。
 - 資安報告的危險／可疑 IP 表格：「判定」欄不再擠成一字一行，危險標紅、可疑標橘。README 截圖全部依 0.7.0 重拍（示範的防護 DNS 伺服器顯示在線）。
 - **macOS 桌面版不再顯示「已損毀」**：桌面版沒有 Apple 開發者簽章，改用 ad-hoc 簽章把整個 .app 簽好（發版時用 `codesign --verify` 檢查），Apple Silicon 上從「已損毀，無法打開」變成可以在「系統設定 → 隱私權與安全性」按「強制打開」。另外新增一行安裝：`curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/download/install.sh | sh -s -- --desktop`，依晶片下載 dmg、比對 SHA256、裝進「應用程式」，用 curl 下載不會被加上隔離屬性，打開時完全不會被 Gatekeeper 擋。
+- **安全性修正**（自行檢查發現）：
+  - Windows 系統服務：設定目錄（%ProgramData%\ai-security-monitor）原本繼承「一般使用者可以建立檔案」，一般使用者能放檔案給以 SYSTEM 執行的服務讀；現在安裝與每次服務啟動時都收緊成只有 SYSTEM 與 Administrators 能存取（擁有者改成 Administrators）。防護 DNS 自動還原只會寫 `/etc/resolv.conf`，Windows 還原腳本只放合法的 IP，不再照紀錄檔寫任意路徑。
+  - 密鑰檔（secrets.json）在 Unix 上一建立就是 0600，不再有短暫可讀的空窗。
+  - 遠端動作是否「破壞性」由本機依種類判斷（`close_port`），不只信 Hub 給的標記。
+  - Hub 開放模式（沒設管理員金鑰）只接受用本機網址（localhost／127.0.0.1／::1）連進來的請求，擋 DNS rebinding 與區網直連；Docker 明確設 `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1` 時照舊。
+  - Hub 用 Bearer 猜管理員金鑰：同一個來源 10 分鐘失敗 100 次就先擋掉；登入改成先記次再檢查，同時送大量請求也繞不過 5 次限制。
+  - 免金鑰加入的「自動允許」模式：網段清單沒填時，公網 IP 送來的申請不再自動核准，會留在待核准清單（區網照舊直接加入）。
+  - Slack／Discord 通知跳脫主機傳來的文字，主機名稱寫成 `@everyone` 或假連結也不會生效；主機送來的情資來源／參考連結只有 https 才給點。
+  - `nodemailer` 升到 10.1.2（修 SMTP 帳密可能透過共用快取外洩的漏洞）。
+  - GitHub Actions 的第三方 action 全部鎖定 commit SHA（Dependabot 每月更新），發版流程的寫入權限只給推映像與建 Release 的 job；新增 SECURITY.md（漏洞請用 GitHub 私下回報）。
 - **GitHub Release 說明加上「怎麼安裝」**：Windows、macOS、Linux 桌面版與伺服器命令列版各自一步一步寫清楚（含 SmartScreen「仍要執行」、macOS「強制打開」與「已損毀」的處理）。
 - `install.sh --service system`：沒指定 `--dir` 時一律裝到 `/usr/local/bin`（需要時用 sudo），不再裝到 `~/.local/bin`。系統服務以 root 執行，執行檔放在使用者可寫的位置等於讓一般權限的程式能換掉它。
 

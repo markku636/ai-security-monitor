@@ -131,7 +131,7 @@ All binary values are base64url without padding; fingerprints/codes are RFC 4648
 - **Admin** (session + CSRF, or admin Bearer): `GET /api/v1/admin/enroll-requests?status=pending|all` (never returns secrets or keys),
   `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`,
   `GET|PUT /api/v1/admin/enroll-settings` `{ join_mode?: "auto"|"review", auto_approve_cidrs?[≤64] }` (either field alone is fine; `join_mode` returns 409 `locked_by_env` when an environment variable sets it; GET also returns `join_mode_source: env|settings|default`; IPv4 prefix ≥ /8, IPv6 ≥ /16; the GET also reports mDNS status and the
-  SRV/TXT records to add, named `_aisecmon._tcp.<domain>`). Audit: `enroll_request.created|approved|rejected|auto_approved|auto_capped`, `enroll_settings.updated` (`target_id` = `enroll_join_mode` / `enroll_auto_approve_cidrs`). Automatic approvals record `decided_by` = `auto:all` (automatic mode) or `auto:<network>`.
+  SRV/TXT records to add, named `_aisecmon._tcp.<domain>`). Audit: `enroll_request.created|approved|rejected|auto_approved|auto_capped`, `enroll_settings.updated` (`target_id` = `enroll_join_mode` / `enroll_auto_approve_cidrs`). Automatic approvals record `decided_by` = `auto:all` (automatic mode, source not a public IP) or `auto:<network>`. In automatic mode, requests from public IPs are not approved automatically.
 - **Agent side**: the Hub fingerprint is pinned in `config.json` (`hub.fingerprint`, `hub.public_key`). `watch` checks
   `/api/v1/hub/identity` at start and stops uploading if it differs; a pending request lives in `<config>/hub-enroll-request.json` (secret in the
   keychain / secrets file) and `watch` keeps polling it.

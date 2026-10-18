@@ -222,7 +222,7 @@ export function EnrollRequestsPanel({ initial, mode }: { initial: EnrollRequestI
                           className={`${PILL} cursor-help bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300`}
                           text={
                             r.decided_by === 'auto:all'
-                              ? t('Hub 是「自動允許加入」模式：申請一送出就核准了。')
+                              ? t('Hub 是「自動允許加入」模式，而且申請來自區網：一送出就核准了。')
                               : t('來源 IP 在「自動核准的網段」內，所以不用人按就核准了。')
                           }
                         >
@@ -319,7 +319,7 @@ export function JoinModeForm({ initial, source }: { initial: JoinMode; source: '
           'auto',
           t('自動允許加入（預設）'),
           t('電腦端送出申請就直接加入，不用人按。適合 Hub 只在公司內網、或你想省事的時候。'),
-          t('任何連得到這個 Hub、又知道網址的電腦都能加入。若 Hub 開放到網際網路，建議改「審核加入」，或在下面填「自動核准的網段」只讓公司網路自動加入。'),
+          t('連得到這個 Hub 的區網電腦都能直接加入；從網際網路（公網 IP）送來的申請不會自動核准，會留在待核准清單等你按。若 Hub 開放到網際網路，也可以改「審核加入」，或在下面填「自動核准的網段」。'),
         )}
         {option(
           'review',

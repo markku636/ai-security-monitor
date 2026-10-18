@@ -94,6 +94,36 @@ describe('login / me / logout', () => {
     expect(who).toMatchObject({ role: 'admin', via: 'open', open_mode: true });
   });
 
+  it('open mode only trusts a loopback Host (DNS rebinding, LAN)', async () => {
+    setEnv({ ASA_HUB_ADMIN_SECRET: undefined, ASA_HUB_CLIENT_SECRETS: undefined, ASA_HUB_ALLOW_OPEN_MODE: undefined });
+    for (const host of ['evil.example:3000', '192.168.1.20:3000']) {
+      const who = await (await me(req('/api/auth/me', { headers: { host } }))).json();
+      expect(who.role).toBe('none');
+      expect((await login(req('/api/auth/login', { method: 'POST', body: { key: 'x' }, headers: { host, origin: `http://${host}` } }))).status).toBe(403);
+    }
+    expect((await (await me(req('/api/auth/me', { headers: { host: '[::1]:3000' } }))).json()).role).toBe('admin');
+    // Docker 明確允許（只在 docker 網路內用）
+    setEnv({ ASA_HUB_ALLOW_OPEN_MODE: '1' });
+    expect((await (await me(req('/api/auth/me', { headers: { host: 'hub:3000' } }))).json()).role).toBe('admin');
+    setEnv({ ASA_HUB_ALLOW_OPEN_MODE: undefined });
+  });
+
+  it('stops guessing the admin key over Bearer after 100 failures', async () => {
+    for (let i = 0; i < 100; i++) {
+      expect((await (await me(req('/api/auth/me', { headers: { authorization: `Bearer guess-${i}` } }))).json()).role).toBe('none');
+    }
+    // 之後連正確的金鑰也先擋（不然猜中就進得來）
+    expect((await (await me(req('/api/auth/me', { headers: { authorization: 'Bearer test-admin' } }))).json()).role).toBe('none');
+    resetRateLimitsForTests();
+    expect((await (await me(req('/api/auth/me', { headers: { authorization: 'Bearer test-admin' } }))).json()).role).toBe('admin');
+  });
+
+  it('counts a login attempt before checking it (parallel requests cannot bypass the limit)', async () => {
+    const tries = await Promise.all(Array.from({ length: 12 }, () => login(req('/api/auth/login', { method: 'POST', body: { key: 'wrong' } }))));
+    expect(tries.filter((r) => r.status === 401).length).toBeLessThanOrEqual(5);
+    expect(tries.filter((r) => r.status === 429).length).toBeGreaterThanOrEqual(7);
+  });
+
   it('public dashboard gives read-only viewers', async () => {
     setEnv({ ASA_HUB_PUBLIC_DASHBOARD: '1' });
     const who = await (await me(req('/api/auth/me'))).json();

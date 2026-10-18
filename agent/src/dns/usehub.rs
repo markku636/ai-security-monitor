@@ -213,9 +213,11 @@ fn v4v6(servers: &[IpAddr]) -> (Vec<String>, Vec<String>) {
     )
 }
 
+/// PowerShell 字串陣列：只放得進合法的 IP（紀錄檔被改過也不會變成指令）。
 fn ps_list(v: &[String]) -> String {
     v.iter()
-        .map(|s| format!("'{}'", s.replace('\'', "")))
+        .filter_map(|s| s.trim().parse::<IpAddr>().ok())
+        .map(|ip| format!("'{ip}'"))
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -278,10 +280,10 @@ pub fn win_restore_script(orig: &[Original]) -> String {
             "Set-DnsClientServerAddress -InterfaceIndex {idx} -ResetServerAddresses\n"
         ));
         let statics: Vec<String> = o.v4.iter().chain(o.v6.iter()).cloned().collect();
-        if !statics.is_empty() {
+        let list = ps_list(&statics);
+        if !list.is_empty() {
             s.push_str(&format!(
-                "Set-DnsClientServerAddress -InterfaceIndex {idx} -ServerAddresses @({})\n",
-                ps_list(&statics)
+                "Set-DnsClientServerAddress -InterfaceIndex {idx} -ServerAddresses @({list})\n"
             ));
         }
     }
@@ -615,15 +617,46 @@ pub async fn restore(r: &dyn CmdRunner, st: &UseHubState) -> AppResult<()> {
             }
             let _ = r.run(&CmdSpec::new("resolvectl", &["flush-caches"])).await;
         }
-        _ => {
+        "resolv.conf" => {
+            // 只還原 /etc/resolv.conf：紀錄檔是以系統權限讀的，不能讓它指定要寫哪個檔
+            let path = resolv_conf();
             for o in &st.original {
+                if o.target != path {
+                    return Err(AppError::InvalidArg(tf!(
+                        "DNS 還原紀錄的目標不是 {path}，不還原：{target}",
+                        path = path,
+                        target = o.target
+                    )));
+                }
                 if let Some(text) = &o.extra {
-                    std::fs::write(&o.target, text)?;
+                    std::fs::write(&path, text)?;
                 }
             }
         }
+        other => {
+            return Err(AppError::InvalidArg(tf!(
+                "DNS 還原紀錄的設定方式不認得：{method}",
+                method = other
+            )));
+        }
     }
     Ok(())
+}
+
+const RESOLV_CONF: &str = "/etc/resolv.conf";
+
+#[cfg(test)]
+thread_local! {
+    static RESOLV_CONF_OVERRIDE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// 還原時唯一允許寫的檔（測試換成暫存檔）。
+fn resolv_conf() -> String {
+    #[cfg(test)]
+    if let Some(p) = RESOLV_CONF_OVERRIDE.with(|o| o.borrow().clone()) {
+        return p;
+    }
+    RESOLV_CONF.to_string()
 }
 
 /// 自動還原後留下的紀錄（dns 掃描器 24 小時內提醒一次）。
@@ -877,6 +910,7 @@ nameserver 127.0.0.1
         }
         .save(dir.path())
         .unwrap();
+        RESOLV_CONF_OVERRIDE.with(|o| *o.borrow_mut() = Some(conf.to_string_lossy().to_string()));
         let r = FakeRunner::default();
         for n in 1..RESTORE_AFTER {
             let msg = watch_tick(dir.path(), &r, true).await.unwrap();
@@ -906,6 +940,44 @@ nameserver 127.0.0.1
         assert!(dir.path().join(RESTORED_FILE).exists());
         // 沒有 use-hub 狀態：什麼都不做
         assert!(watch_tick(dir.path(), &r, true).await.is_none());
+    }
+
+    /// 紀錄檔是以系統權限讀的：被改成別的寫檔目標或不認得的方式時，不能照著寫。
+    #[tokio::test]
+    async fn restore_refuses_tampered_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim.dll");
+        let r = FakeRunner::default();
+        for method in ["resolv.conf", "x"] {
+            let st = UseHubState {
+                servers: vec!["192.0.2.1".parse().unwrap()],
+                applied_at: Utc::now(),
+                method: method.into(),
+                original: vec![Original {
+                    target: victim.to_string_lossy().to_string(),
+                    label: String::new(),
+                    v4: Vec::new(),
+                    v6: Vec::new(),
+                    extra: Some("payload".into()),
+                }],
+                failures: 0,
+            };
+            assert!(restore(&r, &st).await.is_err(), "{method}");
+            assert!(!victim.exists(), "{method}");
+        }
+        // Windows 腳本：不是 IP 的值整個丟掉，不會變成指令
+        let s = win_restore_script(&[Original {
+            target: "7".into(),
+            label: String::new(),
+            v4: vec![
+                "1.1.1.1".into(),
+                "x\u{2019}; Remove-Item C:\\ -Recurse; \u{2019}".into(),
+            ],
+            v6: Vec::new(),
+            extra: None,
+        }]);
+        assert!(s.contains("@('1.1.1.1')"), "{s}");
+        assert!(!s.contains("Remove-Item"), "{s}");
     }
 
     #[tokio::test]

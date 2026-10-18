@@ -174,6 +174,8 @@ describe('admin API', () => {
     const r = await channelTest(req(`/api/v1/admin/notifications/channels/${id}/test`, { method: 'POST', headers: admin }), ctx(id));
     expect(await r.json()).toEqual({ ok: true });
     expect(JSON.parse(calls[0].body).content).toContain('Ops');
+    // 主機名稱寫成 @everyone 也不會真的提及整個頻道
+    expect(JSON.parse(calls[0].body).allowed_mentions).toEqual({ parse: [] });
     vi.stubGlobal('fetch', fakeFetch(true).f);
     const bad = await channelTest(req(`/api/v1/admin/notifications/channels/${id}/test`, { method: 'POST', headers: admin }), ctx(id));
     expect(await bad.json()).toEqual({ ok: false, error: 'HTTP 500' });
@@ -263,5 +265,12 @@ describe('detection and delivery', () => {
     expect((await runNotifications(db, new Date('2030-01-01T08:30:00Z'), { fetch: f })).queued).toBe(0);
     expect(JSON.parse(calls.at(-1)!.body).text).toContain('每日摘要');
     await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, AGENT));
+  });
+});
+
+describe('slackEscape', () => {
+  it('keeps agent text from becoming links or mentions', async () => {
+    const { slackEscape } = await import('@/lib/notify/channels');
+    expect(slackEscape('<!channel> <https://evil|Open Hub> & co')).toBe('&lt;!channel&gt; &lt;https://evil|Open Hub&gt; &amp; co');
   });
 });

@@ -5,7 +5,9 @@
 //   reader 網頁建立的 API token（唯讀，依 scope：read／export／mcp／dns）；compose 內建防護 DNS 的 ASA_HUB_DNS_TOKEN 等同 dns 權杖
 // 網頁建立的註冊金鑰（asa_ek_…）等同 client。
 // 沒設管理員金鑰＝開放模式：所有人都是 admin（只能綁 loopback，見 scripts/start.mjs）。
-import { env, isOpenMode } from '@/lib/env';
+import { env, isOpenMode, readEnv } from '@/lib/env';
+import { count, hit } from '@/lib/auth/ratelimit';
+import { sourceIp } from '@/lib/http';
 import { parseCookies } from '@/lib/http';
 import { safeEqual } from './crypto';
 import { SESSION_COOKIE, validateSession } from './sessions';
@@ -49,9 +51,25 @@ export function bearer(req: Request): string | undefined {
   return m?.[1]?.trim() || undefined;
 }
 
-export async function identifyByCredentials(token: string | undefined, cookieToken: string | undefined): Promise<Identity> {
+/** Host／Origin 是不是本機（localhost、127.0.0.1、::1）。 */
+export function isLoopbackHost(h: string | null | undefined): boolean {
+  if (!h) return false;
+  const host = h.replace(/^https?:\/\//, '').split('/')[0];
+  const name = host.startsWith('[') ? host.slice(1, host.indexOf(']')) : host.split(':')[0];
+  return name === 'localhost' || name === '127.0.0.1' || name === '::1';
+}
+
+/**
+ * 開放模式（沒設管理員金鑰）只給用本機網址連進來的人：擋 DNS rebinding（惡意網頁把自己的網域指到 127.0.0.1）與區網直連。
+ * Docker 明確設 AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1（只在 docker 網路內用）時照舊。
+ */
+export function openModeAllowed(host: string | null | undefined): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(readEnv('ASA_HUB_ALLOW_OPEN_MODE').toLowerCase()) || isLoopbackHost(host);
+}
+
+export async function identifyByCredentials(token: string | undefined, cookieToken: string | undefined, host?: string | null): Promise<Identity> {
   const e = env();
-  if (isOpenMode()) return { role: 'admin', via: 'open' };
+  if (isOpenMode()) return openModeAllowed(host) ? { role: 'admin', via: 'open' } : { role: 'none', via: 'none' };
   if (token) {
     if (safeEqual(token, e.adminSecret)) return { role: 'admin', via: 'bearer' };
     const idx = e.clientSecrets.findIndex((s) => safeEqual(token, s));
@@ -71,8 +89,20 @@ export async function identifyByCredentials(token: string | undefined, cookieTok
   return { role: 'none', via: 'none' };
 }
 
+/** 猜 Bearer 金鑰的煞車：同一個來源 10 分鐘內失敗 100 次就先全部擋掉（正確的金鑰也一樣，否則猜中就進得來）。 */
+const BEARER_FAIL_WINDOW_MS = 10 * 60_000;
+const BEARER_FAIL_MAX = 100;
+
 export async function identify(req: Request): Promise<Identity> {
-  return identifyByCredentials(bearer(req), parseCookies(req)[SESSION_COOKIE]);
+  const token = bearer(req);
+  if (token && !isOpenMode()) {
+    const key = `bearer-fail:${sourceIp(req)}`;
+    if (count(key, BEARER_FAIL_WINDOW_MS) >= BEARER_FAIL_MAX) return { role: 'none', via: 'none' };
+    const id = await identifyByCredentials(token, undefined);
+    if (id.role === 'none') hit(key, BEARER_FAIL_WINDOW_MS);
+    return id;
+  }
+  return identifyByCredentials(token, parseCookies(req)[SESSION_COOKIE], req.headers.get('host'));
 }
 
 /**

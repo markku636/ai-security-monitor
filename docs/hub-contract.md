@@ -125,7 +125,7 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 - **管理**（session＋CSRF，或管理員 Bearer）：`GET /api/v1/admin/enroll-requests?status=pending|all`（不回密語與金鑰）、
   `POST /api/v1/admin/enroll-requests/decide` `{ ids[1..200], decision: approve|reject, reason? }`、
   `GET|PUT /api/v1/admin/enroll-settings` `{ join_mode?: "auto"|"review", auto_approve_cidrs?[≤64] }`（兩欄可單獨送；`join_mode` 被環境變數鎖定時回 409 `locked_by_env`；GET 另回 `join_mode_source: env|settings|default`）（IPv4 前綴至少 /8、IPv6 至少 /16；GET 另外回 mDNS 狀態與要加的 SRV／TXT 紀錄，名稱 `_aisecmon._tcp.<網域>`）。
-  稽核：`enroll_request.created|approved|rejected|auto_approved|auto_capped`、`enroll_settings.updated`（`target_id`＝`enroll_join_mode`／`enroll_auto_approve_cidrs`）。自動核准的 `decided_by`：`auto:all`（自動允許模式）或 `auto:<網段>`。
+  稽核：`enroll_request.created|approved|rejected|auto_approved|auto_capped`、`enroll_settings.updated`（`target_id`＝`enroll_join_mode`／`enroll_auto_approve_cidrs`）。自動核准的 `decided_by`：`auto:all`（自動允許模式，來源不是公網 IP）或 `auto:<網段>`。自動允許模式下公網 IP 送來的申請不自動核准。
 - **agent 端**：Hub 指紋釘選在 `config.json`（`hub.fingerprint`、`hub.public_key`）。`watch` 啟動時查 `/api/v1/hub/identity`，不符就停止上傳；
   等候中的申請存在 `<設定目錄>/hub-enroll-request.json`（密語在系統金鑰圈／密鑰檔），`watch` 會接著輪詢。
 

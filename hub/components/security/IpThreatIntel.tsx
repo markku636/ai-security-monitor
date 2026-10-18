@@ -10,6 +10,7 @@ import { since, utc } from '@/lib/format';
 import type { TFn } from '@/lib/i18n/core';
 import { useT } from '@/lib/i18n/client';
 import type { IpIntelView, ProviderView, RiskLevel, ScoreReason, SkipReason } from '@/lib/ipintel/types';
+import { httpsHref } from '@/lib/links';
 
 const BTN = 'whitespace-nowrap rounded-md bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50';
 const SUB = 'text-xs font-semibold text-slate-500';
@@ -304,7 +305,7 @@ export function IpThreatIntel({ view }: { view: IpIntelView }) {
           <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
             {view.localHits.map((h) => (
               <li key={h.feedId}>
-                <a href={h.sourceUrl} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                <a href={httpsHref(h.sourceUrl)} target="_blank" rel="noreferrer noopener" className="hover:underline">
                   {h.vendor} · {h.feedName}
                 </a>{' '}
                 · {t('信心 {n}%', { n: h.confidence })}
