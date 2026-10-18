@@ -15,7 +15,7 @@ import { highlights, periodText, sevLabel, todo, verdict } from '@/lib/report/te
 export const dynamic = 'force-dynamic';
 
 const SEC = 'break-inside-avoid rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:shadow-none dark:border-slate-800 dark:bg-slate-900';
-const TH = 'px-2 py-1 text-left text-xs font-medium text-slate-500';
+const TH = 'whitespace-nowrap px-2 py-1 text-left text-xs font-medium text-slate-500';
 const TD = 'px-2 py-1 align-top';
 const SEV_TONE: Record<string, string> = {
   critical: 'text-red-700 dark:text-red-400',
@@ -216,7 +216,9 @@ function Report({ r, t }: { r: SecurityReport; t: TFn }) {
                   <Link key="ip" href={`/ip/${encodeURIComponent(x.ip)}`} className="font-mono text-xs hover:underline">
                     {x.ip}
                   </Link>,
-                  x.verdict === 'dangerous' ? t('危險') : t('可疑'),
+                  <span key="v" className={`whitespace-nowrap ${x.verdict === 'dangerous' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {x.verdict === 'dangerous' ? t('危險') : t('可疑')}
+                  </span>,
                   x.seen,
                   [x.country, x.org].filter(Boolean).join(' '),
                   x.note ?? '',

@@ -116,8 +116,22 @@ await send('Page.enable');
 await send('Network.enable');
 await send('Network.setExtraHTTPHeaders', { headers: { authorization: `Bearer ${ADMIN}` } });
 const only = args.only ? new Set(args.only.split(',')) : null;
+// demo-seed.mjs 留下的示範防護 DNS：截 DNS 相關頁面前重送一次心跳，伺服器才會顯示在線（超過 3 分鐘沒心跳就算離線）
+async function refreshDemoDns() {
+  let d;
+  try {
+    d = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), 'ai-security-monitor-demo-dns.json'), 'utf8'));
+  } catch {
+    return;
+  }
+  if (d.hub !== HUB) return;
+  d.heartbeat.status.updated_at = new Date().toISOString();
+  const headers = { 'content-type': 'application/json', authorization: `Bearer ${d.token}` };
+  await fetch(`${HUB}/api/v1/dns/heartbeat`, { method: 'POST', headers, body: JSON.stringify(d.heartbeat) }).catch(() => {});
+}
 for (const [name, p, width, dark, tall] of PAGES) {
   if (only && !only.has(name)) continue;
+  if (name.includes('dns')) await refreshDemoDns();
   const url = HUB + p.replace('AGENT_FIN', encodeURIComponent(fin?.id ?? '')).replace('AGENT_DC', encodeURIComponent(dc?.id ?? ''));
   const mobile = width < 600;
   await send('Emulation.setDeviceMetricsOverride', { width, height: mobile ? 844 : (tall ?? 900), deviceScaleFactor: 1, mobile });

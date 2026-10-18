@@ -4,6 +4,7 @@
 
 - Hub 的 compose 分成兩份：不含防護 DNS（`compose.yml`、`compose.standalone.yml`）與含防護 DNS（`compose.dns.yml`、`compose.standalone.dns.yml`），不再用 `--profile dns`。兩份是同一個專案、同一份資料，可以隨時換；換回不含的那份時加 `--remove-orphans`。含防護 DNS 的那份沒設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` 時會直接說明要設，不會起一台連不上 Hub 的 DNS。dns 映像標籤沒另外設時跟 Hub 同一版（也認舊名 `ASA_HUB_IMAGE_TAG`）。
   **升級注意**：之前用 `--profile dns` 跑防護 DNS 的，改用含防護 DNS 的那份（`-f docker/compose.dns.yml`，單機版 `compose.standalone.dns.yml`）。
+- 資安報告的危險／可疑 IP 表格：「判定」欄不再擠成一字一行，危險標紅、可疑標橘。README 截圖全部依 0.7.0 重拍（示範的防護 DNS 伺服器顯示在線）。
 
 ## v0.7.0 — 2026-10-18
 

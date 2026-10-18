@@ -3,6 +3,9 @@
 // Hub 要能收到過去時間的報告：會用網頁 API 建一把註冊金鑰，每台送 6 份報告（每小時一份）＋連線快照，
 // 以及 7 天的流量樣本（其中三台含效能）、最近 2 小時的 DNS 查詢，和一台連上 Hub 的防護 DNS。
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
@@ -13,6 +16,10 @@ if (!ADMIN) {
   console.error('usage: node scripts/demo-seed.mjs --hub <url> --admin <admin secret>');
   process.exit(2);
 }
+
+const VERSION = JSON.parse(fs.readFileSync(new URL('../hub/package.json', import.meta.url), 'utf8')).version;
+// 截圖腳本（capture-screenshots.mjs）截 DNS 頁前會用它重送示範防護 DNS 的心跳；超過 3 分鐘沒心跳 Hub 就顯示離線
+const DEMO_DNS_FILE = path.join(os.tmpdir(), 'ai-security-monitor-demo-dns.json');
 
 const now = Date.now();
 const iso = (minsAgo) => new Date(now - minsAgo * 60_000).toISOString();
@@ -787,30 +794,29 @@ async function seedDns(h, agentId, agentToken, key) {
 async function seedProtectiveDns() {
   const { token } = await call('/api/v1/admin/tokens', { token: ADMIN, body: { name: 'office-dns', scopes: ['dns'] } });
   await call('/api/v1/admin/dns-protect', { token: ADMIN, method: 'PUT', body: { enabled: true, resolver_ips: ['192.0.2.53'], allow: ['ok.example.com'], block: ['example-c2.test', 'login.microsoft-verify.test'] } });
-  await call('/api/v1/dns/heartbeat', {
-    token,
-    body: {
-      version: '0.6.0',
-      hostname: 'office-dns',
-      status: {
-        running: true,
-        started_at: iso(60 * 24 * 3),
-        updated_at: iso(0),
-        listen: ['192.0.2.53:53'],
-        blocking: true,
-        lists_loaded: ['certpl-domains', 'hagezi-tif-mini'],
-        lists_missing: [],
-        blocklist_entries: 354_812,
-        lists_memory_bytes: 3_412_224,
-        cache_entries: 18_204,
-        upstreams: [
-          { upstream: 'https://dns.quad9.net/dns-query', ewma_ms: 18.4, failures: 0 },
-          { upstream: 'https://cloudflare-dns.com/dns-query', ewma_ms: 12.9, failures: 0 },
-        ],
-        stats: { queries: 1_254_000, blocked: 3_120, cache_hits: 1_011_500, cache_misses: 242_500, hit_p50_us: 100, hit_p99_us: 500, miss_p50_us: 20_000, miss_p99_us: 100_000 },
-      },
+  const heartbeat = {
+    version: VERSION,
+    hostname: 'office-dns',
+    status: {
+      running: true,
+      started_at: iso(60 * 24 * 3),
+      updated_at: iso(0),
+      listen: ['192.0.2.53:53'],
+      blocking: true,
+      lists_loaded: ['certpl-domains', 'hagezi-tif-mini'],
+      lists_missing: [],
+      blocklist_entries: 354_812,
+      lists_memory_bytes: 3_412_224,
+      cache_entries: 18_204,
+      upstreams: [
+        { upstream: 'https://dns.quad9.net/dns-query', ewma_ms: 18.4, failures: 0 },
+        { upstream: 'https://cloudflare-dns.com/dns-query', ewma_ms: 12.9, failures: 0 },
+      ],
+      stats: { queries: 1_254_000, blocked: 3_120, cache_hits: 1_011_500, cache_misses: 242_500, hit_p50_us: 100, hit_p99_us: 500, miss_p50_us: 20_000, miss_p99_us: 100_000 },
     },
-  });
+  };
+  await call('/api/v1/dns/heartbeat', { token, body: heartbeat });
+  fs.writeFileSync(DEMO_DNS_FILE, JSON.stringify({ hub: HUB, token, heartbeat }));
   const minute = (m) => new Date(Math.floor((now - m * 60_000) / 60_000) * 60_000).toISOString();
   const clients = [
     ['192.0.2.77', [['outlook.office365.com', 'NOERROR', 3], ['login.microsoft-verify.test', 'BLOCKED', 40, 'CERT Polska'], ['cdn-update.example-malware.test', 'BLOCKED', 15, 'HaGeZi Threat Intelligence Feeds (mini)']]],
