@@ -125,8 +125,10 @@ The desktop app's *Traffic & performance → Last 24 hours* reads a history kept
 
 - Linux has no per-program network usage (not without eBPF); the Hub's traffic page shows "Current connections per process" instead.
 - Per-program usage on Windows needs administrator rights and counts TCP payload bytes only; the per-user sign-in variant does not have it (the Hub's
-  per-program chart stays empty). To get it, run `ai-security-monitor service install --system --yes` in an administrator PowerShell to switch to a
-  system service that starts at boot.
+  per-program chart stays empty). To get it, press "Turn on per-app traffic" on the desktop app's Traffic & performance page, or run
+  `ai-security-monitor service install --admin-at-logon --yes` (the background service becomes a scheduled task that starts with administrator rights at
+  sign-in, still using your own config directory; asks for UAC once; the account must be an administrator). Alternatively switch to a system service that
+  starts at boot: `ai-security-monitor service install --system --yes` (its config directory is under ProgramData).
 - macOS `nettop` may be unavailable on some managed machines (MDM restrictions); only the per-program figures are missing then.
 - Disk I/O depends on the platform: Windows has none when disk performance counters are off (`diskperf -n`); network drives and tmpfs are not listed.
 - If the computer sleeps or shuts down within an interval, that time's bytes are counted in the first sample after waking (rates use the real elapsed time).

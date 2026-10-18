@@ -843,6 +843,12 @@ pub enum ServiceCmd {
         /// 完整掃描間隔（例：10m、1h）
         #[arg(long, value_name = "DUR")]
         interval: Option<String>,
+        /// Windows：登入時以系統管理員權限啟動（排程工作），才量得到各程式的網路流量；會跳一次 UAC
+        #[arg(long, conflicts_with = "system")]
+        admin_at_logon: bool,
+        /// 排程工作要用的帳號（提權後的子行程用；預設目前登入的帳號）
+        #[arg(long, hide = true, value_name = "USER")]
+        task_user: Option<String>,
     },
     /// 停止並移除開機自動啟動
     Uninstall {
@@ -852,6 +858,12 @@ pub enum ServiceCmd {
         /// 移除使用者層（預設）
         #[arg(long)]
         user: bool,
+        /// Windows：取消「登入時以系統管理員權限啟動」，換回一般的使用者層；會跳一次 UAC
+        #[arg(long, conflicts_with = "system")]
+        admin_at_logon: bool,
+        /// 排程工作要用的帳號（提權後的子行程用；預設目前登入的帳號）
+        #[arg(long, hide = true, value_name = "USER")]
+        task_user: Option<String>,
     },
     /// 系統服務與使用者層的安裝與執行狀態
     Status,

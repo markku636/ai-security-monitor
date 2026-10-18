@@ -11,13 +11,32 @@ use crate::util::cmd::RealRunner;
 
 pub async fn run(env: &Env, cmd: ServiceCmd) -> AppResult<()> {
     match cmd {
-        ServiceCmd::Install { system, interval, .. } => {
+        ServiceCmd::Install {
+            system,
+            interval,
+            admin_at_logon,
+            task_user,
+            ..
+        } => {
             if let Some(i) = &interval {
                 crate::util::time::parse_duration(i)?;
             }
+            if admin_at_logon {
+                return admin_logon(env, interval, true, task_user).await;
+            }
             change(env, scope(system), interval, true).await
         }
-        ServiceCmd::Uninstall { system, .. } => change(env, scope(system), None, false).await,
+        ServiceCmd::Uninstall {
+            system,
+            admin_at_logon,
+            task_user,
+            ..
+        } => {
+            if admin_at_logon {
+                return admin_logon(env, None, false, task_user).await;
+            }
+            change(env, scope(system), None, false).await
+        }
         ServiceCmd::Status => status(env).await,
         ServiceCmd::Restart { system } => restart(env, scope(system)).await,
         ServiceCmd::Logs { system, tail } => logs(env, system, tail),
@@ -33,18 +52,42 @@ fn scope(system: bool) -> Scope {
     }
 }
 
-fn print_plan(plan: &Plan, install: bool) {
+fn print_plan(plan: &Plan, install: bool, admin_task: bool) {
+    let how = if admin_task {
+        t!("排程工作，登入時以系統管理員權限啟動").to_string()
+    } else {
+        plan.manager.label().to_string()
+    };
     println!(
         "{}",
         if install {
-            tf!("安裝開機自動啟動（{how}）：", how = plan.manager.label())
+            tf!("安裝開機自動啟動（{how}）：", how = how)
         } else {
-            tf!("移除開機自動啟動（{how}）：", how = plan.manager.label())
+            tf!("移除開機自動啟動（{how}）：", how = how)
         }
     );
     for s in &plan.steps {
         println!("  · {}", s.describe());
     }
+}
+
+/// Windows：「登入時以系統管理員權限啟動」開／關（排程工作，見 [`service::elevated`]）。
+async fn admin_logon(env: &Env, interval: Option<String>, enable: bool, task_user: Option<String>) -> AppResult<()> {
+    if !cfg!(windows) {
+        return Err(AppError::Unsupported(t!("--admin-at-logon 只支援 Windows").into()));
+    }
+    let user = task_user
+        .or_else(service::elevated::current_user)
+        .ok_or_else(|| AppError::Service(t!("讀不到目前登入的帳號").into()))?;
+    let target = service::current_target(Scope::User, &env.config_dir, interval, &RealRunner).await?;
+    let plan = if enable {
+        service::elevated::plan_enable(&target, &user)
+    } else {
+        service::elevated::plan_disable(&target)
+    };
+    // 提權前先記下目前帳號（UAC 換成別的管理員帳號時，排程工作仍要用原本的帳號）
+    let extra = vec!["--task-user".to_string(), user];
+    apply_plan(env, plan, enable, Scope::User, &target, &extra).await
 }
 
 async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool) -> AppResult<()> {
@@ -54,22 +97,35 @@ async fn change(env: &Env, scope: Scope, interval: Option<String>, install: bool
     } else {
         service::plan_uninstall(&target)
     };
-    let action = if install {
-        t!("安裝開機自動啟動")
-    } else {
-        t!("移除開機自動啟動")
-    };
+    apply_plan(env, plan, install, scope, &target, &[]).await
+}
+
+/// 照計畫執行（需要時提權重跑同一個命令，`extra` 加在子行程的參數後面）。
+async fn apply_plan(
+    env: &Env,
+    plan: Plan,
+    install: bool,
+    scope: Scope,
+    target: &service::Target,
+    extra: &[String],
+) -> AppResult<()> {
+    let elevated_plan = scope == Scope::System || !extra.is_empty();
     if !env.global.yes {
         if env.global.json {
             print_json(&plan);
         } else {
-            print_plan(&plan, install);
+            print_plan(&plan, install, !extra.is_empty());
         }
+        let action = if install {
+            t!("安裝開機自動啟動")
+        } else {
+            t!("移除開機自動啟動")
+        };
         return ensure_confirmed(false, false, false, action);
     }
-    if scope == Scope::System && !elevate::is_elevated() {
-        // 系統服務需要系統管理員：以提權的子行程重跑同一個命令
-        let r = elevate::rerun_elevated(&env.config_dir).await?;
+    if elevated_plan && !elevate::is_elevated() {
+        // 需要系統管理員：以提權的子行程重跑同一個命令
+        let r = elevate::rerun_elevated_with(&env.config_dir, extra).await?;
         if env.global.json {
             print_json(&r.json);
         } else {
@@ -153,13 +209,28 @@ pub async fn user_service_status(config_dir: &std::path::Path) -> AppResult<serd
         "config_dir": target.config_dir,
         "running": service::running_watchers(None).len(),
         "legacy_running": service::legacy_watcher_running(),
+        "admin_at_logon": service::elevated::installed(&RealRunner).await,
     }))
+}
+
+/// 排程工作版（登入時以系統管理員權限啟動）的重新啟動：不用提權。
+async fn restart_admin_task() -> AppResult<Vec<String>> {
+    let plan = Plan {
+        scope: Scope::User,
+        manager: service::Manager::WindowsRun,
+        steps: service::elevated::plan_restart(),
+        notes: Vec::new(),
+    };
+    service::apply(&plan, &RealRunner).await
 }
 
 /// 桌面版用：使用者層的背景服務有登記、卻沒有在跑（例如更新安裝時被結束）→ 把它啟動起來。回傳有沒有啟動。
 pub async fn ensure_user_service_running(config_dir: &std::path::Path) -> AppResult<Option<Vec<String>>> {
     if !service::running_watchers(Some(config_dir)).is_empty() {
         return Ok(None);
+    }
+    if service::elevated::installed(&RealRunner).await {
+        return restart_admin_task().await.map(Some);
     }
     let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
     if !target.existing {
@@ -172,6 +243,9 @@ pub async fn ensure_user_service_running(config_dir: &std::path::Path) -> AppRes
 
 /// 桌面版用：更新之後讓使用者層的背景服務換成新版（有登記才做）。
 pub async fn restart_user_service(config_dir: &std::path::Path) -> AppResult<Option<Vec<String>>> {
+    if service::elevated::installed(&RealRunner).await {
+        return restart_admin_task().await.map(Some);
+    }
     let target = service::current_target(Scope::User, config_dir, None, &RealRunner).await?;
     if !target.existing {
         return Ok(None);
@@ -233,8 +307,9 @@ async fn status(env: &Env) -> AppResult<()> {
         rows.push(service::scope_status(&t, &RealRunner).await);
     }
     let watchers = service::running_watchers(None);
+    let admin_task = service::elevated::installed(&RealRunner).await;
     if env.global.json {
-        print_json(&serde_json::json!({ "scopes": rows, "running": watchers }));
+        print_json(&serde_json::json!({ "scopes": rows, "running": watchers, "admin_at_logon": admin_task }));
         return Ok(());
     }
     let table_rows = rows
@@ -265,6 +340,15 @@ async fn status(env: &Env) -> AppResult<()> {
             table_rows
         )
     );
+    if admin_task {
+        println!(
+            "{}",
+            tf!(
+                "登入時以系統管理員權限啟動：已開啟（排程工作「{task}」）",
+                task = service::elevated::TASK
+            )
+        );
+    }
     if watchers.is_empty() {
         println!("{}", t!("目前沒有常駐中的 ai-security-monitor watch。"));
     } else {

@@ -459,6 +459,39 @@ async fn set_background_service(state: State<'_, AppState>, enabled: bool) -> Cm
     Ok(json!({ "lines": lines, "status": status }))
 }
 
+/// Windows：背景服務改成「登入時以系統管理員權限啟動」（排程工作），才量得到各程式的網路流量。
+/// 會跳一次 UAC；實際動作由命令列版以系統管理員身分執行（`service install|uninstall --admin-at-logon --yes`）。
+#[tauri::command]
+async fn set_admin_logon(state: State<'_, AppState>, enabled: bool) -> CmdResult<Value> {
+    let dir = state.config_dir.clone();
+    let st = asa_lib::cli::service_cmd::user_service_status(&dir)
+        .await
+        .map_err(err)?;
+    let exe = st["exe"]
+        .as_str()
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| "找不到命令列版 ai-security-monitor".to_string())?;
+    let user = asa_lib::service::elevated::current_user().ok_or_else(|| "讀不到目前登入的帳號".to_string())?;
+    let argv: Vec<String> = [
+        exe.display().to_string(),
+        "--config-dir".into(),
+        dir.display().to_string(),
+        "service".into(),
+        if enabled { "install" } else { "uninstall" }.into(),
+        "--admin-at-logon".into(),
+        "--yes".into(),
+        "--task-user".into(),
+        user,
+    ]
+    .into();
+    let r = asa_lib::elevate::run_elevated(&exe, &argv, &dir).await.map_err(err)?;
+    if !r.ok {
+        return Err(r.lines.join("\n"));
+    }
+    let status = background_service_status(state).await?;
+    Ok(json!({ "lines": r.lines, "status": status }))
+}
+
 /// 登入時開啟桌面版（常駐系統匣、不跳視窗）。
 #[tauri::command]
 fn desktop_autostart_status(app: AppHandle) -> CmdResult<bool> {
@@ -632,6 +665,7 @@ pub fn run(start_in_tray: bool) {
             leave_hub,
             background_service_status,
             set_background_service,
+            set_admin_logon,
             desktop_autostart_status,
             set_desktop_autostart,
             usage::metrics_now,

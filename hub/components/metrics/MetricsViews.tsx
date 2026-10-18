@@ -257,9 +257,9 @@ export async function FleetTrafficSection({ t, range, agentId, ranking = [] }: {
             <p>{t('這段期間沒有主機回報各程式的流量，所以畫不出這張圖。')}</p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                {t('Windows：背景服務要以系統管理員身分執行才讀得到。在「系統管理員」PowerShell 執行')}{' '}
-                <code className="rounded bg-slate-100 px-1 font-mono text-xs dark:bg-slate-800">ai-security-monitor service install --system --yes</code>
-                {t('（改成開機時啟動的系統服務），幾分鐘後就會有資料。')}
+                {t('Windows：背景服務要有系統管理員權限才讀得到。在那台電腦的桌面版「流量與效能」按「開啟各程式流量」，或執行')}{' '}
+                <code className="rounded bg-slate-100 px-1 font-mono text-xs dark:bg-slate-800">ai-security-monitor service install --admin-at-logon --yes</code>
+                {t('（登入時以系統管理員權限啟動，會跳一次 Windows 確認），幾分鐘後就會有資料。')}
               </li>
               <li>{t('macOS：會自動回報（用系統內建的 nettop）。')}</li>
               <li>{t('Linux：目前量不到各程式的流量，可以看下方「各行程目前的連線」。')}</li>

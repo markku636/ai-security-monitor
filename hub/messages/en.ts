@@ -1498,4 +1498,6 @@ export const en: Record<string, string> = {
   '這個 Hub 已設定 compose 的防護 DNS 權杖。': 'This Hub has a compose protective DNS token configured.',
   '個別電腦：在那台以系統管理員執行（會記下原設定；防護 DNS 連續 3 分鐘查不到會自動改回）：': 'Single computers: run as administrator on that computer (the old settings are saved; if the protective DNS is unreachable for 3 minutes in a row it switches back automatically):',
   '改回原本的 DNS': 'switch back to the original DNS',
+  'Windows：背景服務要有系統管理員權限才讀得到。在那台電腦的桌面版「流量與效能」按「開啟各程式流量」，或執行': 'Windows: the background service needs administrator rights to read this. On that computer press "Turn on per-app traffic" on the desktop app\'s Traffic & performance page, or run',
+  '（登入時以系統管理員權限啟動，會跳一次 Windows 確認），幾分鐘後就會有資料。': ' (starts with administrator rights at sign-in; Windows asks for confirmation once); data appears within a few minutes.',
 };

@@ -7,6 +7,16 @@
 
 pub fn lookup(zh: &str) -> Option<&'static str> {
     Some(match zh {
+        // ---- service --admin-at-logon ----
+        "排程工作，登入時以系統管理員權限啟動" => "scheduled task, starts with administrator rights at sign-in",
+        "Windows：登入時以系統管理員權限啟動（排程工作），才量得到各程式的網路流量；會跳一次 UAC" => "Windows: start with administrator rights at sign-in (scheduled task) so per-app network traffic can be measured; asks for UAC once",
+        "Windows：取消「登入時以系統管理員權限啟動」，換回一般的使用者層；會跳一次 UAC" => "Windows: stop starting with administrator rights at sign-in and go back to the normal user-level start; asks for UAC once",
+        "排程工作要用的帳號（提權後的子行程用；預設目前登入的帳號）" => "Account the scheduled task runs as (used by the elevated child; defaults to the signed-in account)",
+        "帳號要是系統管理員群組的成員，背景服務才會有管理員權限。" => "The account must be a member of the Administrators group for the background service to get administrator rights.",
+        "指令超過 {n} 個字元，排程工作可能建立失敗；請把程式裝到路徑較短的位置。" => "The command is longer than {n} characters and the scheduled task may fail to be created; install the program in a shorter path.",
+        "--admin-at-logon 只支援 Windows" => "--admin-at-logon is only supported on Windows",
+        "讀不到目前登入的帳號" => "Could not read the signed-in account",
+        "登入時以系統管理員權限啟動：已開啟（排程工作「{task}」）" => "Start with administrator rights at sign-in: on (scheduled task \"{task}\")",
         // ---- fim ----
         "檔案完整性與開機自啟：看哪些重要檔案或開機自動執行項目被改過、接受變更、重建基準" => "File integrity and autoruns: see which important files or startup items changed, accept changes, rebuild the baseline",
         "基準建立時間、監看數量與待確認的變更（預設）" => "Baseline time, what is watched and changes waiting for review (default)",

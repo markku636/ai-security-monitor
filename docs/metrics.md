@@ -110,7 +110,8 @@ ai-security-monitor config set metrics.process_network false  # 不估算各程�
 
 - Linux 沒有各程式的網路用量（不裝 eBPF 拿不到）；Hub 的流量頁改看「各行程目前的連線」。
 - Windows 的各程式用量需要系統管理員，只算 TCP 資料位元組；以一般使用者執行的登入啟動版本沒有這一項（Hub 的各程式圖會是空的）。
-  要有這項資料，在系統管理員 PowerShell 執行 `ai-security-monitor service install --system --yes`，改成開機時啟動的系統服務。
+  要有這項資料：在桌面版「流量與效能」按「開啟各程式流量」，或執行 `ai-security-monitor service install --admin-at-logon --yes`（背景服務改成登入時以系統管理員權限啟動的排程工作，仍用自己的設定目錄；會跳一次 UAC，帳號要是系統管理員）。
+  也可以改成開機時啟動的系統服務：`ai-security-monitor service install --system --yes`（設定目錄改用 ProgramData）。
 - macOS 的 `nettop` 在部分受管環境（MDM 限制）可能讀不到，這時只是少了各程式的用量。
 - 磁碟讀寫量依平台：Windows 關掉磁碟效能計數器（`diskperf -n`）時沒有；網路磁碟與 tmpfs 不列。
 - 取樣間隔內關機或休眠，那段時間的量會算進喚醒後的第一個樣本（速率以實際經過時間計算）。

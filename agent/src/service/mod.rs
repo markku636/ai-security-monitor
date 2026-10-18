@@ -8,6 +8,7 @@
 //! `dev.asa.agent`）在 status 會被認出來；install 先移除它再裝新的，uninstall／restart 也會處理它。
 //! 系統層設定目錄（`%ProgramData%\ai-security-agent`、`/var/lib/asa`…）在 install 時搬到新位置。
 
+pub mod elevated;
 pub mod instance;
 pub mod units;
 #[cfg(windows)]
@@ -1069,7 +1070,7 @@ mod tests {
         );
     }
 
-    fn target(os: Os, scope: Scope) -> Target {
+    pub(super) fn target(os: Os, scope: Scope) -> Target {
         let (exe, cfg, home) = match os {
             Os::Windows => (
                 r"C:\Tools\ai-security-monitor.exe",

@@ -2,6 +2,8 @@
 
 ## 未發佈
 
+- **Windows 一鍵開啟各程式的網路流量**：桌面版「流量與效能」量不到各程式流量時，多了「開啟各程式流量」按鈕（跳一次 Windows UAC），背景服務改成「登入時以系統管理員權限啟動」的排程工作（仍用自己的設定目錄、取代 HKCU Run，之後登入不再詢問），就會開始記錄各程式的流量並回報 Hub。命令列：`ai-security-monitor service install --admin-at-logon --yes`（關閉：`service uninstall --admin-at-logon --yes`，換回一般的登入啟動）；`service status` 會顯示是否開啟；更新後的重新啟動也會用排程工作。帳號要是系統管理員群組成員。設定頁的「背景自動回報」也會顯示這個狀態。
+
 ## v0.6.0 — 2026-10-18
 
 **DNS 防禦：每台電腦即時看查了哪些網域、哪個程式查的，偵測 DNS 通道、亂數網域、被竄改的 DNS 與 hosts；選用的防護 DNS 伺服器（自己寫的 Rust，約 12 萬 QPS），由 Hub 開關、暫停、放行，`dns use-hub` 一鍵把電腦指過去、連不上自動改回；另有檔案完整性與開機自啟監控、通知（Email／Slack／Discord／Teams／Webhook／Syslog）、自動回應、MITRE ATT&CK 與法規對照、IP 反查網域。** 一般使用者請下載 `AI-Security-Monitor-0.6.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.5.0 的桌面版會自動提示更新。防護 DNS 可以用命令列版的 `ai-security-monitor dns-server`，或新的 Docker 映像 `ghcr.io/markku636/ai-security-monitor-dns`（Hub compose 加 `--profile dns`）。

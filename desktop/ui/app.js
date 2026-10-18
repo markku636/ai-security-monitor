@@ -844,6 +844,7 @@ const TRAY_HINT = '登入 Windows／macOS／Linux 時自動開啟這個程式，
 function serviceText(s) {
   const st = s?.status;
   if (!st) return '—';
+  if (s.admin_at_logon) return `已開啟（登入時以系統管理員權限啟動，量得到各程式流量）${s.running ? '・背景回報執行中' : ''}`;
   if (st.installed) return `已開啟${st.state ? `（${esc(st.state)}）` : ''}${s.running ? '・背景回報執行中' : ''}`;
   if (st.legacy) return '找到舊版 asa 的開機啟動：打開這個開關會換成新版（並搬移設定）';
   return s.running ? '沒有設定開機啟動，但目前有背景回報在執行' : '未開啟';
@@ -896,7 +897,8 @@ async function pageSettings(opts = {}) {
   const tray = document.getElementById('auto-tray');
   invoke('background_service_status')
     .then((s) => {
-      bg.checked = !!s.status?.installed;
+      bg.checked = !!s.status?.installed || !!s.admin_at_logon;
+      bg.dataset.admin = s.admin_at_logon ? '1' : '';
       bg.disabled = false;
       bgState.textContent = serviceText(s);
     })
@@ -906,8 +908,11 @@ async function pageSettings(opts = {}) {
     bg.disabled = true;
     bgState.innerHTML = `<span class="spin"></span> ${want ? '設定中…' : '移除中…'}`;
     try {
+      // 目前是「以系統管理員權限啟動」：關掉要先刪排程工作（會跳 UAC）
+      if (!want && bg.dataset.admin) await invoke('set_admin_logon', { enabled: false });
       const r = await invoke('set_background_service', { enabled: want });
-      bg.checked = !!r.status?.status?.installed;
+      bg.checked = !!r.status?.status?.installed || !!r.status?.admin_at_logon;
+      bg.dataset.admin = r.status?.admin_at_logon ? '1' : '';
       bgState.textContent = serviceText(r.status);
       toast(want ? '已開啟背景自動回報' : '已關閉背景自動回報');
       renderUpdateSection(document.getElementById('set-update'));

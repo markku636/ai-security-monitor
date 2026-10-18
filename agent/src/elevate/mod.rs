@@ -81,13 +81,26 @@ pub fn quote_sh(a: &str) -> String {
 
 /// 以管理員身分重跑目前指令並取回結果。
 pub async fn rerun_elevated(config_dir: &Path) -> AppResult<ElevatedResult> {
+    rerun_elevated_with(config_dir, &[]).await
+}
+
+/// 同 [`rerun_elevated`]，另外加上參數（例：提權前才知道的目前帳號）。
+pub async fn rerun_elevated_with(config_dir: &Path, extra: &[String]) -> AppResult<ElevatedResult> {
     let exe = std::env::current_exe().map_err(|e| AppError::Elevation(e.to_string()))?;
+    let mut original: Vec<String> = std::env::args().collect();
+    original.extend(extra.iter().cloned());
+    eprintln!("{}", t!("此動作需要系統管理員權限，正在請求提權…"));
+    run_elevated(&exe, &original, config_dir).await
+}
+
+/// 以系統管理員身分執行指定的 ai-security-monitor 執行檔（`argv` 含程式名，跟 `std::env::args()` 一樣），
+/// 子行程把結果寫回檔案。桌面版用：它自己不是命令列程式，要提權時改跑旁邊的命令列版。
+pub async fn run_elevated(exe: &Path, argv: &[String], config_dir: &Path) -> AppResult<ElevatedResult> {
+    let exe = exe.to_path_buf();
     let dir: PathBuf = config_dir.join("elevated");
     crate::store::ensure_dir(&dir)?;
     let result_file = dir.join(format!("{}.json", uuid::Uuid::new_v4().simple()));
-    let original: Vec<String> = std::env::args().collect();
-    let args = child_args(&original, &result_file, config_dir);
-    eprintln!("{}", t!("此動作需要系統管理員權限，正在請求提權…"));
+    let args = child_args(argv, &result_file, config_dir);
     let exe2 = exe.clone();
     let args2 = args.clone();
     tokio::task::spawn_blocking(move || imp::run_as_admin(&exe2, &args2))

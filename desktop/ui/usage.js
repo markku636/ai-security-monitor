@@ -209,6 +209,7 @@ function renderProcs(d, times, stepS, emptyText) {
   if (!d.has_processes || !pts.some((p) => p.procs)) {
     metricBox.hidden = true;
     box.innerHTML = procHelp(d);
+    wireAdminLogon(box);
     return;
   }
   const totals = new Map();
@@ -268,12 +269,33 @@ function renderProcs(d, times, stepS, emptyText) {
   }
 }
 
+/** 「開啟各程式流量」：背景服務改成登入時以系統管理員權限啟動（跳一次 UAC）。 */
+function wireAdminLogon(box) {
+  const b = box.querySelector('#us-admin-logon');
+  if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true;
+    b.innerHTML = '<span class="spin"></span> 等你在 Windows 視窗按「是」…';
+    try {
+      await invoke('set_admin_logon', { enabled: true });
+      toast('已開啟：背景服務改用系統管理員權限，一兩分鐘後開始記錄各程式的流量', 6000);
+      b.textContent = '已開啟，等待第一筆資料…';
+    } catch (e) {
+      b.disabled = false;
+      b.textContent = '開啟各程式流量（會跳出 Windows 確認）';
+      toast(`沒有開啟：${e}`, 8000);
+    }
+  };
+}
+
 function procHelp(d) {
   if (d.process_network === false) {
     return '<p class="small">各程式的流量統計已關閉（設定 <span class="mono">metrics.process_network</span>）。要開啟：<span class="mono">ai-security-monitor config set metrics.process_network true</span>。</p>';
   }
-  const win = `<li><b>Windows</b>：要以<b>系統管理員</b>執行背景服務才量得到。用「以系統管理員身分執行」開 PowerShell，執行
-      <span class="mono">ai-security-monitor service install --system --yes</span>（改成開機時啟動的系統服務），幾分鐘後就會有資料。</li>`;
+  const win = `<li><b>Windows</b>：背景服務要有<b>系統管理員</b>權限才量得到。
+      <button type="button" class="btn primary" id="us-admin-logon" style="margin:4px 0">開啟各程式流量（會跳出 Windows 確認）</button>
+      <br>按下後背景服務改成登入時以系統管理員權限啟動（仍用你的設定，只會問這一次），一兩分鐘後就會開始記錄各程式的流量。
+      帳號要是系統管理員。也可以手動執行 <span class="mono">ai-security-monitor service install --admin-at-logon --yes</span>。</li>`;
   const mac = '<li><b>macOS</b>：會自動用系統內建的 nettop 量，不用另外設定。</li>';
   const linux = '<li><b>Linux</b>：目前量不到各程式的流量（需要 eBPF）；可以看「<a class="link" href="#connections">連線</a>」頁哪些程式在連網。</li>';
   const order = d.platform === 'macos' ? [mac, win, linux] : d.platform === 'linux' ? [linux, win, mac] : [win, mac, linux];
