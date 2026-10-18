@@ -1661,4 +1661,7 @@ export const en: Record<string, string> = {
   '另外鏡像 {n} 個只限非商業用途的來源：{list}': 'Also mirror {n} sources limited to non-commercial use: {list}',
   '由環境變數 AI_SECURITY_MONITOR_HUB_INTEL_USAGE 指定，網頁上不能改。': 'Set by the AI_SECURITY_MONITOR_HUB_INTEL_USAGE environment variable; it cannot be changed here.',
   '各台電腦的桌面版第一次打開時也會自己問一次，兩邊分開設定：主機選商用時，就算 Hub 有鏡像也不會用。': 'Each computer\'s desktop app also asks once on first launch; the two are set separately, and a host set to business use ignores these sources even when the Hub mirrors them.',
+  '公司／商業用途': 'Company / business use',
+  '個人／非商業用途（預設）': 'Personal / non-commercial use (default)',
+  '情資來源各有授權：有些只准個人或非營利使用（例如 DShield、URLhaus），公司或營利用途要另外向廠商買授權。Hub 預設是個人／非商業用途；公司部署請改成「公司／商業用途」，Hub 就只鏡像可以商用的來源。': 'Each threat-intel source has its own licence: some may only be used for personal or non-profit purposes (for example DShield, URLhaus), and company or for-profit use needs a licence from the vendor. The Hub defaults to personal / non-commercial use; for a company deployment switch to "company / business use" and the Hub only mirrors sources licensed for commercial use.',
 };

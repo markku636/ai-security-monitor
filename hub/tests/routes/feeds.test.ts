@@ -62,6 +62,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  process.env.ASA_HUB_INTEL_USAGE = 'commercial';
   process.env.ASA_HUB_ADMIN_SECRET = 'test-admin';
   process.env.ASA_HUB_CLIENT_SECRETS = 'client-a';
   process.env.ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS = '0';
@@ -168,8 +169,12 @@ describe('feed mirror', () => {
 
   it('mirrors noncommercial-only feeds only when the Hub is set to noncommercial use', async () => {
     const put = (usage: unknown, headers = admin) => usagePut(req('/api/v1/admin/intel-usage', { method: 'PUT', body: { usage }, headers }));
-    expect(await (await usageGet(req('/api/v1/admin/intel-usage', { headers: admin }))).json()).toEqual({ usage: 'commercial', source: 'default' });
-    // 商用（預設）：不同步、不給主機
+    delete process.env.ASA_HUB_INTEL_USAGE;
+    resetEnvForTests();
+    // 沒設定：預設個人／非商業用途
+    expect(await (await usageGet(req('/api/v1/admin/intel-usage', { headers: admin }))).json()).toEqual({ usage: 'noncommercial', source: 'default' });
+    expect((await put('commercial')).status).toBe(200);
+    // 商用：不同步、不給主機
     expect((await syncFeeds({ force: true })).map((o) => o.feed_id)).not.toContain('test-nc');
     expect((await feedRoute(req('/api/v1/feeds/test-nc', { headers: client }), { params: Promise.resolve({ id: 'test-nc' }) })).status).toBe(404);
 
@@ -178,8 +183,11 @@ describe('feed mirror', () => {
     const r = await put('noncommercial');
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ usage: 'noncommercial', source: 'settings' });
-    const [a] = await db.select().from(auditLog).where(eq(auditLog.action, 'intel_usage.updated'));
-    expect(a.details).toMatchObject({ before: 'commercial', after: 'noncommercial' });
+    const updates = await db.select().from(auditLog).where(eq(auditLog.action, 'intel_usage.updated'));
+    expect(updates.map((u) => u.details)).toEqual([
+      expect.objectContaining({ before: 'noncommercial', after: 'commercial' }),
+      expect.objectContaining({ before: 'commercial', after: 'noncommercial' }),
+    ]);
 
     resetMirrorStateForTests();
     expect((await syncFeeds({ force: true })).map((o) => o.feed_id)).toContain('test-nc');

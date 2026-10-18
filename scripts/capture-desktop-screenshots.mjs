@@ -130,6 +130,8 @@ const INTEL_FEEDS = registry.feeds
       kind: x.kind,
       enabled,
       license: x.license?.name ?? '',
+      commercial_ok: x.license?.commercial_ok !== false,
+      license_blocked: false,
       source_url: x.urls[0],
       entries: enabled ? DEMO_ENTRIES[x.id] ?? 1000 + i * 37 : 0,
       fetched_at: enabled ? iso(12 + (i % 4) * 9) : null,
@@ -325,6 +327,14 @@ const DATA = {
   connections: { connections: CONNECTIONS, listeners: [], intel_loaded: true },
   latest_report: REPORT,
   intel_feeds: { feeds: INTEL_FEEDS },
+  // 示範機是個人用：只限非商業用途的來源也開著（情資頁會標「非商用」）
+  intel_usage: {
+    usage: 'noncommercial',
+    noncommercial: true,
+    sources: registry.feeds
+      .filter((x) => x.license?.commercial_ok === false)
+      .map((x) => ({ id: x.id, name: x.name, vendor: x.vendor, license: x.license.name, lookup: x.format === 'lookup-api' })),
+  },
   dns: (() => {
     const t = (m) => new Date(Date.now() - m * 60_000).toISOString();
     const rec = (m, name, process, rcode = 'NOERROR', count = 1, answers = [], reasons = [], qtype = 'A') => ({ ts: t(m), name, qtype, rcode, process, count, answers, reasons });
@@ -466,12 +476,19 @@ function installMock(D) {
     D.overview.hub_url = null;
     D.upload_status.enrolled = false;
   }
+  // -first-run 結尾的截圖：還沒選過情資的使用情境（第一次打開會跳出選擇視窗）
+  if (location.search.endsWith('-first-run')) D.intel_usage = { ...D.intel_usage, usage: null, noncommercial: false };
   const emit = (name, payload) => (listeners[name] ?? []).forEach((cb) => cb({ event: name, payload }));
   const handlers = {
     overview: () => D.overview,
     connections: () => D.connections,
     latest_report: () => D.latest_report,
     intel_feeds: () => D.intel_feeds,
+    intel_usage: () => D.intel_usage,
+    set_intel_usage: ({ usage }) => {
+      D.intel_usage = { ...D.intel_usage, usage, noncommercial: usage === 'noncommercial' };
+      return { usage };
+    },
     dns_recent: () => D.dns,
     dns_settings: () => D.dns,
     lookup_domain: ({ domain }) =>
@@ -686,6 +703,8 @@ const SHOTS = [
       await waitFor(`document.getElementById('dom-ai')`);
     },
   ],
+  // 第一次打開：問這台電腦是公司用還是個人用
+  ['desktop-first-run', 'overview', false, async () => waitFor(`document.querySelector('.overlay .choice') && document.querySelector('#ov-conn table')`)],
   ['desktop-intel', 'intel', false, async () => waitFor(`document.querySelector('#main table')`)],
   [
     'desktop-ai',

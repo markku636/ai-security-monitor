@@ -53,6 +53,22 @@ docker compose -f docker/compose.standalone.yml --env-file .env up -d --remove-o
 
 封鎖開關、把裝置指過去、Linux 的 host 網路見 [dns-server.md](dns-server.md)。
 
+## 商用／非商用版本
+
+有些情資來源只准個人或非營利使用（DShield、URLhaus、ThreatFox…，見 README「[公司用還是個人用？](../README.md#公司用還是個人用情資來源的授權)」）。Hub 預設是**個人／非商業用途**；公司部署請在上面任何一份 compose 後面多疊一個檔：
+
+| 版本 | 多加的檔 | Hub 鏡像給各台電腦的情資 |
+|---|---|---|
+| 公司／商業用途 | `-f docker/compose.commercial.yml` | 只有可以商用的來源 |
+| 個人／非商業用途 | `-f docker/compose.noncommercial.yml` | 另外加上只限非商用的來源 |
+
+```bash
+docker compose -f docker/compose.yml -f docker/compose.commercial.yml --env-file .env up -d
+docker compose -f docker/compose.standalone.dns.yml -f docker/compose.noncommercial.yml --env-file .env up -d
+```
+
+用了這兩個檔之一，Hub 網頁上的「威脅情資 → 情資來源授權」會鎖定；不加就在網頁上選。也可以直接在 `.env` 設 `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial`（或 `noncommercial`）。
+
 ## 設定
 
 完整清單見 [.env.example](../.env.example)。重點：

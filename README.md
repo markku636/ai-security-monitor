@@ -177,6 +177,52 @@ ai-security-monitor service install --system --yes  # 裝成開機就跑的系�
 沒加 `--yes` 的話，`service install`、封鎖 IP 這類會改系統的指令只會先列出「我打算做什麼」，不會真的動手，看過再加 `--yes`。
 要回報到 Hub，照[情境 B](#情境-b我要管辦公室好幾台) 加入即可（伺服器上同樣可以用 `enroll --auto`）。
 
+## 公司用還是個人用？（情資來源的授權）
+
+**程式本身是 MIT 授權，公司、個人都可以免費用。** 但它拿來判斷「這個 IP／網域是不是壞的」的威脅情資，是向各家廠商下載的，**每家有自己的授權**：大部分可以商用，有幾家只准個人或非營利使用。
+
+所以桌面版第一次打開時會問你一次：
+
+![第一次打開：這台電腦是公司用，還是個人用？](docs/images/desktop-first-run.png)
+
+| 你選 | 會發生什麼 |
+|---|---|
+| **公司／商業用途** | 只用可以商用的來源（預設開啟的有 19 個，例如 abuse.ch Feodo Tracker、Spamhaus DROP、CISA KEV、Emerging Threats compromised、CINS Army、HaGeZi、CERT.PL）。下面那些只限非商用的來源**不下載、不比對、不封鎖、不線上查詢**。 |
+| **個人／非商業用途** | 另外開啟下面這些只限非商用的來源，抓得更完整。 |
+| 還沒選（命令列版、伺服器） | 當作公司用。 |
+
+**哪些算「非商業」？** 一般來說：自己家裡的電腦、學生做作業或研究、非營利組織，算非商業。**公司的電腦、自己開的工作室、接案用的電腦都算商業**，請選公司用。各家定義不完全一樣，拿不準就選公司用，或直接問廠商。（這是整理，不是法律意見；條款可能變，正式商用前請再確認一次。）
+
+**只限非商用的來源，以及為什麼：**
+
+| 來源 | 它提供什麼 | 為什麼只限非商用 | 公司要用怎麼辦 |
+|---|---|---|---|
+| **DShield**（SANS Internet Storm Center） | 最近最常在網路上掃描、攻擊別人的網段 | 授權是 CC BY-NC-SA 2.5，「NC」就是不能商用，**光是拿來告警也算使用** | 向 SANS ISC 洽詢 |
+| **URLhaus**（abuse.ch） | 正在散播惡意程式的網址與主機 | abuse.ch 從 2025-11-04 起條款改成只限非營利使用 | 向 Spamhaus 訂閱商用版 |
+| **ThreatFox**（abuse.ch） | 惡意程式連回去的位址（IP:port，例如駭客的中控伺服器） | 同上 | 向 Spamhaus 訂閱商用版 |
+| **AbuseIPDB 免費版** | 線上查一個 IP 被多少人回報過攻擊 | 免費方案（每天 1,000 次）條款寫明不得商用 | 買 AbuseIPDB 付費方案 |
+| **FireHOL level1** | 好幾個來源彙整的封鎖清單 | 裡面**包含 DShield**，所以整份跟著 DShield 只限非商用 | 改用個別來源（Spamhaus DROP、Feodo 等，已預設開啟） |
+| Emerging Threats block list（預設關閉） | 彙整的封鎖清單 | 同樣包含 DShield | 同上 |
+| Phishing Army（預設關閉） | 釣魚網站網域 | 授權限非商業使用 | 向 Phishing Army 洽詢 |
+| GreyNoise Community、CrowdSec CTI、AlienVault OTX（預設關閉，要自己申請金鑰） | 線上查 IP 名聲 | 免費／社群方案限非商業使用 | 買各家的商用方案 |
+
+**在哪裡改：**
+
+- **桌面版**：「設定 → 情資來源授權」。威脅情資頁會在這些來源旁標「非商用」，選公司用時標「未使用（只限非商用）」。
+- **命令列版／伺服器**：`ai-security-monitor config set intel.usage commercial`（或 `noncommercial`）。
+- **Security Hub**：「威脅情資 → 情資來源授權」。Hub **預設是個人／非商業用途**（把只限非商用的來源也鏡像給各台電腦）；**公司部署請改成公司用**，Hub 就只鏡像可以商用的來源。Hub 和每台電腦是分開設定的：電腦選公司用時，就算 Hub 有鏡像也不會用。
+- **Docker 部署直接選版本**：在原本的 compose 後面多疊一個檔（伺服器版、單機版、含防護 DNS 的版本都可以），網頁上就鎖定不能改：
+
+  ```bash
+  # 公司／商業用途
+  docker compose -f docker/compose.yml -f docker/compose.commercial.yml --env-file .env up -d
+  # 個人／非商業用途
+  docker compose -f docker/compose.yml -f docker/compose.noncommercial.yml --env-file .env up -d
+  ```
+
+  也可以在 `.env` 設 `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial`（或 `noncommercial`），效果一樣。
+- **有買商用授權**：選「個人／非商業用途」把這些來源打開，再用 `ai-security-monitor intel disable <id>` 關掉沒買的那幾家。
+
 ## 常見問題
 
 <details>
@@ -252,7 +298,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 <details>
 <summary><b>可以免費商用嗎？</b></summary>
 
-程式碼是 MIT 授權，可以免費商用。但部分威脅情資來源本身只允許非商業使用（例如 DShield、URLhaus、ThreatFox、AbuseIPDB 免費版）。桌面版第一次打開時會問你是「公司／商業用途」還是「個人／非商業用途」：選公司就只用可以商用的來源，選個人才會另外開啟那些只限非商用的來源；之後可以在「設定 → 情資來源授權」改。命令列版用 `ai-security-monitor config set intel.usage commercial`（或 `noncommercial`），Hub 在「威脅情資 → 情資來源授權」設定（預設商用）。詳見「[資料來源與授權](#資料來源與授權)」。
+程式碼是 MIT 授權，可以免費商用。但部分威脅情資來源本身只允許非商業使用（DShield、URLhaus、ThreatFox、AbuseIPDB 免費版、FireHOL level1 等）。桌面版第一次打開時會問你是「公司／商業用途」還是「個人／非商業用途」：選公司就只用可以商用的來源，選個人才會另外開啟那些只限非商用的來源。Hub 預設是個人／非商業用途，公司部署請改成公司用（Docker 用 `docker/compose.commercial.yml`）。每個來源為什麼只限非商用、公司要用怎麼辦、在哪裡改，見「[公司用還是個人用？](#公司用還是個人用情資來源的授權)」。
 </details>
 
 <details>

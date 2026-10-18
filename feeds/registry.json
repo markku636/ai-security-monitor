@@ -131,7 +131,7 @@
       "tags": [
         "malware-distribution"
       ],
-      "notes": "從 URL 行擷取 host；host 可能是 IP 或網域。abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；預設只告警、不進防火牆自動封鎖。"
+      "notes": "從 URL 行擷取 host；host 可能是 IP 或網域。abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；只在選「個人／非商業用途」時使用。"
     },
     {
       "id": "abusech-threatfox-ipport",
@@ -157,7 +157,7 @@
       "tags": [
         "ioc"
       ],
-      "notes": "abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；預設只告警、不進防火牆自動封鎖。"
+      "notes": "abuse.ch 自 2025-11-04 起條款改為非營利使用、營利用途需向 Spamhaus 訂閱；只在選「個人／非商業用途」時使用。"
     },
     {
       "id": "certpl-domains",
@@ -549,7 +549,7 @@
         "name": "BSD/MIT (aggregates Spamhaus DROP + DShield)",
         "url": "https://rules.emergingthreats.net/",
         "attribution_required": true,
-        "commercial_ok": true,
+        "commercial_ok": false,
         "keep_header": true
       },
       "refresh_interval": "1h",
@@ -558,7 +558,7 @@
       "tags": [
         "aggregate"
       ],
-      "notes": "預設關閉：與 spamhaus-drop / dshield 重疊；那兩個關掉時可改開。"
+      "notes": "預設關閉：與 spamhaus-drop／dshield 重疊，且內含 DShield（非商用授權），只在選「個人／非商業用途」時使用。"
     },
     {
       "id": "dshield-block",
@@ -585,7 +585,7 @@
         "scanner",
         "top20"
       ],
-      "notes": "非商用授權：預設只告警，不進封鎖。"
+      "notes": "非商用授權：只在選「個人／非商業用途」時使用。"
     },
     {
       "id": "tor-exits",
@@ -652,10 +652,10 @@
       "direction": "both",
       "confidence": 80,
       "license": {
-        "name": "Aggregate (see per-source licences)",
+        "name": "Aggregate (includes DShield, CC BY-NC-SA; see per-source licences)",
         "url": "https://github.com/firehol/blocklist-ipsets",
         "attribution_required": true,
-        "commercial_ok": true,
+        "commercial_ok": false,
         "keep_header": true
       },
       "refresh_interval": "24h",
@@ -664,7 +664,8 @@
       "tags": [
         "aggregate",
         "bogons"
-      ]
+      ],
+      "notes": "彙整清單，內含 DShield（非商用授權），所以整份只在選「個人／非商業用途」時使用。"
     },
     {
       "id": "dbip-country-lite",

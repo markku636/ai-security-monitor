@@ -1,0 +1,11 @@
+# 個人／非商業用途：疊在任何一份 Hub 的 compose 後面（-f），只改 Hub 的情資使用情境。
+#   docker compose -f docker/compose.yml -f docker/compose.noncommercial.yml --env-file .env up -d
+#   （單機版、含防護 DNS 的版本一樣：-f docker/compose.standalone.yml -f docker/compose.noncommercial.yml …）
+# Hub 也鏡像只限非商業用途的情資來源（偵測更完整）；只限個人、學習研究、非營利組織使用。
+# 由這個檔指定時，Hub 網頁上「威脅情資 → 情資來源授權」會鎖定不能改；不加這個檔＝在網頁上選（預設個人／非商業用途）。
+# 只限非商業用途的來源：DShield、URLhaus、ThreatFox、FireHOL level1、Emerging Threats block list、Phishing Army（說明見 README「公司用還是個人用？」）。
+# 各台電腦自己的設定另外選（桌面版第一次打開會問；命令列 ai-security-monitor config set intel.usage …）。
+services:
+  hub:
+    environment:
+      AI_SECURITY_MONITOR_HUB_INTEL_USAGE: noncommercial

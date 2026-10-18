@@ -1,6 +1,6 @@
 'use client';
 
-// 情資頁的「情資來源授權」：Hub 是公司／商業用途（預設）還是個人／非商業用途。非商用才鏡像只限非商業用途的來源給主機。
+// 情資頁的「情資來源授權」：Hub 是公司／商業用途還是個人／非商業用途（預設）。非商用才鏡像只限非商業用途的來源給主機。
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useT } from '@/lib/i18n/client';
@@ -48,11 +48,11 @@ export function IntelUsageSetting({ usage, locked, sources }: { usage: Usage; lo
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        {t('情資來源各有授權：有些只准個人或非營利使用（例如 DShield、URLhaus），公司或營利用途要另外向廠商買授權。選「公司／商業用途」時 Hub 只鏡像可以商用的來源。')}
+        {t('情資來源各有授權：有些只准個人或非營利使用（例如 DShield、URLhaus），公司或營利用途要另外向廠商買授權。Hub 預設是個人／非商業用途；公司部署請改成「公司／商業用途」，Hub 就只鏡像可以商用的來源。')}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        {option('commercial', t('公司／商業用途（預設）'), t('只鏡像可以商用的情資來源，大部分來源都可以。'))}
-        {option('noncommercial', t('個人／非商業用途'), t('另外鏡像 {n} 個只限非商業用途的來源：{list}', { n: sources.length, list: sources.join('、') }))}
+        {option('commercial', t('公司／商業用途'), t('只鏡像可以商用的情資來源，大部分來源都可以。'))}
+        {option('noncommercial', t('個人／非商業用途（預設）'), t('另外鏡像 {n} 個只限非商業用途的來源：{list}', { n: sources.length, list: sources.join('、') }))}
       </div>
       {locked ? <p className="text-xs text-slate-500">{t('由環境變數 AI_SECURITY_MONITOR_HUB_INTEL_USAGE 指定，網頁上不能改。')}</p> : null}
       <p className="text-xs text-slate-500">{t('各台電腦的桌面版第一次打開時也會自己問一次，兩邊分開設定：主機選商用時，就算 Hub 有鏡像也不會用。')}</p>

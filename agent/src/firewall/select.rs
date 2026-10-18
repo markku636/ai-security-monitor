@@ -184,7 +184,12 @@ mod tests {
         let al = Allowlist::default();
         let kg = KnownGood::load();
         let local: Vec<IpAddr> = vec!["93.184.216.34".parse().unwrap()];
-        let (nets, st) = select(&db, &opts(&local, &al, &kg));
+        // FireHOL level1 內含 DShield，只限非商用：這裡測的是保留／過寬網段，所以允許非商用
+        let o = SelectOpts {
+            allow_noncommercial: true,
+            ..opts(&local, &al, &kg)
+        };
+        let (nets, st) = select(&db, &o);
         let s: Vec<String> = nets.iter().map(|n| n.to_string()).collect();
         assert_eq!(s, vec!["45.0.0.0/15"]);
         assert_eq!(st.skipped_reserved, 6);

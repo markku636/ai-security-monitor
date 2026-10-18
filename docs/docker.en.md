@@ -53,6 +53,22 @@ docker compose -f docker/compose.standalone.yml --env-file .env up -d --remove-o
 
 Blocking switch, pointing devices at it and Linux host networking: see [dns-server.en.md](dns-server.en.md).
 
+## Commercial / non-commercial versions
+
+Some threat intel sources only allow personal or non-profit use (DShield, URLhaus, ThreatFox, …; see the README section [Company or personal use?](../README.en.md#company-or-personal-use-threat-intel-licences)). The Hub defaults to **personal / non-commercial use**; for a company deployment add one more file after any of the compose files above:
+
+| Version | Extra file | Intel the Hub mirrors to computers |
+|---|---|---|
+| Company / business use | `-f docker/compose.commercial.yml` | Only sources licensed for commercial use |
+| Personal / non-commercial use | `-f docker/compose.noncommercial.yml` | Also the non-commercial-only sources |
+
+```bash
+docker compose -f docker/compose.yml -f docker/compose.commercial.yml --env-file .env up -d
+docker compose -f docker/compose.standalone.dns.yml -f docker/compose.noncommercial.yml --env-file .env up -d
+```
+
+With either file the web setting (Threat intel → Threat intel licensing) is locked; without one you choose on the web page. Setting `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial` (or `noncommercial`) in `.env` does the same.
+
 ## Settings
 
 See [.env.example](../.env.example) for the full list. The important ones:

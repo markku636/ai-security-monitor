@@ -177,6 +177,52 @@ ai-security-monitor service install --system --yes  # install as a service that 
 Without `--yes`, commands that change the system (`service install`, blocking an IP, …) only print what they would do and change nothing; add `--yes` once you've read it.
 To report to a Hub, join it as in [scenario B](#scenario-b-i-manage-several-computers-in-an-office) (`enroll --auto` works on servers too).
 
+## Company or personal use? (threat intel licences)
+
+**The program itself is MIT licensed: free for companies and individuals.** The threat intel it uses to decide whether an IP or domain is bad, however, is downloaded from vendors, and **each has its own licence**: most allow commercial use, a few only allow personal or non-profit use.
+
+So the desktop app asks once, the first time you open it:
+
+![First launch: is this computer for company or personal use?](docs/images/desktop-first-run.png)
+
+| You choose | What happens |
+|---|---|
+| **Company / business use** | Only sources licensed for commercial use (19 are on by default, e.g. abuse.ch Feodo Tracker, Spamhaus DROP, CISA KEV, Emerging Threats compromised, CINS Army, HaGeZi, CERT.PL). The non-commercial-only sources below are **not downloaded, matched, blocked or queried**. |
+| **Personal / non-commercial use** | The non-commercial-only sources below are turned on as well, for better coverage. |
+| Not chosen yet (command line, servers) | Treated as company use. |
+
+**What counts as non-commercial?** Usually: your own computer at home, students' coursework or research, non-profit organisations. **Company computers, your own studio, and computers you use for paid work all count as commercial**; choose company use. Vendors define it slightly differently; if in doubt, choose company use or ask the vendor. (This is a summary, not legal advice; terms change, so check again before commercial use.)
+
+**Sources limited to non-commercial use, and why:**
+
+| Source | What it provides | Why non-commercial only | For company use |
+|---|---|---|---|
+| **DShield** (SANS Internet Storm Center) | Networks scanning and attacking others most often right now | Licensed CC BY-NC-SA 2.5; "NC" means no commercial use, and **alerting on it counts as use** | Ask SANS ISC |
+| **URLhaus** (abuse.ch) | URLs and hosts spreading malware | Since 2025-11-04 abuse.ch's terms only allow not-for-profit use | Subscribe via Spamhaus |
+| **ThreatFox** (abuse.ch) | Addresses malware calls back to (IP:port, e.g. attackers' command servers) | Same as above | Subscribe via Spamhaus |
+| **AbuseIPDB free plan** | Online lookup: how many people reported an IP for abuse | The free plan (1,000 lookups a day) forbids commercial use | Buy a paid AbuseIPDB plan |
+| **FireHOL level1** | Block list aggregated from several sources | **Includes DShield**, so the whole list inherits DShield's restriction | Use the individual sources instead (Spamhaus DROP, Feodo, … are on by default) |
+| Emerging Threats block list (off by default) | Aggregated block list | Also includes DShield | Same as above |
+| Phishing Army (off by default) | Phishing domains | Licence limited to non-commercial use | Ask Phishing Army |
+| GreyNoise Community, CrowdSec CTI, AlienVault OTX (off by default, need your own key) | Online IP reputation | Free / community plans are non-commercial | Buy the vendor's commercial plan |
+
+**Where to change it:**
+
+- **Desktop app**: Settings → Threat intel licensing. The Threat intel page marks these sources *non-commercial*, and *not used (non-commercial only)* under company use.
+- **Command line / servers**: `ai-security-monitor config set intel.usage commercial` (or `noncommercial`).
+- **Security Hub**: Threat intel → Threat intel licensing. The Hub **defaults to personal / non-commercial use** (it also mirrors the non-commercial-only sources to every computer); **for a company deployment switch it to company use**, and the Hub only mirrors sources licensed for commercial use. The Hub and each computer are set separately: a computer set to company use ignores these sources even if the Hub mirrors them.
+- **Pick the version when deploying with Docker**: add one more file after your usual compose file (server, standalone and protective-DNS variants all work); the web setting is then locked:
+
+  ```bash
+  # Company / business use
+  docker compose -f docker/compose.yml -f docker/compose.commercial.yml --env-file .env up -d
+  # Personal / non-commercial use
+  docker compose -f docker/compose.yml -f docker/compose.noncommercial.yml --env-file .env up -d
+  ```
+
+  Setting `AI_SECURITY_MONITOR_HUB_INTEL_USAGE=commercial` (or `noncommercial`) in `.env` does the same.
+- **Bought a commercial licence?** Choose personal / non-commercial use to turn the sources on, then turn off the ones you did not license with `ai-security-monitor intel disable <id>`.
+
 ## FAQ
 
 <details>
@@ -252,7 +298,7 @@ If nothing works, ask the administrator for the Hub URL: enter it under "Or ente
 <details>
 <summary><b>Can I use it commercially for free?</b></summary>
 
-The code is MIT licensed, so yes. Some threat intel sources, however, only allow non-commercial use (DShield, URLhaus, ThreatFox, the free AbuseIPDB plan, …). The desktop app asks on first launch whether it is for company / business or personal / non-commercial use: company uses only sources licensed for commercial use, personal also turns on the non-commercial-only ones; change it later under Settings → Threat intel licensing. On the command line use `ai-security-monitor config set intel.usage commercial` (or `noncommercial`); the Hub has the same setting under Threat intel → Threat intel licensing (business use by default). See [Data sources and licenses](#data-sources-and-licenses).
+The code is MIT licensed, so yes. Some threat intel sources, however, only allow non-commercial use (DShield, URLhaus, ThreatFox, the free AbuseIPDB plan, FireHOL level1, …). The desktop app asks on first launch whether it is for company / business or personal / non-commercial use: company uses only sources licensed for commercial use, personal also turns on the non-commercial-only ones. The Hub defaults to personal / non-commercial use; switch it to company use for a company deployment (with Docker: `docker/compose.commercial.yml`). Why each source is limited, what to do for company use and where to change it: [Company or personal use?](#company-or-personal-use-threat-intel-licences).
 </details>
 
 <details>
