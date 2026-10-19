@@ -2,6 +2,10 @@
 
 ## 未發佈
 
+## v0.8.4
+
+- Complete the Google OAuth callback on a same-site landing page so Strict session cookies work immediately without a manual refresh.
+
 ## v0.8.3
 
 - Hub supports direct Google OAuth sign-in with PKCE, verified email allowlists and Google-only web login.

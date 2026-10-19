@@ -4,7 +4,8 @@ import { GET as callback } from '@/app/api/auth/google/callback/route';
 import { POST as login } from '@/app/api/auth/login/route';
 import { googleClaimAllowed, googleLoginConfig, resetGoogleForTests } from '@/lib/auth/google';
 import { isOpenMode, resetEnvForTests } from '@/lib/env';
-import { secretFingerprint } from '@/lib/auth/sessions';
+import * as googleAuth from '@/lib/auth/google';
+import { secretFingerprint, validateSession } from '@/lib/auth/sessions';
 import { createTestDb } from '../helpers/db';
 import { req } from '../helpers/req';
 
@@ -20,7 +21,7 @@ beforeEach(() => {
   resetEnvForTests();
   resetGoogleForTests();
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetEnvForTests(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetEnvForTests(); });
 
 it('redirects directly to Google with PKCE, state, nonce, and secure cookies', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
@@ -80,4 +81,21 @@ it('invalidates sessions when the Google allowlist changes', () => {
   const original = secretFingerprint();
   vi.stubEnv('ASA_HUB_GOOGLE_ALLOWED_EMAILS', 'other@example.com');
   expect(secretFingerprint()).not.toBe(original);
+});
+
+it('completes the cross-site callback before navigating with the Strict session cookie', async () => {
+  vi.spyOn(googleAuth, 'discoverGoogle').mockResolvedValue({ issuer: 'https://accounts.google.com', authorization_endpoint: '', token_endpoint: '', jwks_uri: '' });
+  vi.spyOn(googleAuth, 'exchangeGoogleCode').mockResolvedValue({ id_token: 'verified-in-unit-tests' });
+  vi.spyOn(googleAuth, 'verifyGoogleIdToken').mockResolvedValue({ sub: 'subject', email: 'owner@example.com', email_verified: true });
+  const response = await callback(req('/api/auth/google/callback?code=code&state=state', {
+    cookie: 'asa_google_state=state; asa_google_nonce=nonce; asa_google_verifier=verifier',
+  }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get('location')).toBeNull();
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await response.text()).toContain('http-equiv="refresh" content="0;url=/"');
+  const cookie = response.headers.getSetCookie().find((c) => c.startsWith('asa_admin='))!;
+  expect(cookie).toContain('SameSite=Strict');
+  const token = cookie.split(';')[0].slice('asa_admin='.length);
+  expect(await validateSession(token)).toBe(true);
 });

@@ -58,7 +58,18 @@ export async function GET(req: Request): Promise<Response> {
     const { token } = await createSession(sourceIp(req));
     const actor = googleActor(payload);
     await audit({ actor, actorRole: 'admin', action: 'auth.login', sourceIp: sourceIp(req), details: { via: 'google', subject: payload.sub } });
-    return redirect('/', [...clear, sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000), secure)]);
+    // Finish the cross-site navigation before sending the Strict session cookie.
+    // A 302 chain from Google can reach / without that cookie and bounce to /login.
+    const headers = new Headers({
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer',
+      'content-security-policy': "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    for (const cookie of [...clear, sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000), secure)]) {
+      headers.append('set-cookie', cookie);
+    }
+    return new Response('<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Security Hub</title></head><body><a href="/">Continue to Security Hub</a></body></html>', { status: 200, headers });
   } catch (error) {
     await audit({
       actor: 'anonymous',
