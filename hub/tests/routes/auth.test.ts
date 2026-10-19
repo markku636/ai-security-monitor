@@ -57,7 +57,7 @@ describe('login / me / logout', () => {
     expect(ok.status).toBe(200);
     const sc = ok.headers.get('set-cookie')!;
     expect(sc).toContain('HttpOnly');
-    expect(sc).toContain('SameSite=Strict');
+    expect(sc).toContain('SameSite=Lax');
     const cookie = cookieFrom(ok, 'asa_admin')!;
 
     const who = await (await me(req('/api/auth/me', { cookie }))).json();

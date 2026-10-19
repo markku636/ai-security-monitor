@@ -57,7 +57,8 @@ export function sessionCookie(token: string, maxAgeSec: number, secure: boolean)
   return [
     `${SESSION_COOKIE}=${token}`,
     'HttpOnly',
-    'SameSite=Strict',
+    // OAuth returns through a cross-site redirect; allow the session on its top-level GET.
+    'SameSite=Lax',
     'Path=/',
     `Max-Age=${maxAgeSec}`,
     secure ? 'Secure' : '',
