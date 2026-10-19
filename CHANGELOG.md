@@ -2,6 +2,14 @@
 
 ## 未發佈
 
+## v0.8.2 — 2026-10-19
+
+**Security Hub 新增 Keycloak OIDC 登入，可透過既有 Google Identity Provider 登入，並以已驗證信箱白名單限制管理權限。**
+
+- 支援 Keycloak Public Client + PKCE S256，不必在 Hub 或 Kubernetes 保存 client secret；Confidential Client 仍可選填 secret。
+- 登入頁只有在 Issuer、Client ID 與允許信箱都設定時才顯示 Keycloak 按鈕，可用 `kc_idp_hint=google` 直接轉往 Google。
+- OIDC callback 僅接受 `email_verified=true` 且精確符合設定白名單的信箱；本次部署只允許 `a4756830@gmail.com`。
+
 ## v0.8.1 — 2026-10-19
 
 **桌面版新增掃描結果白名單排除與必填備註，簡化同網段 Security Hub 的尋找／加入流程，並新增「關於」視窗；同時補上 Sigma／YARA 引擎依賴與 macOS ARM64 發版驗證修正。**
