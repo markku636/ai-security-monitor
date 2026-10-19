@@ -129,7 +129,12 @@ async fn restart_background(app: &AppHandle) {
 async fn install(app: &AppHandle, u: Update, bytes: Vec<u8>, relaunch: bool) -> Result<(), String> {
     let _ = app.emit("update-installing", json!({ "version": u.version }));
     let u = u.restart_after_install(relaunch);
-    u.install(bytes).map_err(|e| e.to_string())?;
+    // Native installers may wait for authorization (macOS dispatches to the main
+    // thread). Keep both the UI and async runtime responsive while they run.
+    tauri::async_runtime::spawn_blocking(move || u.install(bytes))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
     // 到這裡的是 macOS／Linux（Windows 在 install 裡就結束了）
     restart_background(app).await;
     if relaunch {
@@ -151,7 +156,7 @@ async fn tick(app: &AppHandle, start_in_tray: bool) {
             "update-available",
             json!({ "version": u.version, "notes_url": notes_url(&u.version), "mode": mode.as_str() }),
         );
-        if mode != UpdateMode::Auto || install_blocker().is_some() || !auto_install_ok() {
+        if mode != UpdateMode::Auto || install_blocker().is_some() {
             return Ok(());
         }
         if st
@@ -165,18 +170,22 @@ async fn tick(app: &AppHandle, start_in_tray: bool) {
         }
         let bytes = download(app, &u).await?;
         let version = u.version.clone();
-        if start_in_tray && !st.window_shown.load(Ordering::SeqCst) {
+        if auto_install_ok() && start_in_tray && !st.window_shown.load(Ordering::SeqCst) {
             // 剛登入、使用者還沒打開視窗：現在就裝（裝完以系統匣模式重新開啟）
             return install(app, u, bytes, true).await;
         }
         *st.ready.lock().await = Some((u, bytes));
         st.last.lock().await.ready = true;
-        let _ = app.emit("update-ready", json!({ "version": version }));
+        let _ = app.emit(
+            "update-ready",
+            json!({ "version": version, "requires_confirmation": !auto_install_ok() }),
+        );
         Ok::<(), String>(())
     }
     .await;
     if let Err(e) = result {
-        st.last.lock().await.error = Some(e);
+        st.last.lock().await.error = Some(e.clone());
+        let _ = app.emit("update-error", json!({ "error": e }));
     }
     st.busy.store(false, Ordering::SeqCst);
 }
@@ -203,8 +212,12 @@ pub fn quit(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let ready = app.state::<Updates>().ready.lock().await.take();
-        if let Some((u, bytes)) = ready {
-            let _ = install(&app, u, bytes, false).await;
+        if let Some((u, bytes)) = ready.filter(|_| auto_install_ok()) {
+            if let Err(e) = install(&app, u, bytes, false).await {
+                app.state::<Updates>().last.lock().await.error = Some(e.clone());
+                let _ = app.emit("update-error", json!({ "error": e }));
+                return;
+            }
         }
         app.exit(0);
     });

@@ -1,6 +1,6 @@
 {
   "name": "ai-security-monitor-hub",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "private": true,
   "description": "Security Hub for ai-security-monitor",
   "license": "MIT",

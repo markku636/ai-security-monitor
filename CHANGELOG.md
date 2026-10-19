@@ -2,6 +2,13 @@
 
 ## 未發佈
 
+## v0.8.5 — 2026-10-20
+
+- Ubuntu 桌面版在背景下載並驗證更新，按「立即更新」並輸入管理員密碼即可完成，不必重新到網站下載。
+- 發佈必須包含已驗章的 Debian 更新檔，缺少簽章即停止發佈。
+- macOS／Linux 安裝改用獨立工作執行緒，避免原生安裝及授權等待阻塞非同步工作；更新失敗會顯示提示。
+- 修復 v0.8.4 發版時誤改第三方套件版本、導致各平台無法建置的 Cargo lock 紀錄。
+
 ## v0.8.4
 
 - Complete the Google OAuth callback on a same-site landing page so Strict session cookies work immediately without a manual refresh.

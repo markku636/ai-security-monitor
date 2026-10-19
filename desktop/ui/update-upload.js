@@ -39,8 +39,8 @@ function showUpdateBanner(kind, info) {
   const el = bannerEl();
   const notes = info.notes_url ? `<a class="link" data-url="${esc(info.notes_url)}">看更新內容</a>` : '';
   if (kind === 'ready') {
-    el.innerHTML = `<div><b>新版 ${esc(v)} 已下載好</b><div class="small muted">結束或重新開啟這個程式時會自動安裝。</div></div>
-      <div class="row"><button class="btn primary" data-up="install">現在重新啟動並更新</button><button class="btn" data-up="close" title="先不要">×</button></div>`;
+    el.innerHTML = `<div><b>新版 ${esc(v)} 已下載好</b><div class="small muted">${info.requires_confirmation ? '按「立即更新」，輸入系統管理員密碼即可完成。' : '結束或重新開啟這個程式時會自動安裝。'}</div></div>
+      <div class="row"><button class="btn primary" data-up="install">${info.requires_confirmation ? '立即更新' : '現在重新啟動並更新'}</button><button class="btn" data-up="close" title="先不要">×</button></div>`;
   } else if (kind === 'installing') {
     el.innerHTML = `<div><span class="spin"></span> 正在安裝新版 ${esc(v)}，程式會自動重新開啟…</div>`;
   } else {
@@ -80,6 +80,7 @@ function initUpdateEvents() {
     if (e.payload?.mode !== 'auto') showUpdateBanner('available', { ...e.payload, current: window.__asmVersion });
   });
   listen('update-ready', (e) => showUpdateBanner('ready', e.payload));
+  listen('update-error', (e) => toast(`更新失敗：${e.payload?.error ?? '請稍後重試'}`, 8000));
   listen('update-installing', (e) => showUpdateBanner('installing', e.payload));
   listen('update-progress', (e) => {
     const p = e.payload ?? {};
@@ -91,7 +92,7 @@ function initUpdateEvents() {
   invoke('update_status')
     .then((s) => {
       window.__asmVersion = s.current;
-      if (s.desktop?.ready) showUpdateBanner('ready', { version: s.desktop.latest });
+      if (s.desktop?.ready) showUpdateBanner('ready', { version: s.desktop.latest, requires_confirmation: !s.auto_install_ok });
       else if (s.desktop?.available && s.mode !== 'off') showUpdateBanner('available', { version: s.desktop.latest, notes_url: s.desktop.notes_url, current: s.current });
     })
     .catch(() => {});

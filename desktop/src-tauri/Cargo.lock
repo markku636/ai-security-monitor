@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "ai-security-monitor"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "ai-security-monitor-desktop"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "ai-security-monitor",
  "chrono",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "keyboard-types"
-version = "0.8.4"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fbe853b403ae61a04233030ae8a79d94975281ed9770a1f9e246732b534b28d"
 dependencies = [
@@ -2547,7 +2547,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "litemap"
-version = "0.8.4"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
@@ -6206,7 +6206,7 @@ dependencies = [
 
 [[package]]
 name = "yoke"
-version = "0.8.4"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "709fe23a0424b6a435d82152b1bd3fdfb0833487d5fa90d05d42762a9891fef5"
 dependencies = [

@@ -8,7 +8,7 @@
 //   darwin-aarch64(-app)    AI-Security-Monitor-<v>-macos-arm64.app.tar.gz
 //   darwin-x86_64(-app)     AI-Security-Monitor-<v>-macos-x64.app.tar.gz
 //   linux-x86_64-appimage   AI-Security-Monitor-<v>-linux-x64.AppImage
-//   linux-x86_64-deb        AI-Security-Monitor-<v>-linux-amd64.deb（有 .deb.sig 才加；安裝要系統管理員密碼）
+//   linux-x86_64-deb        AI-Security-Monitor-<v>-linux-amd64.deb（必須附 .deb.sig；安裝要系統管理員密碼）
 // Linux 刻意不放沒有安裝方式的 linux-x86_64：.deb 安裝找不到自己的項目時就不更新，不會誤拿到 AppImage。
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -55,7 +55,7 @@ export const TARGETS = (v) => [
   { keys: ['darwin-aarch64', 'darwin-aarch64-app'], file: `AI-Security-Monitor-${v}-macos-arm64.app.tar.gz` },
   { keys: ['darwin-x86_64', 'darwin-x86_64-app'], file: `AI-Security-Monitor-${v}-macos-x64.app.tar.gz` },
   { keys: ['linux-x86_64-appimage'], file: `AI-Security-Monitor-${v}-linux-x64.AppImage` },
-  { keys: ['linux-x86_64-deb'], file: `AI-Security-Monitor-${v}-linux-amd64.deb`, optional: true },
+  { keys: ['linux-x86_64-deb'], file: `AI-Security-Monitor-${v}-linux-amd64.deb` },
 ];
 
 /** 產生 latest.json 的內容（並驗章）。 */
