@@ -161,7 +161,11 @@ jobs:
               # Apple Silicon 上才不會顯示「已損毀」，而是可以在「隱私權與安全性」按「強制打開」
               app=$(find "$B/macos" -maxdepth 1 -name "*.app" | head -n 1)
               codesign --verify --deep --strict --verbose=2 "$app"
-              codesign -dv "$app" 2>&1 | tee /dev/stderr | grep -q "Signature=adhoc"
+              # 不用 `tee | grep -q`：grep 找到後會提早關閉 pipe，較長的 arm64
+              # codesign 輸出會讓 tee 收到 SIGPIPE，配合 pipefail 反而誤判失敗。
+              signature=$(codesign -dv "$app" 2>&1)
+              printf '%s\n' "$signature"
+              grep -q "Signature=adhoc" <<<"$signature"
               one dmg '*.dmg' "AI-Security-Monitor-$V-${{ matrix.asset }}.dmg"
               one macos '*.app.tar.gz' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz"
               one macos '*.app.tar.gz.sig' "AI-Security-Monitor-$V-${{ matrix.asset }}.app.tar.gz.sig"
