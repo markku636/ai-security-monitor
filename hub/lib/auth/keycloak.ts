@@ -1,22 +1,23 @@
 import { createHash } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
-import { googleLoginEnabled, readEnv } from '@/lib/env';
+import { keycloakLoginEnabled, readEnv } from '@/lib/env';
 import { hubPublicUrl } from '@/lib/install';
 import { randomToken, safeEqual } from './crypto';
 
-export const GOOGLE_STATE_COOKIE = 'asa_google_state';
-export const GOOGLE_NONCE_COOKIE = 'asa_google_nonce';
-export const GOOGLE_VERIFIER_COOKIE = 'asa_google_verifier';
-export const GOOGLE_COOKIE_MAX_AGE = 10 * 60;
-export const GOOGLE_CALLBACK_PATH = '/api/auth/google/callback';
-const GOOGLE_ISSUER = 'https://accounts.google.com';
+export const KEYCLOAK_STATE_COOKIE = 'asa_keycloak_state';
+export const KEYCLOAK_NONCE_COOKIE = 'asa_keycloak_nonce';
+export const KEYCLOAK_VERIFIER_COOKIE = 'asa_keycloak_verifier';
+export const KEYCLOAK_COOKIE_MAX_AGE = 10 * 60;
+export const KEYCLOAK_CALLBACK_PATH = '/api/auth/keycloak/callback';
 
-export interface GoogleLoginConfig {
+export interface KeycloakLoginConfig {
   enabled: boolean;
+  issuer: string;
   clientId: string;
   clientSecret: string;
   allowedEmails: string[];
   only: boolean;
+  idpHint: string;
 }
 
 interface OidcDiscovery {
@@ -43,29 +44,35 @@ function flag(name: string): boolean {
   return ['1', 'true', 'yes', 'on'].includes(readEnv(name).toLowerCase());
 }
 
-export function googleLoginConfig(): GoogleLoginConfig {
+export function keycloakLoginConfig(): KeycloakLoginConfig {
   return {
-    enabled: googleLoginEnabled(),
-    clientId: readEnv('ASA_HUB_GOOGLE_CLIENT_ID'),
-    clientSecret: readEnv('ASA_HUB_GOOGLE_CLIENT_SECRET'),
-    allowedEmails: csv('ASA_HUB_GOOGLE_ALLOWED_EMAILS'),
-    only: flag('ASA_HUB_GOOGLE_ONLY'),
+    enabled: keycloakLoginEnabled(),
+    issuer: readEnv('ASA_HUB_KEYCLOAK_ISSUER').replace(/\/+$/, ''),
+    clientId: readEnv('ASA_HUB_KEYCLOAK_CLIENT_ID'),
+    clientSecret: readEnv('ASA_HUB_KEYCLOAK_CLIENT_SECRET'),
+    allowedEmails: csv('ASA_HUB_KEYCLOAK_ALLOWED_EMAILS'),
+    only: flag('ASA_HUB_KEYCLOAK_ONLY'),
+    idpHint: readEnv('ASA_HUB_KEYCLOAK_IDP_HINT'),
   };
 }
 
-const g = globalThis as unknown as { __asaGoogleDiscovery?: { value: OidcDiscovery; expiresAt: number } };
+const g = globalThis as unknown as { __asaKeycloakDiscovery?: { issuer: string; value: OidcDiscovery; expiresAt: number } };
 
-export async function discoverGoogle(fetchImpl: typeof fetch = fetch): Promise<OidcDiscovery> {
-  if (g.__asaGoogleDiscovery && g.__asaGoogleDiscovery.expiresAt > Date.now()) return g.__asaGoogleDiscovery.value;
-  const response = await fetchImpl(`${GOOGLE_ISSUER}/.well-known/openid-configuration`, {
+export async function discoverKeycloak(cfg: KeycloakLoginConfig, fetchImpl: typeof fetch = fetch): Promise<OidcDiscovery> {
+  const issuerUrl = new URL(cfg.issuer);
+  if (issuerUrl.protocol !== 'https:') throw new Error('keycloak_insecure_issuer');
+  if (g.__asaKeycloakDiscovery?.issuer === cfg.issuer && g.__asaKeycloakDiscovery.expiresAt > Date.now()) {
+    return g.__asaKeycloakDiscovery.value;
+  }
+  const response = await fetchImpl(`${cfg.issuer}/.well-known/openid-configuration`, {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(10_000),
     cache: 'no-store',
   });
-  if (!response.ok) throw new Error(`google_discovery_${response.status}`);
+  if (!response.ok) throw new Error(`keycloak_discovery_${response.status}`);
   const value = (await response.json()) as Partial<OidcDiscovery>;
   if (
-    value.issuer !== GOOGLE_ISSUER ||
+    value.issuer !== cfg.issuer ||
     typeof value.authorization_endpoint !== 'string' ||
     typeof value.token_endpoint !== 'string' ||
     typeof value.jwks_uri !== 'string' ||
@@ -73,20 +80,20 @@ export async function discoverGoogle(fetchImpl: typeof fetch = fetch): Promise<O
     !value.token_endpoint.startsWith('https://') ||
     !value.jwks_uri.startsWith('https://')
   ) {
-    throw new Error('google_bad_discovery');
+    throw new Error('keycloak_bad_discovery');
   }
   const result = value as OidcDiscovery;
-  g.__asaGoogleDiscovery = { value: result, expiresAt: Date.now() + 10 * 60_000 };
+  g.__asaKeycloakDiscovery = { issuer: cfg.issuer, value: result, expiresAt: Date.now() + 10 * 60_000 };
   return result;
 }
 
-export function googleRedirectUri(headers: Headers, reqUrl?: string): string {
+export function keycloakRedirectUri(headers: Headers, reqUrl?: string): string {
   const base = hubPublicUrl(headers, reqUrl);
-  if (!base) throw new Error('google_public_url_missing');
-  return `${base}${GOOGLE_CALLBACK_PATH}`;
+  if (!base) throw new Error('keycloak_public_url_missing');
+  return `${base}${KEYCLOAK_CALLBACK_PATH}`;
 }
 
-export function createGoogleRequest(): { state: string; nonce: string; verifier: string; challenge: string } {
+export function createKeycloakRequest(): { state: string; nonce: string; verifier: string; challenge: string } {
   const state = randomToken();
   const nonce = randomToken();
   const verifier = randomToken();
@@ -94,17 +101,17 @@ export function createGoogleRequest(): { state: string; nonce: string; verifier:
   return { state, nonce, verifier, challenge };
 }
 
-export function googleTransientCookie(name: string, value: string, secure: boolean, maxAge = GOOGLE_COOKIE_MAX_AGE): string {
+export function keycloakTransientCookie(name: string, value: string, secure: boolean, maxAge = KEYCLOAK_COOKIE_MAX_AGE): string {
   return [`${name}=${encodeURIComponent(value)}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${maxAge}`, secure ? 'Secure' : '']
     .filter(Boolean)
     .join('; ');
 }
 
-export function buildGoogleAuthorizationUrl(
+export function buildKeycloakAuthorizationUrl(
   discovery: OidcDiscovery,
-  cfg: GoogleLoginConfig,
+  cfg: KeycloakLoginConfig,
   redirectUri: string,
-  request: ReturnType<typeof createGoogleRequest>,
+  request: ReturnType<typeof createKeycloakRequest>,
 ): string {
   const url = new URL(discovery.authorization_endpoint);
   url.searchParams.set('client_id', cfg.clientId);
@@ -115,13 +122,13 @@ export function buildGoogleAuthorizationUrl(
   url.searchParams.set('nonce', request.nonce);
   url.searchParams.set('code_challenge', request.challenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  url.searchParams.set('prompt', 'select_account');
+  if (cfg.idpHint) url.searchParams.set('kc_idp_hint', cfg.idpHint);
   return url.toString();
 }
 
-export async function exchangeGoogleCode(
+export async function exchangeKeycloakCode(
   discovery: OidcDiscovery,
-  cfg: GoogleLoginConfig,
+  cfg: KeycloakLoginConfig,
   input: { code: string; verifier: string; redirectUri: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<TokenResponse> {
@@ -140,37 +147,37 @@ export async function exchangeGoogleCode(
     cache: 'no-store',
   });
   const result = (await response.json()) as TokenResponse;
-  if (!response.ok || !result.id_token) throw new Error(result.error || `google_token_${response.status}`);
+  if (!response.ok || !result.id_token) throw new Error(result.error || `keycloak_token_${response.status}`);
   return result;
 }
 
-export async function verifyGoogleIdToken(
+export async function verifyKeycloakIdToken(
   idToken: string,
   discovery: OidcDiscovery,
-  cfg: GoogleLoginConfig,
+  cfg: KeycloakLoginConfig,
   nonce: string,
 ): Promise<JWTPayload> {
   const jwks = createRemoteJWKSet(new URL(discovery.jwks_uri), { timeoutDuration: 10_000, cooldownDuration: 30_000 });
   const { payload } = await jwtVerify(idToken, jwks, {
-    issuer: [GOOGLE_ISSUER, 'accounts.google.com'],
+    issuer: cfg.issuer,
     audience: cfg.clientId,
     algorithms: ['RS256'],
   });
-  if (typeof payload.nonce !== 'string' || !safeEqual(payload.nonce, nonce)) throw new Error('google_nonce_mismatch');
-  if (!payload.sub) throw new Error('google_subject_missing');
+  if (typeof payload.nonce !== 'string' || !safeEqual(payload.nonce, nonce)) throw new Error('keycloak_nonce_mismatch');
+  if (!payload.sub) throw new Error('keycloak_subject_missing');
   return payload;
 }
 
-export function googleClaimAllowed(payload: JWTPayload, cfg = googleLoginConfig()): boolean {
+export function keycloakClaimAllowed(payload: JWTPayload, cfg = keycloakLoginConfig()): boolean {
   const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
   return payload.email_verified === true && cfg.allowedEmails.includes(email);
 }
 
-export function googleActor(payload: JWTPayload): string {
+export function keycloakActor(payload: JWTPayload): string {
   const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : String(payload.sub);
-  return `google:${email.slice(0, 200)}`;
+  return `keycloak:${email.slice(0, 200)}`;
 }
 
-export function resetGoogleForTests(): void {
-  g.__asaGoogleDiscovery = undefined;
+export function resetKeycloakForTests(): void {
+  g.__asaKeycloakDiscovery = undefined;
 }

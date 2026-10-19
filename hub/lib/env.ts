@@ -62,9 +62,14 @@ export function readEnv(name: string): string {
   return raw(name);
 }
 
-/** Google login is shown only when credentials and an explicit email allowlist are all set. */
-export function googleLoginEnabled(): boolean {
-  return !!raw('ASA_HUB_GOOGLE_CLIENT_ID') && !!raw('ASA_HUB_GOOGLE_CLIENT_SECRET') && !!raw('ASA_HUB_GOOGLE_ALLOWED_EMAILS');
+/** Keycloak login is shown only when issuer, credentials and an explicit email allowlist are all set. */
+export function keycloakLoginEnabled(): boolean {
+  return (
+    !!raw('ASA_HUB_KEYCLOAK_ISSUER') &&
+    !!raw('ASA_HUB_KEYCLOAK_CLIENT_ID') &&
+    !!raw('ASA_HUB_KEYCLOAK_CLIENT_SECRET') &&
+    !!raw('ASA_HUB_KEYCLOAK_ALLOWED_EMAILS')
+  );
 }
 
 function flag(name: string): boolean {
@@ -129,5 +134,5 @@ export function resetEnvForTests(): void {
 
 /** 沒有管理員金鑰＝開放模式（只該綁 loopback）。 */
 export function isOpenMode(): boolean {
-  return !env().adminSecret && !googleLoginEnabled();
+  return !env().adminSecret && !keycloakLoginEnabled();
 }

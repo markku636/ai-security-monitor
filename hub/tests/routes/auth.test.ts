@@ -8,7 +8,7 @@ import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
 import { loadEnv, resetEnvForTests } from '@/lib/env';
 import { createTestDb } from '../helpers/db';
 import { cookieFrom, req } from '../helpers/req';
-import { googleClaimAllowed, googleLoginConfig, resetGoogleForTests } from '@/lib/auth/google';
+import { keycloakClaimAllowed, keycloakLoginConfig, resetKeycloakForTests } from '@/lib/auth/keycloak';
 
 function setEnv(vars: Record<string, string | undefined>) {
   for (const [k, v] of Object.entries(vars)) {
@@ -24,15 +24,17 @@ beforeAll(async () => {
 
 beforeEach(() => {
   resetRateLimitsForTests();
-  resetGoogleForTests();
+  resetKeycloakForTests();
   setEnv({
     ASA_HUB_ADMIN_SECRET: 'test-admin',
     ASA_HUB_CLIENT_SECRETS: 'client-a,client-b',
     ASA_HUB_PUBLIC_DASHBOARD: undefined,
-    ASA_HUB_GOOGLE_CLIENT_ID: undefined,
-    ASA_HUB_GOOGLE_CLIENT_SECRET: undefined,
-    ASA_HUB_GOOGLE_ALLOWED_EMAILS: undefined,
-    ASA_HUB_GOOGLE_ONLY: undefined,
+    ASA_HUB_KEYCLOAK_ISSUER: undefined,
+    ASA_HUB_KEYCLOAK_CLIENT_ID: undefined,
+    ASA_HUB_KEYCLOAK_CLIENT_SECRET: undefined,
+    ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: undefined,
+    ASA_HUB_KEYCLOAK_IDP_HINT: undefined,
+    ASA_HUB_KEYCLOAK_ONLY: undefined,
   });
 });
 
@@ -140,28 +142,30 @@ describe('login / me / logout', () => {
     expect(who.role).toBe('viewer');
   });
 
-  it('can make Google the only web login and allow exactly one verified email', async () => {
+  it('can make Keycloak the only web login and allow exactly one verified email', async () => {
     setEnv({
-      ASA_HUB_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com',
-      ASA_HUB_GOOGLE_ALLOWED_EMAILS: 'a4756830@gmail.com',
+      ASA_HUB_KEYCLOAK_ISSUER: 'https://keycloak.example.com/realms/company',
+      ASA_HUB_KEYCLOAK_CLIENT_ID: 'ai-security-monitor',
+      ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: 'a4756830@gmail.com',
     });
-    expect(googleLoginConfig().enabled).toBe(false);
+    expect(keycloakLoginConfig().enabled).toBe(false);
 
     setEnv({
-      ASA_HUB_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com',
-      ASA_HUB_GOOGLE_CLIENT_SECRET: 'test-client-secret',
-      ASA_HUB_GOOGLE_ALLOWED_EMAILS: 'a4756830@gmail.com',
-      ASA_HUB_GOOGLE_ONLY: '1',
+      ASA_HUB_KEYCLOAK_ISSUER: 'https://keycloak.example.com/realms/company',
+      ASA_HUB_KEYCLOAK_CLIENT_ID: 'ai-security-monitor',
+      ASA_HUB_KEYCLOAK_CLIENT_SECRET: 'test-client-secret',
+      ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: 'a4756830@gmail.com',
+      ASA_HUB_KEYCLOAK_ONLY: '1',
     });
-    const cfg = googleLoginConfig();
+    const cfg = keycloakLoginConfig();
     expect(cfg.enabled).toBe(true);
     expect(cfg.only).toBe(true);
-    expect(googleClaimAllowed({ sub: '1', email: 'a4756830@gmail.com', email_verified: true }, cfg)).toBe(true);
-    expect(googleClaimAllowed({ sub: '2', email: 'someone@example.com', email_verified: true }, cfg)).toBe(false);
-    expect(googleClaimAllowed({ sub: '3', email: 'a4756830@gmail.com', email_verified: false }, cfg)).toBe(false);
+    expect(keycloakClaimAllowed({ sub: '1', email: 'a4756830@gmail.com', email_verified: true }, cfg)).toBe(true);
+    expect(keycloakClaimAllowed({ sub: '2', email: 'someone@example.com', email_verified: true }, cfg)).toBe(false);
+    expect(keycloakClaimAllowed({ sub: '3', email: 'a4756830@gmail.com', email_verified: false }, cfg)).toBe(false);
     const keyLogin = await login(req('/api/auth/login', { method: 'POST', body: { key: 'test-admin' } }));
     expect(keyLogin.status).toBe(403);
-    expect(await keyLogin.json()).toMatchObject({ error: 'google_login_only' });
+    expect(await keyLogin.json()).toMatchObject({ error: 'keycloak_login_only' });
   });
 });
 

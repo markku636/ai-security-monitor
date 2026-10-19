@@ -80,9 +80,10 @@ See [.env.example](../.env.example) for the full list. The important ones:
 | `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **Required.** 127.0.0.1 inside a container is not the host's loopback, so open mode without a key is refused in Docker (set `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1` to override) |
 | `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **Required.** Used by compose to build `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
 | `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` (also the mDNS `url=`) |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_CLIENT_ID` / `…_CLIENT_SECRET` | Google OAuth web-application credentials. Set the authorized redirect URI to `<PUBLIC_URL>/api/auth/google/callback` |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_ALLOWED_EMAILS` | Comma-separated allowlist of verified Google email addresses. The Google button appears only when the client ID, client secret, and this value are all configured |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_ONLY` | `1` accepts only Google on the web login once Google is fully configured and disables the administrator-key form; Bearer admin APIs are unaffected |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ISSUER` / `…_CLIENT_ID` / `…_CLIENT_SECRET` | Keycloak OIDC credentials. Set the valid redirect URI to `<PUBLIC_URL>/api/auth/keycloak/callback` |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ALLOWED_EMAILS` | Comma-separated allowlist of verified email addresses. The Keycloak button appears only when the issuer, client ID, client secret, and this value are all configured |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_IDP_HINT` | Optional Keycloak identity-provider alias; for example, `google` sends users directly to the Google IdP managed by Keycloak |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ONLY` | `1` accepts only Keycloak on the web login once it is fully configured and disables the administrator-key form; Bearer admin APIs are unaffected |
 | `AI_SECURITY_MONITOR_HUB_MDNS` | Local network mDNS advertising (on by default for the server edition). **Docker Desktop and bridge networking do not pass multicast to the LAN**: use `network_mode: host` on Linux, or run `ai-security-monitor hub advertise --url <public url>` on any LAN machine, see [enrollment.en.md](enrollment.en.md#mdns-advertising) |
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | `0` = disable keyless enrollment requests (on by default) |
 | `AI_SECURITY_MONITOR_HUB_NAME` | Hub name shown to computers (default Security Hub) |

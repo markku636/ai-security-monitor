@@ -80,9 +80,10 @@ docker compose -f docker/compose.standalone.dns.yml -f docker/compose.noncommerc
 | `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **必填**。容器裡的 127.0.0.1 不是主機的 loopback，所以 Docker 裡不允許沒金鑰的開放模式（要的話設 `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1`） |
 | `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **必填**。compose 用它組 `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
 | `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | 安裝指令與 `/install.sh` 用的對外網址（也是 mDNS 廣播的 `url=`） |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_CLIENT_ID`／`…_CLIENT_SECRET` | Google OAuth 網頁應用程式憑證。Authorized redirect URI 設為 `<PUBLIC_URL>/api/auth/google/callback` |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_ALLOWED_EMAILS` | 可登入的已驗證 Google 信箱白名單（逗號分隔）。Client ID、Client secret 與此值都設定後才顯示 Google 登入按鈕 |
-| `AI_SECURITY_MONITOR_HUB_GOOGLE_ONLY` | `1`＝Google 設定完整後，網頁只接受 Google 登入，不顯示也不接受管理員金鑰登入表單；Bearer 管理 API 不受影響 |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ISSUER`／`…_CLIENT_ID`／`…_CLIENT_SECRET` | Keycloak OIDC 憑證。Valid redirect URI 設為 `<PUBLIC_URL>/api/auth/keycloak/callback` |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ALLOWED_EMAILS` | 可登入的已驗證信箱白名單（逗號分隔）。Issuer、Client ID、Client secret 與此值都設定後才顯示 Keycloak 登入按鈕 |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_IDP_HINT` | 選填 Keycloak Identity Provider alias；例如 `google` 會由 Keycloak 直接導向其 Google IdP |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ONLY` | `1`＝Keycloak 設定完整後，網頁只接受 Keycloak 登入，不顯示也不接受管理員金鑰登入表單；Bearer 管理 API 不受影響 |
 | `AI_SECURITY_MONITOR_HUB_MDNS` | 區網 mDNS 廣播（伺服器版預設開）。**Docker Desktop 與 bridge 網路不會把 multicast 送到區網**：Linux 用 `network_mode: host`，或在區網任一台執行 `ai-security-monitor hub advertise --url <對外網址>`，見 [enrollment.md](enrollment.md#mdns-廣播) |
 | `AI_SECURITY_MONITOR_HUB_ENROLL_REQUESTS` | `0`＝關閉免金鑰加入申請（預設開） |
 | `AI_SECURITY_MONITOR_HUB_NAME` | 電腦端看到的 Hub 名稱（預設 Security Hub） |
