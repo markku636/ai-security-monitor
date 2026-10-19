@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { apiPost } from '@/lib/api-client';
 import { useT } from '@/lib/i18n/client';
 
-export function LoginForm({ keycloakEnabled, keycloakOnly }: { keycloakEnabled: boolean; keycloakOnly: boolean }) {
+export function LoginForm({ keycloakEnabled, keycloakOnly, googleEnabled, googleOnly }: { keycloakEnabled: boolean; keycloakOnly: boolean; googleEnabled: boolean; googleOnly: boolean }) {
   const { t } = useT();
+  const allowAdminKey = !googleOnly && !(keycloakEnabled && keycloakOnly);
   const router = useRouter();
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,11 @@ export function LoginForm({ keycloakEnabled, keycloakOnly }: { keycloakEnabled: 
 
   return (
     <div className="space-y-4">
+      {googleEnabled ? (
+        <a href="/api/auth/google/login" className="block w-full rounded-md bg-teal-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-teal-800">
+          {t('使用 Google 登入')}
+        </a>
+      ) : null}
       {keycloakEnabled ? (
         <a
           href="/api/auth/keycloak/login"
@@ -38,14 +44,14 @@ export function LoginForm({ keycloakEnabled, keycloakOnly }: { keycloakEnabled: 
           {t('使用 Keycloak 登入')}
         </a>
       ) : null}
-      {keycloakEnabled && !keycloakOnly ? (
+      {(keycloakEnabled || googleEnabled) && allowAdminKey ? (
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
           {t('或使用管理員金鑰')}
           <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
         </div>
       ) : null}
-      {!keycloakEnabled || !keycloakOnly ? (
+      {allowAdminKey ? (
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm">
             <span className="mb-1 block text-slate-600 dark:text-slate-300">{t('管理員金鑰')}</span>

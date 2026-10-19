@@ -5,6 +5,7 @@ import { openModeAllowed, sameSiteWrite } from '@/lib/auth/access';
 import { safeEqual } from '@/lib/auth/crypto';
 import { clear, count, hit } from '@/lib/auth/ratelimit';
 import { createSession, SESSION_TTL_MS, sessionCookie } from '@/lib/auth/sessions';
+import { googleLoginConfig } from '@/lib/auth/google';
 import { keycloakLoginConfig } from '@/lib/auth/keycloak';
 import { env, isOpenMode } from '@/lib/env';
 import { BodyTooLarge, error, isHttps, json, readJson, sourceIp } from '@/lib/http';
@@ -17,6 +18,8 @@ const MAX_FAILS = 5;
 
 export async function POST(req: Request): Promise<Response> {
   if (!sameSiteWrite(req)) return error(403, 'cross_site_request');
+  const google = googleLoginConfig();
+  if (google.only) return error(403, 'google_login_only');
   const keycloak = keycloakLoginConfig();
   if (keycloak.enabled && keycloak.only) return error(403, 'keycloak_login_only');
   if (isOpenMode()) {
@@ -35,7 +38,7 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     return error(e instanceof BodyTooLarge ? 413 : 400, e instanceof BodyTooLarge ? 'too_large' : 'bad_request');
   }
-  if (!safeEqual(body.key.trim(), env().adminSecret)) {
+  if (!env().adminSecret || !safeEqual(body.key.trim(), env().adminSecret)) {
     await audit({ actor: 'anonymous', actorRole: 'none', action: 'auth.login_failed', sourceIp: ip });
     return error(401, 'invalid_key');
   }

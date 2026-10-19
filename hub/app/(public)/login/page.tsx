@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getViewer } from '@/lib/auth/require';
 import { getT } from '@/lib/i18n/server';
+import { googleLoginConfig } from '@/lib/auth/google';
 import { keycloakLoginConfig } from '@/lib/auth/keycloak';
 import { LoginForm } from './LoginForm';
 
@@ -10,6 +11,7 @@ export default async function LoginPage() {
   const viewer = await getViewer();
   if (viewer.role === 'admin') redirect('/');
   const { t } = await getT();
+  const google = googleLoginConfig();
   const keycloak = keycloakLoginConfig();
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
@@ -22,13 +24,15 @@ export default async function LoginPage() {
           </div>
         </div>
         <p className="mb-4 text-sm text-slate-500">
-          {keycloak.enabled
+          {google.enabled
+            ? google.only ? t('使用 Google 登入') : t('使用 Google 登入，或貼上管理員金鑰')
+            : keycloak.enabled
             ? keycloak.only
               ? t('使用 Keycloak 登入')
               : t('使用 Keycloak 登入，或貼上管理員金鑰')
             : t('貼上管理員金鑰（AI_SECURITY_MONITOR_HUB_ADMIN_SECRET）登入')}
         </p>
-        <LoginForm keycloakEnabled={keycloak.enabled} keycloakOnly={keycloak.only} />
+        <LoginForm googleEnabled={google.enabled} googleOnly={google.only} keycloakEnabled={keycloak.enabled} keycloakOnly={keycloak.only} />
       </div>
     </main>
   );

@@ -130,6 +130,8 @@ export const en: Record<string, string> = {
   // ---- login ----
   '貼上管理員金鑰（AI_SECURITY_MONITOR_HUB_ADMIN_SECRET）登入': 'Paste the administrator key (AI_SECURITY_MONITOR_HUB_ADMIN_SECRET) to sign in',
   '使用 Keycloak 登入，或貼上管理員金鑰': 'Sign in with Keycloak or paste the administrator key',
+  '使用 Google 登入': 'Sign in with Google',
+  '使用 Google 登入，或貼上管理員金鑰': 'Sign in with Google, or enter the admin key',
   '使用 Keycloak 登入': 'Sign in with Keycloak',
   '或使用管理員金鑰': 'or use the administrator key',
   '嘗試太多次，請一分鐘後再試': 'Too many attempts; try again in a minute',

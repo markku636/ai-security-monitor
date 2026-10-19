@@ -2,6 +2,11 @@
 
 ## 未發佈
 
+## v0.8.3
+
+- Hub supports direct Google OAuth sign-in with PKCE, verified email allowlists and Google-only web login.
+- Incomplete Google configuration fails closed; changes to Google credentials or policy invalidate existing sessions.
+
 ## v0.8.2 — 2026-10-19
 
 **Security Hub 新增 Keycloak OIDC 登入，可透過既有 Google Identity Provider 登入，並以已驗證信箱白名單限制管理權限。**

@@ -71,6 +71,17 @@ export function keycloakLoginEnabled(): boolean {
   );
 }
 
+/** Google requires a confidential web client and an explicit email allowlist. */
+export function googleLoginEnabled(): boolean {
+  return !!raw('ASA_HUB_GOOGLE_CLIENT_ID') && !!raw('ASA_HUB_GOOGLE_CLIENT_SECRET') &&
+    raw('ASA_HUB_GOOGLE_ALLOWED_EMAILS').split(',').some((email) => email.trim());
+}
+
+/** Partial configuration must not silently enable unauthenticated access. */
+export function googleLoginConfigured(): boolean {
+  return ['CLIENT_ID', 'CLIENT_SECRET', 'ALLOWED_EMAILS', 'ONLY'].some((key) => !!raw(`ASA_HUB_GOOGLE_${key}`));
+}
+
 function flag(name: string): boolean {
   return ['1', 'true', 'yes', 'on'].includes(raw(name).toLowerCase());
 }
@@ -106,7 +117,7 @@ export function loadEnv(): HubEnv {
     publicDashboard: flag('ASA_HUB_PUBLIC_DASHBOARD'),
     trustProxy: flag('ASA_HUB_TRUST_PROXY'),
     edition: raw('ASA_HUB_EDITION') === 'server' ? 'server' : 'standalone',
-    version: raw('ASA_HUB_VERSION') || process.env.npm_package_version || '0.8.2',
+    version: raw('ASA_HUB_VERSION') || process.env.npm_package_version || '0.8.3',
     reportMinIntervalMs: num('ASA_HUB_INGEST_MIN_INTERVAL_MS', 60_000),
     snapshotMinIntervalMs: num('ASA_HUB_SNAPSHOT_MIN_INTERVAL_MS', 10_000),
     staleAfterMs: num('ASA_HUB_STALE_AFTER_MS', 30 * 60_000),
@@ -133,5 +144,5 @@ export function resetEnvForTests(): void {
 
 /** 沒有管理員金鑰＝開放模式（只該綁 loopback）。 */
 export function isOpenMode(): boolean {
-  return !env().adminSecret && !keycloakLoginEnabled();
+  return !env().adminSecret && !keycloakLoginEnabled() && !googleLoginConfigured();
 }

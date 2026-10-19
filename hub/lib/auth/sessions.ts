@@ -11,7 +11,7 @@ const TOUCH_EVERY_MS = 60 * 1000;
 
 export function secretFingerprint(): string {
   return sha256Hex(
-    `asa-hub-session:${env().adminSecret}:${keycloakLoginEnabled() ? readEnv('ASA_HUB_KEYCLOAK_ISSUER') : ''}:${readEnv('ASA_HUB_KEYCLOAK_CLIENT_ID')}:${readEnv('ASA_HUB_KEYCLOAK_CLIENT_SECRET')}:${readEnv('ASA_HUB_KEYCLOAK_ALLOWED_EMAILS')}:${readEnv('ASA_HUB_KEYCLOAK_ONLY')}`,
+    `asa-hub-session:${env().adminSecret}:${keycloakLoginEnabled() ? readEnv('ASA_HUB_KEYCLOAK_ISSUER') : ''}:${readEnv('ASA_HUB_KEYCLOAK_CLIENT_ID')}:${readEnv('ASA_HUB_KEYCLOAK_CLIENT_SECRET')}:${readEnv('ASA_HUB_KEYCLOAK_ALLOWED_EMAILS')}:${readEnv('ASA_HUB_KEYCLOAK_ONLY')}:${readEnv('ASA_HUB_GOOGLE_CLIENT_ID')}:${readEnv('ASA_HUB_GOOGLE_CLIENT_SECRET')}:${readEnv('ASA_HUB_GOOGLE_ALLOWED_EMAILS')}:${readEnv('ASA_HUB_GOOGLE_ONLY')}`,
   );
 }
 
