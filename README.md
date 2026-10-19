@@ -16,6 +16,13 @@
 每一個「可疑」都會附上理由和出處（哪一份公開的壞人名單、哪一種奇怪的行為），不是黑箱打分數。
 可以只看自己這台，也可以把辦公室裡好幾台電腦集中到一個網頁看。
 
+### v0.8.1 更新重點
+
+- 掃描結果可以把單一問題加入白名單排除，並要求填寫備註；之後可查看排除原因、顯示已排除項目或取消排除。
+- 「設定」用「同網段的 Security Hub」引導尋找與加入，操作集中在同一區並按需展開；DNS 設定緊接在 Hub 設定下方。
+- 新增「關於 AI Security Monitor」視窗，可查看版本、專案與授權資訊。
+- Agent 預設啟用 Sigma，並提供可選的 YARA-X 掃描引擎支援。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-desktop-hero-dark.png">
@@ -437,7 +444,29 @@ curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/down
 
 ## 資料來源與授權
 
-本專案以 MIT 授權。威脅情資、漏洞與地理資料來自各自的提供者並遵守其授權（例如 DShield 為非商用、預設只告警；DB-IP 需標註），
-每一筆命中都附來源網址；完整清單見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+本專案程式碼以 MIT 授權。威脅情資、漏洞與地理資料**不隨本專案散佈**，由 agent／Hub 執行時向各提供者下載或查詢，授權以各來源為準；
+每一筆命中都附廠商、授權與來源網址，完整清單見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
+**可商用、無附帶條件**：abuse.ch（Feodo、URLhaus、ThreatFox，CC0）、CISA KEV（美國政府公有領域）、IPsum（Unlicense）、blocklist.de、Tor 出口清單（僅供參考，永不自動封鎖）。
+
+**可商用、需標註來源**：Spamhaus DROP（Fair Use，保留檔頭並標註 Spamhaus）、DB-IP Lite（CC BY 4.0，顯示國家／ASN 處標註「IP Geolocation by DB-IP」）、FIRST EPSS、NIST NVD、OSV.dev。
+
+**僅限非商用**——在公司或任何商業環境部署時請關閉：
+
+| 來源 | 說明 |
+|---|---|
+| DShield（SANS ISC） | CC BY-NC-SA 2.5。預設只告警不封鎖，但非商用指的是「完全不能商用」，告警也算使用。 |
+| FireHOL level1 | 彙整清單，**內含 DShield**（另含 Spamhaus DROP、Feodo、bogons），商用環境請關閉或改用其他來源。 |
+| Emerging Threats block list | 同樣彙整了 DShield 與 Spamhaus DROP（預設關閉）。 |
+| AbuseIPDB 免費方案 | 條款明定免費方案不得商用，商用需付費方案。 |
+| GreyNoise Community、CrowdSec CTI、AlienVault OTX 社群金鑰 | 社群方案為非商用。 |
+
+**Hub 外部 IP 查詢**（IP 分析頁按「查詢外部情資」才送出，私有網段一律不送）：金鑰由使用者自備，使用量與用途受各家條款約束。
+IPinfo Lite 為 CC BY-SA 4.0，需標註「IP address data powered by IPinfo」；proxycheck.io 不允許原封不動公開整份 API 回應，金鑰也不能分享到組織外。
+
+**其他**：強化檢查規則與 Windows 事件說明為本專案自行撰寫，未複製 CIS Benchmark 內容。
+程式依賴的 Rust／npm 套件皆為 MIT、Apache-2.0、BSD、ISC、Unicode-3.0、MPL-2.0（未修改）等授權，沒有 GPL／AGPL。
+
+以上為授權條款整理，不構成法律意見；條款可能變動，正式商用前請自行確認各來源最新條款。
 
 MIT © 2026 mark.ku（markku636）

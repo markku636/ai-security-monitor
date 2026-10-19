@@ -14,7 +14,7 @@
 | DShield (SANS ISC) | recommended block list | [CC BY-NC-SA 2.5](https://isc.sans.edu/termsofuse.html) | **non-commercial**; alert-only by default |
 | Tor Project | exit node list | informational | poll ≥ 30 min; never auto-block |
 | IPsum (stamparm) | aggregated scored list | [Unlicense](https://github.com/stamparm/ipsum/blob/master/LICENSE) | |
-| FireHOL level1 | aggregate netset | per-source | |
+| FireHOL level1 | aggregate netset | per-source | **includes DShield (non-commercial)** + Spamhaus DROP, Feodo, fullbogons |
 | CERT Polska warning list | malicious domains (incl. subdomains) | [terms](https://cert.pl/en/warning-list/) (any use incl. commercial; do not imply endorsement) | |
 | HaGeZi DNS blocklists (Threat Intelligence Feeds, DoH) | malicious domains, encrypted DNS endpoints | [GPL-3.0](https://github.com/hagezi/dns-blocklists/blob/main/LICENSE) | mirrored unmodified with its licence, kept as separate files and only combined in memory |
 | Phishing.Database | active phishing domains | [MIT](https://github.com/Phishing-Database/Phishing.Database/blob/master/LICENSE) | alerts only (exact match) |
@@ -27,7 +27,9 @@
 | FIRST EPSS | exploit prediction scores | [EPSS user guide](https://www.first.org/epss/user-guide) | attribution |
 | NIST NVD | CVE data | [terms of use](https://nvd.nist.gov/developers/terms-of-use) | rate limits apply |
 | OSV.dev | open-source vulnerability DB | Apache-2.0 (API) / CC-BY 4.0 (data) | |
-| AbuseIPDB / GreyNoise / CrowdSec CTI / AlienVault OTX | IP reputation (API key, opt-in) | each vendor's ToS; community tiers are non-commercial | disabled by default |
+| AbuseIPDB / GreyNoise / CrowdSec CTI / AlienVault OTX | IP reputation (API key, opt-in) | each vendor's ToS; community tiers are non-commercial | disabled by default; AbuseIPDB ToS §7: free plans may not be used commercially |
+| IPinfo Lite (Hub IP lookup) | country / ASN | [CC BY-SA 4.0](https://ipinfo.io/lite) | attribution: "IP address data powered by IPinfo" |
+| proxycheck.io (Hub IP lookup) | proxy / VPN detection | [terms](https://proxycheck.io/terms) | do not publish the full API response verbatim; keys stay within your organisation |
 | HackerTarget / VirusTotal / AlienVault OTX (Hub "Domains on this IP") | passive DNS: domains seen on an IP | [HackerTarget terms](https://hackertarget.com/terms/), [VirusTotal ToS](https://cloud.google.com/terms/virustotal) (public API: **non-commercial only**), OTX ToS | only sent when an admin presses "Look up domains"; results cached, not redistributed |
 
 Optional rule sets the user may add (not bundled): SigmaHQ (DRL 1.1), Neo23x0 signature-base (DRL), Emerging Threats Suricata rules (BSD). Keep their attribution when importing.

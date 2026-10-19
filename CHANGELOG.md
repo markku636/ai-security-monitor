@@ -2,6 +2,16 @@
 
 ## 未發佈
 
+## v0.8.1 — 2026-10-19
+
+**桌面版新增掃描結果白名單排除與必填備註，簡化同網段 Security Hub 的尋找／加入流程，並新增「關於」視窗；同時補上 Sigma／YARA 引擎依賴與 macOS ARM64 發版驗證修正。**
+
+- 「掃描結果」可將單一問題加入白名單排除；排除原因必填，日後可查看備註、顯示已排除項目或取消排除。被排除的問題不再計分或告警。
+- 「設定」改用「同網段的 Security Hub」用語，尋找與加入操作排在同一區並按需展開；DNS 設定緊接在 Security Hub 設定下方，減少來回尋找。
+- 新增「關於 AI Security Monitor」視窗，集中顯示版本、專案與授權資訊。
+- Agent 預設啟用 Sigma，並加入可選的 YARA-X 引擎相依套件與第三方授權說明。
+- 修正 macOS ARM64 打包時，`codesign` 輸出在 `pipefail` 下被誤判成失敗的問題；安裝包簽章本身沒有異常。
+
 ## v0.8.0 — 2026-10-18
 
 **第一次打開時選「公司用」或「個人用」，只限非商業用途的情資來源（DShield、URLhaus、ThreatFox…）只在個人用時開啟，README 逐一說明；AbuseIPDB／CrowdSec 付費金鑰可以商用；一輪安全性修正（Windows 系統服務提權、Hub 開放模式 DNS rebinding、GitHub Actions 鎖定版本…）；macOS 桌面版改成 ad-hoc 簽章並提供一行安裝，Release 說明加上各平台安裝步驟。** 一般使用者請下載 `AI-Security-Monitor-0.8.0-windows-x64-setup.exe`（或 macOS 的 `.dmg`、Linux 的 `.AppImage`／`.deb`）；0.7.0 的桌面版會自動提示更新。

@@ -1,7 +1,7 @@
 {
   "name": "ai-security-monitor-desktop",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "AI Security Monitor desktop app (Tauri). The UI in ui/ is plain HTML/CSS/JS with no build step.",
   "scripts": {
     "icon": "tauri icon src-tauri/icons/source.png",

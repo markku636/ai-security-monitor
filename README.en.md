@@ -16,6 +16,13 @@ Install it and it tells you who your computer is talking to, which connections l
 Every "suspicious" comes with a reason and a source (which public blocklist, which odd behavior), so it is never a black-box score.
 Use it on just your own computer, or bring every computer in the office into one web page.
 
+### What's new in v0.8.1
+
+- Exclude an individual scan finding with a required allowlist note; review the reason, show excluded findings or remove the exclusion later.
+- Settings now guides users to a Security Hub on the same network, keeps discovery and joining together in an expandable section, and places DNS settings directly below it.
+- A new About AI Security Monitor dialog shows the version, project and licensing information.
+- The agent enables Sigma by default and adds optional YARA-X engine support.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-desktop-hero-dark.png">
@@ -437,7 +444,29 @@ How it works (architecture diagram, reporting intervals, signing and host identi
 
 ## Data sources and licenses
 
-This project is MIT licensed. Threat intel, vulnerability and geo data come from their providers under their own licenses (for example DShield is non-commercial and only alerts by default; DB-IP requires attribution);
-every hit links to its source. See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full list.
+The code is MIT licensed. Threat intel, vulnerability and geo data are **not distributed with this project**: the agent and Hub download or query them from each provider at run time, under that provider's terms.
+Every hit carries vendor, license and source URL; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full list.
+
+**Commercial use OK, no conditions**: abuse.ch (Feodo, URLhaus, ThreatFox; CC0), CISA KEV (US Government public domain), IPsum (Unlicense), blocklist.de, Tor exit list (informational, never auto-blocked).
+
+**Commercial use OK, attribution required**: Spamhaus DROP (Fair Use; keep the header and credit Spamhaus), DB-IP Lite (CC BY 4.0; "IP Geolocation by DB-IP" wherever country/ASN is shown), FIRST EPSS, NIST NVD, OSV.dev.
+
+**Non-commercial only** — turn these off when deploying in a company or any commercial setting:
+
+| Source | Notes |
+|---|---|
+| DShield (SANS ISC) | CC BY-NC-SA 2.5. Alert-only by default, but non-commercial means no commercial use at all; alerting is still use. |
+| FireHOL level1 | Aggregate list that **includes DShield** (plus Spamhaus DROP, Feodo, bogons); disable it or use other sources commercially. |
+| Emerging Threats block list | Also aggregates DShield and Spamhaus DROP (off by default). |
+| AbuseIPDB free plan | Its terms forbid commercial use of free plans; commercial use needs a paid plan. |
+| GreyNoise Community, CrowdSec CTI, AlienVault OTX community keys | Community tiers are non-commercial. |
+
+**Hub external IP lookups** (sent only when you click "look up external intel" on the IP page; private ranges are never sent): you bring your own keys, and usage is bound by each provider's terms.
+IPinfo Lite is CC BY-SA 4.0 and requires "IP address data powered by IPinfo"; proxycheck.io does not allow publishing its full API response verbatim, and keys must not be shared outside your organisation.
+
+**Other**: The hardening checks and Windows event descriptions are written for this project and do not copy CIS Benchmark content.
+Rust/npm dependencies are under MIT, Apache-2.0, BSD, ISC, Unicode-3.0, MPL-2.0 (unmodified) and similar licenses; no GPL/AGPL.
+
+This is a summary of license terms, not legal advice; terms change, so check each provider's current terms before commercial use.
 
 MIT © 2026 mark.ku (markku636)

@@ -1,6 +1,6 @@
 [package]
 name = "ai-security-monitor"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
@@ -17,7 +17,7 @@ name = "ai-security-monitor"
 path = "src/bin/ai-security-monitor.rs"
 
 [features]
-default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain", "dns-server"]
+default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain", "dns-server", "sigma"]
 intel = []
 firewall = []
 vuln = []
@@ -29,8 +29,8 @@ events = []
 # OS keychain for secrets (Windows Credential Manager / macOS Keychain). Off → file store (0600).
 keychain = ["dep:keyring"]
 service = []
-yara = []
-sigma = []
+yara = ["dep:yara-x"]
+sigma = ["dep:sigma-rust"]
 # 防護 DNS 伺服器（ai-security-monitor dns-server）；桌面版不帶。
 dns-server = ["dep:moka", "dep:arc-swap"]
 
@@ -72,6 +72,8 @@ ring = "0.17"
 socket2 = { version = "0.6", features = ["all"] }
 moka = { version = "0.12", default-features = false, features = ["sync"], optional = true }
 arc-swap = { version = "1.9", optional = true }
+sigma-rust = { version = "0.7", optional = true }
+yara-x = { version = "1.21", optional = true, default-features = false, features = ["constant-folding", "exact-atoms", "fast-regexp", "hash-module", "pe-module", "elf-module", "macho-module", "math-module", "string-module"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
