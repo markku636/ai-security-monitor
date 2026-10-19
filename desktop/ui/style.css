@@ -78,17 +78,20 @@ body {
 .brand-name { color: #fff; font-weight: 600; }
 .brand-sub { font-size: 12px; color: #94a3b8; }
 .nav-group { font-size: 11px; letter-spacing: .05em; color: #718096; margin: 12px 8px 4px; }
-#nav a {
+#nav a, #nav button {
   display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: 8px;
-  color: var(--side-text); text-decoration: none;
+  width: 100%; color: var(--side-text); text-decoration: none; border: 0; background: transparent;
+  font: inherit; text-align: left; cursor: pointer;
 }
-#nav a:hover { background: #1e293b; }
+#nav a:hover, #nav button:hover { background: #1e293b; }
 #nav a.active { background: #0f766e; color: #fff; }
-#nav a b { display: block; font-weight: 600; }
-#nav a small { display: block; font-size: 11.5px; color: #94a3b8; }
+#nav a b, #nav button b { display: block; font-weight: 600; }
+#nav a small, #nav button small { display: block; font-size: 11.5px; color: #94a3b8; }
 #nav a.active small { color: #ccfbf1cc; }
 .ic { width: 18px; text-align: center; opacity: .9; }
-.side-foot { margin-top: auto; font-size: 11.5px; color: #718096; padding: 8px; }
+.side-foot { margin-top: auto; font-size: 11.5px; color: #718096; padding: 8px; display: grid; gap: 1px; }
+.side-foot button { width: fit-content; max-width: 100%; padding: 0; border: 0; background: none; color: #94a3b8; font: inherit; cursor: pointer; text-align: left; }
+.side-foot button:hover { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 main { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
 h1 { font-size: 20px; margin: 0 0 2px; }
 .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
@@ -111,7 +114,7 @@ h1 { font-size: 20px; margin: 0 0 2px; }
 @media (prefers-color-scheme: dark) { .btn.primary { color: #042f2e; } }
 .btn:disabled { opacity: .55; cursor: default; }
 .btn.compact { padding: 3px 9px; font-size: 12px; }
-.btn:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
+.btn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -383,6 +386,34 @@ fieldset.plain:disabled { opacity: .5; }
 .overlay { position: fixed; inset: 0; z-index: 50; background: rgb(15 23 42 / 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; max-width: 560px; width: 100%; max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 20px 50px rgb(0 0 0 / 0.3); }
 .dialog h2 { margin: 0 0 8px; }
+.about-overlay { z-index: 70; }
+.about-dialog { max-width: 540px; padding: 0; overflow: hidden; }
+.about-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.about-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
+.about-close, .about-copy { display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.about-close { width: 32px; height: 32px; font-size: 18px; }
+.about-copy { width: 24px; height: 24px; font-size: 14px; }
+.about-close:hover, .about-copy:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.about-body { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px 24px 18px; }
+.about-logo { width: 72px; height: 72px; object-fit: contain; margin-bottom: 8px; filter: drop-shadow(0 6px 12px rgb(0 0 0 / .22)); }
+.about-name { font-size: 19px; font-weight: 650; }
+.about-version-line { display: flex; align-items: center; gap: 3px; min-height: 24px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.about-description { max-width: 430px; margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.about-update { min-height: 60px; margin-top: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.about-update-state { min-height: 20px; font-size: 13px; }
+.about-update-state.ok { color: var(--ok); }
+.about-update-state.err { color: var(--danger); }
+.about-new-version { border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.about-new-version:hover { text-decoration: underline; text-underline-offset: 2px; }
+.about-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 4px; margin-top: 12px; }
+.about-link { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 7px; padding: 5px 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.about-link:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.about-donate { width: 100%; border-top: 1px solid var(--border); margin-top: 15px; padding-top: 13px; }
+.about-donate p { margin: 0; color: var(--muted); font-size: 13px; }
+.about-donate-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 9px; }
+.donate-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.donate-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.about-license { margin-top: 13px; color: color-mix(in srgb, var(--muted) 72%, transparent); font-size: 11px; }
 .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 10px; }
 .choice { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
 .choice:hover, .choice:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }

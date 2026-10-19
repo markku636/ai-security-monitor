@@ -31,8 +31,12 @@
           <a href="#intel" data-page="intel"><span class="ic">⛨</span><span><b>威脅情資</b><small>情資來源與更新</small></span></a>
           <a href="#ai" data-page="ai"><span class="ic">✦</span><span><b>AI 分析</b><small>用本機的 Claude Code／Codex 解讀</small></span></a>
           <a href="#settings" data-page="settings"><span class="ic">⚙</span><span><b>設定</b><small>同網段 Hub、背景服務、更新</small></span></a>
+          <button type="button" id="nav-about"><span class="ic">ⓘ</span><span><b>關於</b><small>版本、更新、專案資訊</small></span></button>
         </nav>
-        <div class="side-foot" id="side-foot"></div>
+        <div class="side-foot" id="side-foot">
+          <button type="button" id="about-version" title="開啟「關於 AI Security Monitor」"><span id="side-version">ai-security-monitor</span></button>
+          <span id="side-status"></span>
+        </div>
       </aside>
       <main id="main"></main>
     </div>
@@ -45,5 +49,6 @@
     <script src="intel-usage.js"></script>
     <script src="markdown.js"></script>
     <script src="app.js"></script>
+    <script src="about.js"></script>
   </body>
 </html>

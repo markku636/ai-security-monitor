@@ -778,6 +778,16 @@ const SHOTS = [
       await evaluate(`document.getElementById('auto-bg').closest('.card').scrollIntoView()`);
     },
   ],
+  [
+    'desktop-about',
+    'overview',
+    false,
+    async () => {
+      await waitFor(`document.getElementById('nav-about')`);
+      await evaluate(`document.getElementById('nav-about').click()`);
+      await waitFor(`document.getElementById('about-current-version')?.textContent === '${VERSION}'`);
+    },
+  ],
   ['desktop-overview-dark', 'overview', true, async () => waitFor(`document.querySelector('#ov-conn table') && document.querySelector('#ov-metrics .spark')`)],
   // 流量與效能 → 最近 1 小時：滑鼠停在網路速度圖上（十字線＋各線的值）
   [

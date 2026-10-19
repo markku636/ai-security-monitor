@@ -131,7 +131,8 @@ async function pageOverview() {
   $main.innerHTML = `<h1>總覽</h1><p class="sub">載入中…</p>`;
   const o = await invoke('overview');
   document.getElementById('brand-host').textContent = o.hostname || o.report?.hostname || '本機';
-  document.getElementById('side-foot').innerHTML = `ai-security-monitor ${esc(o.version)}<br>${o.watcher_running ? '背景服務執行中' : '背景服務沒有在跑'}`;
+  document.getElementById('side-version').textContent = `ai-security-monitor ${o.version}`;
+  document.getElementById('side-status').textContent = o.watcher_running ? '背景服務執行中' : '背景服務沒有在跑';
   const r = o.report;
   const s = r?.score;
   const bar = (label, v) => `<div class="stat"><div class="label">${label}</div><div class="value">${v ?? '—'}</div><div class="bar"><i style="width:${v ?? 0}%"></i></div></div>`;
