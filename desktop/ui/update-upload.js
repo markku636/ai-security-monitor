@@ -14,7 +14,7 @@ const UPDATE_MODES = [
 ];
 const BG_UPDATE_HINT = '背景自動回報用的就是桌面版本身，所以會跟著桌面版一起更新，不用另外處理。';
 const LAN_HINT =
-  '這台電腦上有在跑 Security Hub。打開後，背景自動回報會在區網廣播（mDNS，跟印表機被自動找到的原理一樣）告訴同一個網路的電腦 Hub 在哪裡，同事按「尋找公司的 Hub」就會看到它。';
+  '這台電腦上有在跑 Security Hub。打開後，背景自動回報會在區網廣播（mDNS，跟印表機被自動找到的原理一樣）告訴同一個網路的電腦 Hub 在哪裡，同事按「尋找同網段 Hub」就會看到它。';
 const LAN_URL_HINT =
   '區網裡的電腦要連的網址：這台的區網 IP＋Hub 的 port。Hub 只綁 127.0.0.1（單機版的預設）時區網連不到，要先在 Hub 的 .env 設 AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0 並重新啟動 Hub。';
 
@@ -205,6 +205,7 @@ function advertisingText(s) {
 }
 
 async function renderLanSection(el) {
+  const wasOpen = el.open;
   let s;
   try {
     s = await invoke('local_hub_status');
@@ -219,16 +220,25 @@ async function renderLanSection(el) {
   }
   el.hidden = false;
   const url = s.advertise_url ?? s.suggested_url ?? '';
-  el.innerHTML = `<h2>讓區網裡的電腦找到這台的 Hub</h2>
-    ${s.found ? `<p class="small">這台電腦上有在跑 Security Hub：<b>${esc(s.name ?? 'Security Hub')}</b>（127.0.0.1:${esc(s.port)}，指紋 <span class="mono">${esc(s.fingerprint ?? '—')}</span>）。</p>` : '<p class="small muted">現在偵測不到這台電腦上的 Hub。</p>'}
-    <label class="row" title="${esc(LAN_HINT)}"><input type="checkbox" id="lan-on" ${s.advertise_url ? 'checked' : ''}/> <b>在區網廣播這個 Hub</b> <span class="small muted">(?)</span></label>
+  const badge = !s.advertise_url
+    ? '<span class="chip neutral">未開啟</span>'
+    : s.advertising?.info?.state === 'advertising' && !s.advertising?.stale
+      ? '<span class="chip ok">廣播中</span>'
+      : '<span class="chip medium">需檢查</span>';
+  el.innerHTML = `<summary><b>進階：讓其他電腦找到這台的 Hub</b>${badge}<span class="muted small">僅 Hub 主機需要</span></summary>
+    <div class="advanced-body">
+    <p class="small muted">這是給「這台電腦本身也在執行 Hub」的管理員使用，和上方讓本機加入 Hub 的方式不同；一般使用者不需要設定。</p>
+    ${s.found ? `<p class="small">本機 Hub：<b>${esc(s.name ?? 'Security Hub')}</b>（127.0.0.1:${esc(s.port)}，指紋 <span class="mono">${esc(s.fingerprint ?? '—')}</span>）。</p>` : '<p class="small muted">現在偵測不到這台電腦上的 Hub。</p>'}
+    <label class="row" title="${esc(LAN_HINT)}"><input type="checkbox" id="lan-on" ${s.advertise_url ? 'checked' : ''}/> <b>讓同網段的其他電腦自動找到這台的 Hub</b> <span class="small muted">(?)</span></label>
     <div class="row" style="margin:8px 0 0 24px">
       <input type="text" id="lan-url" value="${esc(url)}" placeholder="http://192.168.x.y:8088" style="flex:1;min-width:240px" title="${esc(LAN_URL_HINT)}" />
       <span class="small muted" title="${esc(LAN_URL_HINT)}">(?)</span>
     </div>
     ${s.lan_ips?.length > 1 ? `<p class="small muted" style="margin:4px 0 0 24px">這台的區網 IP：${s.lan_ips.map(esc).join('、')}</p>` : ''}
     <p class="small" id="lan-state" style="margin:6px 0 0 24px">${advertisingText(s)}</p>
-    <p class="small muted" style="margin:6px 0 0 24px">別台電腦連不到這個網址時（例如 Hub 只綁 127.0.0.1），開了也沒用：Hub 的「新增主機」頁會用白話告訴你辦公室的電腦找不找得到它。</p>`;
+    <p class="small muted" style="margin:6px 0 0 24px">別台電腦連不到這個網址時（例如 Hub 只綁 127.0.0.1），開了也沒用：Hub 的「新增主機」頁會用白話告訴你辦公室的電腦找不找得到它。</p>
+    </div>`;
+  el.open = wasOpen;
   const on = document.getElementById('lan-on');
   on.onchange = async () => {
     const want = on.checked;
@@ -308,7 +318,7 @@ async function uploadNow(card) {
   }
 }
 
-// ---------------- 尋找公司的 Hub：結果與說明 ----------------
+// ---------------- 尋找同網段的 Hub：結果與說明 ----------------
 function hubReach(h) {
   if (h.identity && !h.error) return '<span class="chip ok" title="連得到，而且驗過 Hub 的身分簽章">✓ 連得到</span>';
   return `<span class="chip dangerous" title="${esc(h.error ?? '')}">✗ 連不到</span>${h.error ? `<div class="small muted">${esc(h.error)}</div>` : ''}`;
@@ -317,7 +327,7 @@ function hubReach(h) {
 const NO_HUB_HELP = `<div class="small">
   <p><b>沒有找到 Security Hub。</b>常見原因與解法：</p>
   <ol style="margin:4px 0 0 18px;padding:0">
-    <li><b>直接問管理員 Hub 的網址</b>，填在下面「或輸入管理員給的 Hub 網址」。</li>
+    <li><b>直接問管理員 Hub 的網址</b>，再按上方「輸入 Hub 網址」。</li>
     <li><b>Hub 要讓區網連得到</b>：單機版的 Hub 預設只給它自己那台電腦用（只綁 127.0.0.1），別的電腦連不到也找不到。請管理員改用伺服器版，或在 Hub 的設定加上 AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0。</li>
     <li><b>Hub 跑在 Docker Desktop 裡</b>：它的區網廣播出不了 Docker，要在跑 Hub 的那台電腦打開桌面版「設定 → 讓區網裡的電腦找到這台的 Hub」（或命令列 ai-security-monitor config set hub.advertise_url http://&lt;那台的 IP&gt;:8088）幫忙廣播。跨網段的電腦則要請管理員在公司 DNS 加 _aisecmon._tcp 的 SRV 紀錄。</li>
   </ol>

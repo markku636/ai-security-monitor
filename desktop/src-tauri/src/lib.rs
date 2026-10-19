@@ -20,8 +20,9 @@ use asa_lib::intel::lookup;
 use asa_lib::intel::registry::{Registry, PAID_PLAN_SOURCES};
 use asa_lib::intel::IntelDb;
 use asa_lib::mcp::tools::READ_ONLY;
-use asa_lib::model::allowlist::Allowlist;
+use asa_lib::model::allowlist::{AllowKind, Allowlist};
 use asa_lib::model::baseline::Baseline;
+use asa_lib::model::report::Report;
 use asa_lib::secrets::SecretStore;
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem};
@@ -172,6 +173,78 @@ async fn latest_report(state: State<'_, AppState>) -> CmdResult<Value> {
     Ok(watch::load_latest(&state.config_dir)
         .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
         .unwrap_or(Value::Null))
+}
+
+/// 把目前白名單重新套用到已儲存的最新報告，讓桌面版新增／取消排除後不必重跑完整掃描。
+fn apply_allowlist_to_report(report: &mut Report, allowlist: &Allowlist) {
+    for finding in &mut report.findings {
+        finding.suppressed_by = allowlist.match_finding(finding).map(|entry| entry.id.clone());
+    }
+    report.score = asa_lib::scan::score::compute(
+        &report.findings,
+        report.summaries.hardening.as_ref(),
+        &report.scanners_run,
+    );
+}
+
+/// 列出這台電腦的白名單；桌面版用於顯示排除原因與取消排除。
+#[tauri::command]
+fn allowlist_list(state: State<'_, AppState>) -> CmdResult<Allowlist> {
+    Allowlist::load(&state.config_dir).map_err(err)
+}
+
+/// 精準排除最新報告中的單一 finding。備註必填，避免白名單日後失去稽核脈絡。
+#[tauri::command]
+fn allowlist_add_finding(state: State<'_, AppState>, finding_id: String, note: String) -> CmdResult<Value> {
+    let note = note.trim();
+    if note.is_empty() {
+        return Err("請填寫排除原因".into());
+    }
+    if note.chars().count() > 500 {
+        return Err("備註最多 500 個字".into());
+    }
+    let mut report = watch::load_latest(&state.config_dir).ok_or_else(|| "找不到最新掃描報告".to_string())?;
+    if !report.findings.iter().any(|finding| finding.id == finding_id) {
+        return Err("最新掃描報告裡找不到這筆問題，請重新掃描後再試".into());
+    }
+
+    let mut allowlist = Allowlist::load(&state.config_dir).map_err(err)?;
+    let entry = if let Some(index) = allowlist
+        .entries
+        .iter()
+        .position(|entry| entry.kind == AllowKind::Finding && entry.value == finding_id)
+    {
+        allowlist.entries[index].note = Some(note.to_string());
+        allowlist.entries[index].clone()
+    } else {
+        allowlist
+            .add(Some(AllowKind::Finding), &finding_id, Some(note.to_string()))
+            .map_err(err)?
+            .clone()
+    };
+    allowlist.save(&state.config_dir).map_err(err)?;
+    apply_allowlist_to_report(&mut report, &allowlist);
+    watch::save_latest(&state.config_dir, &report).map_err(err)?;
+    Ok(json!({ "entry": entry, "report": report }))
+}
+
+/// 取消一筆白名單排除，並立刻重算最新報告的狀態與分數。
+#[tauri::command]
+fn allowlist_remove(state: State<'_, AppState>, entry_id: String) -> CmdResult<Value> {
+    let mut allowlist = Allowlist::load(&state.config_dir).map_err(err)?;
+    let removed = allowlist.remove(&entry_id);
+    if !removed {
+        return Err("找不到這筆白名單".into());
+    }
+    allowlist.save(&state.config_dir).map_err(err)?;
+    let report = if let Some(mut report) = watch::load_latest(&state.config_dir) {
+        apply_allowlist_to_report(&mut report, &allowlist);
+        watch::save_latest(&state.config_dir, &report).map_err(err)?;
+        Some(report)
+    } else {
+        None
+    };
+    Ok(json!({ "removed": true, "report": report }))
 }
 
 /// 立即掃描（全部引擎），存成最新報告。
@@ -760,6 +833,9 @@ pub fn run(start_in_tray: bool) {
             connections,
             lookup_ip,
             latest_report,
+            allowlist_list,
+            allowlist_add_finding,
+            allowlist_remove,
             scan_now,
             intel_feeds,
             intel_update,

@@ -108,6 +108,7 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "監聽" => "Listening",
         "本機" => "Local",
         "白名單值不可為空" => "Allowlist value cannot be empty",
+        "不是合法的掃描項目 ID：{value}" => "Not a valid finding ID: {value}",
         "不是合法的 IP：{value}" => "Not a valid IP: {value}",
         "不是合法的 CIDR：{value}" => "Not a valid CIDR: {value}",
         "路徑樣式無效：{e}" => "Invalid path pattern: {e}",
@@ -234,7 +235,9 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         }
         "執行掃描並輸出報告" => "Run a scan and print the report",
         "設定檔" => "Configuration",
-        "白名單（ip / cidr / 行程路徑 / 網域 / 規則）" => "Allowlist (ip / cidr / process path / domain / rule)",
+        "白名單（掃描項目 / ip / cidr / 行程路徑 / 網域 / 規則）" => {
+            "Allowlist (finding / ip / cidr / process path / domain / rule)"
+        }
         "基準線：記住目前狀態，之後只標出新增項目" => "Baseline: remember the current state so later scans flag only new items",
         "要跑的掃描器（逗號分隔；預設全部可用）" => "Scanners to run (comma-separated; default: all available)",
         "把報告寫到檔案" => "Write the report to a file",
@@ -246,8 +249,8 @@ pub fn lookup(zh: &str) -> Option<&'static str> {
         "鍵名（lang、scan.interval、intel.allow_noncommercial …）" => "Key (lang, scan.interval, intel.allow_noncommercial …)",
         "顯示設定目錄路徑" => "Print the config directory path",
         "新增白名單條目（自動推斷種類，或用 --kind 指定）" => "Add an allowlist entry (kind is inferred, or set --kind)",
-        "值：IP、CIDR、行程路徑 glob、網域（*.example.com）、規則（connections.risky_port:3389）" => {
-            "Value: IP, CIDR, process path glob, domain (*.example.com) or rule (connections.risky_port:3389)"
+        "值：掃描項目 ID、IP、CIDR、行程路徑 glob、網域（*.example.com）、規則（connections.risky_port:3389）" => {
+            "Value: finding ID, IP, CIDR, process path glob, domain (*.example.com) or rule (connections.risky_port:3389)"
         }
         "移除條目（以 id 或值）" => "Remove an entry (by id or value)",
         "條目 id 或原值" => "Entry id or original value",

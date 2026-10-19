@@ -96,7 +96,8 @@ const CONNECTIONS = [
   conn({ direction: 'listening', local_ip: '127.0.0.1', local_port: 7869, remote_ip: null, remote_port: null, state: 'LISTEN', process: { pid: 9120, name: 'node.exe' }, verdict: { level: 'safe', reasons: [{ type: 'loopback' }] } }),
 ];
 
-const f = (o) => ({ detail: '', recommendation: '', intel_hits: [], ...o });
+let findingNo = 0;
+const f = (o) => ({ id: `f_${(++findingNo).toString(16).padStart(16, '0')}`, detail: '', recommendation: '', intel_hits: [], ...o });
 const FINDINGS = [
   f({ scanner: 'intel', rule: 'intel.outbound_match', severity: 'critical', title: '連到威脅情資列名的 IP：203.0.113.66', detail: 'updater.exe（暫存目錄）↔ 203.0.113.66:443（判定：危險）。來源：abuse.ch Feodo Tracker（CC0 1.0，90%）', recommendation: '隔離主機、結束 updater.exe、封鎖 203.0.113.66，並用防毒完整掃描。', intel_hits: [hit('feodo', '203.0.113.66')] }),
   f({ scanner: 'vuln', rule: 'vuln.app.7zip-cve-2025-0411', severity: 'critical', title: '7-Zip 24.08 (x64) 有已知漏洞（CVE-2025-0411）', detail: 'Mark-of-the-Web bypass，已遭實際利用（CISA KEV）。', recommendation: '更新 7-Zip 到 24.09 以上。' }),
@@ -326,6 +327,7 @@ const DATA = {
   overview: OVERVIEW,
   connections: { connections: CONNECTIONS, listeners: [], intel_loaded: true },
   latest_report: REPORT,
+  allowlist: { schema_version: 1, entries: [] },
   intel_feeds: { feeds: INTEL_FEEDS },
   // 線上查詢金鑰：AbuseIPDB 用付費方案、GreyNoise 有免費金鑰、CrowdSec 沒設
   intel_keys: {
@@ -493,6 +495,19 @@ function installMock(D) {
     overview: () => D.overview,
     connections: () => D.connections,
     latest_report: () => D.latest_report,
+    allowlist_list: () => D.allowlist,
+    allowlist_add_finding: ({ findingId, note }) => {
+      const entry = { id: `al_demo${D.allowlist.entries.length + 1}`, kind: 'finding', value: findingId, note, added_at: new Date().toISOString() };
+      D.allowlist.entries.push(entry);
+      const finding = D.latest_report.findings.find((item) => item.id === findingId);
+      if (finding) finding.suppressed_by = entry.id;
+      return { entry, report: D.latest_report };
+    },
+    allowlist_remove: ({ entryId }) => {
+      D.allowlist.entries = D.allowlist.entries.filter((entry) => entry.id !== entryId);
+      for (const finding of D.latest_report.findings) if (finding.suppressed_by === entryId) finding.suppressed_by = null;
+      return { removed: true, report: D.latest_report };
+    },
     intel_feeds: () => D.intel_feeds,
     intel_usage: () => D.intel_usage,
     intel_keys: () => D.intel_keys,
@@ -691,6 +706,8 @@ const SHOTS = [
     async () => {
       await waitFor(`document.querySelector('details')`);
       await evaluate(`document.querySelector('details').open = true`);
+      await evaluate(`document.querySelector('[data-exclude]').click()`);
+      await waitFor(`document.querySelector('[data-exclude-form]:not([hidden])')`);
     },
   ],
   [
@@ -741,8 +758,17 @@ const SHOTS = [
       await sleep(1700);
     },
   ],
-  // 還沒加入 Hub：設定頁的 Hub 區塊自動尋找，列出找到的 Hub
-  ['desktop-settings-join', 'settings', false, async () => waitFor(`document.querySelector('#join-found table') && !document.getElementById('join-search').disabled`)],
+  // 還沒加入 Hub：點「尋找同網段 Hub」後展開結果
+  [
+    'desktop-settings-join',
+    'settings',
+    false,
+    async () => {
+      await waitFor(`document.getElementById('hub-method-search')`);
+      await evaluate(`document.getElementById('hub-method-search').click()`);
+      await waitFor(`document.querySelector('#join-found table') && !document.getElementById('join-search').disabled`);
+    },
+  ],
   [
     'desktop-settings-update',
     'settings',

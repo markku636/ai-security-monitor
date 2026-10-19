@@ -1,5 +1,5 @@
-// AI Security Monitor 桌面版：設定頁的「公司的 Security Hub」區塊——唯一的加入入口。
-// 未加入：自動尋找（公司 DNS、區網廣播）、手動輸入網址、申請加入、註冊金鑰、「先不要」；
+// AI Security Monitor 桌面版：設定頁的「同網段的 Security Hub」區塊——唯一的加入入口。
+// 未加入：以同排按鈕展開「同網段尋找、手動輸入網址、註冊金鑰」三種加入方式；
 // 加入中：等候核准卡片＋輪詢（離開設定頁就停）；被拒絕：說明＋重新尋找；
 // 已加入：網址、指紋、開啟 Hub、測試連線、離開，以及「更換 Hub 或重新加入」。
 // 和 app.js 共用 invoke／esc／toast／ago（app.js 定義）；這個檔先載入，只定義函式，畫面載入後才執行。
@@ -16,10 +16,10 @@ const SOURCE_HINT = {
   dns_srv: '公司 DNS 的 _aisecmon._tcp SRV 紀錄（跨網段也找得到）',
   mdns: '同一個網路裡的區網廣播（mDNS，跟印表機被自動找到的原理一樣）',
 };
-const HUB_HINT = 'Security Hub 是公司（或你自己）架的網站，管理員在上面集中查看每台電腦的安全狀況。加入後，這台電腦會定期把掃描結果回報給它；不加入也能在這台電腦單獨使用。';
-const FP_HINT = '指紋是 Hub 的身分證號碼。請和管理員在 Hub「新增主機」頁看到的指紋比對，一樣才是公司的 Hub。';
+const HUB_HINT = 'Security Hub 是同網段內由管理員（或你自己）架設的網站，用來集中查看每台電腦的安全狀況。加入後，這台電腦會定期把掃描結果回報給它；不加入也能單獨使用。';
+const FP_HINT = '指紋是 Hub 的身分證號碼。請和管理員在 Hub「新增主機」頁看到的指紋比對，一樣才是要加入的 Hub。';
 const CODE_HINT = '管理員在「待核准的主機」清單上會看到同一組核對碼，用來確認是這台電腦。';
-const FIND_HINT = '查公司 DNS 與區網廣播，找出辦公室裡的 Hub（約 3–10 秒）。找到的每個 Hub 都會先驗過身分簽章。';
+const FIND_HINT = '透過區網廣播尋找同一個網路裡的 Hub，也會查公司 DNS（約 3–10 秒）。找到的每個 Hub 都會先驗過身分簽章。';
 const URL_HINT = '管理員給的 Hub 網址。必須是 https；公司內網（例如 192.168.x.x）或本機可以用 http。';
 const KEY_HINT = '註冊金鑰是管理員在 Hub「新增主機」頁建立的一串密碼（asa_ek_ 開頭），用金鑰加入就不必等核准。';
 const SKIP_KEY = 'asm.join.skipped';
@@ -64,7 +64,7 @@ function busy(b, on, label) {
   } else if (b.dataset.label) b.textContent = b.dataset.label;
 }
 
-const hubHead = () => `<h2>公司的 Security Hub <span class="muted" title="${esc(HUB_HINT)}">(?)</span></h2>`;
+const hubHead = () => `<h2>同網段的 Security Hub <span class="muted" title="${esc(HUB_HINT)}">(?)</span></h2>`;
 const errLine = (e) => `<span style="color:var(--danger)">✗ ${esc(e)}</span>`;
 
 /** 重新讀 Hub 狀態再畫一次（加入、離開、核准後）。 */
@@ -78,7 +78,7 @@ async function refreshHubSection(el, opts = {}) {
 
 /**
  * 畫設定頁的 Hub 區塊。st＝hub_status 的回應。
- * opts.search：true＝馬上重新尋找；false＝不自動找；省略＝未加入時自動找（按過「先不要」就只在 opts.focus 時找）。
+ * opts.search：true＝展開「尋找同網段 Hub」並馬上尋找；false／省略＝等使用者選擇加入方式。
  * 尋找是非同步的：不會擋住設定頁其他區塊。
  */
 function renderHubSection(el, st, opts = {}) {
@@ -86,10 +86,9 @@ function renderHubSection(el, st, opts = {}) {
   if (!el?.isConnected) return;
   if (st.pending) return renderHubPending(el, st.pending);
   const joined = !!st.hub_url;
-  const autoSearch = opts.search ?? (!joined && (opts.focus === 'hub' || !joinSkipped()));
   const intro = joined
     ? ''
-    : '<p class="small" style="margin:0 0 10px">加入後，這台電腦的安全狀況會定期回報到公司的 Hub，由管理員集中查看。不需要金鑰：找到公司的 Hub 後按「申請加入」；Hub 允許自動加入的話馬上完成，否則等管理員核准。</p>';
+    : '<p class="small" style="margin:0 0 10px">加入後，這台電腦的安全狀況會定期回報到同網段的 Hub，由管理員集中查看。選擇下方其中一種方式即可加入。</p>';
   const status = joined
     ? `<div class="kv">
         <div>狀態</div><div><span class="chip ok">已加入</span></div>
@@ -103,21 +102,33 @@ function renderHubSection(el, st, opts = {}) {
       </div>
       <div id="hub-cur-result" class="small" style="margin-top:8px"></div>`
     : '<div class="kv"><div>狀態</div><div>未加入（只在這台電腦使用）</div></div>';
-  const form = `
-    <h3 class="sub-h">找到的 Hub</h3>
-    <div id="join-found"></div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="join-search" title="${esc(FIND_HINT)}">尋找公司的 Hub</button></div>
-    <h3 class="sub-h">或輸入管理員給的 Hub 網址</h3>
-    <div class="row">
-      <input type="text" id="hub-url" placeholder="https://hub.example.com" value="${esc(st.hub_url ?? '')}" style="flex:1;min-width:240px" title="${esc(URL_HINT)}" />
-      <button class="btn" id="hub-test" title="確認這個網址連得到、是 Security Hub，並顯示它的版本與指紋">測試這個網址</button>
-      <button class="btn primary" id="hub-join" title="不需要金鑰：送出加入申請；Hub 允許自動加入就馬上完成，否則等管理員核准">申請加入</button>
+  const form = `<div class="hub-methods" role="group" aria-label="選擇加入 Hub 的方式">
+      <button class="btn hub-method-btn" id="hub-method-search" aria-expanded="false" aria-controls="hub-search-panel" title="${esc(FIND_HINT)}">尋找同網段 Hub</button>
+      <button class="btn hub-method-btn" id="hub-method-url" aria-expanded="false" aria-controls="hub-url-panel">輸入 Hub 網址</button>
+      <button class="btn hub-method-btn" id="hub-method-key" aria-expanded="false" aria-controls="hub-key-panel" title="${esc(KEY_HINT)}">使用註冊金鑰</button>
     </div>
-    <div id="hub-result" class="small" style="margin-top:8px"></div>
-    <details style="margin-top:10px"><summary class="small">我有註冊金鑰（進階） <span class="muted" title="${esc(KEY_HINT)}">(?)</span></summary>
-      <p class="small muted">管理員也可以在 Hub「新增主機」頁建立註冊金鑰（asa_ek_…）給你，用金鑰加入就不必等核准。網址填在上面的欄位。</p>
-      <div class="row"><input type="text" id="hub-key" placeholder="asa_ek_…" style="flex:1;min-width:240px" autocomplete="off" spellcheck="false" /><button class="btn" id="hub-key-go">用金鑰加入</button></div>
-    </details>`;
+    <section class="hub-method-panel" id="hub-search-panel" aria-label="同網段 Hub" hidden>
+      <div class="hub-panel-head"><b>同網段的 Hub</b><button class="btn compact" id="join-search" title="${esc(FIND_HINT)}">重新尋找</button></div>
+      <div id="join-found"><p class="muted small">按上方「尋找同網段 Hub」開始。</p></div>
+    </section>
+    <section class="hub-method-panel" id="hub-url-panel" aria-label="輸入 Hub 網址" hidden>
+      <label class="small" for="hub-url"><b>管理員提供的 Hub 網址</b></label>
+      <div class="row">
+        <input type="text" id="hub-url" placeholder="https://hub.example.com" value="${esc(st.hub_url ?? '')}" title="${esc(URL_HINT)}" />
+        <button class="btn" id="hub-test" title="確認這個網址連得到、是 Security Hub，並顯示它的版本與指紋">測試網址</button>
+        <button class="btn primary" id="hub-join" title="不需要金鑰：送出加入申請；Hub 允許自動加入就馬上完成，否則等管理員核准">申請加入</button>
+      </div>
+      <div id="hub-result" class="small hub-result"></div>
+    </section>
+    <section class="hub-method-panel" id="hub-key-panel" aria-label="使用註冊金鑰" hidden>
+      <p class="small muted">管理員可在 Hub「新增主機」頁建立 asa_ek_ 開頭的註冊金鑰；用金鑰加入不必等候核准。</p>
+      <div class="hub-key-fields">
+        <label class="small" for="hub-key-url"><b>Hub 網址</b></label><input type="text" id="hub-key-url" placeholder="https://hub.example.com" value="${esc(st.hub_url ?? '')}" title="${esc(URL_HINT)}" />
+        <label class="small" for="hub-key"><b>註冊金鑰</b></label><input type="text" id="hub-key" placeholder="asa_ek_…" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="row hub-key-action"><button class="btn primary" id="hub-key-go">用金鑰加入</button></div>
+      <div id="hub-key-result" class="small hub-result"></div>
+    </section>`;
   el.innerHTML = `${hubHead()}${intro}${status}
     ${joined ? `<details id="hub-change" class="sub-section"${opts.search ? ' open' : ''}><summary><b>更換 Hub 或重新加入</b></summary>${form}</details>` : form}
     ${!joined && !joinSkipped() ? `<p class="small muted" style="margin:12px 0 0"><a class="link" href="#overview" id="join-skip">先不要，只在這台電腦使用</a></p>` : ''}`;
@@ -133,10 +144,10 @@ function renderHubSection(el, st, opts = {}) {
       }
     };
   }
-  const fresh = discovery && Date.now() - discovery.at < DISCOVERY_TTL;
-  if (opts.search === true || (autoSearch && !fresh)) searchHubs(el);
-  else if (fresh) showHubs(el, discovery.r);
-  else el.querySelector('#join-found').innerHTML = '<p class="muted small">按「尋找公司的 Hub」開始。</p>';
+  if (opts.search === true) {
+    setHubMethod(el, 'search');
+    searchHubs(el);
+  }
 }
 
 function bindJoined(el, st) {
@@ -158,13 +169,27 @@ function bindJoined(el, st) {
 function bindHubForm(el) {
   const res = el.querySelector('#hub-result');
   const url = () => el.querySelector('#hub-url').value.trim();
+  el.querySelector('#hub-method-search').onclick = () => {
+    setHubMethod(el, 'search');
+    const fresh = discovery && Date.now() - discovery.at < DISCOVERY_TTL;
+    if (fresh) showHubs(el, discovery.r);
+    else searchHubs(el);
+  };
+  el.querySelector('#hub-method-url').onclick = () => {
+    setHubMethod(el, 'url');
+    el.querySelector('#hub-url').focus();
+  };
+  el.querySelector('#hub-method-key').onclick = () => {
+    setHubMethod(el, 'key');
+    el.querySelector('#hub-key-url').focus();
+  };
   el.querySelector('#join-search').onclick = () => searchHubs(el);
   el.querySelector('#hub-test').onclick = (ev) => {
     if (!url()) return toast('請先輸入 Hub 網址');
     testHub(ev.currentTarget, url(), res);
   };
   el.querySelector('#hub-join').onclick = async (ev) => {
-    if (!url()) return toast('請先輸入 Hub 網址，或按「尋找公司的 Hub」');
+    if (!url()) return toast('請先輸入 Hub 網址，或按「尋找同網段 Hub」');
     const b = ev.currentTarget;
     busy(b, true, '確認 Hub…');
     try {
@@ -180,23 +205,36 @@ function bindHubForm(el) {
     }
   };
   el.querySelector('#hub-key-go').onclick = async (ev) => {
+    const keyUrl = el.querySelector('#hub-key-url').value.trim();
     const key = el.querySelector('#hub-key').value.trim();
-    if (!url() || !key) return toast('請輸入 Hub 網址與註冊金鑰');
+    const keyResult = el.querySelector('#hub-key-result');
+    if (!keyUrl || !key) return toast('請輸入 Hub 網址與註冊金鑰');
     const b = ev.currentTarget;
     busy(b, true, '加入中…');
     try {
-      const r = await invokeConfirmed('enroll_with_key', { url: url(), key });
+      const r = await invokeConfirmed('enroll_with_key', { url: keyUrl, key });
       if (r) {
         toast('已用金鑰加入 Hub');
         discovery = null;
         renderHubSection(el, r, { search: false });
       }
     } catch (e) {
-      res.innerHTML = errLine(e);
+      keyResult.innerHTML = errLine(e);
     } finally {
       if (b.isConnected) busy(b, false);
     }
   };
+}
+
+function setHubMethod(el, method) {
+  for (const name of ['search', 'url', 'key']) {
+    const active = name === method;
+    const button = el.querySelector(`#hub-method-${name}`);
+    const panel = el.querySelector(`#hub-${name}-panel`);
+    button?.setAttribute('aria-expanded', String(active));
+    button?.classList.toggle('on', active);
+    if (panel) panel.hidden = !active;
+  }
 }
 
 /** 申請送出後：改畫等候卡片並開始確認（自動允許加入的 Hub 第一次確認就完成）。 */
@@ -246,7 +284,8 @@ async function searchHubs(el) {
   const btn = el.querySelector('#join-search');
   if (!box) return;
   const seq = ++searchSeq;
-  box.innerHTML = '<p class="muted small"><span class="spin"></span> 正在尋找（公司 DNS、區網廣播），約 3–10 秒…</p>';
+  setHubMethod(el, 'search');
+  box.innerHTML = '<p class="muted small"><span class="spin"></span> 正在尋找同網段的 Hub（區網廣播與公司 DNS），約 3–10 秒…</p>';
   if (btn) btn.disabled = true;
   try {
     const r = await invoke('discover_hubs', { url: null });

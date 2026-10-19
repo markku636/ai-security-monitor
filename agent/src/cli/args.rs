@@ -145,7 +145,7 @@ pub enum Command {
         #[command(subcommand)]
         cmd: ConfigCmd,
     },
-    /// 白名單（ip / cidr / 行程路徑 / 網域 / 規則）
+    /// 白名單（掃描項目 / ip / cidr / 行程路徑 / 網域 / 規則）
     Allowlist {
         #[command(subcommand)]
         cmd: AllowlistCmd,
@@ -197,7 +197,7 @@ pub enum ConfigCmd {
 pub enum AllowlistCmd {
     /// 新增白名單條目（自動推斷種類，或用 --kind 指定）
     Add {
-        /// 值：IP、CIDR、行程路徑 glob、網域（*.example.com）、規則（connections.risky_port:3389）
+        /// 值：掃描項目 ID、IP、CIDR、行程路徑 glob、網域（*.example.com）、規則（connections.risky_port:3389）
         value: String,
         /// 種類
         #[arg(long, value_enum)]

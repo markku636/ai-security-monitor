@@ -15,7 +15,7 @@ use crate::error::{AppError, AppResult};
 use crate::model::allowlist::Allowlist;
 use crate::model::baseline::{Baseline, Snapshot};
 use crate::model::connection::{Connection, Listener};
-use crate::model::finding::{Evidence, Finding, ScannerId};
+use crate::model::finding::{Finding, ScannerId};
 use crate::model::report::{AgentInfo, InventorySummary, Report, Summaries, REPORT_SCHEMA_VERSION};
 
 /// 掃描器對提權的需求。
@@ -267,8 +267,8 @@ impl Pipeline {
 
         // 白名單：命中的 finding 標 suppressed_by（保留在報告裡，hub 可選擇隱藏）。
         for f in &mut findings {
-            if let Some(entry) = allowlist_hit(&ctx.allowlist, f) {
-                f.suppressed_by = Some(entry);
+            if let Some(entry) = ctx.allowlist.match_finding(f) {
+                f.suppressed_by = Some(entry.id.clone());
             }
         }
 
@@ -318,58 +318,10 @@ impl Pipeline {
     }
 }
 
-/// 檢查 finding 是否命中白名單；回傳條目 id。
-fn allowlist_hit(al: &Allowlist, f: &Finding) -> Option<String> {
-    if al.entries.is_empty() {
-        return None;
-    }
-    let port = match &f.evidence {
-        Evidence::Connection(c) => c.remote_port.or(Some(c.local_port)),
-        Evidence::Port { port, .. } => Some(*port),
-        _ => None,
-    };
-    if let Some(e) = al.match_rule(&f.rule, port) {
-        return Some(e.id.clone());
-    }
-    match &f.evidence {
-        Evidence::Connection(c) => {
-            if let Some(ip) = c.remote_ip {
-                if let Some(e) = al.match_ip(ip) {
-                    return Some(e.id.clone());
-                }
-            }
-            if let Some(exe) = c.process.as_ref().and_then(|p| p.exe.as_deref()) {
-                if let Some(e) = al.match_process_path(exe) {
-                    return Some(e.id.clone());
-                }
-            }
-        }
-        Evidence::Process { exe: Some(exe), .. } => {
-            if let Some(e) = al.match_process_path(exe) {
-                return Some(e.id.clone());
-            }
-        }
-        Evidence::Flow { remote, domain, .. } => {
-            if let Some(ip) = remote.rsplit_once(':').and_then(|(ip, _)| ip.parse().ok()) {
-                if let Some(e) = al.match_ip(ip) {
-                    return Some(e.id.clone());
-                }
-            }
-            if let Some(d) = domain {
-                if let Some(e) = al.match_domain(d) {
-                    return Some(e.id.clone());
-                }
-            }
-        }
-        _ => {}
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::finding::Severity;
+    use crate::model::finding::{Evidence, Severity};
 
     struct Fake(ScannerId, &'static [ScannerId]);
 

@@ -1,4 +1,4 @@
-//! 白名單（`<config>/allowlist.json`）：ip / cidr / 行程路徑 glob / domain 萬用字元 / `rule:port`。
+//! 白名單（`<config>/allowlist.json`）：單一 finding / ip / cidr / 行程路徑 glob / domain 萬用字元 / `rule:port`。
 //! 命中的 finding 標 `suppressed_by`，連線判定直接 Safe。
 
 use std::net::IpAddr;
@@ -8,6 +8,7 @@ use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
+use crate::model::finding::{Evidence, Finding};
 use crate::store;
 
 pub const ALLOWLIST_FILE: &str = "allowlist.json";
@@ -16,6 +17,7 @@ pub const ALLOWLIST_FILE: &str = "allowlist.json";
 #[serde(rename_all = "snake_case")]
 #[clap(rename_all = "snake_case")]
 pub enum AllowKind {
+    Finding,
     Ip,
     Cidr,
     ProcessPath,
@@ -49,9 +51,12 @@ impl Allowlist {
         store::write_json_in(dir, ALLOWLIST_FILE, self)
     }
 
-    /// 推斷種類：可解析成 IP → ip；含 `/` 且可解析 → cidr；含 `:` 且前段像規則名 → rule；
+    /// 推斷種類：`f_` 穩定 finding id → finding；可解析成 IP → ip；含 `/` 且可解析 → cidr；含 `:` 且前段像規則名 → rule；
     /// 含路徑分隔或 `*` 且非 domain → process_path；否則 domain。
     pub fn infer_kind(value: &str) -> AllowKind {
+        if is_finding_id(value) {
+            return AllowKind::Finding;
+        }
         if value.parse::<IpAddr>().is_ok() {
             return AllowKind::Ip;
         }
@@ -76,6 +81,14 @@ impl Allowlist {
         }
         let kind = kind.unwrap_or_else(|| Self::infer_kind(value));
         match kind {
+            AllowKind::Finding => {
+                if !is_finding_id(value) {
+                    return Err(AppError::InvalidArg(tf!(
+                        "不是合法的掃描項目 ID：{value}",
+                        value = value
+                    )));
+                }
+            }
             AllowKind::Ip => {
                 value
                     .parse::<IpAddr>()
@@ -175,6 +188,67 @@ impl Allowlist {
                 None => e.value == rule,
             })
     }
+
+    /// 找出會排除這一筆掃描結果的條目。精準的 finding id 優先，其次沿用既有的規則、IP、行程與網域白名單。
+    pub fn match_finding(&self, finding: &Finding) -> Option<&AllowEntry> {
+        if self.entries.is_empty() {
+            return None;
+        }
+        if let Some(entry) = self
+            .entries
+            .iter()
+            .find(|entry| entry.kind == AllowKind::Finding && entry.value == finding.id)
+        {
+            return Some(entry);
+        }
+        let port = match &finding.evidence {
+            Evidence::Connection(connection) => connection.remote_port.or(Some(connection.local_port)),
+            Evidence::Port { port, .. } => Some(*port),
+            _ => None,
+        };
+        if let Some(entry) = self.match_rule(&finding.rule, port) {
+            return Some(entry);
+        }
+        match &finding.evidence {
+            Evidence::Connection(connection) => {
+                if let Some(ip) = connection.remote_ip {
+                    if let Some(entry) = self.match_ip(ip) {
+                        return Some(entry);
+                    }
+                }
+                if let Some(exe) = connection.process.as_ref().and_then(|process| process.exe.as_deref()) {
+                    if let Some(entry) = self.match_process_path(exe) {
+                        return Some(entry);
+                    }
+                }
+            }
+            Evidence::Process { exe: Some(exe), .. } => {
+                if let Some(entry) = self.match_process_path(exe) {
+                    return Some(entry);
+                }
+            }
+            Evidence::Flow { remote, domain, .. } => {
+                if let Some(ip) = remote.rsplit_once(':').and_then(|(ip, _)| ip.parse().ok()) {
+                    if let Some(entry) = self.match_ip(ip) {
+                        return Some(entry);
+                    }
+                }
+                if let Some(domain) = domain {
+                    if let Some(entry) = self.match_domain(domain) {
+                        return Some(entry);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+}
+
+fn is_finding_id(value: &str) -> bool {
+    value
+        .strip_prefix("f_")
+        .is_some_and(|suffix| suffix.len() == 16 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
 #[cfg(test)]
@@ -228,6 +302,42 @@ mod tests {
         let mut a = Allowlist::default();
         assert!(a.add(Some(AllowKind::Ip), "999.1.1.1", None).is_err());
         assert!(a.add(Some(AllowKind::Cidr), "10.0.0.0/99", None).is_err());
+        assert!(a.add(Some(AllowKind::Finding), "f_not-a-valid-id", None).is_err());
         assert!(a.add(None, "", None).is_err());
+    }
+
+    #[test]
+    fn exact_finding_entry_only_matches_that_finding() {
+        use crate::model::finding::{ScannerId, Severity};
+
+        let first = Finding::new(
+            ScannerId::Files,
+            "fim.autorun.service.added",
+            "service|first",
+            Severity::High,
+            "first",
+            "detail",
+            Evidence::Text { detail: "first".into() },
+            "recommendation",
+        );
+        let second = Finding::new(
+            ScannerId::Files,
+            "fim.autorun.service.added",
+            "service|second",
+            Severity::High,
+            "second",
+            "detail",
+            Evidence::Text {
+                detail: "second".into(),
+            },
+            "recommendation",
+        );
+        let mut allowlist = Allowlist::default();
+        allowlist
+            .add(Some(AllowKind::Finding), &first.id, Some("已由 IT 確認".into()))
+            .unwrap();
+
+        assert!(allowlist.match_finding(&first).is_some());
+        assert!(allowlist.match_finding(&second).is_none());
     }
 }

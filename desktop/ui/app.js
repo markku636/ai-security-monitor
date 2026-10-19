@@ -153,7 +153,7 @@ async function pageOverview() {
       <div class="stat"><div class="label">嚴重＋高</div><div class="value" style="color:var(--danger)">${r ? r.counts.critical + r.counts.high : '—'}</div><div class="hint"><a class="link" href="#findings">看掃描結果</a></div></div>
       <div class="stat"><div class="label">中</div><div class="value">${r ? r.counts.medium : '—'}</div><div class="hint">低 ${r?.counts.low ?? '—'}、資訊 ${r?.counts.info ?? '—'}</div></div>
       <div class="stat"><div class="label">威脅情資</div><div class="value">${o.intel.ok}/${o.intel.total}</div><div class="hint">${o.intel.checked_at ? `最後更新 ${ago(o.intel.checked_at)}` : '還沒下載'}${o.intel.source === 'hub' ? '・從 Hub' : o.intel.source === 'vendor' ? '・直接找廠商' : ''}${intelOld ? ' <span class="chip medium">過期</span>' : ''}</div></div>
-      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : `<a class="link" href="${HUB_SECTION}">尋找公司的 Hub</a>`}</div></div>
+      <div class="stat"><div class="label">Security Hub</div><div class="value" style="font-size:15px;padding-top:8px">${o.hub_url ? '已註冊' : '未註冊'}</div><div class="hint">${o.hub_url ? `<span class="mono">${esc(o.hub_url)}</span>` : `<a class="link" href="${HUB_SECTION}">尋找同網段的 Hub</a>`}</div></div>
     </div>
     <div class="grid" id="ov-metrics"><div class="stat"><div class="label">網路</div><div class="hint">載入中…</div></div></div>
     <div class="card" id="ov-upload" hidden></div>
@@ -667,28 +667,135 @@ async function showIp(ip) {
 }
 
 // ---------------- 掃描結果 ----------------
+const ALLOW_KIND = {
+  finding: '單一掃描項目',
+  ip: 'IP',
+  cidr: '網段',
+  process_path: '程式路徑',
+  domain: '網域',
+  rule: '規則',
+};
+
+function findingRow(f, allowEntries) {
+  const entry = f.suppressed_by ? allowEntries.find((item) => item.id === f.suppressed_by) : null;
+  const excluded = Boolean(f.suppressed_by);
+  const note = entry?.note?.trim();
+  return `<tr class="finding-row${excluded ? ' excluded-row' : ''}" data-finding-row data-excluded="${excluded}"${excluded ? ' hidden' : ''}>
+    <td class="finding-severity"><span class="chip ${esc(f.severity)}">${SEVERITY[f.severity] ?? esc(f.severity)}</span></td>
+    <td><details><summary><b>${esc(f.title)}</b>${excluded ? ' <span class="chip ok">已排除</span>' : ''}</summary>
+      <div class="finding-body">
+        <p class="small">${esc(f.detail)}</p>
+        ${f.recommendation ? `<p class="small"><b>建議：</b>${esc(f.recommendation)}</p>` : ''}
+        ${(f.intel_hits ?? []).map((h) => `<span class="reason intel" data-url="${esc(h.source_url)}"><span class="k">情資</span>${esc(h.vendor)} ${esc(h.confidence)}%</span>`).join('')}
+        ${excluded ? `<div class="allow-state">
+          <div><b>白名單排除中</b>${note ? `<span class="allow-note">${esc(note)}</span>` : '<span class="muted">沒有備註</span>'}</div>
+          ${entry ? `<button class="btn compact" data-unexclude="${esc(entry.id)}" data-unexclude-kind="${esc(entry.kind)}">取消排除</button>` : ''}
+        </div>` : `<div class="finding-actions">
+          <button class="btn compact" data-exclude="${esc(f.id)}">加入白名單排除</button>
+          <span class="muted small">只排除此項，不影響同類型的其他問題。</span>
+        </div>
+        <form class="allow-form" data-exclude-form="${esc(f.id)}" hidden>
+          <label for="allow-note-${esc(f.id)}"><b>排除原因</b><span class="muted">（必填，方便日後稽核）</span></label>
+          <input id="allow-note-${esc(f.id)}" type="text" maxlength="500" required data-allow-note placeholder="例如：公司核准的端點防護服務，IT-1234" autocomplete="off">
+          <div class="row"><button class="btn primary compact" type="submit">確認排除</button><button class="btn compact" type="button" data-cancel-exclude>取消</button></div>
+        </form>`}
+      </div>
+    </details></td>
+    <td class="small muted finding-category">${esc(f.scanner)}<div class="mono">${esc(f.rule)}</div></td>
+  </tr>`;
+}
+
+function allowlistPanel(entries) {
+  return `<details class="card allowlist-panel">
+    <summary><b>掃描排除管理</b><span class="badge">${entries.length}</span><span class="muted small">查看備註或取消排除</span></summary>
+    <div class="tbl-wrap allowlist-table">${entries.length ? `<table><thead><tr><th>範圍</th><th>項目</th><th>備註</th><th>加入時間</th><th></th></tr></thead><tbody>${entries.map((entry) => `<tr>
+      <td><span class="chip neutral">${esc(ALLOW_KIND[entry.kind] ?? entry.kind)}</span></td>
+      <td class="mono allow-value">${esc(entry.value)}</td>
+      <td class="small">${entry.note ? esc(entry.note) : '<span class="muted">沒有備註</span>'}</td>
+      <td class="small muted nw">${ago(entry.added_at)}</td>
+      <td><button class="btn compact" data-unexclude="${esc(entry.id)}" data-unexclude-kind="${esc(entry.kind)}">取消</button></td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty">目前沒有掃描排除。</div>'}</div>
+  </details>`;
+}
+
 async function pageFindings() {
   $main.innerHTML = `<h1>掃描結果</h1><p class="sub">載入中…</p>`;
-  const r = await invoke('latest_report');
+  const [r, allowlist] = await Promise.all([
+    invoke('latest_report'),
+    invoke('allowlist_list').catch(() => ({ entries: [] })),
+  ]);
   const order = ['critical', 'high', 'medium', 'low', 'info'];
   const fs = (r?.findings ?? []).slice().sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  const allowEntries = allowlist?.entries ?? [];
+  const active = fs.filter((f) => !f.suppressed_by);
+  const excluded = fs.filter((f) => f.suppressed_by);
+  const findingAllowEntries = allowEntries.filter((entry) => entry.kind === 'finding' || fs.some((f) => f.suppressed_by === entry.id));
   $main.innerHTML = `
     <div class="head">
-      <div><h1>掃描結果</h1><p class="sub">${r ? `最後掃描 ${ago(r.finished_at)}，共 ${fs.length} 筆` : '還沒有掃描報告'}</p></div>
+      <div><h1>掃描結果</h1><p class="sub">${r ? `最後掃描 ${ago(r.finished_at)}，${active.length} 筆待處理${excluded.length ? `，${excluded.length} 筆已排除` : ''}` : '還沒有掃描報告'}</p></div>
       <div class="row"><button class="btn primary" id="scan">立即掃描</button><button class="btn" id="ask">請 AI 解讀這份報告</button></div>
     </div>
-    <div class="card">${fs.length ? `<table><thead><tr><th>嚴重度</th><th>問題</th><th>類別</th></tr></thead><tbody>${fs
-      .map((f) => `<tr>
-        <td><span class="chip ${esc(f.severity)}">${SEVERITY[f.severity] ?? esc(f.severity)}</span></td>
-        <td><details><summary><b>${esc(f.title)}</b></summary>
-          <p class="small">${esc(f.detail)}</p>
-          ${f.recommendation ? `<p class="small"><b>建議：</b>${esc(f.recommendation)}</p>` : ''}
-          ${(f.intel_hits ?? []).map((h) => `<span class="reason intel" data-url="${esc(h.source_url)}"><span class="k">情資</span>${esc(h.vendor)} ${esc(h.confidence)}%</span>`).join('')}
-        </details></td>
-        <td class="small muted">${esc(f.scanner)}<div class="mono">${esc(f.rule)}</div></td>
-      </tr>`).join('')}</tbody></table>` : '<div class="empty">沒有問題，或還沒掃描過。</div>'}</div>`;
+    ${excluded.length ? `<label class="check-toggle"><input type="checkbox" id="show-excluded"> 顯示已排除項目 <span class="badge">${excluded.length}</span></label>` : ''}
+    <div class="card findings-card">${fs.length ? `<div class="tbl-wrap"><table><thead><tr><th>嚴重度</th><th>問題</th><th>類別</th></tr></thead><tbody>${fs.map((f) => findingRow(f, allowEntries)).join('')}</tbody></table></div>
+      ${active.length ? '' : `<div class="empty" id="active-findings-empty"><b>目前沒有待處理問題</b>${excluded.length ? '<p class="small">已排除的項目可用上方開關查看。</p>' : ''}</div>`}` : '<div class="empty">沒有問題，或還沒掃描過。</div>'}</div>
+    ${allowlistPanel(findingAllowEntries)}`;
   document.getElementById('scan').onclick = () => scanNow();
   document.getElementById('ask').onclick = () => goAi('report', '');
+  const showExcluded = document.getElementById('show-excluded');
+  if (showExcluded) {
+    showExcluded.onchange = () => {
+      document.querySelectorAll('[data-finding-row][data-excluded="true"]').forEach((row) => (row.hidden = !showExcluded.checked));
+      const empty = document.getElementById('active-findings-empty');
+      if (empty) empty.hidden = showExcluded.checked;
+    };
+  }
+  document.querySelectorAll('[data-exclude]').forEach((button) => {
+    button.onclick = () => {
+      const form = document.querySelector(`[data-exclude-form="${CSS.escape(button.dataset.exclude)}"]`);
+      button.hidden = true;
+      form.hidden = false;
+      form.querySelector('[data-allow-note]').focus();
+    };
+  });
+  document.querySelectorAll('[data-cancel-exclude]').forEach((button) => {
+    button.onclick = () => {
+      const form = button.closest('form');
+      form.hidden = true;
+      const openButton = document.querySelector(`[data-exclude="${CSS.escape(form.dataset.excludeForm)}"]`);
+      if (openButton) openButton.hidden = false;
+    };
+  });
+  document.querySelectorAll('[data-exclude-form]').forEach((form) => {
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const input = form.querySelector('[data-allow-note]');
+      if (!input.reportValidity()) return;
+      const buttons = form.querySelectorAll('button');
+      buttons.forEach((button) => (button.disabled = true));
+      try {
+        await invoke('allowlist_add_finding', { findingId: form.dataset.excludeForm, note: input.value });
+        toast('已加入白名單；這筆問題不再計分或告警。');
+        await pageFindings();
+      } catch (e) {
+        toast(`無法加入白名單：${e}`);
+        buttons.forEach((button) => (button.disabled = false));
+      }
+    };
+  });
+  document.querySelectorAll('[data-unexclude]').forEach((button) => {
+    button.onclick = async () => {
+      if (button.dataset.unexcludeKind !== 'finding' && !window.confirm('這是共用白名單，取消後可能會讓多筆掃描問題恢復。確定要取消？')) return;
+      button.disabled = true;
+      try {
+        await invoke('allowlist_remove', { entryId: button.dataset.unexclude });
+        toast('已取消白名單排除。');
+        await pageFindings();
+      } catch (e) {
+        toast(`無法取消排除：${e}`);
+        button.disabled = false;
+      }
+    };
+  });
 }
 
 // ---------------- 威脅情資 ----------------
@@ -1205,7 +1312,8 @@ async function pageSettings(opts = {}) {
     <h1>設定</h1>
     <p class="sub">桌面版和命令列 ai-security-monitor、背景服務共用同一個設定目錄。</p>
     <div class="card" id="set-hub"></div>
-    <div class="card" id="set-lan" hidden></div>
+    <div class="card" id="set-dns"><h2>DNS</h2><p class="small muted">讀取中…</p></div>
+    <details class="card advanced-card" id="set-lan" hidden></details>
     <div class="card"><h2>背景自動回報與自動更新</h2>
       <label class="row" title="${esc(BG_HINT)}"><input type="checkbox" id="auto-bg" disabled /> <b>開機／登入後在背景自動回報</b> <span class="small muted">(?)</span></label>
       <p class="small muted" id="auto-bg-state" style="margin:4px 0 0 24px">讀取中…</p>
@@ -1220,7 +1328,6 @@ async function pageSettings(opts = {}) {
       <label class="row" title="${esc(PERF_TOGGLE_HINT)}"><input type="checkbox" id="perf-toggle" ${o.metrics?.performance ? 'checked' : ''} /> <b>蒐集這台電腦的效能（CPU、記憶體、磁碟）</b> <span class="small muted">(?)</span></label>
       <p class="small muted" style="margin:4px 0 0 24px" id="perf-state">${perfStateText(o.metrics?.performance)}</p>
     </div>
-    <div class="card" id="set-dns"><h2>DNS</h2><p class="small muted">讀取中…</p></div>
     <div class="card" id="set-intel"><h2>情資來源授權</h2><p class="small muted">讀取中…</p></div>
     <div class="card"><h2>這台電腦</h2><div class="kv">
       <div>主機名稱</div><div>${esc(o.hostname)}</div>
