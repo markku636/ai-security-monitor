@@ -80,7 +80,7 @@ See [.env.example](../.env.example) for the full list. The important ones:
 | `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` | **Required.** 127.0.0.1 inside a container is not the host's loopback, so open mode without a key is refused in Docker (set `AI_SECURITY_MONITOR_HUB_ALLOW_OPEN_MODE=1` to override) |
 | `AI_SECURITY_MONITOR_HUB_DB_PASSWORD` | **Required.** Used by compose to build `AI_SECURITY_MONITOR_HUB_DATABASE_URL` |
 | `AI_SECURITY_MONITOR_HUB_PUBLIC_URL` | Public URL used in install commands and `/install.sh` (also the mDNS `url=`) |
-| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ISSUER` / `…_CLIENT_ID` / `…_CLIENT_SECRET` | Keycloak OIDC credentials. Set the valid redirect URI to `<PUBLIC_URL>/api/auth/keycloak/callback` |
+| `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ISSUER` / `…_CLIENT_ID` / `…_CLIENT_SECRET` | Keycloak OIDC settings. Public clients with PKCE may omit the secret. Set the valid redirect URI to `<PUBLIC_URL>/api/auth/keycloak/callback` |
 | `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ALLOWED_EMAILS` | Comma-separated allowlist of verified email addresses. The Keycloak button appears only when the issuer, client ID, client secret, and this value are all configured |
 | `AI_SECURITY_MONITOR_HUB_KEYCLOAK_IDP_HINT` | Optional Keycloak identity-provider alias; for example, `google` sends users directly to the Google IdP managed by Keycloak |
 | `AI_SECURITY_MONITOR_HUB_KEYCLOAK_ONLY` | `1` accepts only Keycloak on the web login once it is fully configured and disables the administrator-key form; Bearer admin APIs are unaffected |

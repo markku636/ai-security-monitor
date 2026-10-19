@@ -62,12 +62,11 @@ export function readEnv(name: string): string {
   return raw(name);
 }
 
-/** Keycloak login is shown only when issuer, credentials and an explicit email allowlist are all set. */
+/** Keycloak login is shown only when issuer, client id and an explicit email allowlist are all set. */
 export function keycloakLoginEnabled(): boolean {
   return (
     !!raw('ASA_HUB_KEYCLOAK_ISSUER') &&
     !!raw('ASA_HUB_KEYCLOAK_CLIENT_ID') &&
-    !!raw('ASA_HUB_KEYCLOAK_CLIENT_SECRET') &&
     !!raw('ASA_HUB_KEYCLOAK_ALLOWED_EMAILS')
   );
 }

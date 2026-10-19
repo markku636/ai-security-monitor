@@ -132,17 +132,19 @@ export async function exchangeKeycloakCode(
   input: { code: string; verifier: string; redirectUri: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<TokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: input.code,
+    redirect_uri: input.redirectUri,
+    client_id: cfg.clientId,
+    code_verifier: input.verifier,
+  });
+  // Confidential clients use a secret; public PKCE clients intentionally do not.
+  if (cfg.clientSecret) body.set('client_secret', cfg.clientSecret);
   const response = await fetchImpl(discovery.token_endpoint, {
     method: 'POST',
     headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: input.code,
-      redirect_uri: input.redirectUri,
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
-      code_verifier: input.verifier,
-    }),
+    body,
     signal: AbortSignal.timeout(10_000),
     cache: 'no-store',
   });

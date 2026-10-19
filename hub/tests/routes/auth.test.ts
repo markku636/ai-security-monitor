@@ -146,19 +146,20 @@ describe('login / me / logout', () => {
     setEnv({
       ASA_HUB_KEYCLOAK_ISSUER: 'https://keycloak.example.com/realms/company',
       ASA_HUB_KEYCLOAK_CLIENT_ID: 'ai-security-monitor',
-      ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: 'a4756830@gmail.com',
+      ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: undefined,
     });
     expect(keycloakLoginConfig().enabled).toBe(false);
 
     setEnv({
       ASA_HUB_KEYCLOAK_ISSUER: 'https://keycloak.example.com/realms/company',
       ASA_HUB_KEYCLOAK_CLIENT_ID: 'ai-security-monitor',
-      ASA_HUB_KEYCLOAK_CLIENT_SECRET: 'test-client-secret',
+      ASA_HUB_KEYCLOAK_CLIENT_SECRET: undefined,
       ASA_HUB_KEYCLOAK_ALLOWED_EMAILS: 'a4756830@gmail.com',
       ASA_HUB_KEYCLOAK_ONLY: '1',
     });
     const cfg = keycloakLoginConfig();
     expect(cfg.enabled).toBe(true);
+    expect(cfg.clientSecret).toBe('');
     expect(cfg.only).toBe(true);
     expect(keycloakClaimAllowed({ sub: '1', email: 'a4756830@gmail.com', email_verified: true }, cfg)).toBe(true);
     expect(keycloakClaimAllowed({ sub: '2', email: 'someone@example.com', email_verified: true }, cfg)).toBe(false);
