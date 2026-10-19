@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { apiPost } from '@/lib/api-client';
 import { useT } from '@/lib/i18n/client';
 
-export function LoginForm() {
+export function LoginForm({ googleEnabled, googleOnly }: { googleEnabled: boolean; googleOnly: boolean }) {
   const { t } = useT();
   const router = useRouter();
   const [key, setKey] = useState('');
@@ -29,30 +29,49 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-600 dark:text-slate-300">{t('管理員金鑰')}</span>
-        <input
-          type="password"
-          autoComplete="current-password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-950"
-          required
-        />
-      </label>
-      {msg ? (
-        <p role="alert" className="text-sm text-red-600">
-          {msg}
-        </p>
+    <div className="space-y-4">
+      {googleEnabled ? (
+        <a
+          href="/api/auth/google/login"
+          className="block w-full rounded-md bg-teal-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-teal-800"
+        >
+          {t('使用 Google 登入')}
+        </a>
       ) : null}
-      <button
-        type="submit"
-        disabled={busy || !key}
-        className="w-full rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
-      >
-        {busy ? t('登入中…') : t('登入')}
-      </button>
-    </form>
+      {googleEnabled && !googleOnly ? (
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+          {t('或使用管理員金鑰')}
+          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+        </div>
+      ) : null}
+      {!googleEnabled || !googleOnly ? (
+        <form onSubmit={submit} className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600 dark:text-slate-300">{t('管理員金鑰')}</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-950"
+              required
+            />
+          </label>
+          {msg ? (
+            <p role="alert" className="text-sm text-red-600">
+              {msg}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={busy || !key}
+            className="w-full rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+          >
+            {busy ? t('登入中…') : t('登入')}
+          </button>
+        </form>
+      ) : null}
+    </div>
   );
 }

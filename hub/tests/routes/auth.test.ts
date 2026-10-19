@@ -8,6 +8,7 @@ import { resetRateLimitsForTests } from '@/lib/auth/ratelimit';
 import { loadEnv, resetEnvForTests } from '@/lib/env';
 import { createTestDb } from '../helpers/db';
 import { cookieFrom, req } from '../helpers/req';
+import { googleClaimAllowed, googleLoginConfig, resetGoogleForTests } from '@/lib/auth/google';
 
 function setEnv(vars: Record<string, string | undefined>) {
   for (const [k, v] of Object.entries(vars)) {
@@ -23,7 +24,16 @@ beforeAll(async () => {
 
 beforeEach(() => {
   resetRateLimitsForTests();
-  setEnv({ ASA_HUB_ADMIN_SECRET: 'test-admin', ASA_HUB_CLIENT_SECRETS: 'client-a,client-b', ASA_HUB_PUBLIC_DASHBOARD: undefined });
+  resetGoogleForTests();
+  setEnv({
+    ASA_HUB_ADMIN_SECRET: 'test-admin',
+    ASA_HUB_CLIENT_SECRETS: 'client-a,client-b',
+    ASA_HUB_PUBLIC_DASHBOARD: undefined,
+    ASA_HUB_GOOGLE_CLIENT_ID: undefined,
+    ASA_HUB_GOOGLE_CLIENT_SECRET: undefined,
+    ASA_HUB_GOOGLE_ALLOWED_EMAILS: undefined,
+    ASA_HUB_GOOGLE_ONLY: undefined,
+  });
 });
 
 describe('health', () => {
@@ -128,6 +138,30 @@ describe('login / me / logout', () => {
     setEnv({ ASA_HUB_PUBLIC_DASHBOARD: '1' });
     const who = await (await me(req('/api/auth/me'))).json();
     expect(who.role).toBe('viewer');
+  });
+
+  it('can make Google the only web login and allow exactly one verified email', async () => {
+    setEnv({
+      ASA_HUB_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com',
+      ASA_HUB_GOOGLE_ALLOWED_EMAILS: 'a4756830@gmail.com',
+    });
+    expect(googleLoginConfig().enabled).toBe(false);
+
+    setEnv({
+      ASA_HUB_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com',
+      ASA_HUB_GOOGLE_CLIENT_SECRET: 'test-client-secret',
+      ASA_HUB_GOOGLE_ALLOWED_EMAILS: 'a4756830@gmail.com',
+      ASA_HUB_GOOGLE_ONLY: '1',
+    });
+    const cfg = googleLoginConfig();
+    expect(cfg.enabled).toBe(true);
+    expect(cfg.only).toBe(true);
+    expect(googleClaimAllowed({ sub: '1', email: 'a4756830@gmail.com', email_verified: true }, cfg)).toBe(true);
+    expect(googleClaimAllowed({ sub: '2', email: 'someone@example.com', email_verified: true }, cfg)).toBe(false);
+    expect(googleClaimAllowed({ sub: '3', email: 'a4756830@gmail.com', email_verified: false }, cfg)).toBe(false);
+    const keyLogin = await login(req('/api/auth/login', { method: 'POST', body: { key: 'test-admin' } }));
+    expect(keyLogin.status).toBe(403);
+    expect(await keyLogin.json()).toMatchObject({ error: 'google_login_only' });
   });
 });
 

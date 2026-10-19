@@ -129,6 +129,10 @@ export const en: Record<string, string> = {
 
   // ---- login ----
   '貼上管理員金鑰（AI_SECURITY_MONITOR_HUB_ADMIN_SECRET）登入': 'Paste the administrator key (AI_SECURITY_MONITOR_HUB_ADMIN_SECRET) to sign in',
+  '使用 Google 帳號登入，或貼上管理員金鑰': 'Sign in with Google or paste the administrator key',
+  '使用 Google 帳號登入': 'Sign in with your Google account',
+  '使用 Google 登入': 'Sign in with Google',
+  '或使用管理員金鑰': 'or use the administrator key',
   '嘗試太多次，請一分鐘後再試': 'Too many attempts; try again in a minute',
   '金鑰不正確': 'Wrong key',
   '登入失敗（{status}）': 'Sign-in failed ({status})',

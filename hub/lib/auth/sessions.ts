@@ -2,7 +2,7 @@
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { sessions } from '@/drizzle/schema';
 import { getDb } from '@/lib/db';
-import { env } from '@/lib/env';
+import { env, googleLoginEnabled, readEnv } from '@/lib/env';
 import { randomToken, sha256Hex } from './crypto';
 
 export const SESSION_COOKIE = 'asa_admin';
@@ -10,7 +10,9 @@ export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const TOUCH_EVERY_MS = 60 * 1000;
 
 export function secretFingerprint(): string {
-  return sha256Hex(`asa-hub-session:${env().adminSecret}`);
+  return sha256Hex(
+    `asa-hub-session:${env().adminSecret}:${googleLoginEnabled() ? readEnv('ASA_HUB_GOOGLE_CLIENT_ID') : ''}:${readEnv('ASA_HUB_GOOGLE_CLIENT_SECRET')}:${readEnv('ASA_HUB_GOOGLE_ALLOWED_EMAILS')}:${readEnv('ASA_HUB_GOOGLE_ONLY')}`,
+  );
 }
 
 export async function createSession(ip: string): Promise<{ token: string; expiresAt: Date }> {

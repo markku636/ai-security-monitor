@@ -1,5 +1,5 @@
 import { identify } from '@/lib/auth/access';
-import { env, isOpenMode } from '@/lib/env';
+import { env, googleLoginEnabled, isOpenMode } from '@/lib/env';
 import { json, parseCookies } from '@/lib/http';
 import { LANG_COOKIE, resolveLang } from '@/lib/i18n/core';
 
@@ -11,6 +11,7 @@ export async function GET(req: Request): Promise<Response> {
     role: id.role,
     via: id.via,
     open_mode: isOpenMode(),
+    google_enabled: googleLoginEnabled(),
     public_dashboard: env().publicDashboard,
     lang: resolveLang(parseCookies(req)[LANG_COOKIE], req.headers.get('accept-language')),
   });

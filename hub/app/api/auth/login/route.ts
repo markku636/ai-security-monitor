@@ -5,6 +5,7 @@ import { openModeAllowed, sameSiteWrite } from '@/lib/auth/access';
 import { safeEqual } from '@/lib/auth/crypto';
 import { clear, count, hit } from '@/lib/auth/ratelimit';
 import { createSession, SESSION_TTL_MS, sessionCookie } from '@/lib/auth/sessions';
+import { googleLoginConfig } from '@/lib/auth/google';
 import { env, isOpenMode } from '@/lib/env';
 import { BodyTooLarge, error, isHttps, json, readJson, sourceIp } from '@/lib/http';
 
@@ -16,6 +17,8 @@ const MAX_FAILS = 5;
 
 export async function POST(req: Request): Promise<Response> {
   if (!sameSiteWrite(req)) return error(403, 'cross_site_request');
+  const google = googleLoginConfig();
+  if (google.enabled && google.only) return error(403, 'google_login_only');
   if (isOpenMode()) {
     return openModeAllowed(req.headers.get('host')) ? json({ ok: true, role: 'admin', via: 'open' }) : error(403, 'open_mode_local_only');
   }
