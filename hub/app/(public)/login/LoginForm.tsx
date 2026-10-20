@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { apiPost } from '@/lib/api-client';
 import { useT } from '@/lib/i18n/client';
 
-export function LoginForm({ keycloakEnabled, keycloakOnly, googleEnabled, googleOnly }: { keycloakEnabled: boolean; keycloakOnly: boolean; googleEnabled: boolean; googleOnly: boolean }) {
+export function LoginForm({ keycloakEnabled, keycloakOnly, googleEnabled, googleOnly, keycloakGoogle = false }: { keycloakGoogle?: boolean; keycloakEnabled: boolean; keycloakOnly: boolean; googleEnabled: boolean; googleOnly: boolean }) {
   const { t } = useT();
   const allowAdminKey = !googleOnly && !(keycloakEnabled && keycloakOnly);
   const router = useRouter();
@@ -41,7 +41,7 @@ export function LoginForm({ keycloakEnabled, keycloakOnly, googleEnabled, google
           href="/api/auth/keycloak/login"
           className="block w-full rounded-md bg-teal-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-teal-800"
         >
-          {t('使用 Keycloak 登入')}
+          {t(keycloakGoogle ? '使用 Google 登入' : '使用 Keycloak 登入')}
         </a>
       ) : null}
       {(keycloakEnabled || googleEnabled) && allowAdminKey ? (
