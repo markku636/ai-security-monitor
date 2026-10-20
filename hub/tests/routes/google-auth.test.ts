@@ -83,7 +83,7 @@ it('invalidates sessions when the Google allowlist changes', () => {
   expect(secretFingerprint()).not.toBe(original);
 });
 
-it('completes the cross-site callback before navigating with the Strict session cookie', async () => {
+it('completes the cross-site callback before navigating with the OAuth-compatible session cookie', async () => {
   vi.spyOn(googleAuth, 'discoverGoogle').mockResolvedValue({ issuer: 'https://accounts.google.com', authorization_endpoint: '', token_endpoint: '', jwks_uri: '' });
   vi.spyOn(googleAuth, 'exchangeGoogleCode').mockResolvedValue({ id_token: 'verified-in-unit-tests' });
   vi.spyOn(googleAuth, 'verifyGoogleIdToken').mockResolvedValue({ sub: 'subject', email: 'owner@example.com', email_verified: true });
@@ -95,7 +95,8 @@ it('completes the cross-site callback before navigating with the Strict session 
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await response.text()).toContain('http-equiv="refresh" content="0;url=/"');
   const cookie = response.headers.getSetCookie().find((c) => c.startsWith('asa_admin='))!;
-  expect(cookie).toContain('SameSite=Strict');
+  expect(cookie).toContain('SameSite=Lax');
+  expect(cookie).toContain('HttpOnly');
   const token = cookie.split(';')[0].slice('asa_admin='.length);
   expect(await validateSession(token)).toBe(true);
 });
