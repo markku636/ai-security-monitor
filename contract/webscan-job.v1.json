@@ -1,0 +1,107 @@
+{
+  "jobs": [
+    {
+      "id": "wsj_0123456789abcdef",
+      "kind": "scan",
+      "profile": "active_light",
+      "lease_ms": 120000,
+      "deadline": "2026-10-24T09:20:00.000Z",
+      "target": {
+        "id": "wt_0123456789abcdef",
+        "url": "https://shop.example.com/",
+        "scheme": "https",
+        "host": "shop.example.com",
+        "port": 443,
+        "path": "/",
+        "pinned_ips": [
+          "203.0.113.10"
+        ],
+        "internal": false
+      },
+      "scope": {
+        "hosts": [
+          "shop.example.com"
+        ],
+        "allowed_private_cidrs": []
+      },
+      "limits": {
+        "timeout_ms": 900000,
+        "rate_per_sec": 10,
+        "concurrency": 5,
+        "max_output_bytes": 8388608
+      },
+      "steps": [
+        {
+          "scanner": "httpx",
+          "options": {}
+        },
+        {
+          "scanner": "tlsx",
+          "options": {}
+        },
+        {
+          "scanner": "nuclei",
+          "options": {
+            "exclude_tags": [
+              "intrusive",
+              "dos",
+              "fuzz"
+            ],
+            "severities": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          }
+        },
+        {
+          "scanner": "testssl",
+          "options": {
+            "fast": false
+          }
+        }
+      ],
+      "verify": null
+    },
+    {
+      "id": "wsj_fedcba9876543210",
+      "kind": "verify",
+      "profile": "passive",
+      "lease_ms": 120000,
+      "deadline": "2026-10-24T09:05:00.000Z",
+      "target": {
+        "id": "wt_0123456789abcdef",
+        "url": "https://shop.example.com/",
+        "scheme": "https",
+        "host": "shop.example.com",
+        "port": 443,
+        "path": "/",
+        "pinned_ips": [
+          "203.0.113.10"
+        ],
+        "internal": false
+      },
+      "scope": {
+        "hosts": [
+          "shop.example.com"
+        ],
+        "allowed_private_cidrs": []
+      },
+      "limits": {
+        "timeout_ms": 60000,
+        "rate_per_sec": 2,
+        "concurrency": 1,
+        "max_output_bytes": 65536
+      },
+      "steps": [],
+      "verify": {
+        "method": "well-known",
+        "token": "asm-verify-6f1c2b9a0d4e8f7a6b5c4d3e2f1a0b9c"
+      }
+    }
+  ],
+  "poll_after_ms": 15000,
+  "server_time": "2026-10-24T09:00:00.000Z"
+}

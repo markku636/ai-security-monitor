@@ -10,6 +10,7 @@ import { requireViewer } from '@/lib/auth/require';
 import { isOpenMode } from '@/lib/env';
 import { getT } from '@/lib/i18n/server';
 import { updateAvailable } from '@/lib/update';
+import { urgentWebFindings } from '@/lib/webscan/view';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { t } = await getT();
   const admin = viewer.role === 'admin';
   // 待辦數字：嚴重＋高的未處理問題、待核准的封鎖；查不到不影響頁面
-  const [urgent, pending, enrollPending] = admin
+  const [urgent, pending, enrollPending, webUrgent] = admin
     ? await Promise.all([
         fleetSummary()
           .then((f) => f.severities.critical + f.severities.high)
@@ -30,8 +31,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         Promise.resolve()
           .then(() => pendingEnrollCount(getDb()))
           .catch(() => 0),
+        // 網站掃描找到、還沒處理的嚴重＋高
+        Promise.resolve()
+          .then(() => urgentWebFindings(getDb()))
+          .catch(() => 0),
       ])
-    : [0, 0, 0];
+    : [0, 0, 0, 0];
   const groups: NavGroup[] = [
     {
       items: [
@@ -62,6 +67,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             items: [
               { href: '/vulns', label: t('漏洞與更新'), hint: t('過期系統、有漏洞的軟體'), icon: 'bug' },
               { href: '/hardening', label: t('安全設定'), hint: t('UAC、磁碟加密、SSH 等檢查'), icon: 'settingsCheck' },
+              { href: '/web', label: t('網站掃描'), hint: t('掃自己的網站：弱點、憑證與設定問題'), icon: 'web', badge: webUrgent, badgeTone: 'red' },
             ],
           },
           {

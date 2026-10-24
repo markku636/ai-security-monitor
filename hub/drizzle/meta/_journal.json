@@ -127,6 +127,13 @@
       "when": 1792273563893,
       "tag": "0017_dns_protect",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792851400269,
+      "tag": "0018_web_scan",
+      "breakpoints": true
     }
   ]
 }

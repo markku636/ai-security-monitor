@@ -865,3 +865,159 @@ export const responseBlocks = pgTable(
   },
   (t) => [index('response_blocks_status_idx').on(t.status, t.expiresAt), index('response_blocks_agent_ip_idx').on(t.agentId, t.ip)],
 );
+
+// ---- 網站掃描（webscan）：掃自己驗證過擁有權的網站。全新表、不掛 agents（不做假主機）。 ----
+
+/**
+ * 掃描目標：一個網址（scheme＋host＋port＋path）。主動掃描前要驗證擁有權（DNS TXT／`/.well-known` 檔／meta），
+ * 或位址落在管理員設定的內網網段白名單內（verify_method＝internal-cidr）。
+ */
+export const webTargets = pgTable(
+  'web_targets',
+  {
+    id: text('id').primaryKey(),
+    url: text('url').notNull(),
+    scheme: text('scheme').notNull(),
+    host: text('host').notNull(),
+    port: integer('port').notNull(),
+    path: text('path').notNull().default('/'),
+    name: text('name').notNull().default(''),
+    verifyToken: text('verify_token').notNull(),
+    /** dns-txt／well-known／meta／internal-cidr；null＝還沒驗證。 */
+    verifyMethod: text('verify_method'),
+    verifiedAt: ts('verified_at'),
+    verifyCheckedAt: ts('verify_checked_at'),
+    verifyError: text('verify_error'),
+    /** 被動指紋（httpx）：狀態碼、標題、伺服器、技術。 */
+    fingerprint: jsonb('fingerprint').$type<Record<string, unknown>>().notNull().default({}),
+    lastScanAt: ts('last_scan_at'),
+    lastJobId: text('last_job_id'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    createdBy: text('created_by').notNull(),
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [uniqueIndex('web_targets_url_uq').on(t.url).where(sql`deleted_at is null`), index('web_targets_host_idx').on(t.host)],
+);
+
+/** 掃描端（webscan runner）：比照 dns_servers，online 在讀取時依 last_seen_at 算。 */
+export const webscanRunners = pgTable('webscan_runners', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  version: text('version').notNull().default(''),
+  hostname: text('hostname').notNull().default(''),
+  sourceIp: text('source_ip'),
+  capabilities: jsonb('capabilities').$type<{ scanner: string; version: string; templates?: string }[]>().notNull().default([]),
+  selfIps: jsonb('self_ips').$type<string[]>().notNull().default([]),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+});
+
+/**
+ * 掃描工作：pending ──runner 認領──▶ running ──results──▶ succeeded／failed
+ *            │ 24 小時沒人領 → expired       │ 租約過期沒續 → 回 pending（最多 3 次，之後 failed）
+ *            └ 管理員取消 → cancelled（running 的會在下一次心跳收到 cancel）
+ * spec＝交給 runner 的完整內容（目標、釘住的位址、範圍、限制、步驟），runner 不得更改。
+ */
+export const webscanJobs = pgTable(
+  'webscan_jobs',
+  {
+    id: text('id').primaryKey(),
+    targetId: text('target_id')
+      .notNull()
+      .references(() => webTargets.id, { onDelete: 'cascade' }),
+    /** scan／verify */
+    kind: text('kind').notNull(),
+    /** passive／active_light */
+    profile: text('profile').notNull(),
+    scanners: jsonb('scanners').$type<string[]>().notNull().default([]),
+    spec: jsonb('spec').$type<Record<string, unknown>>().notNull(),
+    status: text('status').notNull().default('pending'),
+    runnerId: text('runner_id'),
+    attempts: integer('attempts').notNull().default(0),
+    leaseExpiresAt: ts('lease_expires_at'),
+    progress: jsonb('progress').$type<Record<string, unknown>>().notNull().default({}),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    error: text('error'),
+    summary: jsonb('summary').$type<{ new: number; open: number; resolved: number }>(),
+    requestedBy: text('requested_by').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    claimedAt: ts('claimed_at'),
+    finishedAt: ts('finished_at'),
+    expiresAt: ts('expires_at').notNull(),
+  },
+  (t) => [
+    index('webscan_jobs_status_created_idx').on(t.status, t.createdAt),
+    index('webscan_jobs_target_created_idx').on(t.targetId, t.createdAt),
+    uniqueIndex('webscan_jobs_open_unique')
+      .on(t.targetId, t.kind, t.profile)
+      .where(sql`status in ('pending', 'running')`),
+  ],
+);
+
+/** 掃描器的原始輸出（保留起來，解析器改進後可以重新解析）：gzip 後 base64 存文字（pg 與 PGlite 的 bytea 型別不同）。 */
+export const webscanArtifacts = pgTable(
+  'webscan_artifacts',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => webscanJobs.id, { onDelete: 'cascade' }),
+    scanner: text('scanner').notNull(),
+    /** jsonl／json／txt */
+    format: text('format').notNull(),
+    exitCode: integer('exit_code'),
+    durationMs: integer('duration_ms'),
+    truncated: boolean('truncated').notNull().default(false),
+    /** 解壓後的位元組數。 */
+    bytes: integer('bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    contentGz: text('content_gz').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('webscan_artifacts_job_idx').on(t.jobId)],
+);
+
+/** 網站掃描找到的問題：同一個目標以 finding_id（掃描器＋規則＋位置的雜湊）去重；重掃沒再出現就 resolved。 */
+export const webFindings = pgTable(
+  'web_findings',
+  {
+    targetId: text('target_id')
+      .notNull()
+      .references(() => webTargets.id, { onDelete: 'cascade' }),
+    findingId: text('finding_id').notNull(),
+    scanner: text('scanner').notNull(),
+    rule: text('rule').notNull(),
+    severity: text('severity').notNull(),
+    title: text('title').notNull(),
+    detail: text('detail').notNull().default(''),
+    recommendation: text('recommendation').notNull().default(''),
+    /** { url, host, port, param } */
+    location: jsonb('location').$type<Record<string, unknown>>().notNull().default({}),
+    evidence: jsonb('evidence').$type<Record<string, unknown>>().notNull().default({}),
+    cve: text('cve'),
+    cwe: jsonb('cwe').$type<string[]>().notNull().default([]),
+    cvss: doublePrecision('cvss'),
+    refs: jsonb('refs').$type<string[]>().notNull().default([]),
+    tags: jsonb('tags').$type<string[]>().notNull().default([]),
+    /** open／acked／suppressed／resolved */
+    status: text('status').notNull().default('open'),
+    firstSeenAt: ts('first_seen_at').notNull(),
+    lastSeenAt: ts('last_seen_at').notNull(),
+    resolvedAt: ts('resolved_at'),
+    ackedAt: ts('acked_at'),
+    ackedBy: text('acked_by'),
+    suppressedUntil: ts('suppressed_until'),
+    suppressReason: text('suppress_reason'),
+    contentHash: text('content_hash').notNull(),
+    firstJobId: text('first_job_id').notNull(),
+    lastJobId: text('last_job_id').notNull(),
+    /** finding_id 的演算法版本（解析器改版改了 id 時用來辨認）。 */
+    fingerprintVer: integer('fingerprint_ver').notNull().default(1),
+  },
+  (t) => [
+    primaryKey({ columns: [t.targetId, t.findingId] }),
+    index('web_findings_status_sev_idx').on(t.status, t.severity),
+    index('web_findings_scanner_idx').on(t.scanner),
+    index('web_findings_cve_idx').on(t.cve),
+  ],
+);

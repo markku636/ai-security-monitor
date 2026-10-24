@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "error": null,
+  "steps": [
+    {
+      "scanner": "httpx",
+      "ok": true,
+      "exit_code": 0,
+      "duration_ms": 1530,
+      "error": null
+    },
+    {
+      "scanner": "tlsx",
+      "ok": true,
+      "exit_code": 0,
+      "duration_ms": 820,
+      "error": null
+    },
+    {
+      "scanner": "nuclei",
+      "ok": true,
+      "exit_code": 0,
+      "duration_ms": 184000,
+      "error": null
+    },
+    {
+      "scanner": "testssl",
+      "ok": false,
+      "exit_code": 245,
+      "duration_ms": 60000,
+      "error": "timeout"
+    }
+  ],
+  "verify": null
+}

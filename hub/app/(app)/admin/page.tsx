@@ -6,6 +6,7 @@ import { HistoryCleaner } from '@/components/admin/HistoryCleaner';
 import { IpIntelSettings } from '@/components/admin/IpIntelSettings';
 import { NotificationSettings } from '@/components/admin/NotificationSettings';
 import { EnrollKeyManager, TokenManager, type EnrollRow, type TokenRow } from '@/components/admin/KeyManagers';
+import { WebScanSettings } from '@/components/admin/WebScanSettings';
 import { Card } from '@/components/ui/Card';
 import { Hint } from '@/components/ui/Hint';
 import { requireAdmin } from '@/lib/auth/require';
@@ -24,10 +25,11 @@ import { responseView } from '@/lib/response/admin';
 import { listAgents } from '@/lib/queries/agents';
 import { listAudit } from '@/lib/queries/admin';
 import { strParam } from '@/lib/queries/params';
+import { webscanView } from '@/lib/webscan/view';
 
 export const dynamic = 'force-dynamic';
 
-const TABS = ['keys', 'tokens', 'intel', 'notify', 'response', 'dns', 'data', 'audit', 'export'] as const;
+const TABS = ['keys', 'tokens', 'intel', 'notify', 'response', 'dns', 'webscan', 'data', 'audit', 'export'] as const;
 type Tab = (typeof TABS)[number];
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
@@ -38,12 +40,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const raw = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'keys';
-  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), intel: t('外部情資來源'), notify: t('通知'), response: t('自動回應'), dns: t('防護 DNS'), data: t('資料清除'), audit: t('稽核紀錄'), export: t('匯出') };
+  const label: Record<Tab, string> = { keys: t('註冊金鑰'), tokens: t('API token'), intel: t('外部情資來源'), notify: t('通知'), response: t('自動回應'), dns: t('防護 DNS'), webscan: t('網站掃描'), data: t('資料清除'), audit: t('稽核紀錄'), export: t('匯出') };
   return (
     <div className="space-y-4">
       <header>
         <h1 className="text-xl font-semibold">{t('設定與金鑰')}</h1>
-        <p className="text-sm text-slate-500">{t('主機的註冊金鑰、唯讀 API token、外部情資來源、通知、自動回應、防護 DNS、資料清除、稽核紀錄與 CSV 匯出。')}</p>
+        <p className="text-sm text-slate-500">{t('主機的註冊金鑰、唯讀 API token、外部情資來源、通知、自動回應、防護 DNS、網站掃描、資料清除、稽核紀錄與 CSV 匯出。')}</p>
       </header>
       <nav className="flex flex-wrap gap-1 border-b border-slate-200 text-sm dark:border-slate-800" aria-label={t('分頁')}>
         {TABS.map((k) => (
@@ -63,6 +65,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {tab === 'notify' ? <NotifyTab /> : null}
       {tab === 'response' ? <AutoResponseSettings view={await responseView(getDb())} /> : null}
       {tab === 'dns' ? <DnsTab /> : null}
+      {tab === 'webscan' ? <WebScanSettings view={await webscanView(getDb())} /> : null}
       {tab === 'data' ? <DataTab /> : null}
       {tab === 'audit' ? <AuditTab action={strParam(sp, 'action', 64)} /> : null}
       {tab === 'export' ? <ExportTab /> : null}

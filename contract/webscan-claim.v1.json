@@ -1,0 +1,27 @@
+{
+  "version": "0.9.0",
+  "hostname": "webscan-01",
+  "capabilities": [
+    {
+      "scanner": "httpx",
+      "version": "1.7.4"
+    },
+    {
+      "scanner": "tlsx",
+      "version": "1.2.2"
+    },
+    {
+      "scanner": "nuclei",
+      "version": "3.4.10",
+      "templates": "10.3.1"
+    },
+    {
+      "scanner": "testssl",
+      "version": "3.2.2"
+    }
+  ],
+  "max_jobs": 1,
+  "self_ips": [
+    "172.20.0.5"
+  ]
+}

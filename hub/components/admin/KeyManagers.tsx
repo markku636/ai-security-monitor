@@ -4,6 +4,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { apiDelete, apiPost } from '@/lib/api-client';
+import { TOKEN_SCOPES as SCOPES } from '@/lib/auth/scopes';
 import { useT } from '@/lib/i18n/client';
 
 export interface TokenRow {
@@ -29,7 +30,6 @@ export interface EnrollRow {
   status: 'active' | 'revoked';
 }
 
-const SCOPES = ['read', 'export', 'mcp', 'dns'] as const;
 const INPUT = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900';
 const BTN = 'rounded-md bg-teal-600 px-3 py-1 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50';
 const TABLE = 'overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900';
@@ -120,7 +120,7 @@ export function TokenManager({ items }: { items: TokenRow[] }) {
             {SCOPES.map((s) => (
               <label key={s} className="inline-flex items-center gap-1">
                 <input type="checkbox" checked={scopes.includes(s)} onChange={(e) => setScopes((x) => (e.target.checked ? [...x, s] : x.filter((y) => y !== s)))} />
-                {s === 'read' ? t('讀取 API') : s === 'export' ? t('CSV 匯出') : s === 'dns' ? t('防護 DNS 伺服器') : 'MCP'}
+                {s === 'read' ? t('讀取 API') : s === 'export' ? t('CSV 匯出') : s === 'dns' ? t('防護 DNS 伺服器') : s === 'webscan' ? t('網站掃描端') : 'MCP'}
               </label>
             ))}
           </div>

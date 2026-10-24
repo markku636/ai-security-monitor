@@ -166,6 +166,10 @@ async function runSafely(): Promise<void> {
     // 同一支排程順便清超過保留期限的 AI 分析紀錄與外部情資快取
     const { pruneHistory } = await import('@/lib/history');
     await pruneHistory(getDb());
+    // 網站掃描：租約過期的工作回排隊／沒人領的過期，清超過保留天數的原始輸出
+    const { expireStaleJobs, pruneArtifacts } = await import('@/lib/webscan/jobs');
+    await expireStaleJobs(getDb());
+    await pruneArtifacts(getDb());
   } catch (err) {
     console.warn('[ai-security-monitor-hub] metrics rollup failed', err instanceof Error ? err.message : err);
   } finally {
