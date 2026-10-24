@@ -45,3 +45,13 @@ export const TESTSSL_OUT = JSON.stringify([
   { id: 'BREACH', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'MEDIUM', cve: 'CVE-2013-3587', cwe: 'CWE-310', finding: 'potentially VULNERABLE' },
   { id: 'some_new_check', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'HIGH', finding: 'bad' },
 ]);
+// testssl 真實輸出的樣子：每個加密套件一筆、加密套件順序、總評等級（應該合併／略過）
+export const WEAK_CIPHERS_OUT = JSON.stringify([
+  { id: 'cipher_order-tls1_2', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'LOW', finding: 'server -- TLS 1.2 ciphers not prioritized' },
+  { id: 'cipher_order', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'LOW', finding: 'Server does not prioritize ciphers' },
+  { id: 'cipher-tls1_2_xc013', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'LOW', finding: 'TLSv1.2   xc013   ECDHE-RSA-AES128-SHA' },
+  { id: 'cipher-tls1_2_x2f', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'LOW', finding: 'TLSv1.2   x2f     AES128-SHA' },
+  { id: 'cipher-tls1_x0a', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'MEDIUM', finding: 'TLSv1     x0a     DES-CBC3-SHA' },
+  { id: 'overall_grade', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'CRITICAL', finding: 'T' },
+  { id: 'grade_cap_reason_1', ip: 'shop.example.com/93.184.216.34', port: '443', severity: 'INFO', finding: 'Grade capped to T. Issues with the chain of trust' },
+]);

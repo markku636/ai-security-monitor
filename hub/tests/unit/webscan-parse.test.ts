@@ -5,8 +5,9 @@ import { HTTPX_TITLES, parseHttpx } from '@/lib/webscan/parse/httpx';
 import { maskSecret, parseNuclei } from '@/lib/webscan/parse/nuclei';
 import { parseTestssl, TESTSSL_TITLES } from '@/lib/webscan/parse/testssl';
 import { certCovers, parseTlsx, TLSX_TITLES } from '@/lib/webscan/parse/tlsx';
-import type { ParseContext } from '@/lib/webscan/parse/types';
-import { HTTPX_OUT, NUCLEI_OUT, TESTSSL_OUT, TLSX_OUT } from '../fixtures/webscan';
+import { dedupeAcrossScanners } from '@/lib/webscan/parse';
+import type { NormalizedFinding, ParseContext } from '@/lib/webscan/parse/types';
+import { HTTPX_OUT, NUCLEI_OUT, TESTSSL_OUT, TLSX_OUT, WEAK_CIPHERS_OUT } from '../fixtures/webscan';
 
 // 用現在時間：範例的憑證到期日也是相對於現在（3.5 天後）
 const ctx: ParseContext = { url: 'https://shop.example.com/', host: 'shop.example.com', port: 443, scheme: 'https', now: new Date() };
@@ -72,6 +73,25 @@ describe('webscan parsers', () => {
     expect(parseTestssl(pretty, ctx).findings.map((f) => f.rule)).toEqual(['testssl:TLS1_1']);
   });
 
+  it('testssl noise: one finding for all weak ciphers, one for cipher order, no overall grade', () => {
+    const r = parseTestssl(WEAK_CIPHERS_OUT, ctx);
+    expect(r.findings.map((f) => [f.rule, f.severity])).toEqual([
+      ['testssl:cipher_order', 'low'],
+      ['testssl:weak_ciphers', 'medium'],
+    ]);
+    const weak = r.findings[1]!;
+    expect(weak.evidence.count).toBe(3);
+    expect(weak.title).toBe(TESTSSL_TITLES.weak_ciphers);
+  });
+
+  it('a certificate problem tlsx already reported is not repeated from testssl', () => {
+    const f = (rule: string) => ({ rule }) as NormalizedFinding;
+    const kept = dedupeAcrossScanners([f('tls.cert_expiring'), f('testssl:cert_notAfter'), f('testssl:cert_expirationStatus'), f('tls.cert_self_signed'), f('testssl:cert_chain_of_trust'), f('testssl:BREACH')]);
+    expect(kept.map((x) => x.rule)).toEqual(['tls.cert_expiring', 'tls.cert_self_signed', 'testssl:BREACH']);
+    // tlsx 沒抓到（例如沒跑）時 testssl 的照留
+    expect(dedupeAcrossScanners([f('testssl:cert_chain_of_trust')]).map((x) => x.rule)).toEqual(['testssl:cert_chain_of_trust']);
+  });
+
   it('every hub-generated title and recommendation has an English translation', () => {
     const texts = [
       ...Object.values(HTTPX_TITLES),
@@ -80,6 +100,7 @@ describe('webscan parsers', () => {
       ...parseHttpx(HTTPX_OUT, { ...ctx, scheme: 'http' }).findings.map((f) => f.recommendation),
       ...parseTlsx(TLSX_OUT, ctx).findings.map((f) => f.recommendation),
       ...parseTlsx(JSON.stringify({ probe_status: true, expired: true, subject_an: ['other.example.net'] }), ctx).findings.map((f) => f.recommendation),
+      ...parseTestssl(WEAK_CIPHERS_OUT, ctx).findings.map((f) => f.recommendation),
     ];
     const missing = [...new Set([...texts, ...Object.values(BLOCK_REASONS), ...Object.values(ERROR_TEXTS)])].filter((zh) => zh && !en[zh]);
     expect(missing).toEqual([]);

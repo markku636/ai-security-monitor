@@ -1,7 +1,14 @@
 // testssl.sh（--jsonfile，扁平陣列）：LOW 以上算問題；WARN／FATAL 是掃描本身的狀況（記成警告）；OK／INFO 略過。
-import { clip, type NormalizedFinding, type ParseContext, type ParseOutput, type Severity } from './types';
+// 降噪：每個加密套件一筆的 cipher-* 合併成一筆「較弱的加密套件」（清單放證據）；總評等級（overall_grade、grade_cap_*）是總結、不算問題。
+import { clip, SEVERITY_RANK, type NormalizedFinding, type ParseContext, type ParseOutput, type Severity } from './types';
 
 const SEV: Record<string, Severity> = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', CRITICAL: 'critical' };
+/** 總結性的項目：不是單獨的問題。 */
+const SUMMARY_IDS = /^(overall_grade|grade_cap_.*|final_score|scanTime)$/;
+/** 每個加密套件一筆（cipher-tls1_2_xc013、cipher-ssl3_x0a…）：合併成 testssl:weak_ciphers。 */
+const PER_CIPHER = /^cipher-(ssl2|ssl3|tls1(_[0-3])?)_x[0-9a-f]+$/i;
+/** 加密套件順序（cipher_order、cipher_order-tls1_2…）：只留一筆 testssl:cipher_order。 */
+const CIPHER_ORDER = /^cipher_order(-.+)?$/;
 
 /** 常見項目的白話標題（繁中原文，顯示時翻譯）；其他項目用不翻譯的「testssl: <id>」。 */
 export const TESTSSL_TITLES: Record<string, string> = {
@@ -29,6 +36,14 @@ export const TESTSSL_TITLES: Record<string, string> = {
   cipherlist_3DES_IDEA: '伺服器提供 3DES／IDEA 加密套件',
   secure_renego: '不支援安全重新協商',
   secure_client_renego: '允許用戶端發起的重新協商',
+  weak_ciphers: '伺服器提供較弱的加密套件',
+  cipher_order: '伺服器沒有規定加密套件的優先順序',
+  cipherlist_OBSOLETED: '伺服器提供過時的加密套件（CBC）',
+  security_headers: '缺少建議的安全標頭',
+  cert_revocation: '憑證沒有提供撤銷檢查資訊（OCSP／CRL）',
+  cert_trust: '憑證不受信任',
+  cert_subjectAltName: '憑證名稱跟網址不符（SAN）',
+  cert_notAfter: '網站憑證已過期或快到期',
 };
 
 /** 沒有白話標題的項目：不翻譯的中性標題（存進資料庫的標題不能帶插值，否則顯示時查不到譯文）。 */
@@ -66,6 +81,15 @@ function toFinding(it: Item, id: string, severity: Severity, port: number, ctx: 
   };
 }
 
+/** 一筆一個加密套件的項目合併成一筆：嚴重度取最高，套件清單放證據。 */
+function weakCiphers(items: { it: Item; id: string; severity: Severity }[], ctx: ParseContext): NormalizedFinding | null {
+  if (!items.length) return null;
+  const worst = items.reduce((a, b) => (SEVERITY_RANK[b.severity] > SEVERITY_RANK[a.severity] ? b : a));
+  const ciphers = items.slice(0, 50).map((x) => `${x.id.replace(/^cipher-/, '')} ${clip(x.it.finding, 120)}`.trim());
+  const f = toFinding({ finding: ciphers.join('\n') }, 'weak_ciphers', worst.severity, Number(worst.it.port) || ctx.port, ctx);
+  return { ...f, evidence: { count: items.length, ciphers }, recommendation: '只留 TLS 1.2 以上的 AEAD 加密套件（AES-GCM、ChaCha20-Poly1305），關掉 CBC、3DES、RSA 金鑰交換。' };
+}
+
 export function parseTestssl(text: string, ctx: ParseContext): ParseOutput {
   let rows: unknown;
   try {
@@ -74,6 +98,7 @@ export function parseTestssl(text: string, ctx: ParseContext): ParseOutput {
     return { findings: [], warnings: ['testssl:bad_json'] };
   }
   const out = new Map<string, NormalizedFinding>();
+  const perCipher: { it: Item; id: string; severity: Severity }[] = [];
   const warnings: string[] = [];
   for (const it of flatten(rows).slice(0, 2000)) {
     if (!it || typeof it !== 'object') continue;
@@ -81,9 +106,15 @@ export function parseTestssl(text: string, ctx: ParseContext): ParseOutput {
     const level = String(it.severity ?? '').toUpperCase();
     if ((level === 'WARN' || level === 'FATAL') && warnings.length < 20) warnings.push(`testssl:${level.toLowerCase()}:${id}:${clip(it.finding, 120)}`);
     const severity = SEV[level];
-    if (!id || !severity) continue;
-    const f = toFinding(it, id, severity, Number(it.port) || ctx.port, ctx);
+    if (!id || !severity || SUMMARY_IDS.test(id)) continue;
+    if (PER_CIPHER.test(id)) {
+      perCipher.push({ it, id, severity });
+      continue;
+    }
+    const f = toFinding(it, CIPHER_ORDER.test(id) ? 'cipher_order' : id, severity, Number(it.port) || ctx.port, ctx);
     if (!out.has(f.key)) out.set(f.key, f);
   }
+  const merged = weakCiphers(perCipher, ctx);
+  if (merged) out.set(merged.key, merged);
   return { findings: [...out.values()], warnings };
 }

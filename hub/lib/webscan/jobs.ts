@@ -12,7 +12,7 @@ import { readEnv } from '@/lib/env';
 import { getIntelUsage } from '@/lib/intel/usage';
 import type { ArtifactMetaT, ClaimRequestT, HeartbeatBodyT, JobSpecT, JobStepT, ResultBodyT } from './contract';
 import { applyScanFindings, type ApplySummary } from './findings';
-import { parseArtifact, type NormalizedFinding, type ParseContext } from './parse';
+import { dedupeAcrossScanners, parseArtifact, type NormalizedFinding, type ParseContext } from './parse';
 import type { RunnerWho } from './runners';
 import { isProfile, isScanner, SCANNER_INFO, scannersFor, type WebscanProfile, type WebscanScanner } from './scanners';
 import { resolveAndScreen, type ScreenResult } from './scope';
@@ -266,7 +266,7 @@ async function parseJob(db: DB, j: JobRow, result: ResultBodyT, now: Date) {
     // 截斷的輸出不完整：照樣記下看到的問題，但不拿來判斷哪些已解決
     if (!a.truncated) completed.add(a.scanner);
   }
-  return { findings, warnings: warnings.slice(0, 50), completed: [...completed], fingerprint };
+  return { findings: dedupeAcrossScanners(findings), warnings: warnings.slice(0, 50), completed: [...completed], fingerprint };
 }
 
 /** runner 回報結束：掃描工作解析原始輸出、更新發現；驗證工作更新目標的擁有權。 */
