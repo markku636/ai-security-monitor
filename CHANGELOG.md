@@ -2,6 +2,10 @@
 
 ## 未發佈
 
+- 網站掃描（選用）：Hub 新增「網站掃描」頁，登錄自己的網站、用 DNS TXT／驗證檔／meta 標籤證明擁有權後，由獨立的掃描端容器（`ai-security-monitor web-scan-runner`，`compose.webscan.yml`／`compose.standalone.webscan.yml`）執行 httpx、tlsx、nuclei、testssl.sh；結果併成同一份發現清單，下次掃描自動標出已解決與重新出現的問題，原始輸出保留 30 天可下載。
+- 網站掃描的範圍在 Hub 與掃描端各強制一次：Hub 只做 DNS 解析、永不連目標；loopback、link-local、雲端 metadata、保留網段永遠禁止，內網位址要在管理員設定的網段白名單內；建立工作時把通過檢查的位址釘住，工具只能連那些位址；每個掃描器的選項是型別白名單；nuclei 關掉 interactsh 與更新檢查。
+- 新的 API token scope `webscan`（網站掃描端）與 compose 權杖 `AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN`；compose 新增 `edge` 網路，掃描端連得到 Hub、連不到 PostgreSQL。
+
 ## v0.8.5 — 2026-10-20
 
 - Ubuntu 桌面版在背景下載並驗證更新，按「立即更新」並輸入管理員密碼即可完成，不必重新到網站下載。

@@ -76,6 +76,21 @@ cd agent && ASA_UPDATE_CONTRACT=1 cargo test contract   # 重新產生 contract/
 - `POST /api/v1/dns/heartbeat`：`contract/dns-heartbeat.v1.json` `{ version, hostname, status }`（`status` 同 `dns-server --status`，≤ 32 KB），每 30 秒一次。回應 `{ ok, server_id, config_etag, blocking, server_time }`；`config_etag` 跟 dns-server 手上的不同就馬上重拉設定。
 - `POST /api/v1/dns/queries`：`contract/dns-resolver.v1.json` `{ records: [{ ts, name, registrable?, qtype, rcode, process?, count, answers[], client, source: "resolver" }] }`，一批 1–1000 列、壓縮後 ≤ 2 MB。每列是（用戶端, 網域, 類型, 結果）每分鐘的聚合；`rcode` 是 `BLOCKED` 時 `process` 是封鎖它的清單。(伺服器, `ts`, `client`, `name`, `qtype`, `rcode`) 唯一，重送覆蓋；Hub 依主機回報的 IP 把用戶端對到主機（對不到＝沒裝 agent 的裝置）；保留期限同 `AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS`。回應 `{ ok, stored, stale, mapped, server_time }`。
 
+### 網站掃描端（`web-scan-runner`）
+
+身分：webscan 權杖（網頁建立的 API token 勾「網站掃描端」，或 compose 的 `AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN`，至少 32 字元）。agent 的 client 金鑰不能當掃描端。說明見 [網站掃描](webscan.md)。
+- `POST /api/v1/webscan/jobs/claim`：`contract/webscan-claim.v1.json` `{ version, hostname, capabilities: [{ scanner, version, templates? }], max_jobs (1–4), self_ips[] }`，閒置時每 `poll_after_ms`（15 秒）一次，同時當作在線回報。回應 `contract/webscan-job.v1.json` `{ jobs: [JobSpec], poll_after_ms, server_time }`；只給 `scanners` 全部在 `capabilities` 裡的工作，釘住的位址是掃描端自己的（`self_ips`）就直接標失敗不給。JobSpec：`{ id, kind: scan|verify, profile: passive|active_light, lease_ms, deadline, target: { id, url, scheme, host, port, path, pinned_ips[], internal }, scope: { hosts[], allowed_private_cidrs[] }, limits: { timeout_ms, rate_per_sec, concurrency, max_output_bytes }, steps: [{ scanner, options }], verify: null | { method: well-known|meta, token } }`。每個掃描器的 `options` 是型別嚴格的白名單（httpx／tlsx `{}`、nuclei `{ exclude_tags, severities }`（一定含 `dos`）、testssl `{ fast }`），掃描端看到不認得的掃描器或欄位就整個工作回報 `bad_job:<原因>`、什麼都不執行。
+- `POST /api/v1/webscan/jobs/{id}/heartbeat`：`contract/webscan-heartbeat.v1.json` `{ step?, message?, progress? }`，每 `lease_ms / 3` 一次續租。回應 `{ ok, lease_expires_at, cancel }`；`cancel: true`＝管理員取消，掃描端要停掉工具並回報；工作已不屬於這台回 409 `not_claimed`。
+- `POST /api/v1/webscan/jobs/{id}/artifacts?scanner=<id>&format=<jsonl|json|txt>&exit_code=<n>&duration_ms=<n>&truncated=<0|1>`：body 是工具的原始輸出（`application/octet-stream`，可 `Content-Encoding: gzip`；壓縮後 ≤ 8 MB、解壓後 ≤ 32 MB、一個工作合計 ≤ 32 MB）。不在這個工作裡的掃描器 400 `unexpected_scanner`。
+- `POST /api/v1/webscan/jobs/{id}/results`：`contract/webscan-result.v1.json` `{ ok, error, steps: [{ scanner, ok, exit_code, duration_ms, error }], verify: null | { found, http_status, detail } }`。Hub 解析這次成功（`ok: true`）且沒被截斷的掃描器輸出：同一個目標以（掃描器＋規則＋位置）去重，這次有跑的掃描器上次有、這次沒看到的標成已解決，之前已解決又出現的重新開啟。回應 `{ ok, status, findings: { new, reopened, resolved, open } }`；驗證工作回 `{ ok, status, verified }`。
+
+| 狀態 | 意義 | 掃描端動作 |
+|---|---|---|
+| 401／403 | 權杖被拒 | 停止，提示檢查權杖 |
+| 404 | Hub 太舊、沒有網站掃描端點 | 5 分鐘後再試 |
+| 409 | 工作已不屬於這台（取消、過期、被重派） | 停掉這個工作 |
+| 429 | 太頻繁（`Retry-After`） | 照 `Retry-After` 等 |
+
 ### `POST /api/v1/agents/me/heartbeat`
 
 內容：`{ agent_id, ts, version, uptime_s?, last_scan_at?, elevated, intel_checked_at?, intel_feeds?, update?, advertising? }`。未知 agent 回 404。

@@ -128,6 +128,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 用瀏覽器打開 `http://<這台的 IP>:8088`，用剛剛填的 `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` 登入。
 只想在自己這台試試看的話，把 `compose.yml` 換成 `compose.standalone.yml`，就只開在 `http://127.0.0.1:8088`。
 要一起跑[防護 DNS](docs/dns-server.md)（擋惡意網域的 DNS 伺服器）就改用 `compose.dns.yml`（單機版 `compose.standalone.dns.yml`），`.env` 另外設 `AI_SECURITY_MONITOR_HUB_DNS_TOKEN`。
+要[掃自己的網站](docs/webscan.md)就改用 `compose.webscan.yml`（單機版 `compose.standalone.webscan.yml`），`.env` 另外設 `AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN`。
 
 **第二步：把電腦加進來**
 
@@ -360,6 +361,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 - **當機與資安事件**：藍屏是什麼原因、有沒有人一直在試你的密碼。
 - **AI 幫你解讀**：用你自己的 Claude Code 或 Codex，一鍵請 AI 用白話告訴你「要不要擔心、該先做什麼」。
 - **公司版 Hub**：所有電腦集中看、出事發通知、自動封鎖攻擊來源（預設關）、一鍵產生資安報告（可存 PDF），也能對照 MITRE ATT&CK 和 ISO 27001、NIST 等法規。
+- **掃自己的網站**：先證明網站是你的，再用 nuclei、testssl.sh 等開源掃描器找漏洞、憑證過期與設定問題，下次掃描自動比對修好了沒（選用，見 [網站掃描](docs/webscan.md)）。
 - **Windows、Mac、Linux 都能用**：桌面版雙擊安裝；伺服器（含 Windows Server、Server Core）用命令列版。
 
 用了哪些名單、怎麼判定、效能數字等細節，見 [技術說明](docs/technical.md#功能細節)。
@@ -378,6 +380,7 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | 命令列版 | Windows 10／11、Windows Server 2016／2019／2022／2025（含 Server Core），x64 或 ARM64；macOS 11 以上；Linux x64／ARM64（靜態連結，不挑發行版） |
 | Security Hub | Docker 24 以上（含 Compose v2），amd64 或 arm64 |
 | 防護 DNS（選用） | 命令列版能跑的平台都可以；或 Docker 映像 `ghcr.io/markku636/ai-security-monitor-dns`（amd64／arm64） |
+| 網站掃描端（選用） | Docker 映像 `ghcr.io/markku636/ai-security-monitor-webscan`（amd64／arm64，內含 httpx、tlsx、nuclei、testssl.sh）；建議 1 GB 記憶體 |
 
 **桌面版：Windows**：見[情境 A](#情境-a我只想看自己的電腦windows)。裝過舊的「AI Security Agent」（0.1.x）要先到「設定 → 應用程式」解除安裝，新版不會覆蓋它。
 裝好後視窗會出現「總覽」，右下角系統匣有 AI Security Monitor 圖示。
@@ -439,7 +442,7 @@ curl -fsSL https://github.com/markku636/ai-security-monitor/releases/latest/down
 
 ## 文件
 
-[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [流量統計與效能](docs/metrics.md) · [DNS 防禦](docs/dns.md) · [防護 DNS 伺服器](docs/dns-server.md) · [事件與當機](docs/events.md) ·
+[連線判定與威脅情資](docs/intel.md) · [防火牆與封鎖](docs/firewall.md) · [安裝與更新](docs/install.md) · [自動尋找 Hub、免金鑰加入](docs/enrollment.md) · [開機自動啟動](docs/service.md) · [桌面版](docs/desktop.md) · [Docker](docs/docker.md) · [MCP 與 AI](docs/mcp.md) · [流量](docs/traffic.md) · [流量統計與效能](docs/metrics.md) · [DNS 防禦](docs/dns.md) · [防護 DNS 伺服器](docs/dns-server.md) · [網站掃描](docs/webscan.md) · [事件與當機](docs/events.md) ·
 [漏洞與更新](docs/vuln.md) · [系統硬化](docs/hardening.md) · [Agent ↔ Hub 契約](docs/hub-contract.md) · [變更紀錄](CHANGELOG.md)
 
 ## 資料來源與授權

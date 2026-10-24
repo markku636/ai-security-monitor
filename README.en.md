@@ -128,6 +128,7 @@ docker compose -f docker/compose.yml --env-file .env up -d
 Open `http://<this machine's IP>:8088` in a browser and sign in with the `AI_SECURITY_MONITOR_HUB_ADMIN_SECRET` you just set.
 Just trying it on your own machine? Use `compose.standalone.yml` instead of `compose.yml`; it only listens on `http://127.0.0.1:8088`.
 To run [protective DNS](docs/dns-server.en.md) (a DNS server that blocks malicious domains) as well, use `compose.dns.yml` (standalone: `compose.standalone.dns.yml`) and also set `AI_SECURITY_MONITOR_HUB_DNS_TOKEN` in `.env`.
+To [scan your own websites](docs/webscan.en.md), use `compose.webscan.yml` (standalone: `compose.standalone.webscan.yml`) and also set `AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN` in `.env`.
 
 **Step 2: add computers**
 
@@ -360,6 +361,7 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 - **Crashes and security events**: why the blue screen happened, and whether someone keeps guessing your password.
 - **AI explains it**: with your own Claude Code or Codex, one click asks the AI to tell you in plain words whether to worry and what to do first.
 - **The Hub for offices**: every computer in one place, alerts, automatic blocking of attackers (off by default), one-click security reports (save as PDF), plus MITRE ATT&CK and ISO 27001 / NIST mappings.
+- **Scans your own websites**: prove a site is yours, then open-source scanners such as nuclei and testssl.sh look for vulnerabilities, expired certificates and misconfigurations, and the next scan shows what got fixed (optional, see [Website scanning](docs/webscan.en.md)).
 - **Windows, Mac and Linux**: the desktop app installs with a double-click; servers (including Windows Server and Server Core) use the command-line version.
 
 Which lists it uses, how verdicts work and performance figures: see [technical details](docs/technical.en.md#feature-details).
@@ -378,6 +380,7 @@ Full steps for every platform. If you just want to get going, [Get started in 5 
 | Command line | Windows 10 / 11, Windows Server 2016 / 2019 / 2022 / 2025 (including Server Core), x64 or ARM64; macOS 11+; Linux x64 / ARM64 (statically linked, any distribution) |
 | Security Hub | Docker 24+ (with Compose v2), amd64 or arm64 |
 | Protective DNS (optional) | anywhere the command-line version runs, or the Docker image `ghcr.io/markku636/ai-security-monitor-dns` (amd64/arm64) |
+| Website scanner (optional) | the Docker image `ghcr.io/markku636/ai-security-monitor-webscan` (amd64/arm64, includes httpx, tlsx, nuclei, testssl.sh); 1 GB of memory recommended |
 
 **Desktop app: Windows**: see [scenario A](#scenario-a-i-just-want-to-check-my-own-computer-windows). If you had the old "AI Security Agent" (0.1.x), uninstall it first in Settings → Apps; the new version does not replace it.
 Once installed the window opens on the overview and the AI Security Monitor icon sits in the system tray.
@@ -439,7 +442,7 @@ How it works (architecture diagram, reporting intervals, signing and host identi
 
 ## Docs
 
-[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Traffic statistics & performance](docs/metrics.en.md) · [DNS defense](docs/dns.en.md) · [Protective DNS server](docs/dns-server.en.md) · [Events & crashes](docs/events.en.md) ·
+[Verdicts & threat intel](docs/intel.en.md) · [Firewall & blocking](docs/firewall.en.md) · [Install & update](docs/install.en.md) · [Automatic Hub discovery & keyless enrollment](docs/enrollment.en.md) · [Start at boot](docs/service.en.md) · [Desktop app](docs/desktop.en.md) · [Docker](docs/docker.en.md) · [MCP & AI](docs/mcp.en.md) · [Traffic](docs/traffic.en.md) · [Traffic statistics & performance](docs/metrics.en.md) · [DNS defense](docs/dns.en.md) · [Protective DNS server](docs/dns-server.en.md) · [Website scanning](docs/webscan.en.md) · [Events & crashes](docs/events.en.md) ·
 [Vulnerabilities](docs/vuln.en.md) · [Hardening](docs/hardening.en.md) · [Agent ↔ Hub contract](docs/hub-contract.en.md) · [Changelog](CHANGELOG.md)
 
 ## Data sources and licenses

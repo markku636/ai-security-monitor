@@ -37,3 +37,22 @@ Optional rule sets the user may add (not bundled): SigmaHQ (DRL 1.1), Neo23x0 si
 Hub "Attack techniques & compliance": technique IDs and English names from [MITRE ATT&CK®](https://attack.mitre.org/) (© The MITRE Corporation, used under the [ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/); ATT&CK is a registered trademark of The MITRE Corporation). The rule → technique / control mapping, Chinese names and summaries are our own; compliance controls are referenced by number with our own short titles only (no standard text is reproduced).
 
 Bundled code in the Hub: country flag SVGs from [`country-flag-icons`](https://gitlab.com/catamphetamine/country-flag-icons) (MIT, © 2020 @catamphetamine).
+
+## Website scanner image (`ai-security-monitor-webscan`)
+
+The optional webscan image **bundles** the following programs **unmodified**, each run as a separate process by `ai-security-monitor web-scan-runner`
+(the runner only passes command-line arguments and reads their output; no code is linked). Exact versions and SHA-256 checksums are pinned in
+`docker/Dockerfile.webscan`; every program's full licence text ships in the image under `/licenses/<tool>/`. Source code for the GPL program is
+available from its upstream repository at the pinned tag (offer valid for three years from the image release).
+
+| Program | Used for | Licence | Source |
+|---|---|---|---|
+| httpx (ProjectDiscovery) | HTTP probe, technology fingerprint | MIT | https://github.com/projectdiscovery/httpx |
+| tlsx (ProjectDiscovery) | TLS certificate checks | MIT | https://github.com/projectdiscovery/tlsx |
+| nuclei (ProjectDiscovery) | template-based vulnerability checks | MIT | https://github.com/projectdiscovery/nuclei |
+| nuclei-templates (ProjectDiscovery) | detection templates, baked into the image, not auto-updated | MIT | https://github.com/projectdiscovery/nuclei-templates |
+| testssl.sh | TLS / SSL configuration and vulnerability checks | GPL-2.0-only | https://github.com/testssl/testssl.sh |
+
+Not integrated on purpose: Nmap (NPSL treats software that runs Nmap and parses its output as a derivative work) and sqlmap (GPL with similar
+"derivative work" wording). Tools whose terms restrict commercial use (for example WPScan) will only run when the Hub's threat-intel usage is set to
+non-commercial.
