@@ -32,6 +32,8 @@ pub mod update_cmd;
 pub mod upload_cmd;
 pub mod version_cmd;
 pub mod vuln_cmd;
+#[cfg(feature = "web-scan-runner")]
+pub mod web_scan_runner_cmd;
 
 use clap::{CommandFactory, FromArgMatches};
 

@@ -296,4 +296,53 @@ mod tests {
         };
         check("enroll-request.v1.json", serde_json::to_value(p).unwrap());
     }
+
+    /// 網站掃描 runner 送給 Hub 的認領、心跳、結果（`POST /api/v1/webscan/jobs/…`）。
+    #[cfg(feature = "web-scan-runner")]
+    #[test]
+    fn contract_webscan_v1() {
+        check(
+            "webscan-claim.v1.json",
+            serde_json::to_value(crate::webscan::sample_claim()).unwrap(),
+        );
+        check(
+            "webscan-heartbeat.v1.json",
+            serde_json::to_value(crate::webscan::sample_heartbeat()).unwrap(),
+        );
+        check(
+            "webscan-result.v1.json",
+            serde_json::to_value(crate::webscan::sample_result()).unwrap(),
+        );
+    }
+
+    /// 工作內容（`webscan-job.v1.json`）由 Hub 產生，這裡只驗 runner 讀得懂、結構檢查會過。
+    /// 範例的釘選位址是文件用網段（203.0.113.10），runner 的範圍檢查本來就會擋（`blocked_target:reserved`）；
+    /// 換成公網位址後兩個工作都要通過完整檢查。
+    #[cfg(feature = "web-scan-runner")]
+    #[test]
+    fn contract_webscan_job_v1_parses() {
+        use crate::webscan::job;
+        let text = std::fs::read_to_string(contract_dir().join("webscan-job.v1.json")).unwrap();
+        let resp: crate::webscan::ClaimResponse = serde_json::from_str(&text).unwrap();
+        assert_eq!(resp.jobs.len(), 2);
+        assert_eq!(resp.poll_after_ms, Some(15_000));
+        assert!(resp.server_time.is_some());
+        let kinds: Vec<job::JobKind> = resp
+            .jobs
+            .iter()
+            .map(|j| job::decode(j.clone()).expect("structure").raw.kind)
+            .collect();
+        assert_eq!(kinds, vec![job::JobKind::Scan, job::JobKind::Verify]);
+        for j in &resp.jobs {
+            assert!(job::job_id(j).is_some());
+            assert_eq!(
+                job::parse(j.clone(), &[]).unwrap_err(),
+                job::Rejection::Blocked(crate::webscan::scope::Blocked::Reserved)
+            );
+            let mut public = j.clone();
+            public["target"]["pinned_ips"] = json!(["8.8.8.8"]);
+            let parsed = job::parse(public, &[]).expect("passes with a public pinned ip");
+            assert_eq!(parsed.target.url(), "https://shop.example.com/");
+        }
+    }
 }

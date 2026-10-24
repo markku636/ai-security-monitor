@@ -17,7 +17,7 @@ name = "ai-security-monitor"
 path = "src/bin/ai-security-monitor.rs"
 
 [features]
-default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain", "dns-server", "sigma"]
+default = ["intel", "firewall", "vuln", "hardening", "traffic", "events", "keychain", "dns-server", "web-scan-runner", "sigma"]
 intel = []
 firewall = []
 vuln = []
@@ -33,6 +33,8 @@ yara = ["dep:yara-x"]
 sigma = ["dep:sigma-rust"]
 # 防護 DNS 伺服器（ai-security-monitor dns-server）；桌面版不帶。
 dns-server = ["dep:moka", "dep:arc-swap"]
+# 網站弱點掃描 runner（ai-security-monitor web-scan-runner，Docker sidecar）；釘選解析器用 dnsd::wire，所以依賴 dns-server。桌面版不帶。
+web-scan-runner = ["dns-server"]
 
 [dependencies]
 clap = { version = "4.6", features = ["derive", "env"] }

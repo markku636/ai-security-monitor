@@ -47,6 +47,8 @@ pub async fn dispatch(cli: Cli) -> AppResult<()> {
         Command::Dns(a) => super::dns_cmd::run(&env, a).await,
         #[cfg(feature = "dns-server")]
         Command::DnsServer(a) => super::dns_server_cmd::run(&env, a).await,
+        #[cfg(feature = "web-scan-runner")]
+        Command::WebScanRunner(a) => super::web_scan_runner_cmd::run(&env, a).await,
         Command::Fim(a) => super::fim_cmd::run(&env, a).await,
         Command::Events(a) => super::events_cmd::run(&env, a).await,
         Command::Vuln(a) => super::vuln_cmd::run(&env, a).await,

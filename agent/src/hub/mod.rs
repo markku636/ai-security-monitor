@@ -10,6 +10,8 @@ pub mod enroll;
 pub mod identity;
 pub mod outbox;
 pub mod watch;
+#[cfg(feature = "web-scan-runner")]
+pub mod webscan;
 
 use std::io::Write;
 use std::time::Duration;

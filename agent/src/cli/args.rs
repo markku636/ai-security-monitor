@@ -120,6 +120,9 @@ pub enum Command {
     /// 防護 DNS 伺服器（選用）：給區網用的 DNS，封鎖情資列名的網域、上游走加密 DNS、有快取
     #[cfg(feature = "dns-server")]
     DnsServer(DnsServerArgs),
+    /// 網站弱點掃描 runner（選用，Docker sidecar）：向 Hub 認領掃描工作，用 httpx、tlsx、nuclei、testssl.sh 掃已驗證擁有權的網站並回傳結果
+    #[cfg(feature = "web-scan-runner")]
+    WebScanRunner(WebScanRunnerArgs),
     /// 檔案完整性與開機自啟：看哪些重要檔案或開機自動執行項目被改過、接受變更、重建基準
     Fim(FimArgs),
     /// 事件與當機原因：藍屏、非預期關機、程式當掉、資安事件（Windows 事件、Linux journal、macOS 當機報告）
@@ -486,6 +489,48 @@ pub struct DnsServerArgs {
     /// 顯示防護 DNS 的狀態（查詢量、快取、封鎖、上游延遲）後結束
     #[arg(long)]
     pub status: bool,
+}
+
+#[cfg(feature = "web-scan-runner")]
+#[derive(Args, Debug, Clone)]
+pub struct WebScanRunnerArgs {
+    /// Security Hub 網址（例 https://hub.example:8088）
+    #[arg(long, value_name = "URL", env = "AI_SECURITY_MONITOR_WEBSCAN_HUB_URL")]
+    pub hub: Option<String>,
+    /// 連 Hub 用的網站掃描權杖（Hub 的 API token 勾「網站掃描」，或 compose 的 AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN）
+    #[arg(
+        long,
+        value_name = "TOKEN",
+        env = "AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN",
+        hide_env_values = true
+    )]
+    pub hub_token: Option<String>,
+    /// 允許用 http 連公網上的 Hub
+    #[arg(long)]
+    pub insecure_http: bool,
+    /// 同時最多跑幾個掃描工作（1–4）
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=4))]
+    pub max_jobs: u8,
+    /// 掃描工具所在的資料夾（省略＝從 PATH 找）
+    #[arg(long, value_name = "DIR", env = "AI_SECURITY_MONITOR_WEBSCAN_TOOLS")]
+    pub tools_dir: Option<PathBuf>,
+    /// nuclei 模板資料夾（不會自動下載或更新）
+    #[arg(
+        long,
+        value_name = "DIR",
+        env = "AI_SECURITY_MONITOR_WEBSCAN_NUCLEI_TEMPLATES",
+        default_value = crate::webscan::DEFAULT_NUCLEI_TEMPLATES
+    )]
+    pub nuclei_templates: PathBuf,
+    /// 每個工作的暫存資料夾放在哪（預設設定目錄下的 webscan-work；工作結束就刪掉）
+    #[arg(long, value_name = "DIR", env = "AI_SECURITY_MONITOR_WEBSCAN_WORK_DIR")]
+    pub work_dir: Option<PathBuf>,
+    /// 只認領一次、做完就結束
+    #[arg(long)]
+    pub once: bool,
+    /// 列出偵測到的掃描工具與版本後結束（至少有一個工具才回 0）
+    #[arg(long)]
+    pub healthcheck: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

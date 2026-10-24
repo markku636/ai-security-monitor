@@ -38,6 +38,8 @@ pub mod traffic;
 pub mod update;
 pub mod util;
 pub mod vuln;
+#[cfg(feature = "web-scan-runner")]
+pub mod webscan;
 
 pub mod cli;
 
