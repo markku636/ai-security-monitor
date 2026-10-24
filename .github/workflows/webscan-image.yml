@@ -1,0 +1,97 @@
+name: webscan-image
+
+# 網站弱點掃描 runner 映像跟著 main 建：跟 hub-image 一樣推 :<sha>，自架 Hub（Helm）可以不等發版就讓 Hub 與掃描端對上同一個 commit。
+# 不推 :latest——compose 預設拉 :latest，那個 tag 留給 release.yml（發版才換），compose 使用者不會拉到未發佈的掃描端。
+# 執行檔與 release.yml 同一套：Linux musl 靜態檔（x64＋arm64），映像內容見 docker/Dockerfile.webscan。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - agent/**
+      - docker/Dockerfile.webscan
+      - .github/workflows/webscan-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WEBSCAN_IMAGE: ghcr.io/markku636/ai-security-monitor-webscan
+
+jobs:
+  agent:
+    name: agent (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, arch: amd64 }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, arch: arm64 }
+    defaults:
+      run:
+        shell: bash
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: agent
+          key: webscan-${{ matrix.target }}
+      - name: musl toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Stage binary
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist/webscan/${{ matrix.arch }}
+          cp target/${{ matrix.target }}/release/ai-security-monitor ../dist/webscan/${{ matrix.arch }}/
+          ../dist/webscan/${{ matrix.arch }}/ai-security-monitor web-scan-runner --help > /dev/null
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webscan-${{ matrix.arch }}
+          path: dist/webscan/${{ matrix.arch }}/ai-security-monitor
+          if-no-files-found: error
+
+  image:
+    needs: agent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: webscan-*
+          path: artifacts
+      - name: Stage binaries
+        run: |
+          set -euo pipefail
+          for a in amd64 arm64; do
+            mkdir -p dist/webscan/$a
+            cp artifacts/webscan-$a/ai-security-monitor dist/webscan/$a/ai-security-monitor
+          done
+          chmod +x dist/webscan/*/ai-security-monitor
+          ls -l dist/webscan/*
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push web scan runner
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.webscan
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.WEBSCAN_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=webscan
+          cache-to: type=gha,scope=webscan,mode=max
