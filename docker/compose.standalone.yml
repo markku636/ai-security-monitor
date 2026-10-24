@@ -1,5 +1,6 @@
 # 單機版：Hub＋PostgreSQL 預設只給這台電腦用（只綁 127.0.0.1），本機的 ai-security-monitor 回報到 http://127.0.0.1:8088。
-# 不含防護 DNS；要一起跑防護 DNS 改用 compose.standalone.dns.yml（同一個專案、同一份資料）。
+# 不含防護 DNS；要一起跑防護 DNS 改用 compose.standalone.dns.yml、網站弱點掃描改用 compose.standalone.webscan.yml（同一個專案、同一份資料）。
+# 網路分兩段：postgres 只在 default；hub 同時在 default 與 edge。edge 給對外連線的 sidecar（webscan runner）用，連不到資料庫。
 # 要讓辦公室其他電腦也連得到：.env 加 AI_SECURITY_MONITOR_HUB_BIND=0.0.0.0 與 AI_SECURITY_MONITOR_HUB_PUBLIC_URL=http://<這台的區網 IP>:8088。
 #   cp .env.example .env   # 填好 AI_SECURITY_MONITOR_HUB_ADMIN_SECRET、AI_SECURITY_MONITOR_HUB_DB_PASSWORD
 #   docker compose -f docker/compose.standalone.yml --env-file .env up -d
@@ -19,6 +20,9 @@ services:
       POSTGRES_PASSWORD: ${AI_SECURITY_MONITOR_HUB_DB_PASSWORD:-${ASA_HUB_DB_PASSWORD:-}}
     volumes:
       - pgdata:/var/lib/postgresql
+    # 只在 default：edge 上的 sidecar 連不到資料庫
+    networks:
+      - default
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U asa_hub -d asa_hub"]
       interval: 5s
@@ -34,6 +38,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - edge
     environment:
       AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:${AI_SECURITY_MONITOR_HUB_DB_PASSWORD:-${ASA_HUB_DB_PASSWORD:-}}@postgres:5432/asa_hub
       AI_SECURITY_MONITOR_HUB_ADMIN_SECRET: ${AI_SECURITY_MONITOR_HUB_ADMIN_SECRET:-${ASA_HUB_ADMIN_SECRET:-}}
@@ -72,6 +79,7 @@ services:
       AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS: ${AI_SECURITY_MONITOR_HUB_DNS_RAW_DAYS:-}
       AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS: ${AI_SECURITY_MONITOR_HUB_DNS_HOURLY_DAYS:-}
       AI_SECURITY_MONITOR_HUB_DNS_TOKEN: ${AI_SECURITY_MONITOR_HUB_DNS_TOKEN:-}
+      AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN: ${AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN:-}
       AI_SECURITY_MONITOR_HUB_AI_RETENTION_DAYS: ${AI_SECURITY_MONITOR_HUB_AI_RETENTION_DAYS:-}
       AI_SECURITY_MONITOR_HUB_IPINTEL_CACHE_DAYS: ${AI_SECURITY_MONITOR_HUB_IPINTEL_CACHE_DAYS:-}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -82,6 +90,9 @@ services:
       - "${AI_SECURITY_MONITOR_HUB_BIND:-${ASA_HUB_BIND:-127.0.0.1}}:${AI_SECURITY_MONITOR_HUB_HOST_PORT:-${ASA_HUB_HOST_PORT:-8088}}:3000"
     volumes:
       - hubdata:/data
+
+networks:
+  edge: {}
 
 volumes:
   pgdata: {}

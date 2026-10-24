@@ -1,0 +1,116 @@
+# syntax=docker/dockerfile:1.7
+# 網站弱點掃描 runner 映像（ghcr.io/markku636/ai-security-monitor-webscan）：ai-security-monitor 的 web-scan-runner 子命令
+# ＋httpx、tlsx、nuclei（模板烘焙進映像，執行時不更新）、testssl.sh；alpine，amd64／arm64，以 nobody（65534）執行。
+# 建置環境是 repo 根目錄；執行檔和防護 DNS 映像是同一支 musl 靜態檔，先放到 dist/webscan/<amd64|arm64>/ai-security-monitor：
+#   cargo build --release --target x86_64-unknown-linux-musl --manifest-path agent/Cargo.toml
+#   mkdir -p dist/webscan/amd64 && cp agent/target/x86_64-unknown-linux-musl/release/ai-security-monitor dist/webscan/amd64/
+#   docker build -f docker/Dockerfile.webscan -t ai-security-monitor-webscan .
+# 第三方工具一律釘版本＋寫死 sha256（下載內容不符就建置失敗），只用發佈滿 14 天的穩定版。升版時兩個來源都要對得上：
+#   ProjectDiscovery：release 的 <tool>_<版本>_checksums.txt 與 GitHub 資產 digest（gh api repos/projectdiscovery/<tool>/releases/tags/v<版本>）
+#   nuclei-templates：release 的 nuclei-templates-<版本>_checksums.txt 列的 tag tarball sha256
+#   testssl.sh：tag 有作者 GPG 簽章（GitHub 驗證），tarball sha256 與 Homebrew formula 核對
+# nuclei 要 ≥ 3.3.2（CVE-2024-43405 模板簽章旁路）。執行時根目錄唯讀（compose read_only）：工作目錄 /work、暫存與工具設定（HOME）
+# 都在 tmpfs（/work、/tmp）。各工具授權全文在 /licenses/<工具>/，來源與 sha256 在 /licenses/SOURCES.txt。
+
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS fetch
+ARG TARGETARCH
+# httpx 1.12.0（2026-09-08）
+ARG HTTPX_VERSION=1.12.0
+ARG HTTPX_SHA256_AMD64=9d8439e8b6c9aa7d1e2314817a392e00d5178da3af5652f7475f88868f418f76
+ARG HTTPX_SHA256_ARM64=fd7b123c1dfbc3d69f19f524e4eebcd6ec06b9a6cbd56813c76f11645197331e
+# tlsx 1.4.0（2026-09-07）
+ARG TLSX_VERSION=1.4.0
+ARG TLSX_SHA256_AMD64=05628cec246e292e2f9afc6e7bc5de95aaa0fbe78fd556d5ad220b9f4702d364
+ARG TLSX_SHA256_ARM64=b757125d94c7d0e1f1f109534f0ed88d2a4b1c3856e1fa35efc1ef9e36781b0e
+# nuclei 3.11.1（2026-08-08）
+ARG NUCLEI_VERSION=3.11.1
+ARG NUCLEI_SHA256_AMD64=ea63d4ae232808cd7c6bc00d0142428e231fab59dae01042246097d195835ab6
+ARG NUCLEI_SHA256_ARM64=8044e3d9768ba0a744b2872c1a87e813006f013da97ca9f50f7661a4203bec07
+# nuclei-templates v10.5.0（2026-10-05）
+ARG NUCLEI_TEMPLATES_VERSION=10.5.0
+ARG NUCLEI_TEMPLATES_SHA256=80fbabceca095fac40afecc7f023748df22b9576b9ff10a4422bd2fbf81f9a41
+# testssl.sh v3.2.4（2026-07-12）
+ARG TESTSSL_VERSION=3.2.4
+ARG TESTSSL_SHA256=98528f8a0ac07f1e226efaa8ead438247df8efcb8fee4e056a937ab82a305490
+RUN apk add --no-cache curl unzip
+WORKDIR /fetch
+RUN <<'EOF'
+set -eu
+case "$TARGETARCH" in
+  amd64) httpx_sum=$HTTPX_SHA256_AMD64 tlsx_sum=$TLSX_SHA256_AMD64 nuclei_sum=$NUCLEI_SHA256_AMD64 ;;
+  arm64) httpx_sum=$HTTPX_SHA256_ARM64 tlsx_sum=$TLSX_SHA256_ARM64 nuclei_sum=$NUCLEI_SHA256_ARM64 ;;
+  *) echo "unsupported TARGETARCH=$TARGETARCH (amd64 and arm64 only)" >&2; exit 1 ;;
+esac
+case "$NUCLEI_VERSION" in
+  [0-2].*|3.[0-2].*|3.3.[01]) echo "nuclei $NUCLEI_VERSION < 3.3.2 (CVE-2024-43405 template signature bypass)" >&2; exit 1 ;;
+esac
+# 下載後先比對 sha256 才解開
+get() {
+  curl -fsSL --proto '=https' --proto-redir '=https' --retry 3 -o "$1" "$2"
+  echo "$3  $1" | sha256sum -c -
+  echo "$4 $2 sha256:$3" >> out/licenses/SOURCES.txt
+}
+mkdir -p out/bin out/licenses
+for spec in "httpx $HTTPX_VERSION $httpx_sum" "tlsx $TLSX_VERSION $tlsx_sum" "nuclei $NUCLEI_VERSION $nuclei_sum"; do
+  set -- $spec
+  get "$1.zip" "https://github.com/projectdiscovery/$1/releases/download/v$2/$1_$2_linux_$TARGETARCH.zip" "$3" "$1 $2 MIT"
+  unzip -q "$1.zip" -d "x-$1"
+  install -m 0755 "x-$1/$1" "out/bin/$1"
+  mkdir -p "out/licenses/$1"
+  cp "x-$1"/LICENSE* "out/licenses/$1/"
+done
+get templates.tar.gz "https://github.com/projectdiscovery/nuclei-templates/archive/refs/tags/v$NUCLEI_TEMPLATES_VERSION.tar.gz" \
+  "$NUCLEI_TEMPLATES_SHA256" "nuclei-templates $NUCLEI_TEMPLATES_VERSION MIT"
+mkdir -p out/nuclei-templates out/licenses/nuclei-templates
+tar -xzf templates.tar.gz -C out/nuclei-templates --strip-components=1 --no-same-owner
+# runner 讀這個檔回報模板版本（runtime 不更新模板，版本就是建置時這個）
+printf '%s\n' "$NUCLEI_TEMPLATES_VERSION" > out/nuclei-templates/.asm-templates-version
+cp out/nuclei-templates/LICENSE.md out/licenses/nuclei-templates/
+get testssl.tar.gz "https://github.com/testssl/testssl.sh/archive/refs/tags/v$TESTSSL_VERSION.tar.gz" \
+  "$TESTSSL_SHA256" "testssl.sh $TESTSSL_VERSION GPL-2.0-only"
+mkdir -p x-testssl out/testssl out/licenses/testssl.sh
+tar -xzf testssl.tar.gz -C x-testssl --strip-components=1 --no-same-owner
+# 未修改的 testssl.sh 本體＋etc/（cipher 對照、CA 清單）；不帶 bin/ 裡預先編好的 OpenSSL 1.0.2，用 alpine 的 openssl（amd64／arm64 行為一致）
+cp -R x-testssl/testssl.sh x-testssl/etc out/testssl/
+cp x-testssl/LICENSE out/licenses/testssl.sh/
+chmod -R go-w out
+EOF
+
+FROM alpine:3.22
+ARG TARGETARCH
+# testssl.sh 需要 bash、GNU coreutils（timeout --preserve-status）、procps（ps）、openssl、drill（CAA 等 DNS 查詢）；
+# hexdump／xxd 用 busybox 內建的（testssl 官方映像也是）。
+# /work 和 /tmp 一樣是 1777：compose 的 tmpfs 會沿用映像裡這個目錄的權限、但擁有者是 root，nobody 才寫得進去。
+RUN apk add --no-cache bash ca-certificates coreutils drill openssl procps-ng \
+ && mkdir -m 1777 /work \
+ && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh
+COPY --from=fetch /fetch/out/bin/ /usr/local/bin/
+COPY --from=fetch /fetch/out/nuclei-templates /opt/nuclei-templates
+COPY --from=fetch /fetch/out/testssl /opt/testssl
+COPY --from=fetch /fetch/out/licenses /licenses
+COPY LICENSE /licenses/ai-security-monitor/LICENSE
+# 版本號放在工具層之後：升版只重建下面幾層
+ARG ASA_VERSION=0.8.5
+LABEL org.opencontainers.image.title="AI Security Monitor web scan runner" \
+      org.opencontainers.image.description="Website vulnerability scan runner for the Security Hub: httpx, tlsx, nuclei (templates baked in) and testssl.sh against owner-verified targets" \
+      org.opencontainers.image.source="https://github.com/markku636/ai-security-monitor" \
+      org.opencontainers.image.version="${ASA_VERSION}" \
+      org.opencontainers.image.licenses="MIT AND GPL-2.0-only"
+COPY --chmod=0755 dist/webscan/${TARGETARCH}/ai-security-monitor /usr/local/bin/ai-security-monitor
+# NUCLEI_TEMPLATES_DIR：nuclei 預設就用烘焙的模板（runner 仍要帶 -duc，否則 nuclei 會試著更新唯讀的模板目錄）。
+# GOMEMLIMIT：Go 工具的軟性記憶體上限。nuclei 載入 http／ssl 約一萬個模板，沒設時匿名記憶體峰值約 780 MB（compose 的 mem_limit 是 1g），
+# 設 640MiB 後約 630 MB、耗時與結果相同；給更多記憶體時可用 -e GOMEMLIMIT=… 一起調高。
+ENV AI_SECURITY_MONITOR_WEBSCAN_NUCLEI_TEMPLATES=/opt/nuclei-templates \
+    AI_SECURITY_MONITOR_WEBSCAN_WORK_DIR=/work \
+    AI_SECURITY_MONITOR_SECRETS_BACKEND=file \
+    AI_SECURITY_MONITOR_CONFIG_DIR=/tmp/asm \
+    NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates \
+    TESTSSL_INSTALL_DIR=/opt/testssl \
+    GOMEMLIMIT=640MiB \
+    HOME=/tmp \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+USER 65534:65534
+WORKDIR /work
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/usr/local/bin/ai-security-monitor", "web-scan-runner", "--healthcheck"]
+ENTRYPOINT ["/usr/local/bin/ai-security-monitor", "web-scan-runner"]

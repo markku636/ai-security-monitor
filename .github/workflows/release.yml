@@ -1,6 +1,7 @@
 name: release
 
-# 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim），
+# 打 tag v* 就發版：六個平台的 ai-security-monitor 執行檔＋SHA256SUMS＋安裝腳本、GHCR 的 Hub 映像（amd64／arm64，含 -slim）、
+# 防護 DNS 映像與網站弱點掃描 runner 映像（ai-security-monitor-dns／-webscan，amd64／arm64），
 # 以及桌面版安裝檔 AI-Security-Monitor-<ver>-*（Windows NSIS、macOS arm64／x64 dmg、Linux AppImage／deb；未做程式碼簽章）。
 # 桌面版自動更新：用 secrets TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) 的 minisign 金鑰簽更新檔（NSIS、.app.tar.gz、AppImage），
 # scripts/updater-manifest.mjs 用 tauri.conf.json 的公鑰驗章後產生 latest.json（App 讀 releases/latest/download/latest.json）。
@@ -24,6 +25,7 @@ permissions:
 env:
   IMAGE: ghcr.io/markku636/ai-security-monitor-hub
   DNS_IMAGE: ghcr.io/markku636/ai-security-monitor-dns
+  WEBSCAN_IMAGE: ghcr.io/markku636/ai-security-monitor-webscan
   LEGACY_IMAGE: ghcr.io/markku636/ai-security-agent-hub
   DOCKER_BUILD_RECORD_UPLOAD: false
   PUBLISH: ${{ github.event_name == 'push' || !inputs.dry_run }}
@@ -323,8 +325,50 @@ jobs:
             ${{ env.DNS_IMAGE }}:${{ needs.verify.outputs.version }}
             ${{ env.DNS_IMAGE }}:latest
 
+  # 網站弱點掃描 runner 映像：同一支 Linux musl 靜態執行檔（x64＋arm64）＋httpx、tlsx、nuclei（模板烘焙進映像）、testssl.sh，alpine
+  webscan-image:
+    needs: [verify, agent]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: agent-linux-*
+          path: artifacts
+      - name: Stage binaries
+        run: |
+          set -euo pipefail
+          V=${{ needs.verify.outputs.version }}
+          mkdir -p dist/webscan/amd64 dist/webscan/arm64
+          cp "artifacts/agent-linux-x64/ai-security-monitor-$V-linux-x64" dist/webscan/amd64/ai-security-monitor
+          cp "artifacts/agent-linux-arm64/ai-security-monitor-$V-linux-arm64" dist/webscan/arm64/ai-security-monitor
+          chmod +x dist/webscan/*/ai-security-monitor
+          ls -l dist/webscan/*
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Web scan runner image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.webscan
+          platforms: linux/amd64,linux/arm64
+          build-args: ASA_VERSION=${{ needs.verify.outputs.version }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.WEBSCAN_IMAGE }}:${{ needs.verify.outputs.version }}
+            ${{ env.WEBSCAN_IMAGE }}:latest
+
   release:
-    needs: [verify, agent, desktop, hub-image, dns-image]
+    needs: [verify, agent, desktop, hub-image, dns-image, webscan-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write

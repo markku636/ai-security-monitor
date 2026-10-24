@@ -1,0 +1,44 @@
+# 單機版＋網站弱點掃描：compose.standalone.yml 的 Hub＋PostgreSQL，再多一台 webscan runner（httpx、tlsx、nuclei、testssl.sh）。不要掃描就用 compose.standalone.yml。
+#   .env 另外設 AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN（至少 32 字元，Hub 與 webscan 共用，例 openssl rand -hex 24）
+#   docker compose -f docker/compose.standalone.webscan.yml --env-file .env up -d
+# 和 compose.standalone.yml 是同一個專案（同名、同一份資料），兩份之間隨時可以換；
+# 換回不含 webscan 的那份時加 --remove-orphans 把 webscan 容器收掉。
+# 也要防護 DNS：docker compose -f docker/compose.standalone.dns.yml -f docker/compose.standalone.webscan.yml --env-file .env up -d（兩個權杖都要設）。
+# 目標與範圍由 Hub 決定：只掃驗證過擁有權的網站，內網網段要管理員先加進白名單；所有打到目標的流量都從 webscan 發出，Hub 不連目標。
+# webscan 只接 edge 網路（連得到 hub、連不到 postgres），不發布任何 port；根目錄唯讀、/work 與 /tmp 是 tmpfs、
+# 拿掉所有 capability、限制記憶體／CPU／行程數。
+# 映像版本用 AI_SECURITY_MONITOR_WEBSCAN_IMAGE_TAG（預設 latest）；刻意不跟 Hub 的 tag，Hub 用 slim／-commercial 時照樣拉得到。
+# 需要 Docker Compose 2.20 以上（include）。
+name: asa-hub-standalone
+
+include:
+  - compose.standalone.yml
+
+services:
+  webscan:
+    image: ghcr.io/markku636/ai-security-monitor-webscan:${AI_SECURITY_MONITOR_WEBSCAN_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - hub
+    # 只接 edge（compose.standalone.yml 宣告）：不在 default，所以連不到 postgres
+    networks:
+      - edge
+    environment:
+      AI_SECURITY_MONITOR_WEBSCAN_HUB_URL: http://hub:3000
+      AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN: ${AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN:?請在 .env 設 AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN（至少 32 字元，例 openssl rand -hex 24）}
+    # 容器內走 compose 網路連 Hub（http 只在這個內部網路上）
+    command: ["--insecure-http"]
+    # 掃描工具會開一堆子行程：由 init 收掉逾時被砍的孫行程，殭屍行程才不會把 pids_limit 用完
+    init: true
+    read_only: true
+    tmpfs:
+      - /work
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # nuclei 一次載入約一萬個模板：映像預設 GOMEMLIMIT=640MiB，實測峰值約 0.65 GB；調高 mem_limit 時可在 environment 一起調高 GOMEMLIMIT
+    mem_limit: 1g
+    cpus: "1.5"
+    pids_limit: 512

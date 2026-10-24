@@ -534,24 +534,69 @@ jobs:
           docker run --rm ghcr.io/markku636/ai-security-monitor-dns:ci --help > dns-help.txt
           grep -q 'dns-server' dns-help.txt
           docker image ls ghcr.io/markku636/ai-security-monitor-dns:ci
+      - name: Build web scan runner image (same musl binary + httpx, tlsx, nuclei, testssl.sh)
+        run: |
+          set -euo pipefail
+          mkdir -p dist/webscan/amd64
+          cp agent/target/x86_64-unknown-linux-musl/release/ai-security-monitor dist/webscan/amd64/
+          I=ghcr.io/markku636/ai-security-monitor-webscan:ci
+          docker build -f docker/Dockerfile.webscan -t $I .
+          docker run --rm $I --help > webscan-help.txt
+          grep -q 'web-scan-runner' webscan-help.txt
+          # 每個工具在 compose 的限制下（唯讀根目錄、tmpfs、nobody、沒有 capability、沒有網路）都跑得起來；先寫檔再比對（pipefail 下別接 head）
+          R="docker run --rm --network none --read-only --tmpfs /tmp --tmpfs /work --cap-drop ALL --security-opt no-new-privileges:true --entrypoint"
+          $R httpx $I -version > tools.txt 2>&1
+          $R tlsx $I -version >> tools.txt 2>&1
+          $R nuclei $I -version >> tools.txt 2>&1
+          $R testssl.sh $I --version >> tools.txt 2>&1
+          $R sh $I -c 'test "$(id -u)" = 65534 && touch /work/w /tmp/t && test -s /opt/nuclei-templates/.asm-templates-version && test -s /licenses/testssl.sh/LICENSE && cat /licenses/SOURCES.txt' >> tools.txt
+          cat tools.txt
+          grep -q 'Nuclei Engine Version' tools.txt
+          grep -q 'testssl.sh.*version' tools.txt
+          docker image ls $I
       - name: Standalone compose smoke
         run: |
           set -euo pipefail
           printf 'AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=ci-admin\nAI_SECURITY_MONITOR_HUB_DB_PASSWORD=ci-db\nAI_SECURITY_MONITOR_HUB_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_HOST_PORT=18088\nAI_SECURITY_MONITOR_HUB_UPDATE_CHECK=0\n' > ci.env
           # 只有舊名 ASA_HUB_* 的 .env（0.1.x）展開結果要跟新名完全一樣
           printf 'ASA_HUB_ADMIN_SECRET=ci-admin\nASA_HUB_DB_PASSWORD=ci-db\nASA_HUB_IMAGE_TAG=ci\nASA_HUB_HOST_PORT=18088\nASA_HUB_UPDATE_CHECK=0\n' > legacy.env
-          printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\n' > tok.env
-          for f in compose.standalone.yml compose.yml compose.standalone.dns.yml compose.dns.yml; do
+          printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\nAI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN=ci-webscan-token-0123456789abcdef01234567\n' > tok.env
+          ALL="compose.standalone.yml compose.yml compose.standalone.dns.yml compose.dns.yml compose.standalone.webscan.yml compose.webscan.yml"
+          for f in $ALL; do
             diff <(docker compose -f docker/$f --env-file ci.env --env-file tok.env config) <(docker compose -f docker/$f --env-file legacy.env --env-file tok.env config)
+            docker compose -f docker/$f --env-file ci.env --env-file tok.env config --services > "svc-$f.txt"
           done
-          # 不含防護 DNS 的兩份沒有 dns 服務；含的兩份有，而且沒設權杖時拒絕展開
-          for f in compose.standalone.yml compose.yml; do
-            ! docker compose -f docker/$f --env-file ci.env config --services | grep -qx dns
+          # 只有 *.dns.yml 有 dns 服務、只有 *.webscan.yml 有 webscan 服務（反向斷言用 if：set -e 不管 ! 開頭的指令）
+          for f in compose.standalone.yml compose.yml compose.standalone.webscan.yml compose.webscan.yml; do
+            if grep -qx dns "svc-$f.txt"; then echo "::error::docker/$f should not have a dns service"; exit 1; fi
           done
-          for f in compose.standalone.dns.yml compose.dns.yml; do
-            docker compose -f docker/$f --env-file ci.env --env-file tok.env config --services | grep -qx dns
-            ! docker compose -f docker/$f --env-file ci.env config > /dev/null 2>&1
+          for f in compose.standalone.yml compose.yml compose.standalone.dns.yml compose.dns.yml; do
+            if grep -qx webscan "svc-$f.txt"; then echo "::error::docker/$f should not have a webscan service"; exit 1; fi
           done
+          grep -qx dns svc-compose.standalone.dns.yml.txt
+          grep -qx dns svc-compose.dns.yml.txt
+          grep -qx webscan svc-compose.standalone.webscan.yml.txt
+          grep -qx webscan svc-compose.webscan.yml.txt
+          # 沒設權杖時拒絕展開，錯誤訊息點名缺的變數
+          for f in compose.standalone.dns.yml:DNS compose.dns.yml:DNS compose.standalone.webscan.yml:WEBSCAN compose.webscan.yml:WEBSCAN; do
+            if docker compose -f "docker/${f%%:*}" --env-file ci.env config > /dev/null 2> tok-err.txt; then echo "::error::docker/${f%%:*} expanded without a token"; exit 1; fi
+            grep -q "AI_SECURITY_MONITOR_HUB_${f##*:}_TOKEN" tok-err.txt
+          done
+          # 網路拓撲：hub 在 default＋edge、postgres 只在 default；webscan 只在 edge、根目錄唯讀、沒有 capability、不發布 port、映像 tag 不跟 Hub 走
+          for f in $ALL; do
+            docker compose -f docker/$f --env-file ci.env --env-file tok.env config --format json > net.json
+            jq -e '(.services.hub.networks | keys) == ["default", "edge"] and (.services.postgres.networks | keys) == ["default"]' net.json > /dev/null \
+              || { jq '.services | map_values(.networks)' net.json; exit 1; }
+          done
+          for f in compose.standalone.webscan.yml compose.webscan.yml; do
+            docker compose -f docker/$f --env-file ci.env --env-file tok.env config --format json > net.json
+            jq -e '.services.webscan | (.networks | keys) == ["edge"] and .read_only == true and .cap_drop == ["ALL"] and (.ports // []) == [] and .image == "ghcr.io/markku636/ai-security-monitor-webscan:latest"' net.json > /dev/null \
+              || { jq '.services.webscan' net.json; exit 1; }
+          done
+          # 防護 DNS＋網站弱點掃描一起跑（兩份 include 同一個基本檔）
+          docker compose -f docker/compose.standalone.dns.yml -f docker/compose.standalone.webscan.yml --env-file ci.env --env-file tok.env config --services > svc-both.txt
+          grep -qx dns svc-both.txt
+          grep -qx webscan svc-both.txt
           docker compose -f docker/compose.dns.yml -f docker/compose.dns-host.yml --env-file ci.env --env-file tok.env config | grep -q 'network_mode: host'
           docker compose -f docker/compose.standalone.yml --env-file legacy.env config | grep -q 'AI_SECURITY_MONITOR_HUB_DATABASE_URL: postgres://asa_hub:ci-db@postgres:5432/asa_hub'
           docker compose -f docker/compose.standalone.yml --env-file ci.env up -d --wait --no-build
@@ -563,10 +608,10 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' $B/api/v1/fleet/summary)" = "401"
           docker compose -f docker/compose.standalone.yml --env-file ci.env exec -T hub sh -c 'test "$(id -un)" = node'
           # 沒有管理員金鑰的容器要拒絕啟動
-          ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
-          ! docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci
+          if docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci; then exit 1; fi
+          if docker run --rm -e ASA_HUB_DATABASE_URL=postgres://x ghcr.io/markku636/ai-security-monitor-hub:ci; then exit 1; fi
           # 資料庫密碼空白（.env 沒設）也要拒絕
-          ! docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:@postgres:5432/asa_hub -e AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=x ghcr.io/markku636/ai-security-monitor-hub:ci
+          if docker run --rm -e AI_SECURITY_MONITOR_HUB_DATABASE_URL=postgres://asa_hub:@postgres:5432/asa_hub -e AI_SECURITY_MONITOR_HUB_ADMIN_SECRET=x ghcr.io/markku636/ai-security-monitor-hub:ci; then exit 1; fi
           # 防護 DNS（compose.standalone.dns.yml）：容器健康、經加密 DNS 解析、Hub 開封鎖後擋自訂網域、Hub 看得到這台
           cp ci.env dns.env
           printf 'AI_SECURITY_MONITOR_HUB_DNS_TOKEN=ci-dns-token-0123456789abcdef0123456789\nAI_SECURITY_MONITOR_DNS_IMAGE_TAG=ci\nAI_SECURITY_MONITOR_HUB_DNS_PORT=15353\n' >> dns.env
@@ -582,6 +627,45 @@ jobs:
           docker compose -f docker/compose.standalone.dns.yml --env-file dns.env exec -T dns /ai-security-monitor dns-server --healthcheck --listen 127.0.0.1:53
           docker compose -f docker/compose.standalone.dns.yml --env-file dns.env down -v
           echo "docker smoke ok"
+      - name: Web scan compose smoke (runner claims a job, scans a local target, cannot reach postgres)
+        run: |
+          set -euo pipefail
+          # compose.standalone.webscan.yml：Hub 排工作 → runner 認領、只掃 edge 網路上這裡自己起的靶站（不碰任何外部網站）→ 上傳原始輸出。
+          # 專案名另取（-p）：照抄到別台機器跑也不會動到既有的 asa-hub-standalone 資料。
+          cp ci.env ws.env
+          printf 'AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN=ci-webscan-token-0123456789abcdef01234567\nAI_SECURITY_MONITOR_WEBSCAN_IMAGE_TAG=ci\n' >> ws.env
+          WS="docker compose -p asm-ci-webscan -f docker/compose.standalone.webscan.yml --env-file ws.env"
+          trap 'rc=$?; if [ "$rc" != 0 ]; then $WS logs --no-color --tail 50 hub webscan || true; docker logs --tail 20 asm-ci-target || true; fi' EXIT
+          $WS up -d --wait --wait-timeout 180 --no-build
+          B=http://127.0.0.1:18088; A='authorization: Bearer ci-admin'; J='content-type: application/json'
+          # 靶站（digest 釘版）只接 edge 網路；把它的 IP 加進內網白名單
+          EDGE=$($WS config --format json | jq -er '.networks.edge.name')
+          docker run -d -q --name asm-ci-target --network "$EDGE" nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 > /dev/null
+          TIP=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$EDGE\").IPAddress}}" asm-ci-target)
+          test -n "$TIP"
+          curl -sf -X PUT -H "$A" -H "$J" -d "{\"internal_cidrs\":[\"$TIP/32\"]}" $B/api/v1/admin/webscan/settings > /dev/null
+          TID=$(curl -sf -H "$A" -H "$J" -d "{\"url\":\"http://$TIP/\"}" $B/api/v1/admin/webscan/targets | jq -er .target.id)
+          JID=$(curl -sf -H "$A" -H "$J" -d "{\"target_id\":\"$TID\",\"profile\":\"passive\"}" $B/api/v1/admin/webscan/jobs | jq -er .job.id)
+          # 等 runner 認領、掃完、回報（最多 3 分鐘）
+          st=""
+          for i in $(seq 1 60); do
+            curl -sf -H "$A" "$B/api/v1/admin/webscan/jobs/$JID" > job.json
+            st=$(jq -r .job.status job.json)
+            if [ "$st" = succeeded ] || [ "$st" = failed ]; then break; fi
+            sleep 3
+          done
+          jq '{status: .job.status, error: .job.error, artifacts: [.artifacts[]? | {scanner, format, exitCode, bytes}]}' job.json
+          test "$st" = succeeded
+          jq -e '(.artifacts | length) >= 1' job.json > /dev/null
+          curl -sf -H "$A" $B/api/v1/admin/webscan | jq -e '.runners | map(select(.id == "env" and .online)) | length == 1' > /dev/null
+          # 隔離：runner 連得到 hub，連不到 postgres（名稱解析不到，直接連 IP 也不通）
+          $WS exec -T webscan sh -c 'nc -z -w 3 hub 3000'
+          if $WS exec -T webscan sh -c 'nc -z -w 3 postgres 5432'; then echo "::error::webscan runner reached postgres by name"; exit 1; fi
+          PG=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$($WS ps -q postgres)")
+          if $WS exec -T webscan sh -c "nc -z -w 3 $PG 5432"; then echo "::error::webscan runner reached postgres at $PG"; exit 1; fi
+          docker rm -f asm-ci-target > /dev/null
+          $WS down -v
+          echo "webscan smoke ok"
 
   e2e:
     name: e2e (agent ↔ hub, remote action on linux)

@@ -39,7 +39,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          build-args: ASA_HUB_VERSION=0.8.4
+          # 升版時跟著改：scripts/check-version.mjs 會檢查這個值
+          build-args: ASA_HUB_VERSION=0.8.5
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
