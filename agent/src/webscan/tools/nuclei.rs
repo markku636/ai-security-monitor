@@ -7,7 +7,10 @@
 //! `-etags`／`-exclude-tags`、`-s`／`-severity`、`-rl`／`-rate-limit`、`-c`／`-concurrency`、`-timeout`（秒）、`-retries`、
 //! `-r`／`-resolvers`（解析器清單「檔案」）、`-or`／`-omit-raw`（JSONL 不帶 request／response 原文：命中外洩的 .env／金鑰檔時，
 //! 祕密才不會整包進 artifact 與 Hub）、`-ot`／`-omit-template`（不帶編碼過的模板，縮小輸出）、
-//! `-lna`／`-restrict-local-network-access`（不准連本機／私有網段；只在目標全是公網位址時加）。
+//! `-lna`／`-restrict-local-network-access`（不准連本機／私有網段；只在目標全是公網位址時加）、
+//! `-nmhe`／`-no-mhe`（不因錯誤把目標整個跳過：有些模板會把目標拼進網址去連第三方主機，例如
+//! `https://login.microsoftonline.com/<目標>/…`，釘選解析器對範圍外的名稱回 NXDOMAIN 擋下它，nuclei 卻把這個
+//! 「no address found」算在目標頭上、判成永久無回應，剩下的模板全部不跑——2026-10-25 本機端到端實測抓到）。
 //! 不加 `-sr`（不准退回系統 DNS）、不加 `-dashboard`（不上傳雲端），也不帶 `-ut`／`-ud`（模板由 `--nuclei-templates` 給、不下載）。
 
 use serde::Deserialize;
@@ -140,6 +143,7 @@ pub fn spec(env: &StepEnv, opts: &Options) -> CmdSpec {
         &resolvers,
         "-or",
         "-ot",
+        "-nmhe",
     ]);
     if !t.internal {
         args.push("-lna".to_string());
@@ -200,6 +204,7 @@ mod tests {
                 &f.resolvers.to_string_lossy(),
                 "-or",
                 "-ot",
+                "-nmhe",
                 "-lna",
             ])
         );
@@ -223,7 +228,7 @@ mod tests {
             opts(serde_json::json!({"exclude_tags": [], "severities": ["critical"]})),
         ] {
             let s = spec(&env(&j, &f, "nuclei"), &o);
-            for flag in ["-ni", "-duc", "-dr", "-or", "-ot", "-silent", "-jsonl"] {
+            for flag in ["-ni", "-duc", "-dr", "-or", "-ot", "-nmhe", "-silent", "-jsonl"] {
                 assert!(s.args.iter().any(|a| a == flag), "missing {flag}");
             }
             for banned in [

@@ -30,6 +30,19 @@ use crate::util::cmd::{BoundedOutput, CmdSpec};
 
 /// 工具自己每個連線的逾時（秒）。
 pub const CONNECT_TIMEOUT_S: &str = "10";
+/// 掃描端自己設定的環境變數前綴（含連 Hub 的權杖 `AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN`）：一律不給第三方工具。
+const OWN_ENV_PREFIXES: [&str; 2] = ["AI_SECURITY_MONITOR_", "ASA_"];
+
+/// 要從工具環境拿掉的變數：固定清單＋掃描端自己的設定（`keys`＝目前行程的環境變數名稱）。
+pub fn stripped_env<I: IntoIterator<Item = String>>(keys: I) -> Vec<String> {
+    let mut out: Vec<String> = STRIPPED_ENV.iter().map(|s| s.to_string()).collect();
+    out.extend(
+        keys.into_iter()
+            .filter(|k| OWN_ENV_PREFIXES.iter().any(|p| k.starts_with(p))),
+    );
+    out
+}
+
 /// 不讓工具繼承的環境變數：代理（會繞過釘選）、ProjectDiscovery 雲端的金鑰（不上傳任何東西）。
 pub const STRIPPED_ENV: [&str; 9] = [
     "HTTP_PROXY",
@@ -118,7 +131,7 @@ pub struct StepEnv<'a> {
 }
 
 impl StepEnv<'_> {
-    /// 所有工具共用：在工作目錄執行、逾時、stdout 上限、拿掉代理與雲端金鑰。
+    /// 所有工具共用：在工作目錄執行、逾時、stdout 上限、拿掉代理、雲端金鑰與掃描端自己的設定（Hub 權杖）。
     fn command(&self, scanner: Scanner, args: Vec<String>) -> CmdSpec {
         let mut spec = CmdSpec::new(&self.program, &[])
             .timeout(self.timeout_ms)
@@ -126,8 +139,9 @@ impl StepEnv<'_> {
             .cap_stdout(self.limits.max_output_bytes)
             .describe(scanner.id());
         spec.args = args;
-        for k in STRIPPED_ENV {
-            spec = spec.without_env(k);
+        let keys = std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned());
+        for k in stripped_env(keys) {
+            spec = spec.without_env(&k);
         }
         spec
     }
@@ -280,6 +294,31 @@ pub(crate) mod tests {
             }
             // 參數裡不會出現 Hub 原始的 target.url 以外的字串（這裡就是重新組出來的網址）
             assert!(s.args.iter().all(|a| !a.contains(' ')), "{:?}", s.args);
+        }
+    }
+
+    #[test]
+    fn runner_settings_and_the_hub_token_never_reach_the_tools() {
+        let keys = [
+            "AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN",
+            "ASA_HUB_WEBSCAN_TOKEN",
+            "AI_SECURITY_MONITOR_WEBSCAN_HUB_URL",
+            "PATH",
+            "HOME",
+            "GOMEMLIMIT",
+        ];
+        let v = stripped_env(keys.iter().map(|k| k.to_string()));
+        for k in [
+            "AI_SECURITY_MONITOR_HUB_WEBSCAN_TOKEN",
+            "ASA_HUB_WEBSCAN_TOKEN",
+            "AI_SECURITY_MONITOR_WEBSCAN_HUB_URL",
+            "HTTPS_PROXY",
+            "PDCP_API_KEY",
+        ] {
+            assert!(v.iter().any(|e| e == k), "{k} should be stripped");
+        }
+        for k in ["PATH", "HOME", "GOMEMLIMIT"] {
+            assert!(!v.iter().any(|e| e == k), "{k} must stay");
         }
     }
 
