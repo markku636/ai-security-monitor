@@ -78,6 +78,31 @@ Later releases add wafw00f, checkdmarc, naabu, katana, MDN HTTP Observatory, OWA
 commercial use (such as WPScan) follow the "threat-intel usage" switch and are skipped in commercial mode. nmap and sqlmap treat
 programs that run them and parse their output as derivative works, so they are not integrated.
 
+### Passive security-header check (httpx)
+
+The httpx step (passive, runs as soon as a site is added) also checks whether the landing page sets the recommended security headers
+(Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy,
+Cross-Origin-Opener-Policy) and reports the missing ones as a **single** `Recommended security headers are missing` finding, calling out
+version-disclosing headers (such as `X-Powered-By`) too. It only runs on a content page (not a 3xx redirect).
+
+This finding replaces nuclei's `http-missing-security-headers` (one info finding per missing header, which is noisy) and testssl's
+`security_headers`. This is a deliberate curation: it reports the core recommended set above; the situational/legacy headers nuclei also
+checks (Cross-Origin-Embedder-Policy, Cross-Origin-Resource-Policy, X-Permitted-Cross-Domain-Policies…) are normal to omit on most sites,
+so they are not listed separately to avoid false positives. nuclei's `weak-hsts-detect` (HSTS present but weak) is a different issue and
+is kept. Response headers are captured with httpx `-irh`, but secrets such as `Set-Cookie` and `Authorization` are redacted before the
+raw output is uploaded (like nuclei's `-or` — secrets never reach the Hub).
+
+## Example report
+
+Below is a findings list from a real scan of **our own site** `esim.226network.com` (the scanners ran with the same hardened flags as
+`web-scan-runner`): the passive fingerprint, the TLS configuration, and the merged, severity-ranked list of findings.
+
+![Example website scan report: a real scan of our own site esim.226network.com, showing the passive fingerprint, TLS configuration and severity-ranked findings](images/webscan-report.png)
+
+This site sits behind Cloudflare with a Vercel origin, so active scanning hits the Cloudflare edge and WAF; the findings cluster around
+edge TLS-compatibility settings (weaker cipher suites, weak HSTS) and information disclosure (missing headers, `X-Powered-By`), with no
+CVE-class hits — things to tune in Cloudflare, not origin weaknesses.
+
 ## Deploy
 
 ### On the same machine as the Hub (Docker)

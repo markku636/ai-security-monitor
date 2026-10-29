@@ -1673,6 +1673,8 @@ export const en: Record<string, string> = {
   '網站掃描端': 'Website scanner',
   '網站沒有使用 HTTPS': 'The website does not use HTTPS',
   '申請 TLS 憑證（例如 Let’s Encrypt），把 http 全部轉到 https，並設定 HSTS。': 'Get a TLS certificate (for example from Let’s Encrypt), redirect all http to https and set HSTS.',
+  '補上這些建議的安全標頭（Content-Security-Policy、Strict-Transport-Security、X-Content-Type-Options、X-Frame-Options、Referrer-Policy、Permissions-Policy、Cross-Origin-Opener-Policy）；並移除會洩漏技術版本的 X-Powered-By 等標頭。':
+    'Add the recommended security headers (Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy) and remove version-disclosing headers such as X-Powered-By.',
   '網站憑證已過期': 'The website certificate has expired',
   '網站憑證即將到期': 'The website certificate expires soon',
   '網站使用自簽憑證': 'The website uses a self-signed certificate',

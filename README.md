@@ -346,7 +346,13 @@ Mac 第一次打開要在「應用程式」裡對它按右鍵 →「打開」，
 | ![資安報告](docs/images/report.png) 資安報告：選一段期間整理分數、問題、情資、連線、DNS 與事件，可列印或存成 PDF | ![防護 DNS 設定](docs/images/admin-dns.png) 防護 DNS：封鎖開關與暫停、伺服器狀態、被擋最多的網域、擋錯一鍵放行、黑白名單 |
 | ![可疑 IP 清單](docs/images/connections-ips.png) 可疑 IP 清單：完整排名、外部情資風險，備註直接點著改 | |
 
-> 截圖全部是示範資料（虛構主機、文件專用的保留 IP、example.com），Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 產生。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
+> 上面的截圖都是示範資料（虛構主機、文件專用的保留 IP、example.com），Hub 由 `scripts/demo-seed.mjs` 灌資料，桌面版由 `scripts/capture-desktop-screenshots.mjs` 產生。更多桌面版畫面見 [docs/desktop.md](docs/desktop.md)。
+
+### 網站掃描報告（選用）
+
+掃自己的網站後，各掃描器的發現會併成一份依嚴重度排序的清單。下圖是對**本專案自有網站** `esim.226network.com` 的一次實測（被動指紋、TLS 設定、發現的問題），細節見 [網站掃描](docs/webscan.md)：
+
+<p align="center"><img src="docs/images/webscan-report.png" alt="網站掃描報告：對自有網站 esim.226network.com 的實測，整理出被動指紋、TLS 設定與依嚴重度排序的發現" width="520"></p>
 
 ## 它能幫你做什麼
 

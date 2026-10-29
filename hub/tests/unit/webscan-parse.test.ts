@@ -22,6 +22,29 @@ describe('webscan parsers', () => {
     expect(parseHttpx('', ctx).warnings).toEqual(['httpx:no_output']);
   });
 
+  it('httpx fingerprint ip comes from host_ip (hostname goes in host for URL inputs)', () => {
+    const r = parseHttpx(JSON.stringify({ url: 'https://shop.example.com/', status_code: 200, host: 'shop.example.com', host_ip: '93.184.216.34', failed: false }), ctx);
+    expect(r.fingerprint).toMatchObject({ ip: '93.184.216.34' });
+  });
+
+  it('httpx security headers: one low finding for the missing ones, redirects and http-only skipped', () => {
+    const page = (header: Record<string, unknown>, status = 200) => JSON.stringify({ url: 'https://shop.example.com/', status_code: status, header });
+    // 落地頁（200）缺 CSP、Permissions-Policy；X-Powered-By 記在 disclosed
+    const r = parseHttpx(page({ strict_transport_security: 'max-age=63072000', x_content_type_options: 'nosniff', x_frame_options: 'SAMEORIGIN', referrer_policy: 'strict-origin', cross_origin_opener_policy: 'same-origin', x_powered_by: 'Next.js' }), ctx);
+    expect(r.findings.map((f) => [f.rule, f.severity])).toEqual([['web.security_headers', 'low']]);
+    const f = r.findings[0]!;
+    expect(f.detail).toBe('Content-Security-Policy, Permissions-Policy');
+    expect(f.evidence).toMatchObject({ missing: ['Content-Security-Policy', 'Permissions-Policy'], disclosed: ['X-Powered-By'] });
+    // 所有建議標頭都在 → 沒有 finding
+    expect(parseHttpx(page({ strict_transport_security: 'x', content_security_policy: "default-src 'self'", x_content_type_options: 'nosniff', x_frame_options: 'DENY', referrer_policy: 'no-referrer', permissions_policy: 'geolocation=()', cross_origin_opener_policy: 'same-origin' }), ctx).findings).toEqual([]);
+    // 3xx 轉址頁不判（body 在落地頁）
+    expect(parseHttpx(page({ strict_transport_security: 'x' }, 307), ctx).findings).toEqual([]);
+    // http 站台：no_https 照出，但 HSTS 不算「缺少」（httpsOnly）；缺的是其他標頭
+    const httpOut = parseHttpx(page({ x_frame_options: 'DENY' }), { ...ctx, scheme: 'http', url: 'http://shop.example.com/', port: 80 });
+    const sh = httpOut.findings.find((x) => x.rule === 'web.security_headers')!;
+    expect(sh.evidence).toMatchObject({ missing: ['Content-Security-Policy', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy', 'Cross-Origin-Opener-Policy'] });
+  });
+
   it('tlsx: expiring, self-signed and old protocol', () => {
     const r = parseTlsx(TLSX_OUT, ctx);
     expect(r.findings.map((f) => [f.rule, f.severity])).toEqual([
@@ -92,12 +115,27 @@ describe('webscan parsers', () => {
     expect(dedupeAcrossScanners([f('testssl:cert_chain_of_trust')]).map((x) => x.rule)).toEqual(['testssl:cert_chain_of_trust']);
   });
 
+  it('httpx security-headers summary suppresses nuclei/testssl missing-header noise but keeps weak-hsts', () => {
+    const f = (rule: string) => ({ rule }) as NormalizedFinding;
+    const kept = dedupeAcrossScanners([
+      f('web.security_headers'),
+      f('nuclei:http-missing-security-headers'),
+      f('nuclei:http-missing-security-headers'),
+      f('testssl:security_headers'),
+      f('nuclei:weak-hsts-detect'),
+    ]);
+    expect(kept.map((x) => x.rule)).toEqual(['web.security_headers', 'nuclei:weak-hsts-detect']);
+    // httpx 沒跑出摘要（例如沒拿到標頭）時，nuclei 的 missing-header 照留
+    expect(dedupeAcrossScanners([f('nuclei:http-missing-security-headers')]).map((x) => x.rule)).toEqual(['nuclei:http-missing-security-headers']);
+  });
+
   it('every hub-generated title and recommendation has an English translation', () => {
     const texts = [
       ...Object.values(HTTPX_TITLES),
       ...Object.values(TLSX_TITLES),
       ...Object.values(TESTSSL_TITLES),
       ...parseHttpx(HTTPX_OUT, { ...ctx, scheme: 'http' }).findings.map((f) => f.recommendation),
+      ...parseHttpx(JSON.stringify({ url: 'https://shop.example.com/', status_code: 200, header: { server: 'nginx' } }), ctx).findings.map((f) => f.recommendation),
       ...parseTlsx(TLSX_OUT, ctx).findings.map((f) => f.recommendation),
       ...parseTlsx(JSON.stringify({ probe_status: true, expired: true, subject_an: ['other.example.net'] }), ctx).findings.map((f) => f.recommendation),
       ...parseTestssl(WEAK_CIPHERS_OUT, ctx).findings.map((f) => f.recommendation),

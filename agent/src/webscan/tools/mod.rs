@@ -217,6 +217,8 @@ pub fn collect(
     };
     match step {
         Step::Testssl(_) => testssl::collect(files, b, duration_ms, max_output),
+        // httpx：上傳前遮掉 `header` 裡的 Set-Cookie 等敏感標頭（其餘比照一般 JSONL 工具）
+        Step::Httpx(_) => httpx::collect(b, duration_ms),
         _ => {
             let code = b.output.code;
             let error = if b.timed_out {

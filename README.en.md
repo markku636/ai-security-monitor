@@ -346,7 +346,13 @@ The code is MIT licensed, so yes. Some threat intel sources, however, only allow
 | ![Security report](docs/images/report.png) Security report: scores, findings, threat intel, connections, DNS and events for a chosen period; print or save as PDF | ![Protective DNS settings](docs/images/admin-dns.png) Protective DNS: blocking switch and pause, server status, most blocked domains, one-click allow, blocklist/allowlist |
 | ![Suspicious IPs](docs/images/connections-ips.png) Suspicious IP list: full ranking, external intel risk, notes editable inline | |
 
-> All screenshots use demo data (fictional hosts, documentation-only IP ranges, example.com): the Hub is seeded by `scripts/demo-seed.mjs` and the desktop shots come from `scripts/capture-desktop-screenshots.mjs`. The UI is shown in Traditional Chinese; the Hub also has English. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md).
+> The screenshots above use demo data (fictional hosts, documentation-only IP ranges, example.com): the Hub is seeded by `scripts/demo-seed.mjs` and the desktop shots come from `scripts/capture-desktop-screenshots.mjs`. The UI is shown in Traditional Chinese; the Hub also has English. More desktop screens in [docs/desktop.en.md](docs/desktop.en.md).
+
+### Website scan report (optional)
+
+When you scan your own site, every scanner's findings merge into one severity-ranked list. Below is a real scan of **our own site** `esim.226network.com` (passive fingerprint, TLS configuration, findings); see [Website scanning](docs/webscan.en.md) for details:
+
+<p align="center"><img src="docs/images/webscan-report.png" alt="Website scan report: a real scan of our own site esim.226network.com, showing the passive fingerprint, TLS configuration and severity-ranked findings" width="520"></p>
 
 ## What it does for you
 
