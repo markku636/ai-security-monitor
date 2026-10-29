@@ -67,6 +67,22 @@ Security Hub 的「網站掃描」掃**你自己的網站**：先證明網站是
 
 GPL 不等於不能商用：testssl.sh 以未修改的獨立程式執行，映像裡附授權全文。之後的版本會再加 wafw00f、checkdmarc、naabu、katana、MDN HTTP Observatory、OWASP ZAP 等；條款真的限制商用的工具（例如 WPScan）會跟著「情資使用情境」開關，商用模式自動不排。nmap、sqlmap 的授權把「執行並解析輸出的程式」也視為衍生作品，所以不整合。
 
+### 被動安全標頭檢查（httpx）
+
+httpx 這一步（被動、已登錄就會跑）除了指紋，還會檢查落地頁有沒有建議的安全標頭（Content-Security-Policy、Strict-Transport-Security、X-Content-Type-Options、X-Frame-Options、Referrer-Policy、Permissions-Policy、Cross-Origin-Opener-Policy），缺的併成**一筆** `缺少建議的安全標頭`，並順便指出會洩漏技術版本的標頭（例如 `X-Powered-By`）。只在回傳內容頁（非 3xx 轉址）時判斷。
+
+這一筆會取代 nuclei 的 `http-missing-security-headers`（nuclei 每個缺的標頭各一筆、都是 info，很吵）與 testssl 的 `security_headers`。這是**刻意策展**：以上面這組核心建議標頭為準；nuclei 另外會抓的情境式／舊式標頭（Cross-Origin-Embedder-Policy、Cross-Origin-Resource-Policy、X-Permitted-Cross-Domain-Policies…）多數站台沒有也正常，故不另外列出，以免誤報。nuclei 的 `weak-hsts-detect`（HSTS 有、但偏弱）是另一回事，照留。
+
+擷取回應標頭用 httpx 的 `-irh`，但上傳原始輸出前會先遮掉 `Set-Cookie`、`Authorization` 這類祕密（比照 nuclei 的 `-or`，祕密不進 Hub）。
+
+## 報告範例
+
+下面是對**本專案自有網站** `esim.226network.com` 的一次實測（掃描器用 `web-scan-runner` 相同的安全旗標）整理出的發現清單：被動指紋、TLS 設定，以及各掃描器併好、依嚴重度排序的「發現的問題」。
+
+![網站掃描報告範例：對自有網站 esim.226network.com 的實測，整理出被動指紋、TLS 設定與依嚴重度排序的發現](images/webscan-report.png)
+
+這個網站在 Cloudflare 之後、源站是 Vercel，所以主動掃描打到的是 Cloudflare 邊緣與 WAF；命中集中在邊緣的 TLS 相容性設定（較弱加密套件、HSTS 偏弱）與資訊揭露（缺安全標頭、`X-Powered-By`），沒有 CVE 類命中——是調 Cloudflare 設定的事項，不是源站弱點。
+
 ## 部署
 
 ### 跟 Hub 在同一台（Docker）
