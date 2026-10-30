@@ -2,13 +2,13 @@
 import type { TFn } from '@/lib/i18n/core';
 
 export function profileLabel(t: TFn, p: string): string {
-  return p === 'active_light' ? t('主動掃描') : p === 'passive' ? t('被動檢查') : p;
+  return p === 'active_light' ? t('主動檢查（手動）') : p === 'passive' ? t('被動檢查') : p;
 }
 
 export function profileHint(t: TFn, p: string): string {
   return p === 'active_light'
-    ? t('會送出探測請求找已知漏洞與設定問題（不做注入、不做 DoS、不做模糊測試）；要先證明網站是你的，或位址在內網白名單裡。')
-    : t('只做跟一般瀏覽器差不多的幾個請求：看憑證、標頭與網站用了哪些技術。網站還沒驗證也可以跑。');
+    ? t('會送出探測請求找已知漏洞與設定問題（不做注入、不做 DoS、不做模糊測試）；按下按鈕才會執行。')
+    : t('只做跟一般瀏覽器差不多的幾個請求：看憑證、標頭與網站用了哪些技術。');
 }
 
 export function jobStatusLabel(t: TFn, s: string): { text: string; tone: 'neutral' | 'ok' | 'warn' | 'bad' | 'info' } {
@@ -34,34 +34,6 @@ export function kindLabel(t: TFn, k: string): string {
   return k === 'verify' ? t('擁有權驗證') : t('掃描');
 }
 
-export interface ProofLike {
-  verifyMethod: string | null;
-  proven: boolean;
-  proofExpired: boolean;
-}
-
-export function proofLabel(t: TFn, x: ProofLike): { text: string; tone: 'neutral' | 'ok' | 'warn' | 'bad' | 'info'; hint: string } {
-  if (x.proven) return { text: t('已驗證'), tone: 'ok', hint: t('已經證明這個網站是你的，可以做主動掃描。') };
-  if (x.verifyMethod === 'internal-cidr') return { text: t('內網'), tone: 'info', hint: t('位址在內網網段白名單裡：管理員已聲明是自己的網段，可以做主動掃描。') };
-  if (x.proofExpired) return { text: t('驗證已過期'), tone: 'warn', hint: t('擁有權驗證超過 90 天，要重新驗證才能做主動掃描。') };
-  return { text: t('未驗證'), tone: 'neutral', hint: t('還沒證明這個網站是你的：只能做被動檢查。') };
-}
-
-export function verifyMethodLabel(t: TFn, m: string | null): string {
-  switch (m) {
-    case 'dns-txt':
-      return t('DNS TXT 記錄');
-    case 'well-known':
-      return t('網站上的驗證檔');
-    case 'meta':
-      return t('網頁裡的 meta 標籤');
-    case 'internal-cidr':
-      return t('內網白名單');
-    default:
-      return '—';
-  }
-}
-
 /** 位址檢查沒過的原因（繁中原文；經 t() 顯示，測試會檢查每一條都有英文）。 */
 export const BLOCK_REASONS: Record<string, string> = {
   unresolvable: '查不到這個網域的位址',
@@ -85,8 +57,6 @@ export function blockReasonText(t: TFn, reason: string): string {
 
 /** API 錯誤碼的白話（繁中原文；經 t() 顯示，測試會檢查每一條都有英文）。 */
 export const ERROR_TEXTS: Record<string, string> = {
-  not_verified: '主動掃描前要先證明網站是你的（下面三種方式選一種）。',
-  proof_expired: '擁有權驗證已過期，請重新驗證。',
   duplicate: '這個網站已經有同樣的工作在排隊或執行中。',
   no_scanners: '這個層級沒有可用的掃描器（可能都被停用了）。',
   bad_url: '網址格式不對。',
@@ -103,7 +73,6 @@ export const ERROR_TEXTS: Record<string, string> = {
   lease_expired: '掃描端失聯太久，這個工作已放棄。',
   target_deleted: '目標已刪除。',
   all_steps_failed: '每個掃描器都失敗了（請看掃描端的紀錄）。',
-  verify_request_failed: '連不上網站，沒辦法檢查驗證檔或 meta 標籤。',
   work_dir_unavailable: '掃描端的暫存目錄不能用。',
   resolver_unavailable: '掃描端沒辦法啟動釘選解析器。',
   cancelled: '已取消。',

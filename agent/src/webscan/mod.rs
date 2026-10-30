@@ -20,7 +20,6 @@ pub mod resolver;
 pub mod runner;
 pub mod scope;
 pub mod tools;
-pub mod verify;
 
 use std::net::IpAddr;
 

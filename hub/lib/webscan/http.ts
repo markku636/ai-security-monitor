@@ -17,7 +17,6 @@ export async function runnerAuth(req: Request, db: DB, bucket: string, perMinute
 export function jobErrorStatus(code: string): number {
   if (code === 'target_not_found' || code === 'not_found') return 404;
   if (code === 'duplicate' || code === 'bad_state') return 409;
-  if (code === 'not_verified' || code === 'proof_expired') return 403;
   if (code.startsWith('blocked_target:')) return 422;
   return 400;
 }

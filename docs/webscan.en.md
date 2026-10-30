@@ -2,20 +2,20 @@
 
 English | [繁體中文](webscan.md)
 
-The Security Hub's website scanning checks **your own websites**: prove a site is yours, then let several open-source scanners
-look for known vulnerabilities, certificate and configuration problems. The results are merged into one findings list, and each
+The Security Hub's website scanning checks **your own websites**: manually ask several open-source scanners
+to look for known vulnerabilities, certificate and configuration problems. The results are merged into one findings list, and each
 new scan works out what was fixed and what came back.
 **Optional and off by default**: `compose.yml` / `compose.standalone.yml` have no scanner; use `compose.webscan.yml` /
 `compose.standalone.webscan.yml`, which include it.
 
 > Only scan sites you own or have written permission to test. Actively probing someone else's systems may be illegal; the Hub
-> enforces ownership verification, but authorisation is your responsibility.
+> runs scans only when requested by an administrator.
 
 | | Default | Notes |
 |---|---|---|
 | Scanner (webscan runner) | not started | A separate container: picks up jobs from the Hub, runs the scanners, sends raw output and results back |
-| Unverified sites | **passive checks** only | A few browser-like requests: certificate, headers, technologies |
-| Active scans | need ownership verification, or an address inside the internal allowlist | Probe requests for known vulnerabilities and misconfigurations; no injection, no DoS, no fuzzing |
+| Passive checks | manual | A few browser-like requests: certificate, headers, technologies |
+| Active scans | manual; no ownership proof required | Probe requests for known vulnerabilities and misconfigurations; no injection, no DoS, no fuzzing |
 | Internal sites | always blocked | Allowed once an administrator adds the range under Settings & keys → Website scanning |
 
 ## How it works
@@ -36,20 +36,9 @@ scanner ── claims jobs (only for scanners it has) ──▶ screens the scop
 - Raw output (gzip) is stored in the Hub database for 30 days by default (`AI_SECURITY_MONITOR_HUB_WEBSCAN_ARTIFACT_DAYS`), so it
   can be re-parsed when the parsers improve. Findings are never pruned.
 
-## Proving a site is yours
+## Manual checks
 
-Each target gets a verification code (`asm-verify-…`). Put it in place with one of these methods, then press "Check" on the
-target's page:
-
-| Method | Where | Who checks |
-|---|---|---|
-| DNS TXT (recommended) | A TXT record at `_asm-verify.<domain>` (the domain itself also works) | The Hub queries DNS |
-| Verification file | `https://<domain>/.well-known/asm-verify.txt` containing the code | The scanner fetches it (the Hub never connects to the site) |
-| Meta tag | `<meta name="asm-verify" content="<code>">` in the page HTML | The scanner fetches it; it must be in the HTML the server sends, a tag added later by JavaScript is not seen |
-
-Verification is valid for 90 days; after that, check again to run active scans. **Internal** addresses need no verification: if
-they fall inside the administrator's "internal ranges allowed for scanning", the administrator has declared the range as their
-own (every job re-resolves and re-checks it).
+Add a target, open its page, and click **Active check (manual)**. No DNS, file or meta ownership proof is required. Jobs start only when requested; an offline runner leaves them queued.
 
 ## Scope and safety guardrails
 
@@ -140,4 +129,4 @@ vulnerability management; reports say a finding is "mapped to" a requirement, no
 ## API
 
 Formats: [Agent ↔ Hub contract](hub-contract.en.md#website-scanner-web-scan-runner). Admin endpoints: `/api/v1/admin/webscan`
-(overview), `…/settings`, `…/targets`, `…/targets/{id}/verify`, `…/jobs`, `…/jobs/{id}`, `…/artifacts/{id}`, `…/findings`.
+(overview), `…/settings`, `…/targets`, `…/jobs`, `…/jobs/{id}`, `…/artifacts/{id}`, `…/findings`.

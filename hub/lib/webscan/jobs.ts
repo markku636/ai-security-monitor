@@ -17,13 +17,12 @@ import type { RunnerWho } from './runners';
 import { isProfile, isScanner, SCANNER_INFO, scannersFor, type WebscanProfile, type WebscanScanner } from './scanners';
 import { resolveAndScreen, type ScreenResult } from './scope';
 import { getWebscanSettings, type WebscanSettingsT } from './settings';
-import { finishVerify, getTarget, proofState, syncInternalMark, type TargetRow } from './targets';
+import { getTarget, type TargetRow } from './targets';
 
 export const LEASE_MS = 120_000;
 export const PENDING_TTL_MS = 24 * 3_600_000;
 export const MAX_ATTEMPTS = 3;
 export const POLL_AFTER_MS = 15_000;
-export const VERIFY_TIMEOUT_MS = 60_000;
 /** 一個 artifact 壓縮後／解壓後的上限，與一個工作全部 artifact 的上限（壓縮後）。 */
 export const MAX_ARTIFACT_COMPRESSED = 8 * 1024 * 1024;
 export const MAX_ARTIFACT_BYTES = 32 * 1024 * 1024;
@@ -59,18 +58,18 @@ export function pickScanners(t: Pick<TargetRow, 'scheme'>, profile: WebscanProfi
   );
 }
 
-function buildSpec(t: TargetRow, screen: Extract<ScreenResult, { ok: true }>, s: WebscanSettingsT, scanners: WebscanScanner[], verify: Spec['verify']): Spec {
+function buildSpec(t: TargetRow, screen: Extract<ScreenResult, { ok: true }>, s: WebscanSettingsT, scanners: WebscanScanner[]): Spec {
   return {
     target: { id: t.id, url: t.url, scheme: t.scheme as 'http' | 'https', host: t.host, port: t.port, path: t.path, pinned_ips: screen.ips, internal: screen.internal },
     scope: { hosts: [t.host], allowed_private_cidrs: screen.internal ? s.internal_cidrs : [] },
     limits: {
-      timeout_ms: verify ? VERIFY_TIMEOUT_MS : s.timeout_minutes * 60_000,
-      rate_per_sec: verify ? 2 : s.rate_per_sec,
-      concurrency: verify ? 1 : s.concurrency,
-      max_output_bytes: verify ? 65_536 : MAX_OUTPUT_BYTES,
+      timeout_ms: s.timeout_minutes * 60_000,
+      rate_per_sec: s.rate_per_sec,
+      concurrency: s.concurrency,
+      max_output_bytes: MAX_OUTPUT_BYTES,
     },
-    steps: verify ? [] : scanners.map(stepFor),
-    verify,
+    steps: scanners.map(stepFor),
+    verify: null,
   };
 }
 
@@ -84,7 +83,7 @@ async function insertJob(db: DB, row: typeof webscanJobs.$inferInsert): Promise<
   }
 }
 
-/** 建立掃描工作。範圍在這裡強制：重新解析＋檢查位址、主動掃描要有效的擁有權證明（或位址都在內網白名單內）。 */
+/** 建立掃描工作。由管理員手動發起，重新解析並檢查位址範圍。 */
 export async function createScanJob(
   db: DB,
   input: { targetId: string; profile: string; scanners?: string[] },
@@ -98,12 +97,7 @@ export async function createScanJob(
   if (input.scanners?.some((x) => !isScanner(x))) return { error: 'bad_scanner' };
   const s = await getWebscanSettings(db);
   const screen = await resolveAndScreen(t.host, { internalCidrs: s.internal_cidrs });
-  await syncInternalMark(db, t, screen.ok && screen.internal, now);
   if (!screen.ok) return { error: `blocked_target:${screen.reason}` };
-  if (input.profile !== 'passive' && !screen.internal) {
-    const proof = proofState(t, now);
-    if (!proof.proven) return { error: proof.expired ? 'proof_expired' : 'not_verified' };
-  }
   const scanners = pickScanners(t, input.profile, s, (await getIntelUsage(db)).usage, input.scanners);
   if (!scanners.length) return { error: 'no_scanners' };
   return insertJob(db, {
@@ -112,34 +106,15 @@ export async function createScanJob(
     kind: 'scan',
     profile: input.profile,
     scanners,
-    spec: buildSpec(t, screen, s, scanners, null),
+    spec: buildSpec(t, screen, s, scanners),
     requestedBy: actor,
     expiresAt: new Date(now.getTime() + PENDING_TTL_MS),
   });
 }
 
-/** 檔案／meta 驗證：交給 runner 去抓（Hub 不連目標）。只做一個 GET，未驗證的目標也可以排。 */
-export async function createVerifyJob(db: DB, targetId: string, method: 'well-known' | 'meta', actor: string, now = new Date()): Promise<{ job: JobRow } | { error: string }> {
-  await expireStaleJobs(db, now);
-  const t = await getTarget(db, targetId);
-  if (!t) return { error: 'target_not_found' };
-  const s = await getWebscanSettings(db);
-  const screen = await resolveAndScreen(t.host, { internalCidrs: s.internal_cidrs });
-  await syncInternalMark(db, t, screen.ok && screen.internal, now);
-  if (!screen.ok) return { error: `blocked_target:${screen.reason}` };
-  return insertJob(db, {
-    id: newJobId(),
-    targetId: t.id,
-    kind: 'verify',
-    profile: 'passive',
-    scanners: [],
-    spec: buildSpec(t, screen, s, [], { method, token: t.verifyToken }),
-    requestedBy: actor,
-    expiresAt: new Date(now.getTime() + 3_600_000),
-  });
-}
-
 export async function expireStaleJobs(db: DB, now = new Date()): Promise<void> {
+  // Retire legacy ownership jobs on upgrade; never dispatch them to a runner.
+  await db.update(webscanJobs).set({ status: 'cancelled', finishedAt: now, error: 'verification_removed' }).where(and(eq(webscanJobs.kind, 'verify'), inArray(webscanJobs.status, ['pending', 'running'])));
   const leaseOver = and(eq(webscanJobs.status, 'running'), lt(webscanJobs.leaseExpiresAt, now));
   await db.update(webscanJobs).set({ status: 'pending', runnerId: null, leaseExpiresAt: null }).where(and(leaseOver, lt(webscanJobs.attempts, MAX_ATTEMPTS)));
   await db.update(webscanJobs).set({ status: 'failed', finishedAt: now, error: 'lease_expired' }).where(leaseOver);
@@ -168,7 +143,7 @@ export async function claimJobs(db: DB, who: RunnerWho, c: ClaimRequestT, now = 
     const ids = await tx
       .select({ id: webscanJobs.id })
       .from(webscanJobs)
-      .where(and(eq(webscanJobs.status, 'pending'), sql`${webscanJobs.scanners} <@ ${JSON.stringify(caps)}::jsonb`))
+      .where(and(eq(webscanJobs.kind, 'scan'), eq(webscanJobs.status, 'pending'), sql`${webscanJobs.scanners} <@ ${JSON.stringify(caps)}::jsonb`))
       .orderBy(webscanJobs.createdAt)
       .limit(limit)
       .for('update', { skipLocked: true });
@@ -269,7 +244,7 @@ async function parseJob(db: DB, j: JobRow, result: ResultBodyT, now: Date) {
   return { findings: dedupeAcrossScanners(findings), warnings: warnings.slice(0, 50), completed: [...completed], fingerprint };
 }
 
-/** runner 回報結束：掃描工作解析原始輸出、更新發現；驗證工作更新目標的擁有權。 */
+/** runner 回報結束：解析原始輸出、更新發現。 */
 export async function finishJob(db: DB, who: RunnerWho, id: string, result: ResultBodyT, now = new Date()) {
   const j = await ownedJob(db, who, id, ['running', 'cancelled']);
   if (!j) return { error: 'not_claimed' as const };
@@ -279,13 +254,6 @@ export async function finishJob(db: DB, who: RunnerWho, id: string, result: Resu
     return { ok: true, status: 'cancelled', findings: null };
   }
   const t = await getTarget(db, j.targetId);
-  if (j.kind === 'verify') {
-    const spec = j.spec as unknown as Spec;
-    if (t && spec.verify) await finishVerify(db, t, spec.verify.method, !!result.verify?.found, result.verify?.found ? null : (result.verify?.detail || result.error || 'not_found'), now);
-    const status = result.ok ? 'succeeded' : 'failed';
-    await db.update(webscanJobs).set({ ...base, status, error: result.error }).where(eq(webscanJobs.id, id));
-    return { ok: true, status, findings: null, verified: !!result.verify?.found };
-  }
   const p = await parseJob(db, j, result, now);
   let summary: ApplySummary | null = null;
   if (t) {

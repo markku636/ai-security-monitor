@@ -8,7 +8,6 @@ import { DELETE as jobCancel, GET as jobGet } from '@/app/api/v1/admin/webscan/j
 import { POST as jobCreate } from '@/app/api/v1/admin/webscan/jobs/route';
 import { PUT as settingsPut } from '@/app/api/v1/admin/webscan/settings/route';
 import { DELETE as targetDelete, GET as targetGet } from '@/app/api/v1/admin/webscan/targets/[id]/route';
-import { POST as verifyPost } from '@/app/api/v1/admin/webscan/targets/[id]/verify/route';
 import { POST as targetCreate } from '@/app/api/v1/admin/webscan/targets/route';
 import { POST as artifactsPost } from '@/app/api/v1/webscan/jobs/[id]/artifacts/route';
 import { POST as heartbeatPost } from '@/app/api/v1/webscan/jobs/[id]/heartbeat/route';
@@ -21,7 +20,7 @@ import type { DB } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { JobSpec } from '@/lib/webscan/contract';
 import { expireStaleJobs } from '@/lib/webscan/jobs';
-import { setSelfIpsForTests, setWebscanLookupForTests, setWebscanTxtForTests } from '@/lib/webscan/scope';
+import { setSelfIpsForTests, setWebscanLookupForTests } from '@/lib/webscan/scope';
 import { urgentWebFindings } from '@/lib/webscan/view';
 import { HTTPX_OUT, NUCLEI_OUT, TESTSSL_OUT, TLSX_OUT } from '../fixtures/webscan';
 import { createTestDb } from '../helpers/db';
@@ -35,7 +34,6 @@ let db: DB;
 let runnerToken: string;
 let readToken: string;
 const dns: Record<string, string[]> = {};
-const txt: Record<string, string[][]> = {};
 
 function req(url: string, init: { method?: string; token?: string; body?: unknown; raw?: string | Buffer; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3000${url}`, {
@@ -89,10 +87,6 @@ beforeAll(async () => {
     if (!dns[h]) throw new Error('ENOTFOUND');
     return dns[h];
   });
-  setWebscanTxtForTests(async (n) => {
-    if (!txt[n]) throw new Error('ENODATA');
-    return txt[n];
-  });
   Object.assign(dns, {
     'shop.example.com': ['93.184.216.34'],
     'plain.example.com': ['93.184.216.35'],
@@ -105,7 +99,6 @@ beforeAll(async () => {
 
 afterAll(() => {
   setWebscanLookupForTests(null);
-  setWebscanTxtForTests(null);
   setSelfIpsForTests(null);
 });
 
@@ -117,11 +110,11 @@ beforeEach(() => {
 });
 
 describe('webscan: targets and scope', () => {
-  it('adds a public target (not verified yet) and refuses duplicates and junk', async () => {
+  it('adds a public target without an ownership challenge and refuses duplicates and junk', async () => {
     const r = await addTarget('Shop.Example.com');
     expect(r.status).toBe(200);
-    expect(r.body.target).toMatchObject({ url: 'https://shop.example.com/', host: 'shop.example.com', verifyMethod: null });
-    expect(r.body.target.verifyToken).toMatch(/^asm-verify-[0-9a-f]{32}$/);
+    expect(r.body.target).toMatchObject({ url: 'https://shop.example.com/', host: 'shop.example.com' });
+    expect(r.body.target).not.toHaveProperty('verifyToken');
     expect(r.body.screen).toEqual({ ok: true, ips: ['93.184.216.34'], internal: false });
     expect((await addTarget('https://shop.example.com/')).status).toBe(409);
     expect((await addTarget('ftp://shop.example.com')).body.error).toBe('bad_scheme');
@@ -156,21 +149,9 @@ describe('webscan: targets and scope', () => {
     const j = await newJob(t.body.target.id, 'active_light');
     expect(j.status).toBe(200);
     expect(j.body.job).toMatchObject({ profile: 'active_light', internal: true, pinnedIps: ['192.168.50.20'], scanners: ['httpx', 'nuclei'] });
-    // 先加目標、後加白名單：建立工作時就把畫面上的「內網」標記補上
-    expect((await db.select().from(webTargets).where(eq(webTargets.id, t.body.target.id)))[0]!.verifyMethod).toBe('internal-cidr');
     await jobCancel(req(`/api/v1/admin/webscan/jobs/${j.body.job.id}`, { method: 'DELETE', ...admin }), params(j.body.job.id));
   });
 
-  it('IP targets are re-marked as soon as the allowlist changes', async () => {
-    const t = (await addTarget('http://192.168.60.5:8080/')).body.target;
-    expect(t.verifyMethod).toBeNull();
-    const put = (cidrs: string[]) => settingsPut(req('/api/v1/admin/webscan/settings', { method: 'PUT', ...admin, body: { internal_cidrs: cidrs } }));
-    await put(['192.168.50.20', '192.168.60.0/24']);
-    const mark = async () => (await db.select().from(webTargets).where(eq(webTargets.id, t.id)))[0]!.verifyMethod;
-    expect(await mark()).toBe('internal-cidr');
-    await put(['192.168.50.20']);
-    expect(await mark()).toBeNull();
-  });
 });
 
 describe('webscan: runner lifecycle', () => {
@@ -248,16 +229,8 @@ describe('webscan: runner lifecycle', () => {
     expect(d3.body).toMatchObject({ status: 'failed', findings: { reopened: 3, open: 3 } });
   });
 
-  it('active scans need a verified owner; DNS TXT verification unlocks them', async () => {
+  it('manual active scans run without ownership verification', async () => {
     const t = (await addTarget('https://shop.example.com/app')).body.target;
-    const j = await newJob(t.id, 'active_light');
-    expect(j.status).toBe(403);
-    expect(j.body.error).toBe('not_verified');
-    const miss = await (await verifyPost(req(`/api/v1/admin/webscan/targets/${t.id}/verify`, { method: 'POST', ...admin, body: { method: 'dns-txt' } }), params(t.id))).json();
-    expect(miss).toMatchObject({ verified: false, error: 'txt_not_found' });
-    txt['_asm-verify.shop.example.com'] = [[t.verifyToken]];
-    const ok = await (await verifyPost(req(`/api/v1/admin/webscan/targets/${t.id}/verify`, { method: 'POST', ...admin, body: { method: 'dns-txt' } }), params(t.id))).json();
-    expect(ok).toMatchObject({ verified: true });
     const j2 = await newJob(t.id, 'active_light');
     expect(j2.status).toBe(200);
     expect(j2.body.job.scanners).toEqual(['httpx', 'tlsx', 'nuclei', 'testssl']);
@@ -270,18 +243,12 @@ describe('webscan: runner lifecycle', () => {
     expect(done.body.findings.new).toBe(5);
   });
 
-  it('file verification is fetched by the runner (the hub never connects to the target)', async () => {
-    const t = (await addTarget('https://shop.example.com/verify-me')).body.target;
-    const v = await (await verifyPost(req(`/api/v1/admin/webscan/targets/${t.id}/verify`, { method: 'POST', ...admin, body: { method: 'well-known' } }), params(t.id))).json();
-    expect(v.job).toMatchObject({ kind: 'verify', scanners: [] });
-    const c = await claim();
-    const spec = c.body.jobs.find((x: { id: string }) => x.id === v.job.id);
-    expect(spec.verify).toEqual({ method: 'well-known', token: t.verifyToken });
-    expect(spec.steps).toEqual([]);
-    const r = await finish(spec.id, [], { verify: { found: true, http_status: 200, detail: 'ok' } });
-    expect(r.body).toMatchObject({ status: 'succeeded', verified: true });
-    const row = (await db.select().from(webTargets).where(eq(webTargets.id, t.id)))[0]!;
-    expect(row.verifyMethod).toBe('well-known');
+  it('retires legacy verification jobs without sending them to runners', async () => {
+    const t = (await addTarget('https://shop.example.com/legacy')).body.target;
+    const j = (await newJob(t.id)).body.job;
+    await db.update(webscanJobs).set({ kind: 'verify', scanners: [] }).where(eq(webscanJobs.id, j.id));
+    expect((await claim()).body.jobs.map((x: { id: string }) => x.id)).not.toContain(j.id);
+    expect((await db.select().from(webscanJobs).where(eq(webscanJobs.id, j.id)))[0]).toMatchObject({ status: 'cancelled', error: 'verification_removed' });
   });
 
   it('cancel: pending ends at once; running gets cancel on the next heartbeat; strangers get 409', async () => {

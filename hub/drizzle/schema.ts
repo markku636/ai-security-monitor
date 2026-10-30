@@ -869,8 +869,7 @@ export const responseBlocks = pgTable(
 // ---- 網站掃描（webscan）：掃自己驗證過擁有權的網站。全新表、不掛 agents（不做假主機）。 ----
 
 /**
- * 掃描目標：一個網址（scheme＋host＋port＋path）。主動掃描前要驗證擁有權（DNS TXT／`/.well-known` 檔／meta），
- * 或位址落在管理員設定的內網網段白名單內（verify_method＝internal-cidr）。
+ * 掃描目標：一個網址（scheme＋host＋port＋path）。管理員可手動發起檢查。
  */
 export const webTargets = pgTable(
   'web_targets',
@@ -882,8 +881,8 @@ export const webTargets = pgTable(
     port: integer('port').notNull(),
     path: text('path').notNull().default('/'),
     name: text('name').notNull().default(''),
+    // Legacy ownership columns retained for existing databases; no longer used or exposed.
     verifyToken: text('verify_token').notNull(),
-    /** dns-txt／well-known／meta／internal-cidr；null＝還沒驗證。 */
     verifyMethod: text('verify_method'),
     verifiedAt: ts('verified_at'),
     verifyCheckedAt: ts('verify_checked_at'),

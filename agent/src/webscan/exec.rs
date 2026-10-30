@@ -2,7 +2,7 @@
 //! 1. 解析與檢查（[`job::parse`]）：不合（`bad_job:…`）或範圍不過（`blocked_target:…`）→ 直接回報失敗，不送心跳、不呼叫任何工具。
 //! 2. 開始前送一次心跳，之後每 max(10 秒, lease_ms/3) 送一次；`cancel:true` 或 409（工作已不屬於這台）→ 立刻中止（殺掉正在跑的工具）。
 //! 3. 掃描：一個工作一個暫存目錄＋釘選解析器，逐步跑工具（每步逾時＝min(離截止的時間, limits.timeout_ms)），
-//!    每步上傳原始輸出（超過 16 KB 就 gzip，壓縮後上限 8 MiB）；擁有權驗證：runner 自己發 HTTP。
+//!    每步上傳原始輸出（超過 16 KB 就 gzip，壓縮後上限 8 MiB）。
 //! 4. 回報結果；暫存目錄刪掉、解析器關掉。
 
 use std::net::IpAddr;
@@ -18,7 +18,7 @@ use super::caps::Tools;
 use super::job::{self, Job, JobKind};
 use super::resolver::PinnedResolver;
 use super::tools::{self, Artifact, JobFiles, StepEnv};
-use super::{clean_detail, log, verify, Capability, Heartbeat, HeartbeatReply, JobResult, Scanner, StepResult};
+use super::{clean_detail, log, Capability, Heartbeat, HeartbeatReply, JobResult, Scanner, StepResult};
 use crate::error::AppError;
 use crate::hub::webscan::{ArtifactMeta, MAX_ARTIFACT_BYTES};
 use crate::hub::HubClient;
@@ -48,8 +48,7 @@ pub struct Ctx {
     pub work_dir: PathBuf,
     /// 心跳的最短間隔（10 秒；測試縮短）。
     pub heartbeat_min: Duration,
-    /// 擁有權驗證的逾時（15 秒）。
-    pub verify_timeout: Duration,
+    /// 是否省略一般進度訊息。
     pub quiet: bool,
 }
 
@@ -444,7 +443,7 @@ pub async fn execute(
     let run = match (initial, job.kind) {
         (Some(a), _) => Run::Aborted(a, Vec::new()),
         (None, JobKind::Scan) => run_scan(&ctx, &job, &progress, abort_rx.clone(), clock).await,
-        (None, JobKind::Verify) => run_verify(&ctx, &job, abort_rx.clone(), clock).await,
+        (None, JobKind::Verify) => Run::Done(JobResult::failed("bad_job:verification_removed")),
     };
     hb.abort();
     stop_fwd.abort();
@@ -597,37 +596,12 @@ async fn run_scan(
     Run::Done(JobResult::from_steps(results))
 }
 
-async fn run_verify(ctx: &Ctx, job: &Job, mut abort: watch::Receiver<Option<Abort>>, clock: chrono::Duration) -> Run {
-    let Some(v) = &job.verify else {
-        return Run::Done(JobResult::failed("bad_job:missing_verify"));
-    };
-    let remaining = remaining_ms(job.deadline, clock);
-    if remaining < MIN_STEP_MS {
-        return Run::Done(JobResult::failed("deadline_exceeded"));
-    }
-    let timeout = ctx.verify_timeout.min(Duration::from_millis(remaining));
-    tokio::select! {
-        o = verify::check(&job.target, v, timeout) => Run::Done(verify_result(o)),
-        a = wait_abort(&mut abort) => Run::Aborted(a, Vec::new()),
-    }
-}
-
-/// 擁有權驗證的結果：有拿到 HTTP 回應就算 ok（找沒找到看 `verify.found`），連不上是 `verify_request_failed`。
-fn verify_result(o: verify::Outcome) -> JobResult {
-    JobResult {
-        ok: o.responded,
-        error: (!o.responded).then(|| "verify_request_failed".to_string()),
-        steps: Vec::new(),
-        verify: Some(o.result),
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use crate::hub::test_server::{self, Captured};
     use crate::util::cmd::{CmdOutput, CmdSpec, FakeRunner};
-    use crate::webscan::job::tests::{scan_job, verify_job};
+    use crate::webscan::job::tests::scan_job;
     use crate::webscan::Capability;
     use async_trait::async_trait;
     use serde_json::json;
@@ -655,7 +629,6 @@ pub(crate) mod tests {
             caps: all_caps(),
             work_dir: work.to_path_buf(),
             heartbeat_min,
-            verify_timeout: Duration::from_secs(2),
             quiet: true,
         })
     }
@@ -1013,64 +986,6 @@ pub(crate) mod tests {
             .unwrap()
             .iter()
             .all(|s| s["error"] == "deadline_exceeded"));
-    }
-
-    /// 驗證工作的流程（不連目標：截止時間已過，所以不會發出任何 HTTP；HTTP 本身在 verify.rs 用 127.0.0.1 測）。
-    #[tokio::test]
-    async fn verify_job_flow_never_runs_tools() {
-        let work = tempfile::tempdir().unwrap();
-        let (url, cap) = test_server::serve(vec![(200, HB_OK.into()), (200, r#"{"ok":true}"#.into())]).await;
-        let fake = Arc::new(fake_tools());
-        let c = ctx(&url, fake.clone(), work.path(), Duration::from_secs(3600));
-        let mut j = verify_job("8.8.8.8");
-        j["deadline"] = json!("2020-01-01T00:00:00Z");
-        let (_tx, stop) = not_stopped();
-        let done = execute(c, j, vec![], chrono::Duration::zero(), stop).await;
-        assert!(fake.calls().is_empty(), "verify jobs never run tools");
-        let reqs = cap.lock().unwrap().clone();
-        assert!(reqs[0]
-            .head
-            .starts_with("POST /api/v1/webscan/jobs/wsj_fedcba9876543210/heartbeat "));
-        assert_eq!(body(&reqs[0]), json!({"message": "verify", "progress": 0.0}));
-        let res = body(&reqs[1]);
-        assert_eq!(
-            res,
-            json!({"ok": false, "error": "deadline_exceeded", "steps": [], "verify": null})
-        );
-        assert!(matches!(done.outcome, Outcome::Reported { ok: false, .. }));
-        assert_eq!(
-            std::fs::read_dir(work.path()).unwrap().count(),
-            0,
-            "verify jobs need no work dir"
-        );
-    }
-
-    #[test]
-    fn verify_outcome_maps_to_the_result_block() {
-        let r = verify_result(verify::Outcome {
-            responded: true,
-            result: crate::webscan::VerifyResult {
-                found: true,
-                http_status: Some(200),
-                detail: "found".into(),
-            },
-        });
-        assert!(r.ok && r.error.is_none() && r.steps.is_empty());
-        let v = serde_json::to_value(&r).unwrap();
-        assert_eq!(
-            v["verify"],
-            json!({"found": true, "http_status": 200, "detail": "found"})
-        );
-        let r = verify_result(verify::Outcome {
-            responded: false,
-            result: crate::webscan::VerifyResult {
-                found: false,
-                http_status: None,
-                detail: "connect_error: refused".into(),
-            },
-        });
-        assert_eq!((r.ok, r.error.as_deref()), (false, Some("verify_request_failed")));
-        assert_eq!(serde_json::to_value(&r).unwrap()["verify"]["http_status"], Value::Null);
     }
 
     #[test]

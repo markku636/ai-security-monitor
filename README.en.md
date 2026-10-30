@@ -367,7 +367,7 @@ When you scan your own site, every scanner's findings merge into one severity-ra
 - **Crashes and security events**: why the blue screen happened, and whether someone keeps guessing your password.
 - **AI explains it**: with your own Claude Code or Codex, one click asks the AI to tell you in plain words whether to worry and what to do first.
 - **The Hub for offices**: every computer in one place, alerts, automatic blocking of attackers (off by default), one-click security reports (save as PDF), plus MITRE ATT&CK and ISO 27001 / NIST mappings.
-- **Scans your own websites**: prove a site is yours, then open-source scanners such as nuclei and testssl.sh look for vulnerabilities, expired certificates and misconfigurations, and the next scan shows what got fixed (optional, see [Website scanning](docs/webscan.en.md)).
+- **Scans your own websites**: start a manual active check; open-source scanners such as nuclei and testssl.sh look for vulnerabilities, expired certificates and misconfigurations, and the next scan shows what got fixed (optional, see [Website scanning](docs/webscan.en.md)).
 - **Windows, Mac and Linux**: the desktop app installs with a double-click; servers (including Windows Server and Server Core) use the command-line version.
 
 Which lists it uses, how verdicts work and performance figures: see [technical details](docs/technical.en.md#feature-details).

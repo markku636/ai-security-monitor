@@ -8,7 +8,7 @@ import { listWebFindings } from './findings';
 import { getJobDetail, listJobs } from './jobs';
 import { listRunners } from './runners';
 import { getWebscanSettings } from './settings';
-import { getTarget, listTargets, proofState, publicTarget, verifyTxtName } from './targets';
+import { getTarget, listTargets, publicTarget } from './targets';
 
 export async function webscanView(db: DB) {
   const [settings, runners, targets, jobs, usage] = await Promise.all([getWebscanSettings(db), listRunners(db), listTargets(db), listJobs(db, { limit: 30 }), getIntelUsage(db)]);
@@ -21,13 +21,8 @@ export async function targetDetail(db: DB, id: string) {
   if (!t) return null;
   const [jobs, findings, runners] = await Promise.all([listJobs(db, { targetId: id, limit: 30 }), listWebFindings(db, { targetId: id, limit: 1000 }), listRunners(db)]);
   const latest = jobs.find((j) => j.kind === 'scan' && (j.status === 'succeeded' || j.status === 'failed'));
-  const proof = proofState(t);
   return {
     target: publicTarget(t),
-    proven: proof.proven,
-    proofExpired: proof.expired,
-    proofExpiresAt: proof.expiresAt?.toISOString() ?? null,
-    txtName: verifyTxtName(t.host),
     jobs,
     latest: latest ? await getJobDetail(db, latest.id) : null,
     findings,

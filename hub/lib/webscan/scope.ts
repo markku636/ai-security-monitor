@@ -173,9 +173,8 @@ export function screenIps(ips: string[], opts: ScreenOpts): ScreenResult {
 }
 
 type Lookup = (host: string) => Promise<string[]>;
-type TxtLookup = (name: string) => Promise<string[][]>;
 
-const g = globalThis as unknown as { __asaWebscanLookup?: Lookup; __asaWebscanTxt?: TxtLookup; __asaSelfIps?: { at: number; ips: string[] } };
+const g = globalThis as unknown as { __asaWebscanLookup?: Lookup; __asaSelfIps?: { at: number; ips: string[] } };
 
 async function systemLookup(host: string): Promise<string[]> {
   const rows = await dns.promises.lookup(host, { all: true, verbatim: true });
@@ -185,10 +184,6 @@ async function systemLookup(host: string): Promise<string[]> {
 /** 測試用：換掉 DNS 解析（null＝還原）。 */
 export function setWebscanLookupForTests(fn: Lookup | null): void {
   g.__asaWebscanLookup = fn ?? undefined;
-}
-
-export function setWebscanTxtForTests(fn: TxtLookup | null): void {
-  g.__asaWebscanTxt = fn ?? undefined;
 }
 
 export function setSelfIpsForTests(ips: string[] | null): void {
@@ -205,15 +200,6 @@ export async function resolveHost(host: string): Promise<string[]> {
   try {
     const addrs = await withTimeout((g.__asaWebscanLookup ?? systemLookup)(host), RESOLVE_TIMEOUT_MS);
     return [...new Set(addrs.map(normalizeIp))].slice(0, MAX_ADDRS);
-  } catch {
-    return [];
-  }
-}
-
-export async function resolveTxt(name: string): Promise<string[]> {
-  try {
-    const rows = await withTimeout((g.__asaWebscanTxt ?? ((n: string) => dns.promises.resolveTxt(n)))(name), RESOLVE_TIMEOUT_MS);
-    return rows.map((parts) => parts.join(''));
   } catch {
     return [];
   }

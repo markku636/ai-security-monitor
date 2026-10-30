@@ -2,17 +2,17 @@
 
 [English](webscan.en.md) | 繁體中文
 
-Security Hub 的「網站掃描」掃**你自己的網站**：先證明網站是你的，再交給多個開源掃描器找已知漏洞、憑證與設定問題，
+Security Hub 的「網站掃描」掃**你自己的網站**：手動交給多個開源掃描器找已知漏洞、憑證與設定問題，
 結果併成同一份「發現的問題」清單，下一次掃描自動比對哪些修好了、哪些又出現。
 **選用、預設不開**：`compose.yml`／`compose.standalone.yml` 沒有掃描端，要用含網站掃描的 `compose.webscan.yml`／`compose.standalone.webscan.yml`。
 
-> 只掃你擁有、或已取得書面授權的網站。對別人的系統做主動探測可能觸法；Hub 會強制要求擁有權驗證，但授權是你的責任。
+> 只掃你擁有、或已取得書面授權的網站。對別人的系統做主動探測可能觸法；掃描由管理員手動發起。
 
 | | 預設 | 說明 |
 |---|---|---|
 | 掃描端（webscan runner） | 不起 | 另外一個容器，向 Hub 領工作、執行掃描器、把原始輸出與結果傳回來 |
-| 未驗證的網站 | 只能做**被動檢查** | 跟一般瀏覽器差不多的幾個請求：憑證、標頭、用了哪些技術 |
-| 主動掃描 | 要先驗證擁有權，或位址在內網白名單內 | 送出探測請求找已知漏洞與設定問題；不做注入、不做 DoS、不做模糊測試 |
+| 被動檢查 | 手動執行 | 跟一般瀏覽器差不多的幾個請求：憑證、標頭、用了哪些技術 |
+| 主動掃描 | 手動執行，不需要所有權驗證 | 送出探測請求找已知漏洞與設定問題；不做注入、不做 DoS、不做模糊測試 |
 | 內網網站 | 一律擋 | 管理員在「設定與金鑰 → 網站掃描」把網段加進白名單才放行 |
 
 ## 運作方式
@@ -31,17 +31,9 @@ Security Hub 的「網站掃描」掃**你自己的網站**：先證明網站是
 - 工作用租約管理：掃描端 2 分鐘沒心跳，工作回到排隊（最多重試 3 次）；24 小時沒人領就過期。多台掃描端搶同一個工作池也不會重複（PostgreSQL `FOR UPDATE SKIP LOCKED`）。
 - 原始輸出（gzip）存在 Hub 資料庫，預設保留 30 天（`AI_SECURITY_MONITOR_HUB_WEBSCAN_ARTIFACT_DAYS`）；解析器改進後可以重新解析。發現的問題不會被清。
 
-## 證明網站是你的
+## 手動檢查
 
-新增網址後，每個目標有一組驗證碼（`asm-verify-…`）。選一種方式放上去，再到網站的頁面按「檢查」：
-
-| 方式 | 放在哪 | 誰去檢查 |
-|---|---|---|
-| DNS TXT（推薦） | `_asm-verify.<網域>` 的 TXT 記錄（放在網域本身也可以） | Hub 直接查 DNS |
-| 驗證檔 | `https://<網域>/.well-known/asm-verify.txt`，內容是驗證碼 | 掃描端去抓（Hub 不連網站） |
-| meta 標籤 | 網頁 HTML 裡的 `<meta name="asm-verify" content="<驗證碼>">` | 掃描端去抓；要寫在伺服器送出的 HTML 裡，JavaScript 事後加的抓不到 |
-
-驗證有效 90 天，過期後要重新檢查才能做主動掃描。**內網**的網址不用驗證：位址落在管理員設定的「允許掃描的內網網段」內，就視為管理員已聲明是自己的網段（每次建立工作都會重新解析檢查）。
+新增網址後，開啟目標頁面，按「**主動檢查（手動）**」即可排入掃描。不需要 DNS、驗證檔或 meta 所有權證明。只有手動按下按鈕才會建立工作；掃描端離線時先排隊，連線後執行。
 
 ## 範圍與安全護欄
 
@@ -114,4 +106,4 @@ docker run -d --init --read-only --tmpfs /work --tmpfs /tmp --cap-drop ALL --sec
 
 ## API
 
-格式見 [Agent ↔ Hub 契約](hub-contract.md#網站掃描端web-scan-runner)。管理員端點：`/api/v1/admin/webscan`（總覽）、`…/settings`、`…/targets`、`…/targets/{id}/verify`、`…/jobs`、`…/jobs/{id}`、`…/artifacts/{id}`、`…/findings`。
+格式見 [Agent ↔ Hub 契約](hub-contract.md#網站掃描端web-scan-runner)。管理員端點：`/api/v1/admin/webscan`（總覽）、`…/settings`、`…/targets`、`…/jobs`、`…/jobs/{id}`、`…/artifacts/{id}`、`…/findings`。

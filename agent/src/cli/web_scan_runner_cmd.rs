@@ -12,7 +12,7 @@ use super::Env;
 use crate::error::{AppError, AppResult};
 use crate::util::cmd::{CmdRunner, RealRunner};
 use crate::webscan::caps::{self, Tools};
-use crate::webscan::{exec, runner, verify, Capability, Scanner};
+use crate::webscan::{exec, runner, Capability, Scanner};
 
 /// 「httpx 1.12.0、nuclei 3.11.1（模板 10.5.0）」。
 fn caps_line(caps: &[Capability]) -> String {
@@ -119,7 +119,6 @@ pub async fn run(env: &Env, a: WebScanRunnerArgs) -> AppResult<()> {
         caps: found,
         work_dir,
         heartbeat_min: Duration::from_secs(10),
-        verify_timeout: verify::TIMEOUT,
         quiet: env.global.quiet,
     });
     let cfg = runner::Config {

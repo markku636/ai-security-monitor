@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { AddTargetForm } from '@/components/webscan/AddTargetForm';
 import { JobsTable } from '@/components/webscan/JobsTable';
-import { proofLabel } from '@/components/webscan/labels';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -37,7 +36,6 @@ function RunnerStrip({ runners, t }: { runners: WebscanView['runners']; t: TFn }
 }
 
 function TargetRow({ x, t }: { x: TargetListItem; t: TFn }) {
-  const p = proofLabel(t, x);
   return (
     <tr className="border-b border-slate-100 last:border-0 dark:border-slate-800 [&_td]:px-3 [&_td]:py-2">
       <td>
@@ -45,10 +43,6 @@ function TargetRow({ x, t }: { x: TargetListItem; t: TFn }) {
           {x.url}
         </Link>
         {x.name ? <div className="text-xs text-slate-500">{x.name}</div> : null}
-      </td>
-      <td className="whitespace-nowrap">
-        <Badge tone={p.tone}>{p.text}</Badge>
-        <Hint text={p.hint} />
       </td>
       <td className="whitespace-nowrap text-xs text-slate-500">{x.lastScanAt ? since(x.lastScanAt, t) : t('還沒掃過')}</td>
       <td>
@@ -66,7 +60,6 @@ function TargetsTable({ targets, t }: { targets: TargetListItem[]; t: TFn }) {
         <thead className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-800 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2">
           <tr>
             <th>{t('網址')}</th>
-            <th>{t('擁有權')}</th>
             <th>{t('最後掃描')}</th>
             <th>{t('未處理的問題')}</th>
           </tr>
@@ -89,7 +82,7 @@ export default async function WebScanPage() {
     <div className="space-y-4">
       <header>
         <h1 className="text-xl font-semibold">{t('網站掃描')}</h1>
-        <p className="text-sm text-slate-500">{t('掃你自己的網站：先證明網站是你的，再用多個開源掃描器找弱點、憑證與設定問題。只掃你擁有或取得書面授權的網站。')}</p>
+        <p className="text-sm text-slate-500">{t('新增網站後，開啟目標頁面即可手動檢查弱點、憑證與設定問題。')}</p>
       </header>
       <RunnerStrip runners={v.runners} t={t} />
       <Card title={t('新增目標')}>

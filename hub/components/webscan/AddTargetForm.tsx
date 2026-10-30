@@ -34,7 +34,7 @@ export function AddTargetForm() {
         ? t('已新增，但目前不能掃：{why}', { why: blockReasonText(t, s?.reason ?? '') })
         : s.internal
           ? t('已新增：位址在內網白名單裡，可以直接掃描。')
-          : t('已新增：先做被動檢查，或證明網站是你的再做主動掃描。');
+          : t('已新增：打開目標頁面即可手動執行被動或主動檢查。');
       setMsg({ ok: !!s?.ok, text: note, id: r.data.target.id, settings: s?.reason === 'private_not_allowed' });
       setUrl('');
       setName('');

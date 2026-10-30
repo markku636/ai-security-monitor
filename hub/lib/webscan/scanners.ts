@@ -1,8 +1,8 @@
 // 網站掃描的共用常數（不含 node 模組：頁面元件與 server 端共用，避免像 SCOPES／EVENTS 那樣各複製一份）。
 //
 // 掃描層級：
-//   passive       已登錄就能跑（還沒驗證擁有權也可以）：只做跟一般瀏覽器差不多的幾個請求
-//   active_light  已驗證擁有權、或位址在管理員設定的內網網段白名單內：會送出探測請求，但不做注入、DoS、模糊測試
+//   passive       手動執行：只做跟一般瀏覽器差不多的幾個請求
+//   active_light  手動執行：會送出探測請求，但不做注入、DoS、模糊測試
 // 授權：GPL 不等於不能商用（以未修改的獨立程式執行、映像附授權全文）；只有條款真的限制商用的工具才標 commercialOk=false。
 
 export const WEBSCAN_PROFILES = ['passive', 'active_light'] as const;
@@ -54,6 +54,3 @@ export function isProfile(v: unknown): v is WebscanProfile {
 export function isScanner(v: unknown): v is WebscanScanner {
   return typeof v === 'string' && (WEBSCAN_SCANNERS as readonly string[]).includes(v);
 }
-
-/** 擁有權驗證的有效天數：過期後要重新驗證才能做主動掃描。 */
-export const VERIFY_TTL_DAYS = 90;

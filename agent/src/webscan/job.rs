@@ -35,7 +35,7 @@ pub enum JobKind {
     Verify,
 }
 
-/// 掃描層級：`passive` 已登錄就能跑（只做跟一般瀏覽器差不多的請求）；`active_light` 要驗證過擁有權或在內網白名單。
+/// 掃描層級：`passive` 已登錄就能跑（只做跟一般瀏覽器差不多的請求）；`active_light` 由管理員手動發起。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Profile {
@@ -79,6 +79,7 @@ pub struct RawStep {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+// Legacy wire types are decoded for compatibility; execution rejects verify jobs.
 pub enum VerifyMethod {
     #[serde(rename = "well-known")]
     WellKnown,
